@@ -328,7 +328,7 @@ PATCH_OUTPUT_SHA256 = {
     "MainApp.qml": "3860c9addd37ba6be61fb6eea7fa1a08d93a782ffc94c1e989341cf8ef4d53ce",
     "Settings.qml": "403b650e32e2353ba542b4960ea7d0d211d62897dbca9e953c7253e491156447",
     "Components/Settings/GeneralsChoice.qml": "fe4241e1c5d99abb9175f36ec6a9e35ef48033af0c07ab0c46b25309f615e240",
-    "C300XSettings.qml": "aa04b8381b5e8c9d6ac3977411b03c1c46897944980486f91b98a7164e5b040f",
+    "C300XSettings.qml": "1d7578c919ed6efe9fee6359e06c578bb47835fff8699b0aa3b3774e98aa7019",
     "js/c300x_maintenance.js": "7baebcd3b0b52b92c934eb9b2cfaf27b198bf0064e16db6571a04aa927557c56",
     "HomePage.qml": "1d112569fcaa49253da2bdc115b12306c4443dc588c999c26a5b3a1c4a593676",
     "MemoPage.qml": "f7fe6279108429389bc607e6c92df065d75dbbce2d9cdfc6ec1280f30f893e0f",

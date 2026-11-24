@@ -68,6 +68,32 @@ Item {
         }
     }
 
+    function statusKey(row) {
+        return row === 0 ? "Home Assistant" : row === 1 ? label("status_server") : row === 2 ? label("status_contact") : ""
+    }
+    function statusValue(row) {
+        if (row === 0) return label(reachable ? "status_ok" : problem ? "status_down" : "status_checking")
+            + (reachable && instanceName ? " (" + instanceName + ")" : "")
+        if (row === 1) return address || "-"
+        if (row === 2) return contact || "-"
+        return "Integration " + (reachable && integrationVersion ? integrationVersion : "-")
+            + " \u00b7 Agent " + (agentVersion || "-") + " \u00b7 Firmware " + (firmwareVersion || "-")
+    }
+    function rowText(row) {
+        if (row === 0) return label("section_display")
+        if (row === 1) return c300xDisplayPreferences.label
+        if (row === 2) return label("setting_standby")
+        if (row === 3) return label(!reachable ? "setting_nav" : tabNavigation ? "setting_nav_tabs" : "setting_nav_pager")
+        return row === 4 ? label("section_station") : "SSH"
+    }
+    function rowOn(row) {
+        return row === 1 ? c300xDisplayPreferences.feedbackEnabled === true : row === 2 ? keepOpen : row === 3 ? tabNavigation : row === 5 && sshRunning
+    }
+    function rowEnabled(row) {
+        if (row === 1) return c300xDisplayPreferences.ready && !c300xDisplayPreferences.busy
+        if (row === 5) return sshKnown && !busy
+        return (row === 2 || row === 3) && reachable && !saving
+    }
     function contactText(age) {
         if (typeof age !== "number") return label("contact_never")
         if (age < 90) return label("contact_now")
@@ -142,15 +168,7 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             width: 400
             Repeater {
-                model: [
-                    {k: "Home Assistant", v: panel.label(panel.reachable ? "status_ok" : panel.problem ? "status_down" : "status_checking")
-                        + (panel.reachable && panel.instanceName ? " (" + panel.instanceName + ")" : ""),
-                     c: panel.reachable ? "#58d68d" : panel.problem ? "#f1c40f" : "white"},
-                    {k: panel.label("status_server"), v: panel.address || "-", c: "white"},
-                    {k: panel.label("status_contact"), v: panel.contact || "-", c: "white"},
-                    {k: "", v: "Integration " + (panel.reachable && panel.integrationVersion ? panel.integrationVersion : "-")
-                        + " \u00b7 Agent " + (panel.agentVersion || "-") + " \u00b7 Firmware " + (panel.firmwareVersion || "-"), c: "white"}
-                ]
+                model: 4
                 Item {
                     width: content.width
                     height: 24
@@ -158,18 +176,18 @@ Item {
                         anchors.verticalCenter: parent.verticalCenter
                         color: "#c7d0d9"
                         font.pixelSize: 18
-                        text: modelData.k
+                        text: panel.statusKey(index)
                     }
                     UbuntuLightText {
                         objectName: "statusValue" + index
                         anchors.left: parent.left
-                        anchors.leftMargin: modelData.k ? 140 : 0
+                        anchors.leftMargin: index < 3 ? 140 : 0
                         anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
-                        color: modelData.c
+                        color: index > 0 ? "white" : panel.reachable ? "#58d68d" : panel.problem ? "#f1c40f" : "white"
                         font.pixelSize: 18
                         elide: Text.ElideRight
-                        text: modelData.v
+                        text: panel.statusValue(index)
                     }
                 }
             }
@@ -183,21 +201,13 @@ Item {
                 text: panel.problem ? panel.label(panel.problem) : ""
             }
             Repeater {
-                model: [
-                    {h: panel.label("section_display")},
-                    {t: c300xDisplayPreferences.label, s: c300xDisplayPreferences.feedbackEnabled,
-                     e: c300xDisplayPreferences.ready && !c300xDisplayPreferences.busy, a: "feedback"},
-                    {t: panel.label("setting_standby"), s: panel.keepOpen, e: panel.reachable && !panel.saving, a: "standby"},
-                    {t: panel.label(!panel.reachable ? "setting_nav" : panel.tabNavigation ? "setting_nav_tabs" : "setting_nav_pager"), s: panel.tabNavigation,
-                     e: panel.reachable && !panel.saving, a: "navigation"},
-                    {h: panel.label("section_station")},
-                    {t: "SSH", s: panel.sshRunning, e: panel.sshKnown && !panel.busy, a: "ssh"}
-                ]
+                model: 6
                 Item {
                     width: content.width
-                    height: modelData.h ? 26 : 37
+                    property bool head: index === 0 || index === 4
+                    height: head ? 26 : 37
                     Rectangle {
-                        visible: !!modelData.h
+                        visible: head
                         anchors.bottom: parent.bottom
                         width: parent.width
                         height: 1
@@ -207,19 +217,19 @@ Item {
                         anchors.left: parent.left
                         anchors.right: toggle.left
                         anchors.verticalCenter: parent.verticalCenter
-                        anchors.verticalCenterOffset: modelData.h ? 1 : 0
-                        color: modelData.h ? "#c7d0d9" : "white"
+                        anchors.verticalCenterOffset: head ? 1 : 0
+                        color: head ? "#c7d0d9" : "white"
                         font.pixelSize: 18
                         elide: Text.ElideRight
-                        text: modelData.h || modelData.t
+                        text: panel.rowText(index)
                     }
                     BasicButton {
                         id: toggle
-                        visible: !modelData.h
+                        visible: !head
                         anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
-                        checked: modelData.s === true
-                        enabled: modelData.e === true && !panel.pending
+                        checked: panel.rowOn(index)
+                        enabled: panel.rowEnabled(index) && !panel.pending
                         opacity: enabled ? 1 : 0.45
                         style: CheckableButtonStyle {
                             defaultImage: "images/ringtones/switch-bg_btn.svg"
@@ -230,11 +240,11 @@ Item {
                             checkedIconRight: "images/ringtones/switch_btn_p.svg"
                         }
                         onMouseClicked: {
-                            if (modelData.a === "ssh")
+                            if (index === 5)
                                 Maintenance.request(panel, deadline, "/ssh", {enabled: !checked})
-                            else if (modelData.a === "feedback")
+                            else if (index === 1)
                                 c300xDisplayPreferences.setFeedbackEnabled(!checked)
-                            else if (modelData.a === "standby")
+                            else if (index === 2)
                                 panel.setDisplay("dashboard_prevent_return", checked ? "off" : "on")
                             else
                                 panel.setDisplay("dashboard_navigation", checked ? "pager" : "tabs")

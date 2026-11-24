@@ -506,7 +506,7 @@ panel.setDisplay('dashboard_prevent_return', 'off');
 assert.equal(calls.setting.length, 2, 'not while a confirmation is open');
 assert.match(qml, /panel\.setDisplay\("dashboard_prevent_return", checked \? "off" : "on"\)/);
 assert.match(qml, /panel\.setDisplay\("dashboard_navigation", checked \? "pager" : "tabs"\)/);
-assert.equal(qml.split('e: panel.reachable && !panel.saving').length - 1, 2, 'both switches rest while unreachable');
+assert.ok(qml.includes('return (row === 2 || row === 3) && reachable && !saving'), 'both switches rest while unreachable');
 assert.deepEqual(['setting_standby', 'setting_nav_tabs', 'setting_nav_pager', 'setting_nav'].map(key => texts.text('de', key)),
     ['Seite im Standby offen lassen', 'Seitenwechsel: Favoritenleiste', 'Seitenwechsel: Pfeile', 'Seitenwechsel']);
 for (const key of ['setting_standby', 'setting_nav_tabs', 'setting_nav_pager', 'setting_nav']) {
@@ -704,3 +704,20 @@ def test_settings_restore_rejects_untrusted_backup(tmp_path, target):
         assert _run_qml_patch_raw(tmp_path, gui, backup, action).returncode != 0
         assert victim.read_bytes() == b"unchanged"
         assert "c300xSettings" in (gui / SETTINGS).read_text()
+
+
+def test_integration_tab_rows_are_not_rebuilt_when_a_value_changes():
+    """A Repeater over a JavaScript array with bindings in it builds all rows anew.
+
+    On the station's Qt 4.8 a tap on a switch changed "saving" inside the
+    array, and every row was destroyed and created again while its own click
+    handler still ran. The row count is fixed now and each value is bound
+    inside its row.
+    """
+    source = (ROOT / "device_qml/C300XSettings.qml").read_text(encoding="utf-8")
+    models = re.findall(r"\n +model: ([^\n]+)", source)
+    assert models == ["4", "6", '["reboot", "remove"]']
+    assert "panel." not in "".join(models)
+    for name in ("statusKey", "statusValue", "rowText", "rowOn", "rowEnabled"):
+        assert f"    function {name}(row) {{" in source and f"panel.{name}(index)" in source
+    assert not re.search(r"modelData\.[a-z]\b", source)

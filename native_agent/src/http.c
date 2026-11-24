@@ -82,7 +82,7 @@
 #include <time.h>
 #include <unistd.h>
 #define C300X_MAX_SUBSCRIPTIONS 4
-#define C300X_MAX_SUBSCRIPTION_EVENTS 24
+#define C300X_MAX_SUBSCRIPTION_EVENTS 32
 #define C300X_MAX_URL_LEN 512
 #define C300X_MAX_VOICEMAIL_WATCHES (C300X_MAX_VOICEMAIL_MESSAGES + 1)
 #define C300X_MESSAGE_WATCH_MASK (IN_CREATE | IN_DELETE | IN_MODIFY | IN_CLOSE_WRITE | IN_MOVED_FROM | IN_MOVED_TO | IN_ATTRIB | IN_DELETE_SELF | IN_MOVE_SELF)
@@ -2131,6 +2131,12 @@ static void json_events_array_range(
             return;
         }
     }
+    while (ptr < end && isspace((unsigned char)*ptr)) {
+        ptr++;
+    }
+    if (ptr < end && *ptr != ']') {
+        subscription->event_count = -1; /* More than fit: never drop some silently. */
+    }
 }
 
 static int subscription_matches_event(const struct subscription *subscription, const char *event_type)
@@ -2410,8 +2416,9 @@ static void handle_subscriptions_post(
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"https_unavailable\"}\n");
         return;
     }
-    if (subscription.event_count == 0) {
-        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"events_required\"}\n");
+    if (subscription.event_count <= 0) {
+        send_json(client_fd, 400, "Bad Request", subscription.event_count < 0
+            ? "{\"ok\":false,\"error\":\"too_many_events\"}\n" : "{\"ok\":false,\"error\":\"events_required\"}\n");
         return;
     }
     had_existing = runtime->subscription_count > 0;

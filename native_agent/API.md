@@ -472,7 +472,8 @@ Request fields:
 Validation:
 
 - `callback_url` is required.
-- `events` must contain at least one event.
+- `events` must contain at least one event and at most 32; more are refused
+  with `too_many_events`, never cut.
 - Unsupported callback URLs are rejected with `unsupported_callback_url`.
 - HTTP and HTTPS are accepted. HTTPS requires `capabilities.https_callbacks`;
   otherwise registration returns `https_unavailable`. TLS verifies the server's

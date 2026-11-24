@@ -11,6 +11,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import secrets
 import shlex
 import stat
 from dataclasses import dataclass
@@ -651,15 +652,7 @@ class _AsyncSshDeviceSshClient(_DeviceSshClient):
         file_mode = mode or f"{stat.S_IMODE(source.stat().st_mode):04o}"
         if _remote_content_matches_sync(self, remote_path, content):
             return _ensure_remote_mode_sync(self, remote_path, file_mode)
-        temp_path = f"{remote_path}.new"
-        self.run(
-            (
-                f"umask 077 && cat > {_quote(temp_path)} && "
-                f"chmod {file_mode} {_quote(temp_path)} && "
-                f"mv -f {_quote(temp_path)} {_quote(remote_path)}"
-            ),
-            content,
-        )
+        self.run(_verified_upload_command(remote_path, content, file_mode), content)
         return True
 
     def close(self) -> None:
@@ -686,7 +679,7 @@ def _install_startup_script_sync(
     remote_dir: str,
 ) -> tuple[str, ...]:
     changed_files: list[str] = []
-    temp_path = f"{remote_dir}/.c300x-native-agent-init.new"
+    temp_path = _unique_temp_path(f"{remote_dir}/.c300x-native-agent-init")
     env_path = f"{remote_dir}/{REMOTE_INIT_ENV_NAME}"
     init_content = _render_startup_script(source, remote_dir)
     init_changed = not _remote_content_matches_sync(
@@ -708,13 +701,14 @@ def _install_startup_script_sync(
         changed_files.append(env_path)
     if init_changed:
         client.run(
-            f"umask 077 && cat > {_quote(temp_path)} && chmod 700 {_quote(temp_path)}",
+            f"{{ {_verified_stage_command(temp_path, init_content, '700')}; }} "
+            f"|| {{ rm -f {_quote(temp_path)}; exit 1; }}",
             init_content,
         )
     if init_changed or link_changed:
         # remote_dir can be on another filesystem. Copy beside the live init
         # first so a failed copy never truncates the script used at boot.
-        init_temp_path = f"{REMOTE_INIT_SCRIPT}.new"
+        init_temp_path = _unique_temp_path(REMOTE_INIT_SCRIPT)
         install_init = (
             f"rm -f {_quote(init_temp_path)} && "
             f"cp {_quote(temp_path)} {_quote(init_temp_path)} && "
@@ -731,7 +725,9 @@ def _install_startup_script_sync(
                 f"{install_init}"
                 f"if [ $rc -eq 0 ]; then ln -sf {_quote(REMOTE_INIT_SCRIPT)} {_quote(REMOTE_INIT_LINK)}; rc=$?; fi; "
                 "mount -o remount,ro /; ro_rc=$?; "
-                "if [ $rc -eq 0 ]; then rc=$ro_rc; fi; fi; exit $rc"
+                "if [ $rc -eq 0 ]; then rc=$ro_rc; fi; fi; "
+                + (f"rm -f {_quote(temp_path)}; " if init_changed else "")
+                + "exit $rc"
             ),
         )
         if init_changed:
@@ -763,15 +759,39 @@ def _write_remote_file_sync(
 ) -> bool:
     if _remote_content_matches_sync(client, remote_path, content):
         return _ensure_remote_mode_sync(client, remote_path, mode)
-    client.run(
-        (
-            f"umask 077 && cat > {_quote(f'{remote_path}.new')} && "
-            f"chmod {mode} {_quote(f'{remote_path}.new')} && "
-            f"mv -f {_quote(f'{remote_path}.new')} {_quote(remote_path)}"
-        ),
-        content,
-    )
+    client.run(_verified_upload_command(remote_path, content, mode), content)
     return True
+
+
+def _unique_temp_path(path: str) -> str:
+    """Name a staging file that no other install run can share."""
+
+    return f"{path}.c300x-{secrets.token_hex(8)}.new"
+
+
+def _verified_stage_command(temp_path: str, content: bytes, mode: str) -> str:
+    """Write stdin to temp_path and succeed only if it holds exactly content.
+
+    A cut SSH stream still ends with EOF, so cat can exit 0 on a partial file.
+    """
+
+    temp = _quote(temp_path)
+    return (
+        f"umask 077 && cat > {temp} && sum=$(sha256sum < {temp}) && "
+        f'[ "${{sum%% *}}" = {hashlib.sha256(content).hexdigest()} ] && '
+        f"chmod {mode} {temp}"
+    )
+
+
+def _verified_upload_command(remote_path: str, content: bytes, mode: str) -> str:
+    """Move a verified upload into place; never leave its staging file behind."""
+
+    temp_path = _unique_temp_path(remote_path)
+    return (
+        f"{{ {_verified_stage_command(temp_path, content, mode)} && "
+        f"mv -f {_quote(temp_path)} {_quote(remote_path)}; }}; "
+        f"rc=$?; rm -f {_quote(temp_path)}; exit $rc"
+    )
 
 
 def _remote_content_matches_sync(

@@ -80,7 +80,8 @@ def test_startup_copy_failure_preserves_init_and_retry_is_idempotent(
                 installer._install_startup_script_sync(client, source, str(agent))
             assert init.read_bytes() == original
             assert link.readlink() == init
-            assert not Path(f"{init}.new").exists()
+            assert not list(root.glob("init.*"))
+            assert not list(agent.glob(".c300x-native-agent-init*"))
             assert client.mounts[-2:] == [
                 "MOCK_MOUNT -o remount,rw /", "MOCK_MOUNT -o remount,ro /",
             ]
@@ -91,8 +92,8 @@ def test_startup_copy_failure_preserves_init_and_retry_is_idempotent(
         assert init.read_bytes() == installer._render_startup_script(source, str(agent))
         assert init.stat().st_mode & 0o777 == 0o700
         assert link.readlink() == init
-        assert not Path(f"{init}.new").exists()
-        assert not (agent / ".c300x-native-agent-init.new").exists()
+        assert not list(root.glob("init.*"))
+        assert not list(agent.glob(".c300x-native-agent-init*"))
         stamp = init.stat().st_mtime_ns
         mount_count = len(client.mounts)
         assert installer._install_startup_script_sync(client, source, str(agent)) == ()

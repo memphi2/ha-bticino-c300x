@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import types
@@ -393,7 +394,7 @@ def test_bootstrap_install_uses_python_ssh_client(
         for command in fake_client.commands
         if command[1] and b"DEFAULT_AGENT_DIR" in command[1]
     )
-    assert f"{remote_dir}/.c300x-native-agent-init.new" in init_write[0]
+    assert re.search(rf"{remote_dir}/\.c300x-native-agent-init\.c300x-[0-9a-f]{{16}}\.new", init_write[0])
     assert f'DEFAULT_AGENT_DIR="{remote_dir}"'.encode() in init_write[1]
     assert DEFAULT_REMOTE_DIR.encode() not in init_write[1]
     defaults_write = next(
@@ -406,7 +407,7 @@ def test_bootstrap_install_uses_python_ssh_client(
     config_write = next(
         command for command in fake_client.commands if command[1] and b"api-token" in command[1]
     )
-    assert f"{remote_dir}/config.json.new" in config_write[0]
+    assert f"{remote_dir}/config.json.c300x-" in config_write[0]
     assert any(command[0] == "/etc/init.d/c300x-native-agent restart" for command in fake_client.commands)
     assert any(command[0] == f"readlink {device_installer.REMOTE_INIT_LINK}" for command in fake_client.commands)
     assert any(command[0] == f"{device_installer.REMOTE_INIT_SCRIPT} status" for command in fake_client.commands)
@@ -625,7 +626,7 @@ def test_write_remote_file_replaces_changed_content_atomically() -> None:
         mode="600",
     )
     write_command, input_data = client.commands[-1]
-    assert "config.json.new" in write_command
+    assert "config.json.c300x-" in write_command
     assert "chmod 600" in write_command
     assert "mv -f" in write_command
     assert input_data == content
@@ -754,11 +755,15 @@ def test_asyncssh_put_file_replaces_changed_payload(tmp_path: Path) -> None:
     client.run = fake_run
 
     assert client.put_file(payload, "/remote/config.json", "600") is True
-    assert commands[-1] == (
-        "umask 077 && cat > /remote/config.json.new && "
-        "chmod 600 /remote/config.json.new && "
-        "mv -f /remote/config.json.new /remote/config.json",
-        b"new",
+    command, data = commands[-1]
+    assert data == b"new"
+    temp = r"(/remote/config\.json\.c300x-[0-9a-f]{16}\.new)"
+    digest = hashlib.sha256(b"new").hexdigest()
+    assert re.fullmatch(
+        r"\{ umask 077 && cat > " + temp + r" && sum=\$\(sha256sum < \1\) && "
+        r'\[ "\$\{sum%% \*\}" = ' + digest + r" \] && chmod 600 \1 && "
+        r"mv -f \1 /remote/config\.json; \}; rc=\$\?; rm -f \1; exit \$rc",
+        command,
     )
 
 
@@ -890,7 +895,7 @@ def test_startup_script_recreates_missing_rc_link_without_rewriting_init(
         for command in client.commands
     )
     link_repair = next(command[0] for command in client.commands if "ln -sf" in command[0])
-    assert ".c300x-native-agent-init.new" not in link_repair
+    assert ".c300x-native-agent-init." not in link_repair
     assert "mv -f" not in link_repair
 
 
@@ -927,7 +932,7 @@ def test_startup_script_update_preserves_init_move_failure_status(
                 return "644\n"
             if command.startswith("readlink "):
                 raise device_installer.C300XDeviceInstallError("device_install_failed")
-            if command.startswith("umask 077 && cat > "):
+            if command.startswith("{ umask 077 && cat > ") and "mv -f" not in command:
                 return ""
             if "mv -f" in command:
                 return ""
@@ -960,9 +965,10 @@ def test_startup_script_update_preserves_init_move_failure_status(
     assert "mv -f" in update_command
     assert "if [ $rc -eq 0 ]; then ln -sf" in update_command
     assert "fi; rc=$?" not in update_command
-    assert update_command.endswith(
-        "mount -o remount,ro /; ro_rc=$?; "
-        "if [ $rc -eq 0 ]; then rc=$ro_rc; fi; fi; exit $rc"
+    assert re.search(
+        r"mount -o remount,ro /; ro_rc=\$\?; if \[ \$rc -eq 0 \]; then rc=\$ro_rc; fi; fi; "
+        r"rm -f \S+/\.c300x-native-agent-init\.c300x-[0-9a-f]{16}\.new; exit \$rc$",
+        update_command,
     )
 
 

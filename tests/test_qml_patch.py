@@ -606,3 +606,57 @@ def test_a_real_status_read_clears_an_earlier_failed_read() -> None:
     asyncio.run(async_refresh_qml_patch_status(entry))
 
     assert diagnostics.last_error is None
+
+
+@dataclass
+class _RestartingApi(_FakeApi):
+    """The station answers its write while the display restart still runs."""
+
+    pending_reads: int = 2
+
+    async def async_qml_patch_status(self) -> dict[str, Any]:
+        self.calls.append("qml_status")
+        if self.pending_reads > 0:
+            self.pending_reads -= 1
+            return {**self.status, "gui_restart": "pending", "gui_running": False}
+        return {**self.status, "gui_restart": "idle"}
+
+
+_ACTIVE = {"ok": True, "available": True, "patched": True, "core_patched": True,
+           "gui_running": True, "qt5_overlay": "active"}
+
+
+@pytest.mark.parametrize("core", [False, True])
+def test_a_restart_still_running_is_waited_for_not_failed(monkeypatch, core):
+    from custom_components.bticino_c300x import qml_patch
+
+    monkeypatch.setattr(qml_patch, "DISPLAY_RESTART_POLL_SECONDS", 0)
+    pending = {**_ACTIVE, "gui_running": False, "gui_restart": "pending", "changed_files": 3}
+    api = _RestartingApi(status=_ACTIVE, apply_status=pending, core_apply_status=pending)
+    entry = _entry(api)
+    run = async_apply_qml_core_patch_and_confirm if core else async_apply_qml_patch_and_confirm
+    status = asyncio.run(run(entry))
+    assert status["gui_restart"] == "idle" and status["gui_running"] is True
+    assert api.calls.count("qml_status") >= 3
+
+
+def test_a_restart_that_does_not_end_in_time_is_not_confirmed(monkeypatch):
+    from custom_components.bticino_c300x import qml_patch
+    from custom_components.bticino_c300x.api_errors import C300XDisplayNotConfirmedError
+
+    monkeypatch.setattr(qml_patch, "DISPLAY_RESTART_POLL_SECONDS", 0)
+    monkeypatch.setattr(qml_patch, "DISPLAY_RESTART_WAIT_SECONDS", 0.05)
+    pending = {**_ACTIVE, "gui_running": False, "gui_restart": "pending"}
+    api = _RestartingApi(status=_ACTIVE, core_apply_status=pending, pending_reads=10**6)
+    with pytest.raises(C300XDisplayNotConfirmedError, match="still running"):
+        asyncio.run(async_apply_qml_core_patch_and_confirm(_entry(api)))
+
+
+def test_the_update_followup_waits_for_a_pending_restart(monkeypatch):
+    from custom_components.bticino_c300x import qml_patch
+
+    monkeypatch.setattr(qml_patch, "DISPLAY_RESTART_POLL_SECONDS", 0)
+    pending = {**_ACTIVE, "gui_running": False, "gui_restart": "pending"}
+    api = _RestartingApi(status=_ACTIVE, apply_status=pending, core_apply_status=pending, pending_reads=1)
+    status = asyncio.run(async_restore_qml_patches_after_update(_entry(api), apply_full_patch=True))
+    assert status["gui_running"] is True

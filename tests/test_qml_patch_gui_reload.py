@@ -618,3 +618,16 @@ def test_a_write_during_a_restart_is_not_taken_for_a_failed_overlay(overlay: Ove
     assert not overlay.mark.exists()
     # The boot, the first restart, and one restart with the written files.
     assert _starts(overlay) == ["overlay", "overlay", "overlay"]
+
+
+def test_a_restart_still_running_is_reported_as_pending(overlay: OverlayStation) -> None:
+    """A write whose wait ended before its restart says so; a later status read tells the outcome."""
+
+    overlay.boot(C300X_TEST_TEARDOWN="3")
+    overlay.mark.write_text("boot-1\n")
+    status = overlay.run("core-apply", C300X_QML_GUI_BUDGET_SECONDS="0")
+    assert status["ok"] is True and status["gui_restart"] == "pending", status
+    assert len(_settled(overlay)) == 1
+    later = overlay.run("status")
+    assert later["gui_restart"] == "idle" and later["gui_running"] is True
+    assert later["qt5_overlay"] == "active"

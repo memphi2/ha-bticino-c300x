@@ -253,10 +253,18 @@ A plain reload keeps a mark of this boot and starts stock.
 
 **Time budget.** A request waits at most until 24 s after the script started
 (`C300X_QML_GUI_BUDGET_SECONDS`), within the agent's 30 s job limit, and at
-most 5 s after a signal. A cycle still running then is not a failure: the
-write is committed and the worker finishes the restart; the status read
-afterwards shows its outcome. Only a cycle that ended without any display
-program fails the restart (and rolls a write back).
+most 5 s after the first signal. A cycle still running then is not a
+failure: the write is committed, the worker finishes the restart, and the
+answer says `"gui_restart":"pending"`. Every status read reports
+`gui_restart` (`pending` while a request is queued or a worker runs, else
+`idle`). HA (`async_display_restart_settled`) and the SSH installer read the
+status every 2 s until it is `idle`, at most 180 s (a cycle with a retry and
+the stock fallback takes about three minutes at worst), and judge the
+display then; one still pending after that counts as not confirmed. The
+agent's media-user label write accepts a pending restart: the label is
+written and a failed restart shows in the display status. Only a cycle that
+ended without any display program fails the restart (and rolls a write
+back).
 
 **Install and update.** A failed core-apply or apply on the Qt 5 display does
 not fail the SSH install or the agent update: the agent is installed, the

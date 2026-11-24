@@ -115,3 +115,28 @@ def test_real_qt5_label_restore_is_not_skipped(route_binary, programs, tmp_path,
     assert status["qt5_overlay"] == ("failed" if quarantined else "active")
     assert failed.exists() is quarantined
     assert device.packed("Components/Settings/CallBlockPopup.qml") is None
+
+
+@pytest.mark.parametrize("operation", ["ensure", "restore"])
+def test_a_label_write_whose_display_restart_still_runs_is_accepted(route_binary, tmp_path, operation):
+    """The label is written; the restart in flight shows it, its outcome shows in the status."""
+
+    applying = operation == "ensure"
+    response = {"ok": True, "qt5_overlay": "active", "gui_running": False, "gui_restart": "pending",
+                "media_user_label_patched": applying,
+                "media_user_label_state": "patched" if applying else "original"}
+    script = tmp_path / "qml-patch"
+    script.write_text("#!/bin/sh\nprintf '%s\\n' '" + json.dumps(response) + "'\n")
+    script.chmod(0o700)
+    result = route(route_binary, script, operation)
+    assert result["status"] == 200, result
+    assert result["restored"] == int(not applying)
+
+
+def test_a_label_write_without_a_display_and_no_restart_is_refused(route_binary, tmp_path):
+    response = {"ok": True, "qt5_overlay": "active", "gui_running": False, "gui_restart": "idle",
+                "media_user_label_patched": True, "media_user_label_state": "patched"}
+    script = tmp_path / "qml-patch"
+    script.write_text("#!/bin/sh\nprintf '%s\\n' '" + json.dumps(response) + "'\n")
+    script.chmod(0o700)
+    assert route(route_binary, script, "ensure")["status"] == 500

@@ -109,8 +109,13 @@ json_status() {
     if [ "$QT5_DISPLAY" = "1" ]; then
         # A request nobody serves (its worker died, or no requester waits any
         # more) is taken up by the next status read.
+        gui_restart=idle
         if [ -d "$GUI_RUN_DIR/requests" ] && gui_requests_waiting; then
             gui_spawn_worker
+            gui_restart=pending
+        elif [ -e "$GUI_RUN_DIR/lock" ] && command -v "$GUI_FLOCK" >/dev/null 2>&1 \
+            && ! "$GUI_FLOCK" -n "$GUI_RUN_DIR/lock" true 2>/dev/null; then
+            gui_restart=pending
         fi
         qt5_overlay="$(qt5_overlay_state)"
         # Left over from a run cut short: restore-all takes it away.
@@ -118,7 +123,9 @@ json_status() {
             state=partial
             patched=null
         fi
-        qt5_fields=",\"qt5_overlay\":\"$qt5_overlay\""
+        # pending: a display restart is still queued or running; its outcome
+        # (gui_running, qt5_overlay) shows in a status read after it.
+        qt5_fields=",\"qt5_overlay\":\"$qt5_overlay\",\"gui_restart\":\"$gui_restart\""
         if [ -s "$QT5_UNSUPPORTED" ]; then
             qt5_fields="$qt5_fields,\"qt5_unsupported\":\"$(tr -cd 'a-z0-9_' < "$QT5_UNSUPPORTED" | head -c 48)\""
         fi

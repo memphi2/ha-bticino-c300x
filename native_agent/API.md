@@ -1663,6 +1663,15 @@ when the home page carries neither layout. On firmware 3.0.x it is also `null`
 while the overlay is not active (`qt5_overlay` other than `active`): the
 display then shows the vendor home page.
 
+On firmware 3.0.x, `gui_restart` says whether a display restart is still
+queued or running (`"pending"`) or not (`"idle"`). A write whose restart had
+not ended when its wait on the station ended answers `200` with
+`"gui_restart":"pending"`; that is not a failure, and `gui_running` and
+`qt5_overlay` in that answer describe the moment of the answer. Read the
+status until `gui_restart` is `"idle"` for the outcome. Home Assistant, the
+SSH installer and the media-user label write handle it so; the label write
+accepts a pending restart because the label is already written.
+
 On firmware 3.0.x, `qt5_unsupported` names why the station's display program or
 start script is not one the agent knows (`display_program_unknown`,
 `display_resource_missing`, `display_file_unsupported`,

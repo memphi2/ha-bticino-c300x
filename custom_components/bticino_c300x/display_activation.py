@@ -3,7 +3,7 @@
 from collections.abc import Mapping
 from typing import Any
 
-from .api_errors import C300XAgentApiError
+from .api_errors import C300XDisplayNotConfirmedError
 
 
 def display_activation_confirmed(status: Mapping[str, Any], *, required: bool = True) -> bool:
@@ -16,8 +16,20 @@ def display_activation_confirmed(status: Mapping[str, Any], *, required: bool = 
     overlay = status.get("qt5_overlay")
     if overlay is None:
         return True
+    if display_restart_pending(status):
+        return False
     accepted = ("active",) if required else ("active", "off")
     return overlay in accepted and status.get("gui_running") is True
+
+
+def display_restart_pending(status: Mapping[str, Any] | None) -> bool:
+    """Whether the station still restarts its display (Qt 5 restart worker).
+
+    A write answers once its restart ran or its wait ended; a restart still
+    in flight is not a failure. Its outcome shows in a later status read.
+    """
+
+    return isinstance(status, Mapping) and status.get("gui_restart") == "pending"
 
 
 def display_unsupported(status: Mapping[str, Any] | None) -> str | None:
@@ -36,12 +48,17 @@ def require_display_activation(status: Mapping[str, Any], *, required: bool = Tr
 
     reason = display_unsupported(status)
     if required and reason is not None:
-        raise C300XAgentApiError(
+        raise C300XDisplayNotConfirmedError(
             f"The display pages are not available on this station ({reason}); "
             "the agent runs without them."
         )
+    if display_restart_pending(status):
+        raise C300XDisplayNotConfirmedError(
+            "The display restart is still running on the station; "
+            "its outcome shows in the display status."
+        )
     if not display_activation_confirmed(status, required=required):
-        raise C300XAgentApiError(
+        raise C300XDisplayNotConfirmedError(
             "Qt 5 display activation is not confirmed; inspect the display status and log. "
             "A quarantined overlay holds until the next boot; applying the Display "
             "patch or the core Repair tries it once more."

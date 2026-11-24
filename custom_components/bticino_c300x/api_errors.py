@@ -55,6 +55,14 @@ class C300XAgentApiAuthError(C300XAgentApiError):
         )
 
 
+class C300XDisplayNotConfirmedError(C300XAgentApiError):
+    """The display step ran on the station, but its display is not confirmed.
+
+    The Qt 5 overlay is quarantined, incomplete or off, no display program
+    runs, or the display restart was still running when the wait ended.
+    """
+
+
 class C300XAgentApiResponseError(C300XAgentApiError):
     """Raised when the device agent returns an invalid response."""
 

@@ -160,3 +160,24 @@ def test_a_failed_display_step_on_qt5_does_not_fail_the_install(
     assert _install() == ()
     assert client.closed
     assert client.actions == (["core-apply"] if action == "core-apply" else ["core-apply", "apply"])
+
+
+def test_a_restart_still_running_is_waited_for(client: FakeClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(installer, "DISPLAY_RESTART_POLL_SECONDS", 0)
+    client.qt5 = True
+    active = {"ok": True, "core_patched": True, "gui_running": True, "patched": False,
+              "qt5_overlay": "active"}
+    client.responses["core-apply"] = json.dumps({**active, "gui_running": False, "gui_restart": "pending"})
+    reads = iter([{**active, "gui_running": False, "gui_restart": "pending"}, {**active, "gui_restart": "idle"}])
+    client.responses["status"] = None
+    original = client.run
+
+    def run(command: str) -> str:
+        if command.endswith("qml_patch.sh status"):
+            client.actions.append("status")
+            return json.dumps(next(reads))
+        return original(command)
+
+    client.run = run  # type: ignore[method-assign]
+    _install(apply_gui_patch=False)
+    assert client.actions == ["core-apply", "status", "status"]

@@ -20,11 +20,16 @@ const char *c300x_label_trim(char *value)
 
 int c300x_label_qt5_state_ok(const char *body, int applying)
 {
-    char overlay[32] = "";
+    char overlay[32] = "", restart[16] = "";
     int running = 0, patched = 0;
     c300x_json_string_field(body, "qt5_overlay", overlay, sizeof(overlay));
     if (overlay[0] == '\0') return 1; /* Legacy Qt4 status contract. */
-    if (!c300x_json_bool_field(body, "gui_running", &running) || !running
+    /* The label is written; a restart still in flight shows it when it ends,
+     * and a failed one shows in the display status like any other. */
+    c300x_json_string_field(body, "gui_restart", restart, sizeof(restart));
+    if (strcmp(restart, "pending") == 0) running = 1;
+    else if (!c300x_json_bool_field(body, "gui_running", &running)) return 0;
+    if (!running
         || !c300x_json_bool_field(body, "media_user_label_patched", &patched)
         || patched != applying) return 0;
     /* Removing a label must not reactivate an unrelated quarantined overlay. */

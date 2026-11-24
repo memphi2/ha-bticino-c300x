@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from asyncio import Lock
 from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from datetime import UTC, datetime
+from time import monotonic
 from typing import Any
 
 from .agent_update import async_retry_update_maintenance_busy
@@ -23,6 +25,7 @@ from .const import (
 )
 from .display_activation import (
     display_activation_confirmed,
+    display_restart_pending,
     display_unsupported,
     require_display_activation,
 )
@@ -31,6 +34,11 @@ from .entry_locks import entry_lock
 from .entry_types import BticinoC300XConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
+
+# A Qt 5 restart cycle takes about 20 s; one that retries the overlay and then
+# falls back to the stock display can take about three minutes.
+DISPLAY_RESTART_WAIT_SECONDS = 180.0
+DISPLAY_RESTART_POLL_SECONDS = 2.0
 
 
 def _qml_patch_lock(entry: BticinoC300XConfigEntry) -> Lock:
@@ -59,6 +67,31 @@ async def async_refresh_qml_patch_status(
     )
     if diagnostics is not None:
         diagnostics.mark_success(datetime.now(UTC))
+    return status
+
+
+async def async_display_restart_settled(
+    entry: BticinoC300XConfigEntry, status: dict[str, Any],
+) -> dict[str, Any]:
+    """Return the status once the station's display restart has ended.
+
+    A write on the Qt 5 display answers when its restart ran or its wait on
+    the station ended; in the second case the answer says the restart is
+    pending. The status is read again until it ended, at most
+    DISPLAY_RESTART_WAIT_SECONDS; the answer's own fields stay underneath.
+    """
+
+    deadline = monotonic() + DISPLAY_RESTART_WAIT_SECONDS
+    read = entry.runtime_data.api.async_qml_patch_status
+    while display_restart_pending(status) and monotonic() < deadline:
+        await asyncio.sleep(DISPLAY_RESTART_POLL_SECONDS)
+        try:
+            later: dict[str, Any] = await async_retry_update_maintenance_busy(read)
+        except C300XAgentApiError as err:
+            _LOGGER.warning("C300X: the display status could not be read during a restart: %s", err)
+            break
+        status = {**status, **later}
+        _store_qml_patch_status(entry, status)
     return status
 
 
@@ -137,6 +170,7 @@ async def async_restore_qml_patches_after_update(
     async with _qml_patch_lock(entry):
         core_status: dict[str, Any] = await busy_retry(api.async_apply_qml_core_patch)
         _store_qml_patch_status(entry, core_status)
+        core_status = await async_display_restart_settled(entry, core_status)
         if display_unsupported(core_status):
             # Nothing to bring back: the agent runs without the display pages.
             return core_status
@@ -154,7 +188,9 @@ async def async_restore_qml_patches_after_update(
                 refresh=lambda entry: async_refresh_qml_patch_status(entry, wait_busy=True),
             )
         await busy_retry(api.async_reload_gui)
-        status = await async_refresh_qml_patch_status(entry, wait_busy=True)
+        status = await async_display_restart_settled(
+            entry, await async_refresh_qml_patch_status(entry, wait_busy=True)
+        )
         require_display_activation(status)
         if status.get("qt5_overlay") is not None and (
             status.get("core_patched") is not True
@@ -314,6 +350,9 @@ async def _async_settle_qml_patch_action(
         _store_qml_patch_status(entry, previous_status)
         _notify_status_changed(status_changed)
         raise
+    if display_restart_pending(action_status):
+        _store_qml_patch_status(entry, action_status)
+        action_status = await async_display_restart_settled(entry, action_status)
     if not confirmed(action_status):
         _store_qml_patch_status(entry, action_status)
         _notify_status_changed(status_changed)

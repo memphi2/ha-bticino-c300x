@@ -14,6 +14,7 @@ import logging
 import secrets
 import shlex
 import stat
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
@@ -28,7 +29,11 @@ from .const import (
     DOMAIN,
 )
 from .device_activations import desired_activation_items
-from .display_activation import display_activation_confirmed, display_unsupported
+from .display_activation import (
+    display_activation_confirmed,
+    display_restart_pending,
+    display_unsupported,
+)
 from .factory_login import LOGIN_REFUSED
 
 if TYPE_CHECKING:
@@ -966,13 +971,13 @@ def _apply_display_step_sync(
         return False
 
 
-def _apply_qml_patch_sync(client: _DeviceSshClient, remote_dir: str, action: str) -> bool:
-    """Require the patcher's reported outcome, not just a successful shell exit.
+# As for the agent API (qml_patch.DISPLAY_RESTART_*): the worker's cycle with
+# a retry and the stock fallback ends within about three minutes.
+DISPLAY_RESTART_WAIT_SECONDS = 180.0
+DISPLAY_RESTART_POLL_SECONDS = 2.0
 
-    False: the station's display is one the agent does not know, so it stays
-    as shipped and the agent runs without the display pages.
-    """
 
+def _run_qml_patch_sync(client: _DeviceSshClient, remote_dir: str, action: str) -> dict[str, Any]:
     output = client.run(
         f"C300X_QML_SOURCE_DIR={_quote(f'{remote_dir}/qml')} "
         f"{_quote(f'{remote_dir}/qml_patch.sh')} {action}"
@@ -981,6 +986,24 @@ def _apply_qml_patch_sync(client: _DeviceSshClient, remote_dir: str, action: str
         result = json.loads(output)
     except (TypeError, ValueError) as err:
         raise C300XDeviceInstallError("device_install_verify_failed") from err
+    if not isinstance(result, dict):
+        raise C300XDeviceInstallError("device_install_verify_failed")
+    return result
+
+
+def _apply_qml_patch_sync(client: _DeviceSshClient, remote_dir: str, action: str) -> bool:
+    """Require the patcher's reported outcome, not just a successful shell exit.
+
+    False: the station's display is one the agent does not know, so it stays
+    as shipped and the agent runs without the display pages.
+    """
+
+    result = _run_qml_patch_sync(client, remote_dir, action)
+    # A restart still running on the station is not a failure: wait for it.
+    deadline = time.monotonic() + DISPLAY_RESTART_WAIT_SECONDS
+    while display_restart_pending(result) and time.monotonic() < deadline:
+        time.sleep(DISPLAY_RESTART_POLL_SECONDS)
+        result = {**result, **_run_qml_patch_sync(client, remote_dir, "status")}
     reason = display_unsupported(result)
     if reason is not None and result.get("error") == "display_unsupported":
         _LOGGER.warning(

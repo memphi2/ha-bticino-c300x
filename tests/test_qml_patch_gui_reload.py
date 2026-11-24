@@ -648,3 +648,23 @@ def test_a_request_of_a_worker_that_died_is_served_by_the_next_worker(station: S
     assert (station.run_dir / "done" / orphan).read_text() == "0\n"
     assert _kinds(station).count("wrapper") == 2
     assert not list((station.run_dir / "serving").iterdir())
+
+
+def test_a_note_of_a_killed_writer_whose_pid_was_reused_does_not_block_the_restart(
+    station: Station,
+) -> None:
+    """The note's PID runs, but it is not this script: no write, the note goes."""
+
+    station.boot(C300X_TEST_TEARDOWN="1")
+    foreign = subprocess.Popen(["sleep", "120"])
+    try:
+        station.run_dir.mkdir()
+        (station.run_dir / "writing").write_text(f"{foreign.pid}\n")
+        result = station.reload()
+        assert result.returncode == 0, result.stderr
+        assert _wait_for(lambda: _kinds(station).count("wrapper") == 2, 20), station.events()
+        assert len(_settled(station)) == 1
+        assert not (station.run_dir / "writing").exists()
+    finally:
+        foreign.kill()
+        foreign.wait()

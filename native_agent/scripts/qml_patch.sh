@@ -489,7 +489,7 @@ gui_verify() {
     while :; do
         # A mark set while a write changes the files is the write's own.
         "$GUI_FLOCK" 8
-        if gui_writer_active; then
+        if gui_writer_active drop; then
             "$GUI_FLOCK" -u 8
             gui_result=superseded
             return 0
@@ -536,7 +536,7 @@ gui_verify() {
 # activation files: nothing starts with half of them (returns 2).
 gui_start_unless_writing() {
     "$GUI_FLOCK" 8
-    if gui_writer_active; then
+    if gui_writer_active drop; then
         "$GUI_FLOCK" -u 8
         return 2
     fi
@@ -592,7 +592,12 @@ gui_worker() {
     done
     while :; do
         # A write in progress files its own request once its files are in place.
-        while gui_writer_active; do
+        while :; do
+            "$GUI_FLOCK" 8
+            gui_writer_active drop
+            gui_writer_busy=$?
+            "$GUI_FLOCK" -u 8
+            [ "$gui_writer_busy" = "0" ] || break
             gui_phase wait
             sleep 1
         done
@@ -667,9 +672,17 @@ gui_writing_end() {
     return 0
 }
 
+# A note whose PID is gone or is no longer this script (a killed writer, its
+# PID reused) is no write; with "drop", called under the activation lock, the
+# worker removes it.
 gui_writer_active() {
     gui_writer="$(cat "$GUI_RUN_DIR/writing" 2>/dev/null || true)"
-    [ -n "$gui_writer" ] && kill -0 "$gui_writer" 2>/dev/null
+    [ -n "$gui_writer" ] || return 1
+    transaction_owner_running "$gui_writer" && return 0
+    if [ "${1:-}" = "drop" ]; then
+        rm -f "$GUI_RUN_DIR/writing"
+    fi
+    return 1
 }
 
 gui_requests_waiting() {

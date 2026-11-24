@@ -426,6 +426,13 @@ def test_safe_c300x_path_accepts_static_config_www_root_without_config() -> None
     ) == Path("/config/www/c300x/clip.mp4")
 
 
+def test_safe_c300x_path_reports_a_nul_byte_as_an_invalid_path() -> None:
+    from homeassistant.exceptions import HomeAssistantError
+
+    with pytest.raises(HomeAssistantError, match="Invalid C300X output path"):
+        _safe_c300x_path(types.SimpleNamespace(), Path("/config/c300x/a\x00.mp4"), "output")
+
+
 def test_resolve_root_returns_original_path_on_os_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

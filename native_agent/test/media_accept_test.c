@@ -64,6 +64,60 @@ static bool options_answered(int fd) {
     return got > 0 && strncmp(response, "RTSP/1.0 200", 12) == 0;
 }
 
+static int connections(void) {
+    pthread_mutex_lock(&g_bridge.mutex);
+    int count = g_bridge.rtsp_client_threads;
+    pthread_mutex_unlock(&g_bridge.mutex);
+    return count;
+}
+
+static void wait_connections(int count) {
+    for (int i = 0; i < 500 && connections() != count; i++) usleep(2000);
+    assert(connections() == count);
+}
+
+static bool closed_by_peer(int fd) {
+    char byte;
+    return recv(fd, &byte, 1, 0) == 0;
+}
+
+static bool authenticated_request(int fd) {
+    const char *request = "GET_PARAMETER rtsp://127.0.0.1/doorbell-video RTSP/1.0\r\nCSeq: 2\r\n"
+        "Authorization: Basic dXNlcjpwYXNz\r\n\r\n";
+    char response[512] = {0};
+    if (send(fd, request, strlen(request), MSG_NOSIGNAL) != (ssize_t)strlen(request)) return false;
+    ssize_t got = recv(fd, response, sizeof(response) - 1, 0);
+    return got > 0 && strncmp(response, "RTSP/1.0 ", 9) == 0 && strstr(response, " 401 ") == NULL;
+}
+
+/* A full table of connections that never authenticate must not keep Home
+ * Assistant out: the oldest of them gives way, an authenticated one stays. */
+static void unauth_eviction_test(struct c300x_config *config, struct c300x_video *video) {
+    strcpy(config->video_rtsp_username, "user");
+    strcpy(config->video_rtsp_password, "pass");
+    assert(c300x_media_bridge_start(config, video));
+    unsigned port = listener_port();
+    int authenticated = connect_client(port);
+    assert(authenticated >= 0 && authenticated_request(authenticated));
+    int idle[RTSP_CONNECTION_LIMIT - 1];
+    for (int i = 0; i < RTSP_CONNECTION_LIMIT - 1; i++) {
+        idle[i] = connect_client(port);
+        assert(idle[i] >= 0);
+        wait_connections(i + 2);
+        usleep(5000);
+    }
+    int fresh = connect_client(port);
+    assert(fresh >= 0);
+    assert(options_answered(fresh));
+    assert(closed_by_peer(idle[0]));
+    assert(authenticated_request(authenticated));
+    wait_connections(RTSP_CONNECTION_LIMIT);
+    close(fresh);
+    close(authenticated);
+    for (int i = 0; i < RTSP_CONNECTION_LIMIT - 1; i++) close(idle[i]);
+    c300x_media_bridge_stop(video);
+}
+
 /* c300x_video_create starts the listener; the failures are armed before. */
 static void accept_error_test(struct c300x_config *config, struct c300x_video *video) {
     assert(c300x_media_bridge_start(config, video));
@@ -94,6 +148,8 @@ int main(int argc, char **argv) {
     assert(video);
     if (strcmp(argv[1], "accept_error") == 0) {
         accept_error_test(&config, video);
+    } else if (strcmp(argv[1], "unauth_eviction") == 0) {
+        unauth_eviction_test(&config, video);
     } else {
         return 2;
     }

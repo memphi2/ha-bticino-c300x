@@ -73,7 +73,7 @@ def test_rtsp_write_deadlines(media_binaries, case):
     assert result.returncode == 0, result.stderr
 
 
-@pytest.mark.parametrize("case", ["accept_error"])
+@pytest.mark.parametrize("case", ["accept_error", "unauth_eviction"])
 def test_rtsp_listener(media_binaries, case):
     result = subprocess.run([str(media_binaries / "media_accept"), case],
                             capture_output=True, text=True, timeout=30)

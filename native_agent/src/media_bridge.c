@@ -148,6 +148,8 @@ typedef struct {
     int rtsp_client_threads;
     /* All sockets, including clients awaiting authentication or closing after TEARDOWN. */
     int rtsp_connection_fds[RTSP_CONNECTION_LIMIT]; /* fd + 1; zero means unused. */
+    /* Accept time while unauthenticated, 0 once authenticated, -1 once evicted. */
+    long long rtsp_connection_since[RTSP_CONNECTION_LIMIT];
     bool running;
     bool startup_done;
     bool startup_ok;
@@ -5497,6 +5499,16 @@ void c300x_media_bridge_set_doorstation_audio_gain_tenths(
     pthread_mutex_unlock(&g_bridge.mutex);
 }
 
+static void mark_rtsp_connection_authenticated(media_bridge_t *bridge, int fd) {
+    pthread_mutex_lock(&bridge->mutex);
+    for (int index = 0; index < RTSP_CONNECTION_LIMIT; index++) {
+        if (bridge->rtsp_connection_fds[index] == fd + 1 && bridge->rtsp_connection_since[index] > 0) {
+            bridge->rtsp_connection_since[index] = 0;
+        }
+    }
+    pthread_mutex_unlock(&bridge->mutex);
+}
+
 static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
     (void)peer;
     struct c300x_rtsp_writer *writer = c300x_rtsp_writer_create();
@@ -5585,6 +5597,9 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
                 break;
             }
             continue;
+        }
+        if (!ever_authenticated) {
+            mark_rtsp_connection_authenticated(&g_bridge, fd);
         }
         ever_authenticated = true;
         if (slot_index < 0 && !teardown_seen) {
@@ -5993,14 +6008,43 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
     c300x_rtsp_writer_release(writer);
 }
 
+/* Shut down the oldest connection that never authenticated, so a few idle
+ * connections cannot keep Home Assistant out. Its thread frees the slot. */
+static bool evict_oldest_unauthenticated_locked(media_bridge_t *bridge) {
+    int oldest = -1;
+    bool pending = false;
+    for (int index = 0; index < RTSP_CONNECTION_LIMIT; index++) {
+        long long since = bridge->rtsp_connection_since[index];
+        pending = pending || since < 0;
+        if (bridge->rtsp_connection_fds[index] > 0 && since > 0
+            && (oldest < 0 || since < bridge->rtsp_connection_since[oldest])) {
+            oldest = index;
+        }
+    }
+    if (oldest >= 0) {
+        shutdown(bridge->rtsp_connection_fds[oldest] - 1, SHUT_RDWR);
+        bridge->rtsp_connection_since[oldest] = -1;
+    }
+    return oldest >= 0 || pending;
+}
+
 static int reserve_rtsp_client(media_bridge_t *bridge, int fd) {
     int index = -1;
+    long long deadline = c300x_monotonic_ms() + 1000;
     pthread_mutex_lock(&bridge->mutex);
-    if (bridge->running) {
+    while (bridge->running) {
         index = c300x_rtsp_connection_add(bridge->rtsp_connection_fds, fd);
         if (index >= 0) {
+            bridge->rtsp_connection_since[index] = c300x_monotonic_ms() | 1;
             bridge->rtsp_client_threads++;
+            break;
         }
+        if (!evict_oldest_unauthenticated_locked(bridge) || c300x_monotonic_ms() >= deadline) {
+            break;
+        }
+        pthread_mutex_unlock(&bridge->mutex);
+        usleep(10000);
+        pthread_mutex_lock(&bridge->mutex);
     }
     pthread_mutex_unlock(&bridge->mutex);
     return index;
@@ -6011,6 +6055,7 @@ static void release_rtsp_client(media_bridge_t *bridge, int fd, int index) {
     /* Keep shutdown from acting on a closed and potentially reused descriptor. */
     close(fd);
     bridge->rtsp_connection_fds[index] = 0;
+    bridge->rtsp_connection_since[index] = 0;
     bridge->rtsp_client_threads--;
     pthread_cond_broadcast(&bridge->ready_cond);
     pthread_mutex_unlock(&bridge->mutex);

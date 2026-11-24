@@ -4,6 +4,7 @@ import asyncio
 import base64
 import json
 from collections.abc import AsyncIterator, Callable
+from typing import Any
 
 import pytest
 from aiohttp import ClientError
@@ -284,6 +285,54 @@ def test_byte_request_reports_unsupported_endpoint() -> None:
 
     with pytest.raises(C300XAgentApiUnsupportedError, match="missing"):
         asyncio.run(api.async_memo_audio("voice/memo_1"))
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda api: api.async_home_call_status(),
+        lambda api: api.async_memo_audio("voice/memo_1"),
+        lambda api: api.async_firewall_status(),
+    ],
+    ids=["json", "bytes", "maintenance"],
+)
+def test_unknown_agent_route_501_reports_unsupported_endpoint(call: Any) -> None:
+    """The agent answers unknown /api/v1 routes with 501 not_implemented."""
+
+    session = _FakeSession(
+        '{"ok": false, "error": "not_implemented"}',
+        response_status=501,
+    )
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+    )
+
+    with pytest.raises(C300XAgentApiUnsupportedError, match="not_implemented"):
+        asyncio.run(call(api))
+
+
+def test_smartphone_forwarding_falls_back_to_state_on_501() -> None:
+    session = _QueuedSession(
+        [
+            (501, '{"ok": false, "error": "not_implemented"}'),
+            (200, '{"state": {}}'),
+        ]
+    )
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+    )
+
+    status = asyncio.run(api.async_smartphone_forwarding_status())
+
+    assert status.state == "unknown"
+    assert [request["args"] for request in session.requests] == [
+        ("GET", "http://agent.local:8080/api/v1/smartphone-forwarding"),
+        ("GET", "http://agent.local:8080/api/v1/state"),
+    ]
 
 
 def test_byte_request_reports_http_error() -> None:

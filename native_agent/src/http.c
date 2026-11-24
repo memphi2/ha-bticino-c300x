@@ -5213,6 +5213,8 @@ static void api_capabilities(
     const struct c300x_capabilities_context context = {
         .device_id = device_id,
         .memo_led_present = runtime != NULL && runtime->memo_led.claim_dir >= 0,
+        /* Firmware 3.0.x has no IPv6 firewall start script to patch. */
+        .ipv6_firewall_hook = access(config->maintenance_ipv6_firewall_path, F_OK) == 0,
         .picture_supported = picture == PICTURE_DIRECT || (runtime && c300x_gui_supports_picture(&runtime->ringer_control)),
         .device_firmware = firmware_value,
         .bundle_hash = bundle_hash,

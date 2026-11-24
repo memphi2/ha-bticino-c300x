@@ -75,6 +75,7 @@ int c300x_capabilities_json(
         "\"touch_tone\":{\"supported\":true,\"requires_display_patch\":true},"
         "\"display_alerts\":true,"
         "\"memo_led\":%s,"
+        "\"ipv6_firewall_hook\":%s,"
         "\"display_bridge\":{\"supported\":true,\"configurable\":true,\"configured\":%s}"
         "}"
         "}\n",
@@ -163,6 +164,7 @@ int c300x_capabilities_json(
         /* Firmware 3.0.x too: there it sets the low stream. */
         (maintenance_supported && config->video_enabled) ? "true" : "false",
         context->memo_led_present ? "true" : "false",
+        context->ipv6_firewall_hook ? "true" : "false",
         config->display_bridge_enabled ? "true" : "false"
     );
     return written >= 0 && (size_t)written < body_len;

@@ -23,6 +23,8 @@ FEATURE_PATCH_FILES="Settings.qml MainApp.qml HomePage.qml MemoPage.qml Componen
 PATCH_FILES="$FEATURE_PATCH_FILES $CORE_PATCH_FILES"
 OBSOLETE_GUI_FILES="C300XText.qml C300XEnergyDistribution.qml images/c300x_alarm_icon.svg images/c300x_alarm_icon_p.svg images/c300x_home_assistant_icon.svg images/c300x_home_assistant_icon_p.svg"
 TRANSACTION_STATE=
+TRANSACTION_FORMAT=.c300x-v2
+ROOT_RW_MARK="${TMPDIR:-/tmp}/c300x-qml-root-rw"
 
 json_status() {
     changed_files="${1:-}"
@@ -104,7 +106,11 @@ json_reload_failed() {
     if command -v pidof >/dev/null 2>&1 && pidof BtClass >/dev/null 2>&1; then
         gui_running=true
     fi
-    printf '{"ok":false,"available":true,"state":"reload_failed","patched":null,"core_state":"unknown","core_patched":null,"backup_available":%s,"core_backup_available":%s,"gui_running":%s}\n' "$backup_available" "$core_backup_available" "$gui_running"
+    transaction_field=
+    if [ -n "$TRANSACTION_STATE" ]; then
+        transaction_field=",\"transaction\":\"$TRANSACTION_STATE\""
+    fi
+    printf '{"ok":false,"available":true,"state":"reload_failed","patched":null,"core_state":"unknown","core_patched":null,"backup_available":%s,"core_backup_available":%s,"gui_running":%s%s}\n' "$backup_available" "$core_backup_available" "$gui_running" "$transaction_field"
 }
 
 file_contains() {
@@ -359,6 +365,7 @@ remount_rw() {
     if [ "$NO_REMOUNT" = "1" ]; then
         return 0
     fi
+    printf '%s %s\n' "$$" "$GUI_DIR" > "$ROOT_RW_MARK" 2>/dev/null || true
     mount -o remount,rw / >/dev/null 2>&1
 }
 
@@ -366,7 +373,14 @@ remount_ro() {
     if [ "$NO_REMOUNT" = "1" ]; then
         return 0
     fi
-    mount -o remount,ro / >/dev/null 2>&1
+    mount -o remount,ro / >/dev/null 2>&1 || return 1
+    rm -f "$ROOT_RW_MARK"
+}
+
+root_left_writable() {
+    [ "$NO_REMOUNT" != "1" ] && [ -f "$ROOT_RW_MARK" ] || return 1
+    read -r mark_pid mark_gui < "$ROOT_RW_MARK" || return 1
+    [ "$mark_gui" = "$GUI_DIR" ] && ! transaction_owner_running "$mark_pid"
 }
 
 rollback_transaction() {
@@ -374,14 +388,21 @@ rollback_transaction() {
     rollback_ok=1
     while read -r rollback_entry; do
         rollback_rel="${rollback_entry#?}"
+        rollback_target="$GUI_DIR/$rollback_rel"
         case "$rollback_entry" in
             -*)
-                rm -f "$GUI_DIR/$rollback_rel" || rollback_ok=0
+                if [ -e "$rollback_target" ] || [ -L "$rollback_target" ]; then
+                    if ! : > "$1/.c300x-reload" || ! rm -f "$rollback_target"; then
+                        rollback_ok=0
+                    fi
+                fi
                 ;;
             *)
                 if [ -f "$1/$rollback_rel" ]; then
-                    if ! mkdir -p "$(dirname "$GUI_DIR/$rollback_rel")" \
-                        || ! mv -f "$1/$rollback_rel" "$GUI_DIR/$rollback_rel"; then
+                    if ! cmp -s "$1/$rollback_rel" "$rollback_target" && ! : > "$1/.c300x-reload"; then
+                        rollback_ok=0
+                    elif ! mkdir -p "$(dirname "$rollback_target")" \
+                        || ! mv -f "$1/$rollback_rel" "$rollback_target"; then
                         rollback_ok=0
                     fi
                 fi
@@ -392,55 +413,149 @@ rollback_transaction() {
 }
 
 remove_transaction() {
-    rm -f "$1/.c300x-files" && rm -rf "$1"
+    rm -f "$1/.c300x-reload" "$1/.c300x-files" "$1/.c300x-files.tmp" || return 1
+    for remove_entry in "$1"/*; do
+        rm -rf "$remove_entry" || return 1
+    done
+    rm -f "$1/.c300x-stuck" || return 1
+    rm -f "$1/$TRANSACTION_FORMAT" && rm -rf "$1"
 }
 
 transaction_owner_running() {
+    case "$1" in
+        ''|*[!0-9]*) return 1 ;;
+    esac
     kill -0 "$1" 2>/dev/null || return 1
     [ -r "$PROC_DIR/$1/cmdline" ] || return 0
     tr '\000' ' ' < "$PROC_DIR/$1/cmdline" | grep -q -F "${0##*/}"
 }
 
-recover_transactions() {
-    recover_live=0
-    recover_mounted=0
-    recover_restored=0
-    for recover_dir in "$GUI_DIR"/.c300x-qml-transaction.*; do
-        recover_pid="${recover_dir##*.}"
-        case "$recover_pid" in
-            ''|*[!0-9]*) continue ;;
+leftover_transaction() {
+    leftover_pid="${1##*.}"
+    case "$leftover_pid" in
+        ''|*[!0-9]*) return 1 ;;
+    esac
+    if [ ! -d "$1" ] || [ -L "$1" ] || [ "$leftover_pid" = "$$" ]; then
+        return 1
+    fi
+    if transaction_owner_running "$leftover_pid"; then
+        TRANSACTION_LIVE=1
+        return 1
+    fi
+}
+
+legacy_copy_verified() {
+    find "$1" | while read -r legacy_path; do
+        if [ -d "$legacy_path" ] && [ ! -L "$legacy_path" ]; then
+            continue
+        fi
+        legacy_rel="${legacy_path#"$1"/}"
+        [ "$legacy_rel" != ".c300x-reload" ] || continue
+        [ -f "$legacy_path" ] && [ ! -L "$legacy_path" ] || exit 1
+        case " $OBSOLETE_GUI_FILES " in
+            *" $legacy_rel "*) continue ;;
         esac
-        if [ ! -d "$recover_dir" ] || [ "$recover_pid" = "$$" ]; then
+        case " $PATCH_FILES $MEDIA_USER_LABEL_FILES " in
+            *" $legacy_rel "*) ;;
+            *) exit 1 ;;
+        esac
+        cmp -s "$legacy_path" "$GUI_DIR/$legacy_rel" && continue
+        if [ -f "$BACKUP_DIR/$legacy_rel" ] && cmp -s "$legacy_path" "$BACKUP_DIR/$legacy_rel"; then
             continue
         fi
-        if transaction_owner_running "$recover_pid"; then
-            recover_live=1
+        if is_generated_patch_file "$legacy_rel" && cmp -s "$legacy_path" "$SOURCE_DIR/$legacy_rel"; then
             continue
         fi
-        if [ "$recover_mounted" = "0" ]; then
-            recover_mounted=1
-            remount_rw || true
+        exit 1
+    done
+}
+
+restore_legacy_transaction() {
+    [ ! -e "$1/.c300x-stuck" ] && legacy_copy_verified "$1" || return 1
+    for legacy_rel in $PATCH_FILES $MEDIA_USER_LABEL_FILES; do
+        if [ ! -f "$1/$legacy_rel" ] || cmp -s "$1/$legacy_rel" "$GUI_DIR/$legacy_rel"; then
+            continue
         fi
-        if [ -f "$recover_dir/.c300x-files" ]; then
-            recover_restored=1
-            if ! rollback_transaction "$recover_dir"; then
-                TRANSACTION_STATE=stuck
-                continue
-            fi
-        fi
-        if ! remove_transaction "$recover_dir"; then
-            TRANSACTION_STATE=stuck
-        elif [ "$TRANSACTION_STATE" != "stuck" ]; then
-            TRANSACTION_STATE=recovered
+        if ! : > "$1/.c300x-reload" \
+            || ! mkdir -p "$(dirname "$GUI_DIR/$legacy_rel")" \
+            || ! mv -f "$1/$legacy_rel" "$GUI_DIR/$legacy_rel"; then
+            return 1
         fi
     done
-    if [ "$recover_mounted" = "1" ]; then
+}
+
+settle_transaction() {
+    if [ ! -f "$1/$TRANSACTION_FORMAT" ]; then
+        restore_legacy_transaction "$1"
+    elif [ -f "$1/.c300x-files" ]; then
+        rollback_transaction "$1"
+    fi
+}
+
+transaction_report() {
+    TRANSACTION_LIVE=0
+    for report_dir in "$GUI_DIR"/.c300x-qml-transaction.*; do
+        leftover_transaction "$report_dir" || continue
+        if [ -e "$report_dir/.c300x-stuck" ]; then
+            TRANSACTION_STATE=stuck
+        elif [ "$TRANSACTION_STATE" != "stuck" ]; then
+            TRANSACTION_STATE=pending
+        fi
+    done
+}
+
+recover_transactions() {
+    transaction_report
+    [ "$TRANSACTION_LIVE" = "0" ] || return 1
+    recover_ro=0
+    if root_left_writable; then
+        recover_ro=1
+    fi
+    recover_stuck=
+    recover_blocked=0
+    recover_reload=0
+    if [ -n "$TRANSACTION_STATE" ]; then
+        TRANSACTION_STATE=
+        recover_ro=1
+        remount_rw || true
+        for recover_dir in "$GUI_DIR"/.c300x-qml-transaction.*; do
+            leftover_transaction "$recover_dir" || continue
+            if settle_transaction "$recover_dir"; then
+                rm -f "$recover_dir/.c300x-stuck"
+                if [ -e "$recover_dir/.c300x-reload" ]; then
+                    recover_reload=1
+                fi
+            else
+                : > "$recover_dir/.c300x-stuck" 2>/dev/null || true
+                recover_stuck="$recover_stuck ${recover_dir##*.} "
+                if [ -f "$recover_dir/$TRANSACTION_FORMAT" ]; then
+                    recover_blocked=1
+                fi
+            fi
+        done
+        if [ "$recover_reload" = "1" ]; then
+            reload_gui || true
+        fi
+        for recover_dir in "$GUI_DIR"/.c300x-qml-transaction.*; do
+            leftover_transaction "$recover_dir" || continue
+            case "$recover_stuck" in
+                *" ${recover_dir##*.} "*)
+                    TRANSACTION_STATE=stuck
+                    continue
+                    ;;
+            esac
+            if ! remove_transaction "$recover_dir"; then
+                TRANSACTION_STATE=stuck
+                recover_blocked=1
+            elif [ "$TRANSACTION_STATE" != "stuck" ]; then
+                TRANSACTION_STATE=recovered
+            fi
+        done
+    fi
+    if [ "$recover_ro" = "1" ]; then
         remount_ro || true
     fi
-    if [ "$recover_restored" = "1" ] && [ "$TRANSACTION_STATE" = "recovered" ]; then
-        reload_gui || true
-    fi
-    [ "$TRANSACTION_STATE" != "stuck" ] && [ "$recover_live" = "0" ]
+    [ "$recover_blocked" = "0" ]
 }
 
 finish_write_action() {
@@ -454,6 +569,11 @@ finish_write_action() {
     if [ "${WRITE_TRANSACTION_READY:-0}" = "1" ] && [ "${WRITE_TRANSACTION_COMMITTED:-0}" != "1" ]; then
         restart_previous="${WRITE_RELOAD_ATTEMPTED:-0}"
         rollback_transaction "$WRITE_TRANSACTION" || recovery_ok=0
+    fi
+    if [ "$restart_previous" = "1" ] && [ "$recovery_ok" = "1" ]; then
+        if ! reload_gui; then
+            printf 'Previous GUI files restored, but GUI restart could not be confirmed\n' >&2
+        fi
     fi
     if [ "$recovery_ok" = "1" ]; then
         if [ -n "${WRITE_TRANSACTION:-}" ]; then
@@ -470,11 +590,6 @@ finish_write_action() {
     if ! remount_ro; then
         write_rc=1
         write_root_ro=0
-    fi
-    if [ "$restart_previous" = "1" ] && [ "$recovery_ok" = "1" ]; then
-        if ! reload_gui; then
-            printf 'Previous GUI files restored, but GUI restart could not be confirmed\n' >&2
-        fi
     fi
     return "$write_rc"
 }
@@ -500,6 +615,8 @@ run_write_action() {
     transaction_dir="$GUI_DIR/.c300x-qml-transaction.$$"
     (umask 077; mkdir "$transaction_dir")
     WRITE_TRANSACTION="$transaction_dir"
+    : > "$WRITE_TRANSACTION/$TRANSACTION_FORMAT"
+    sync
     for transaction_rel in $PATCH_FILES $MEDIA_USER_LABEL_FILES $OBSOLETE_GUI_FILES; do
         transaction_source="$GUI_DIR/$transaction_rel"
         if [ -L "$transaction_source" ] || { [ -e "$transaction_source" ] && [ ! -f "$transaction_source" ]; }; then
@@ -1786,6 +1903,9 @@ restore_all_patch_files() {
 
 case "$ACTION" in
     status)
+        transaction_report
+        ;;
+    recover)
         recover_transactions || true
         ;;
     apply|core-apply|media-user-label-apply|restore|core-restore|media-user-label-restore|restore-all)
@@ -1798,7 +1918,7 @@ case "$ACTION" in
 esac
 
 case "$ACTION" in
-    status)
+    status|recover)
         json_status
         ;;
     apply)

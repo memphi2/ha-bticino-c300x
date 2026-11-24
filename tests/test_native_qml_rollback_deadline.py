@@ -47,5 +47,5 @@ def test_rollback_restart_survives_ten_seconds_and_keeps_single_writer(lab):
     result = response(pending)
     assert result["ok"] is False and result["state"] == "reload_failed"
     assert result["gui_running"] is True
-    assert snapshot(gui) == snapshot(observations / "2") == before
+    assert snapshot(gui) == snapshot(observations / "2", gui_only=True) == before
     assert observations.joinpath("count").read_text() == "2"

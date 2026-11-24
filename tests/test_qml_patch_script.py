@@ -2323,7 +2323,7 @@ def _killed_apply(tmp_path: Path) -> tuple[Path, Path, dict[str, bytes]]:
 
 
 @pytest.mark.parametrize("cut_rollback", [False, True])
-def test_a_leftover_write_transaction_is_rolled_back_at_the_next_status(
+def test_status_reports_a_leftover_and_recover_rolls_it_back(
     tmp_path: Path, cut_rollback: bool,
 ) -> None:
     gui, backup, before = _killed_apply(tmp_path)
@@ -2331,9 +2331,14 @@ def test_a_leftover_write_transaction_is_rolled_back_at_the_next_status(
         # A rollback cut off after it had moved one file back already.
         leftover = next(gui.glob(".c300x-qml-transaction.*"))
         (leftover / "MainApp.qml").replace(gui / "MainApp.qml")
+    during = _gui_files(gui)
     status = _run_qml_patch_raw(tmp_path, gui, backup, "status")
     assert status.returncode == 0, status.stderr
-    result = json.loads(status.stdout)
+    assert json.loads(status.stdout)["transaction"] == "pending"
+    assert _gui_files(gui) == during
+    recovered = _run_qml_patch_raw(tmp_path, gui, backup, "recover")
+    assert recovered.returncode == 0, recovered.stderr
+    result = json.loads(recovered.stdout)
     assert result["transaction"] == "recovered"
     assert result["state"] == "original" and result["core_state"] == "original"
     assert _gui_files(gui) == before
@@ -2354,11 +2359,10 @@ def test_a_write_rolls_a_leftover_transaction_back_before_it_writes(tmp_path: Pa
     assert _gui_files(gui) == _before
 
 
-def test_a_leftover_from_before_the_file_list_was_complete_leaves_the_gui_alone(
-    tmp_path: Path,
-) -> None:
-    """Cut off while it copied the files aside: nothing was changed yet. The
-    PID of a running process that is not this script counts as gone."""
+def test_a_leftover_cut_off_before_its_file_list_leaves_the_gui_alone(tmp_path: Path) -> None:
+    """Cut off while it copied the files aside: the format marker is there,
+    the file list is not, so no GUI file was changed yet. The PID of a running
+    process that is not this script counts as gone."""
 
     gui, backup = tmp_path / "gui", tmp_path / "backup"
     gui.mkdir()
@@ -2367,8 +2371,9 @@ def test_a_leftover_from_before_the_file_list_was_complete_leaves_the_gui_alone(
     for pid in (_dead_pid(), os.getpid()):
         leftover = gui / f".c300x-qml-transaction.{pid}"
         leftover.mkdir()
+        (leftover / ".c300x-v2").write_text("")
         (leftover / "MainApp.qml").write_text("partial")
-    result = json.loads(_run_qml_patch_raw(tmp_path, gui, backup, "status").stdout)
+    result = json.loads(_run_qml_patch_raw(tmp_path, gui, backup, "recover").stdout)
     assert result["transaction"] == "recovered"
     assert _gui_files(gui) == before
     assert not list(gui.glob(".c300x-qml-transaction.*"))
@@ -2383,8 +2388,11 @@ def test_a_transaction_of_a_running_write_is_never_touched(tmp_path: Path) -> No
         during = _gui_files(gui)
         status = json.loads(_run_qml_patch_raw(tmp_path, gui, backup, "status").stdout)
         assert "transaction" not in status
+        recovered = json.loads(_run_qml_patch_raw(tmp_path, gui, backup, "recover").stdout)
+        assert "transaction" not in recovered
         write = _run_qml_patch_raw(tmp_path, gui, backup, "apply")
         assert write.returncode != 0 and write.stdout == ""
+        assert "An unfinished GUI write is still in place" in write.stderr
         assert _gui_files(gui) == during and running.is_dir()
     finally:
         owner.kill()
@@ -2404,12 +2412,15 @@ def test_a_leftover_that_cannot_be_rolled_back_is_reported_and_blocks_writes(
     )
     (commands / "mv").chmod(0o700)
     env = {"PATH": str(commands) + os.pathsep + os.environ["PATH"]}
-    status = _run_qml_patch_raw(tmp_path, gui, backup, "status", env_overrides=env)
-    assert status.returncode == 0, status.stderr
-    assert json.loads(status.stdout)["transaction"] == "stuck"
+    recovered = _run_qml_patch_raw(tmp_path, gui, backup, "recover", env_overrides=env)
+    assert recovered.returncode == 0, recovered.stderr
+    assert json.loads(recovered.stdout)["transaction"] == "stuck"
+    status = json.loads(_run_qml_patch_raw(tmp_path, gui, backup, "status").stdout)
+    assert status["transaction"] == "stuck"
     leftover = next(gui.glob(".c300x-qml-transaction.*"))
     assert (leftover / "MainApp.qml").read_bytes() == _before["MainApp.qml"]
     write = _run_qml_patch_raw(tmp_path, gui, backup, "apply", env_overrides=env)
     assert write.returncode != 0 and write.stdout == ""
+    assert "An unfinished GUI write is still in place" in write.stderr
     assert (leftover / "MainApp.qml").read_bytes() == _before["MainApp.qml"]
     assert _gui_files(gui)["MainApp.qml"] == during["MainApp.qml"]

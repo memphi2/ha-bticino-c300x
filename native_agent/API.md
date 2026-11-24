@@ -1313,8 +1313,8 @@ ended and is then answered with `504`:
 stopped on the signal with every GUI file it changed back in place and `/`
 read-only again, or before it changed any. `false` means the rollback failed or
 the script had to be killed; `GET /api/v1/maintenance/qml-patch` then says
-what the device has and rolls back a transaction the write left behind (see
-QML Patch).
+what the device has and reports a transaction the write left behind; the next
+write finishes it (see QML Patch).
 Graceful agent shutdown during a QML write also sends `SIGTERM` once and waits
 up to the same 15 seconds before `SIGKILL`; that request is closed without an
 answer. The init script's own stop sends `SIGKILL` to the agent after 3 seconds;
@@ -1587,25 +1587,52 @@ Reads both optional Display patch state and required core media-hook state.
 when the home page carries neither layout.
 
 Every QML write keeps the GUI files it may change in a transaction directory
-`.c300x-qml-transaction.<pid>` inside the GUI directory, with a file list
-that names the files it found and the ones it would add, written only once
-all copies are on flash. A write cut off for good (power loss, crash,
-`SIGKILL`) leaves that directory behind. Status and every write first look
-for such a directory whose process is gone and roll it back: files back in
-place, files the write added removed, `/` read-only again, the GUI restarted;
-the directory goes only after every file is back. A directory without the
-file list was cut off before any GUI file changed and is just removed. A
-directory whose process still runs is never touched. The answer of status
-and of the write then carries one more field:
+`.c300x-qml-transaction.<pid>` inside the GUI directory. The directory gets a
+format marker `.c300x-v2` first, then the copies, then a file list that names
+the files it found and the ones it would add, written only once all copies are
+on flash and before any GUI file changes. A write cut off for good (power loss,
+crash, `SIGKILL`) leaves that directory behind.
 
-- `"transaction": "recovered"`: a leftover transaction was rolled back or
-  removed.
-- `"transaction": "stuck"`: a leftover could not be rolled back completely;
-  its directory and the files not yet restored stay for the next try.
+Status only reads: it reports a leftover and never changes the device. The
+recovery runs before every write and in the script's `recover` action. It skips
+everything while a transaction of a running write exists and otherwise
+finishes each leftover whose process is gone, in an order that a later run
+can repeat from any point where it was cut off:
 
-Without a leftover the field is absent. While a leftover is stuck, or a
-transaction of another running write exists, writes fail with
-`script_failed` without changing anything.
+1. Roll back. With the file list: files back in place, files the write added
+   removed. With the marker and no list: nothing to do, no GUI file had
+   changed. Without the marker (a write of agent 2.9.0 or older, which kept
+   no list): only copies proven complete are moved back, i.e. byte-equal to
+   the stock backup of that file, to the agent's own source of a generated
+   file, or to the file in place. If any copy cannot be proven, the directory
+   stays, the GUI is left as it is and the leftover is reported `stuck` for
+   good; remove the directory by hand once the display works.
+2. Restart the GUI, only when step 1 changed a file. A marker file in the
+   directory keeps that fact for a run that is cut off before the restart.
+3. Remove the directory: marker files first, the copies, the format marker
+   last, so that a cut-off removal still leaves a directory the next run
+   finishes.
+4. Remount `/` read-only. Every remount read-write leaves a mark naming the
+   process in `$TMPDIR` (default `/tmp`, RAM on the device); the next run
+   remounts read-only when that process is gone, and a reboot clears it.
+
+The answers carry one more field when a leftover exists:
+
+- `"transaction": "pending"` (status): a leftover waits for the next recovery.
+- `"transaction": "recovered"` (write, recovery): this run finished a leftover.
+- `"transaction": "stuck"`: a leftover could not be finished; its directory
+  stays. A leftover with the format marker is tried again at the next
+  recovery; one without it is not.
+
+Without a leftover the field is absent. While a leftover with the format
+marker is stuck, or a transaction of another running write exists, a write
+exits with status 1 before it prints anything (stderr: `An unfinished GUI
+write is still in place`); the agent answers `502` with
+`{"ok": false, "available": false, "state": "script_failed"}`, and the
+device-user actions answer `500` with `media_user_label_setup_failed` or
+`media_user_label_restore_failed`. A stuck leftover without the marker does
+not block writes: every write builds its files from the stock backups and the
+agent's sources, never from the files in place.
 
 `POST /api/v1/maintenance/qml-patch/actions/apply-core`
 

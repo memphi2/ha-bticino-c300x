@@ -444,6 +444,11 @@ again, as on a C300X.
 6. **Video.** Video is on after bootstrap. Start one on-demand stream from the HA
    card and check picture and sound; then ring from the outdoor station and
    answer the call in HA. Report both separately, with the agent diagnostics.
+7. **Picture controls.** During on-demand video, open the picture panel (the
+   sliders icon appears about two seconds after the picture). Move brightness,
+   contrast and saturation one at a time and check that the picture changes
+   each time. End the video and start a new one: the panel must show the
+   station's own values again, not the ones you set.
 
 ## Optional Read-Only Audio Probe
 

@@ -110,14 +110,18 @@ saved recordings and snapshots are never recoloured.
 - **Ring Call:** uses the stock controls of the video call. Opening the sliders
   does not answer.
 - **On-demand video:** start live video first; the sliders icon appears about
-  two seconds later. On firmware 1.7.19, 2.0.2 (either video decoder) and
-  3.0.6 (TVP5150 boards only) the agent checks during the session whether the
-  video source offers all three settings. A slider move writes only that
+  two seconds later. On firmware 1.7.19, 2.0.2 (either video decoder),
+  3.0.6 (TVP5150 boards only) and the Classe 100X on 1.5.8 the agent checks
+  during the session whether the video source offers all three settings. A slider move writes only that
   setting and succeeds only after reading the exact value back; otherwise the
   old value is put back. On a TVP5150 board contrast reads back from the
   driver's own copy, so a contrast write the decoder missed goes unnoticed.
-  Tested on 1.7.19; 2.0.2 and 3.0.6 are checked offline only. Changes last
-  until the video ends; the station starts each video with its own values.
+  Tested on 1.7.19; 2.0.2, 3.0.6 and the Classe 100X are checked offline
+  only. Changes last until the video ends; the station starts each video with
+  its own values.
+- **Classe 100X:** the percentages are the station's own day settings. In the
+  dark the station switches to its night values, and its own menu has steps
+  between the 10 % marks; the sliders then show the nearest 10 % step.
 
 Automations use `bticino_c300x.camera_picture` in an active session: omit
 `control` and `value` to read, or send both (for example `control: contrast`,

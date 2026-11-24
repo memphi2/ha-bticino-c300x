@@ -1006,9 +1006,11 @@ Side effects: POST changes one picture control of the active video source.
 A connected GUI advertising `picture=1` provides the legacy ring-only path.
 An eligible C300X (firmware 1.7.19; 2.0.2 with a bound ADV7180 video decoder,
 HW rev 2/3, or TVP5150, HW rev 1/4; 3.0.6 with its bound TVP5150, as the 3.0.6
-package requires HW rev 4) can also report
+package requires HW rev 4), or a C100X on firmware 1.5.8 with its bound
+TVP5150 (the HW rev 4 capture path), can also report
 `bridge.picture_controls_scope: "ring_and_on_demand"` with
-`bridge.picture_controls_supported: true`. Model and firmware alone do not
+`bridge.picture_controls_supported: true`. The model is the station's own
+(the agent detects it at runtime), not the configured one. Model and firmware alone do not
 enable it: an authenticated status or capability request during owned media
 checks the capture source on the bounded media worker. The read result is
 cached for that media session; no source is opened while idle.
@@ -1024,16 +1026,27 @@ The source must be character device 81:0 bound to `mxc_v4l2_capture` with
 driver is refused. The stock capture driver has no V4L2 control descriptors
 (`VIDIOC_QUERYCTRL` fails with `EINVAL`). The agent accepts that only by its
 exact signature (version `0x10b`, capabilities `0x05000005`, `device_caps` 0,
-empty card and bus) and uses the stock firmware's fixed raw ranges
-(brightness 30-180, contrast 59-209, saturation 64-244, eleven steps). Any
-other `mxc_v4l2` device must expose integer descriptors that cover these
-ranges; raw control reads alone do not make it supported.
+empty card and bus) and uses the stock firmware's fixed raw steps (eleven per
+control, one per 10 %). C300X: brightness 30-180, contrast 59-209, saturation
+64-244, in equal steps. C100X 1.5.8: the station's day ranges, brightness
+30-220, contrast 80-255, saturation 80-255, each step
+`trunc(min + percent * (max - min) / 100)` as in its `stack_open.xml`, so a
+percent in HA is the station's own day percent. Any other `mxc_v4l2` device
+must expose integer descriptors that cover these steps; raw control reads
+alone do not make it supported.
 The decoder is told by its bound I2C driver
 (`/sys/bus/i2c/drivers/adv7180/<bus>-<address>` or `.../tvp5150/...`). The
 stock ADV7180 driver writes brightness XOR `0x80` but reads the register back
 raw, so the agent undoes that XOR on read. The TVP5150 reads back plain; its
 contrast is a driver cache that stays 0 until the first write after boot.
-Such a 0, like any read off the eleven steps, fails the whole read: all three
+On the C100X, `bt_av_media` re-applies its night ranges (brightness 30-180,
+contrast 50-120, saturation 80-190) once per session when it detects a dark
+picture, and the station's own menu uses steps off the 10 % grid. A C100X read
+inside the day and night ranges together therefore reads as the nearest day
+step (a tie goes to the lower one), clamped to 0-100 %; a write still writes
+the day step and is verified against that exact raw value.
+On a C300X, a read off the eleven steps, and on both models a read outside
+those ranges (such as that contrast 0), fails the whole read: all three
 controls are unavailable, and the agent refuses direct control for the rest
 of that media session (a Ring Call falls back to the GUI path). Once a
 TVP5150 contrast write ioctl succeeds, its read-back always matches, because
@@ -1047,8 +1060,8 @@ The TVP5150 driver queues its I2C write and returns at once, so when the
 read-back differs the agent reads again up to five times, 10 ms apart,
 before it reports the setting as not applied.
 Changes last for the current media session; the station applies its own
-values again when the next session starts. 3.0.6 and the 2.0.2 path are
-checked offline only; 1.7.19 is tested on a device.
+values again when the next session starts. 3.0.6, the 2.0.2 path and the
+C100X are checked offline only; 1.7.19 is tested on a device.
 Direct operations check media ownership and session identity during execution.
 A failed direct write returns an error; it is not retried through the GUI.
 When the write or its read-back fails, the agent writes the previous value

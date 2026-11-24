@@ -175,8 +175,12 @@ Token-based maintenance keeps working when noAuth maintenance is off.
 ## Discovery and Address Changes
 
 The optional mDNS responder (`mdns.enabled`, HA mDNS maintenance switch)
-advertises `_bticino-c300x-agent._tcp.local` with a per-device TXT `id` and host
-name derived from the MAC address, falling back to the host name.
+advertises `_bticino-c300x-agent._tcp.local` (C300X) or
+`_bticino-c100x-agent._tcp.local` (C100X) with a per-device TXT `id` and host
+name derived from the MAC address, falling back to the host name. It answers
+queries only for its own type. HA lists both types in `manifest.json`; an
+announcement of one model never matches, renews or moves an entry whose agent
+reported the other model (`model_mismatch`).
 
 - It stays quiet while Home Assistant is present: HA has reached the agent in
   this run (a successful callback) and an authenticated API request arrived

@@ -34,6 +34,17 @@ static int contains(const unsigned char *packet, size_t size, const char *text)
     return 0;
 }
 
+static int service_query(const char *name, const struct c300x_config *config)
+{
+    unsigned char query[512] = {0};
+    size_t size = 12;
+    query[5] = 1;
+    assert(mdns_put_name(query, sizeof(query), &size, name));
+    assert(mdns_put_u16(query, sizeof(query), &size, 12));
+    assert(mdns_put_u16(query, sizeof(query), &size, 1));
+    return mdns_relevant_query(query, size, config);
+}
+
 static void check_identity(void)
 {
     struct c300x_config config = {.api_port = 8091};
@@ -47,7 +58,10 @@ static void check_identity(void)
         assert(size > 0);
         assert(contains(packet, size, c100x ? "model=C100X" : "model=C300X"));
         assert(contains(packet, size, c100x ? "name=BTicino C100X" : "name=BTicino C300X"));
-        assert(contains(packet, size, "_bticino-c300x-agent"));
+        assert(contains(packet, size, c100x ? "_bticino-c100x-agent" : "_bticino-c300x-agent"));
+        assert(!contains(packet, size, c100x ? "_bticino-c300x-agent" : "_bticino-c100x-agent"));
+        assert(service_query("_bticino-c100x-agent._tcp.local", &config) == c100x);
+        assert(service_query("_bticino-c300x-agent._tcp.local", &config) == !c100x);
         c300x_mdns_device_id(after, sizeof(after));
         assert(strcmp(before, after) == 0);
         mdns_instance_name(&config, "c300x-001122334455", label, sizeof(label));

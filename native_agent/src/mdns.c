@@ -23,6 +23,7 @@
 #define C300X_MDNS_PORT 5353
 #define C300X_MDNS_ENUMERATION "_services._dns-sd._udp.local"
 #define C300X_MDNS_SERVICE "_bticino-c300x-agent._tcp.local"
+#define C100X_MDNS_SERVICE "_bticino-c100x-agent._tcp.local"
 #define C300X_MDNS_ANNOUNCE_SECONDS 60
 #define C300X_MDNS_CLASS_IN 0x0001
 #define C300X_MDNS_CLASS_FLUSH_IN 0x8001
@@ -31,6 +32,12 @@
 static const char *mdns_default_name(void)
 {
     return c300x_device_model() == C300X_DEVICE_MODEL_C100X ? "BTicino C100X" : "BTicino C300X";
+}
+
+/* Each model has its own service type, so HA tells them apart before setup. */
+static const char *mdns_service(void)
+{
+    return c300x_device_model() == C300X_DEVICE_MODEL_C100X ? C100X_MDNS_SERVICE : C300X_MDNS_SERVICE;
 }
 
 static const char *mdns_display_name(const struct c300x_config *config)
@@ -221,7 +228,7 @@ static int mdns_relevant_query(const unsigned char *packet, size_t size,
     char device_id[64], label[64], instance[160], host[80];
     c300x_mdns_device_id(device_id, sizeof(device_id));
     mdns_instance_name(config, device_id, label, sizeof(label));
-    snprintf(instance, sizeof(instance), "%s.%s", label, C300X_MDNS_SERVICE);
+    snprintf(instance, sizeof(instance), "%s.%s", label, mdns_service());
     snprintf(host, sizeof(host), "%s.local", device_id);
     size_t offset = 12;
     int relevant = 0;
@@ -233,7 +240,7 @@ static int mdns_relevant_query(const unsigned char *packet, size_t size,
         offset += 4;
         if (cls != 1 && cls != 255) continue;
         if (((type == 12 || type == 255) &&
-             (strcasecmp(name, C300X_MDNS_ENUMERATION) == 0 || strcasecmp(name, C300X_MDNS_SERVICE) == 0)) ||
+             (strcasecmp(name, C300X_MDNS_ENUMERATION) == 0 || strcasecmp(name, mdns_service()) == 0)) ||
             ((type == 16 || type == 33 || type == 255) && strcasecmp(name, instance) == 0) ||
             ((type == 1 || type == 28 || type == 255) && strcasecmp(name, host) == 0)) relevant = 1;
     }
@@ -402,7 +409,7 @@ static int mdns_build_response(
             sizeof(instance_name),
             "%s.%s",
             instance_label,
-            C300X_MDNS_SERVICE
+            mdns_service()
         ) >= (int)sizeof(instance_name)
     ) {
         return 0;
@@ -460,7 +467,7 @@ static int mdns_build_response(
     }
 
     rdata_len = 0;
-    if (!mdns_put_name(rdata, sizeof(rdata), &rdata_len, C300X_MDNS_SERVICE)) {
+    if (!mdns_put_name(rdata, sizeof(rdata), &rdata_len, mdns_service())) {
         return 0;
     }
     if (
@@ -490,7 +497,7 @@ static int mdns_build_response(
             buffer,
             buffer_len,
             &offset,
-            C300X_MDNS_SERVICE,
+            mdns_service(),
             12,
             C300X_MDNS_CLASS_IN,
             ttl,

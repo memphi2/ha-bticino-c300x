@@ -28,6 +28,7 @@
   "requirements": [],
   "version": "2.9.0",
   "zeroconf": [
+    "_bticino-c100x-agent._tcp.local.",
     "_bticino-c300x-agent._tcp.local."
   ]
 }

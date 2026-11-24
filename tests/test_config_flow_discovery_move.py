@@ -218,9 +218,9 @@ def setup(monkeypatch):
     return build
 
 
-def announce(flow, host=NEW_HOST, port=NEW_PORT, properties=None):
+def announce(flow, host=NEW_HOST, port=NEW_PORT, properties=None, service="_bticino-c300x-agent._tcp.local."):
     info = SimpleNamespace(
-        host=host, port=port, name="Door._bticino-c300x-agent._tcp.local.",
+        host=host, port=port, name=f"Door.{service}", type=service,
         properties={"id": DEVICE_ID} if properties is None else properties,
     )
     try:
@@ -682,3 +682,42 @@ def test_check_running_during_unload_plans_no_recheck(setup):
 
     assert session.urls == BOTH
     assert hass.timers == []
+
+
+C100X_SERVICE = "_bticino-c100x-agent._tcp.local."
+C300X_SERVICE = "_bticino-c300x-agent._tcp.local."
+
+
+@pytest.mark.parametrize(("entry_model", "service"), [("C300X", C100X_SERVICE), ("C100X", C300X_SERVICE)])
+def test_an_announcement_of_the_other_model_never_moves_an_entry(setup, entry_model, service):
+    entry, hass, new_flow, session = setup(station())
+    entry.runtime_data = SimpleNamespace(agent_info={"model": entry_model})
+    data, options = dict(entry.data), dict(entry.options)
+
+    assert announce(new_flow(), service=service) == "model_mismatch"
+
+    assert session.urls == []
+    assert_unchanged(entry, hass, data, options)
+    assert pending(hass) == []
+
+
+@pytest.mark.parametrize(("entry_model", "service"), [("C300X", C300X_SERVICE), ("C100X", C100X_SERVICE)])
+def test_an_announcement_of_the_same_model_still_moves(setup, entry_model, service):
+    entry, hass, new_flow, session = setup(station())
+    entry.runtime_data = SimpleNamespace(agent_info={"model": entry_model})
+
+    assert announce(new_flow(), service=service) == "already_configured"
+
+    assert session.urls == BOTH
+    assert_moved(entry, hass)
+
+
+def test_a_recheck_skips_an_entry_that_turned_out_to_be_the_other_model(setup):
+    entry, hass, new_flow, session = setup(station(old=STILL_THERE))
+    assert announce(new_flow(), service=C100X_SERVICE) == "already_configured"
+    assert len(pending(hass)) == 1
+    entry.runtime_data = SimpleNamespace(agent_info={"model": "C300X"})
+    calls = len(session.calls)
+    fire(hass)
+    assert len(session.calls) == calls
+    assert pending(hass) == []

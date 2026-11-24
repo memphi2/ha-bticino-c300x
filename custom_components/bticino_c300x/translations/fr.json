@@ -662,6 +662,7 @@
       }
     },
     "abort": {
+      "model_mismatch": "Cette annonce provient d'un autre modèle de poste que l'entrée configurée avec la même identité. Rien n'a été modifié.",
       "already_configured": "BTicino C300X est déjà configure.",
       "reconfigure_successful": "BTicino C300X a été reconfigure. Mettez à jour la configuration locale de l'agent appareil ou du display bridge si vous avez renouvelé les identifiants.",
       "cannot_connect": "L'agent appareil est injoignable. Verifiez l'adresse et que l'agent fonctionne.",

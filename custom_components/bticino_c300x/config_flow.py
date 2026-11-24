@@ -469,12 +469,14 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
     async def async_step_zeroconf(
         self, discovery_info: Any
     ) -> FlowResult:
-        """Start setup from a C300X native-agent mDNS advertisement."""
+        """Start setup from a C300X or C100X native-agent mDNS advertisement."""
 
         from .discovery import (
             discovery_connection_updates,
             discovery_display_name,
             discovery_matches_entry,
+            discovery_model,
+            discovery_model_conflicts,
             discovery_unique_id,
         )
 
@@ -489,6 +491,14 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
             return self.async_abort(reason="cannot_connect")
 
         discovered_unique_id = discovery_unique_id(properties)
+        model = discovery_model(getattr(discovery_info, "type", ""), getattr(discovery_info, "name", ""))
+        # A known entry of the other model is never matched, renewed or moved.
+        if discovered_unique_id is not None and any(
+            discovery_matches_entry(discovered_unique_id, entry.unique_id)
+            and discovery_model_conflicts(entry, model)
+            for entry in self._async_current_entries()
+        ):
+            return self.async_abort(reason="model_mismatch")
         unique_id = discovered_unique_id or DOMAIN
         await self.async_set_unique_id(unique_id)
         self._async_request_existing_entry_event_registration(
@@ -498,7 +508,7 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
         )
         # mDNS is untrusted: a known station is followed to a new address only
         # after it proves the saved identity there (discovery_move).
-        if await async_follow_proven_move(self, discovered_unique_id, connection):
+        if await async_follow_proven_move(self, discovered_unique_id, connection, model=model):
             return self.async_abort(reason="already_configured")
         self._abort_if_unique_id_configured()
         existing_entry_abort = (
@@ -506,6 +516,7 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
                 discovered_unique_id,
                 connection,
                 discovery_matches_entry=discovery_matches_entry,
+                model=model,
             )
         )
         if existing_entry_abort is not None:
@@ -534,12 +545,13 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
         connection: dict[str, Any],
         *,
         discovery_matches_entry: Any,
+        model: str = "",
     ) -> FlowResult | None:
         """Merge a later mDNS identity into an existing manual setup entry."""
 
         return cast(FlowResult | None, await _async_existing_manual_discovery(
             self, discovered_unique_id, connection,
-            discovery_matches_entry, _async_agent_setup_data,
+            discovery_matches_entry, _async_agent_setup_data, model=model,
         ))
 
     @callback

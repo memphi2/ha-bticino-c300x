@@ -41,7 +41,7 @@ from .config_flow_identity import (
     entry_uses_manual_setup_unique_id,
 )
 from .const import CONF_AGENT_HOST, CONF_AGENT_PORT, CONF_AGENT_TOKEN, DOMAIN
-from .discovery import discovery_matches_entry
+from .discovery import discovery_matches_entry, discovery_model_conflicts
 from .http_body import read_capped_body
 
 _LOGGER = logging.getLogger(__name__)
@@ -69,13 +69,14 @@ def identity_proof(token: str, device_id: str, host: str, port: int, nonce: str)
 
 
 async def async_follow_proven_move(
-    flow: Any, discovered_unique_id: str | None, connection: dict[str, Any],
+    flow: Any, discovered_unique_id: str | None, connection: dict[str, Any], *, model: str = "",
 ) -> bool:
     """Move the matching entry to the announced IPv4 endpoint once proven.
 
-    The announcement replaces a pending re-check of the same entry.
+    The announcement replaces a pending re-check of the same entry. An entry
+    whose agent reported the other model never follows it.
     """
-    return await _async_check(flow, discovered_unique_id, connection, MOVE_RECHECKS, recheck=False)
+    return await _async_check(flow, discovered_unique_id, connection, MOVE_RECHECKS, recheck=False, model=model)
 
 
 def async_cancel_move_recheck(hass: Any, entry_id: str) -> None:
@@ -87,7 +88,7 @@ def async_cancel_move_recheck(hass: Any, entry_id: str) -> None:
 
 async def _async_check(
     flow: Any, discovered_unique_id: str | None, connection: dict[str, Any],
-    rechecks_left: int, *, recheck: bool,
+    rechecks_left: int, *, recheck: bool, model: str = "",
 ) -> bool:
     """Run one attempt; plan the next check of this announcement if it may help."""
     host = _routable_ipv4(connection.get(CONF_AGENT_HOST))
@@ -97,7 +98,7 @@ async def _async_check(
         entry for entry in flow._async_current_entries()
         if discovery_matches_entry(discovered_unique_id, entry.unique_id)
     ), None)
-    if entry is None:
+    if entry is None or discovery_model_conflicts(entry, model):
         return False
     rechecks = _rechecks(flow.hass)
     ticket = rechecks.begin(entry.entry_id)
@@ -111,7 +112,7 @@ async def _async_check(
         return outcome == _MOVED
 
     def check() -> Coroutine[Any, Any, bool]:
-        return _async_check(flow, discovered_unique_id, connection, rechecks_left, recheck=True)
+        return _async_check(flow, discovered_unique_id, connection, rechecks_left, recheck=True, model=model)
 
     if rechecks.schedule(entry.entry_id, ticket, delay, check):
         _LOGGER.debug(

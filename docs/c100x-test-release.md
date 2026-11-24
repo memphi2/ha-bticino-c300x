@@ -83,7 +83,7 @@ GUI activation/readiness/recovery on the device remains unproven. See the
 | Native updater | The new updater rejects C100X-only bundles on a non-C100X device and rejects unmarked incompatible bundles on C100X. Older updaters cannot enforce a field they never implemented: use the reviewed HA preflight, never a raw old updater upload. |
 | Legacy shell installer | Blocked in this checkout: its generic upload path has no C100X model preflight. Do not remove the policy file to enable it. |
 | Public publication | `publish_release.py` refuses this checkout while `c100x-test-policy.json` exists. There is no bypass flag. The existing workflow additionally requires canonical-main validation evidence; this branch is not a working alternate release channel. |
-| HA integration | Domain, discovery service and config-entry identity remain `bticino_c300x`. This package would replace the existing integration on the same HA instance. **Use a separate disposable HA test instance**, with no C300X stable or firmware-3.0.6 beta entries. Renaming the ZIP is not HA isolation. |
+| HA integration | Domain and config-entry identity remain `bticino_c300x`; a C100X agent announces its own discovery service `_bticino-c100x-agent._tcp`. This package would replace the existing integration on the same HA instance. **Use a separate disposable HA test instance**, with no C300X stable or firmware-3.0.6 beta entries. Renaming the ZIP is not HA isolation. |
 
 These guards prevent accidental use through this branch's supported paths, not
 manual privileged overwrites or deliberately relabelled packages. They do not
@@ -432,6 +432,11 @@ again, as on a C300X.
    (the boot link starts the agent early) show that it came up with that boot.
    A value close to the station's uptime means a later manual start, not
    reboot persistence; `uptime_seconds` far below it means it restarted since.
+   **Discovery:** with the HA mDNS switch of the agent on and HA not yet
+   connected, `avahi-browse -rt _bticino-c100x-agent._tcp` (or HA's discovered
+   devices) shows the station with TXT `model=C100X` and its `id`, and
+   `avahi-browse -rt _bticino-c300x-agent._tcp` does not list it. If a C300X is
+   on the same network, its entry must not change when the C100X announces.
 6. **Video.** Video is on after bootstrap. Start one on-demand stream from the HA
    card and check picture and sound; then ring from the outdoor station and
    answer the call in HA. Report both separately, with the agent diagnostics.

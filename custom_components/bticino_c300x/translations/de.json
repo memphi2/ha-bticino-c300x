@@ -662,6 +662,7 @@
       }
     },
     "abort": {
+      "model_mismatch": "Diese Ankündigung stammt von einem anderen Stationsmodell als der eingerichtete Eintrag mit derselben Identität. Es wurde nichts geändert.",
       "already_configured": "BTicino C300X ist bereits konfiguriert.",
       "reconfigure_successful": "BTicino C300X wurde neu konfiguriert. Aktualisiere die lokale Device-Agent- oder Display-Bridge-Konfiguration, falls Zugangsdaten rotiert wurden.",
       "cannot_connect": "Der Device-Agent ist nicht erreichbar. Pruefe die Adresse und ob der Agent laeuft.",

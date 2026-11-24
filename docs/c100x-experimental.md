@@ -44,7 +44,7 @@ This was not a stock-station test or acceptance of Companion coexistence.
 
 | Area | C100X 1.5.8 status | Evidence and limits |
 | --- | --- | --- |
-| Model, firmware and SIP identity | C100X / 1.5.8 reported on one modified station | SIP identity and discovery were not validated end to end. The discovery service remains `_bticino-c300x-agent._tcp`; manual setup by host worked. |
+| Model, firmware and SIP identity | C100X / 1.5.8 reported on one modified station | SIP identity was not validated end to end. Discovery: **implemented offline; hardware unproven.** A C100X agent announces `_bticino-c100x-agent._tcp` (a C300X keeps `_bticino-c300x-agent._tcp`); HA discovers both, and an announcement of one model never matches, renews or moves an entry whose agent reported the other model. Manual setup by host worked. |
 | Agent build / ABI | Offline validated | Oldest C300X build baseline retained; C100X 1.5.8 remains an additional ABI check. This is not a process-start or endurance test. |
 | Routing / media user | Implemented; hardware unproven | C100X-specific `bt_answering_machine` table matches all nine stock patch ranges. Patch apply on a temporary firmware copy passed; registration, ring answering and vendor-app coexistence still require a device. |
 | HA entities and callbacks | Capability-gated; hardware unproven | Door, stair light, ring/call events and supported maintenance controls retain their existing paths. Physical outputs, event timing and callback reachability are not proven. |

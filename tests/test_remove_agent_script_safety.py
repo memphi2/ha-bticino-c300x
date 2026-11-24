@@ -249,7 +249,8 @@ def test_a_failed_removal_starts_the_agent_it_stopped(local_device, tmp_path, fa
                      "[ \"$AGENT_RUNNING\" = 1 ] && ! grep -q '^killall$' \"$CALL_LOG\" || exit 1\n"
                      "printf '12345\\n'\n")
     init = Path(env["C300X_INIT_SCRIPT"])
-    init.write_text('#!/bin/sh\nprintf "init %s\\n" "$1" >> "$CALL_LOG"\n')
+    init.write_text('#!/bin/sh\nprintf "init %s\\n" "$1" >> "$CALL_LOG"\n'
+                    '[ "$1" != status ] || exit "${INIT_STATUS:-0}"\n')
     init.chmod(0o755)
     if failure == "qml":
         env["C300X_QML_PATCH_SCRIPT"] = str(tmp_path / "missing-patch-script")
@@ -268,15 +269,44 @@ def test_a_failed_removal_starts_the_agent_it_stopped(local_device, tmp_path, fa
     calls = Path(env["CALL_LOG"]).read_text().splitlines()
     if failure == "none":
         assert result.returncode == 0, result.stderr
-        assert "init start" not in calls
+        assert not [call for call in calls if call.startswith("init ")]
         return
     assert result.returncode == 1, result.stderr
-    assert calls.count("init start") == (1 if running else 0)
+    assert [call for call in calls if call.startswith("init ")] == (
+        ["init restart", "init status"] if running else [])
     if running:
-        assert calls.index("killall") < calls.index("init start")
+        assert calls.index("killall") < calls.index("init restart")
         assert "started again so the removal can be retried" in result.stderr
     assert "reboot" not in calls
     assert Path(env["C300X_AGENT_DIR"]).is_dir()
+
+
+def test_a_restart_that_leaves_no_agent_running_is_not_reported_as_started(local_device, tmp_path):
+    """An agent slow to exit makes "start --oknodo" a no-op that returns 0;
+    only a status that sees the agent running counts as started."""
+    env = local_device
+    label_patch(env)
+    pidof = tmp_path / "commands/pidof"
+    pidof.write_text("#!/bin/sh\nprintf 'pidof\\n' >> \"$CALL_LOG\"\nprintf '12345\\n'\n")
+    init = Path(env["C300X_INIT_SCRIPT"])
+    init.write_text('#!/bin/sh\nprintf "init %s\\n" "$1" >> "$CALL_LOG"\n'
+                    '[ "$1" != status ] || exit 3\n')
+    init.chmod(0o755)
+    sleep = tmp_path / "commands/sleep"
+    sleep.write_text("#!/bin/sh\nexit 0\n")
+    for path in (pidof, sleep):
+        path.chmod(0o700)
+    Path(env["CALL_LOG"]).write_text("")
+
+    result = subprocess.run(["sh", str(REMOVE), "remove"], env=env,
+                            capture_output=True, text=True, timeout=10)
+
+    assert result.returncode == 1
+    assert "Cannot verify agent termination" in result.stderr
+    assert "started again so the removal can be retried" not in result.stderr
+    assert f"Agent could not be started again; start it with {init} restart" in result.stderr
+    calls = Path(env["CALL_LOG"]).read_text().splitlines()
+    assert [call for call in calls if call.startswith("init ")] == ["init restart", "init status"]
 
 
 @pytest.mark.parametrize("damage", ["none", "config", "qml", "mode", "link", "content",

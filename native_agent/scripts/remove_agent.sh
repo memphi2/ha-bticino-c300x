@@ -70,10 +70,10 @@ cleanup_workspace() {
     fi
     if [ "$cleanup_status" != 0 ] && [ "$AGENT_STOPPED" = 1 ] && [ "$keep_workspace" = 0 ] \
         && [ -x "$INIT_SCRIPT" ] && [ -x "$AGENT_DIR/c300x-agent-native" ]; then
-        if "$INIT_SCRIPT" start >/dev/null 2>&1; then
+        if "$INIT_SCRIPT" restart >/dev/null 2>&1 && "$INIT_SCRIPT" status >/dev/null 2>&1; then
             printf 'Agent started again so the removal can be retried\n' >&2
         else
-            printf 'Agent could not be started again; start it with %s start\n' "$INIT_SCRIPT" >&2
+            printf 'Agent could not be started again; start it with %s restart\n' "$INIT_SCRIPT" >&2
         fi
     fi
     exit "$cleanup_status"

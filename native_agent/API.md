@@ -1313,7 +1313,8 @@ ended and is then answered with `504`:
 stopped on the signal with every GUI file it changed back in place and `/`
 read-only again, or before it changed any. `false` means the rollback failed or
 the script had to be killed; `GET /api/v1/maintenance/qml-patch` then says
-what the device has.
+what the device has and rolls back a transaction the write left behind (see
+QML Patch).
 Graceful agent shutdown during a QML write also sends `SIGTERM` once and waits
 up to the same 15 seconds before `SIGKILL`; that request is closed without an
 answer. The init script's own stop sends `SIGKILL` to the agent after 3 seconds;
@@ -1584,6 +1585,27 @@ Reads both optional Display patch state and required core media-hook state.
 `home_buttons` names the home page button layout installed on the device:
 `"stock"` (the stock layout), `"side_by_side"` (the fixed pair), or `null`
 when the home page carries neither layout.
+
+Every QML write keeps the GUI files it may change in a transaction directory
+`.c300x-qml-transaction.<pid>` inside the GUI directory, with a file list
+that names the files it found and the ones it would add, written only once
+all copies are on flash. A write cut off for good (power loss, crash,
+`SIGKILL`) leaves that directory behind. Status and every write first look
+for such a directory whose process is gone and roll it back: files back in
+place, files the write added removed, `/` read-only again, the GUI restarted;
+the directory goes only after every file is back. A directory without the
+file list was cut off before any GUI file changed and is just removed. A
+directory whose process still runs is never touched. The answer of status
+and of the write then carries one more field:
+
+- `"transaction": "recovered"`: a leftover transaction was rolled back or
+  removed.
+- `"transaction": "stuck"`: a leftover could not be rolled back completely;
+  its directory and the files not yet restored stay for the next try.
+
+Without a leftover the field is absent. While a leftover is stuck, or a
+transaction of another running write exists, writes fail with
+`script_failed` without changing anything.
 
 `POST /api/v1/maintenance/qml-patch/actions/apply-core`
 

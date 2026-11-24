@@ -52,6 +52,8 @@ struct c300x_video {
     long long external_event_expires_ms;
     char external_owner[32];
     long long station_busy_until_ms;
+    /* Bus call ends seen, and their count when the on-demand start began. */
+    unsigned bus_call_ends, bus_call_ends_at_start;
     char last_block_reason[64];
     unsigned long long bt_media_start_attempts;
     unsigned long long bt_media_stop_attempts;
@@ -597,6 +599,7 @@ void c300x_video_bridge_media_starting(struct c300x_video *video)
     }
     pthread_mutex_lock(&video->mutex);
     video->media_starting = 1;
+    video->bus_call_ends_at_start = video->bus_call_ends;
     video->media_closed_grace_until_ms =
         c300x_monotonic_ms() + C300X_ONDEMAND_START_MEDIA_CLOSED_GRACE_MS;
     clear_external_media_active_locked(video);
@@ -764,7 +767,21 @@ void c300x_video_bridge_station_busy(struct c300x_video *video)
         return;
     }
     pthread_mutex_lock(&video->mutex);
-    video->station_busy_until_ms = c300x_monotonic_ms() + C300X_STATION_BUSY_GUARD_MS;
+    /* A call that ended after the INVITE went out freed the station. */
+    if (video->bus_call_ends == video->bus_call_ends_at_start) {
+        video->station_busy_until_ms = c300x_monotonic_ms() + C300X_STATION_BUSY_GUARD_MS;
+    }
+    pthread_mutex_unlock(&video->mutex);
+}
+
+void c300x_video_note_bus_call_end(struct c300x_video *video)
+{
+    if (video == NULL) {
+        return;
+    }
+    pthread_mutex_lock(&video->mutex);
+    video->bus_call_ends++;
+    video->station_busy_until_ms = 0;
     pthread_mutex_unlock(&video->mutex);
 }
 
@@ -776,7 +793,7 @@ int c300x_video_consume_media_closed_event(struct c300x_video *video)
         return 0;
     }
     pthread_mutex_lock(&video->mutex);
-    /* Every bus call end passes here: the station is free again. */
+    /* A media close (bus or the agent's own) frees the station again. */
     video->station_busy_until_ms = 0;
     armed = (
         video->media_closed_event_armed

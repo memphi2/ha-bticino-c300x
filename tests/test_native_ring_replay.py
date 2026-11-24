@@ -16,10 +16,12 @@ WRAPPED = (
     "c300x_device_media_start", "c300x_device_media_stop",
     "c300x_audio_codec_device_is_pcmu", "c300x_monotonic_ms",
     "dlopen", "dlsym", "dlclose", "bind", "c300x_mqtt_publish_event",
+    "c300x_video_bridge_station_busy",
 )
 CASES = {
     "display_answer": 0, "display_answer_end_lost": 1, "unanswered": 0, "ha_answer": 0,
     "station_busy_bus_end": 2, "station_busy_timeout": 2,
+    "station_freed_before_486": 2, "station_freed_after_486": 2,
 }
 
 

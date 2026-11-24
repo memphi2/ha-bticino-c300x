@@ -5003,6 +5003,9 @@ static void handle_udp_event(
         }
     }
     if (map_openwebnet_event(runtime, msg, type, sizeof(type), data, sizeof(data))) {
+        if (strcmp(type, "doorbell.media.closed") == 0 && runtime != NULL) {
+            c300x_video_note_bus_call_end(runtime->video);
+        }
         if (
             strcmp(type, "doorbell.view_requested") == 0
             && doorbell_view_requested_is_ondemand_start_transition(runtime, msg)

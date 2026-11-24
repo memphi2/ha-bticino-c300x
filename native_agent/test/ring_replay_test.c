@@ -133,6 +133,10 @@ static int sip_listen_fd = -1;
 static atomic_int ring_fd = -1;
 static atomic_int ondemand_invites;
 static atomic_int station_busy = 1;
+/* The call the station is busy with ends before its 486 answer, or right
+ * after it while the agent still cleans up the failed start. */
+static atomic_int end_before_486, end_after_486;
+static void bus(const char *frame);
 static pthread_mutex_t codes_mutex = PTHREAD_MUTEX_INITIALIZER;
 static int ring_codes[64];
 static int ring_code_count;
@@ -185,6 +189,10 @@ static void *station_connection(void *arg) {
             reply(fd, message, 200, "Registration successful", NULL);
         } else if (strncmp(message, "INVITE ", 7) == 0) {
             atomic_fetch_add(&ondemand_invites, 1);
+            if (atomic_exchange(&end_before_486, 0)) {
+                bus("*8*3#1#4*411##");
+                usleep(100000);
+            }
             if (atomic_load(&station_busy)) reply(fd, message, 486, "Busy here", NULL);
             else reply(fd, message, 200, "Ok", station_sdp);
         } else if (strncmp(message, "BYE ", 4) == 0) {
@@ -240,6 +248,15 @@ static void station_send(const char *method, int cseq, const char *body) {
         method, cseq, cseq, method, body ? "Content-Type: application/sdp\r\n" : "",
         body ? strlen(body) : 0, body ? body : "");
     assert(c300x_media_sip_send_all(fd, message, (size_t)length) > 0);
+}
+
+void __real_c300x_video_bridge_station_busy(struct c300x_video *video);
+void __wrap_c300x_video_bridge_station_busy(struct c300x_video *video) {
+    __real_c300x_video_bridge_station_busy(video);
+    if (atomic_exchange(&end_after_486, 0)) {
+        bus("*8*3#1#4*411##");
+        usleep(100000);
+    }
 }
 
 /* ---- the agent's own event loop, as in the running agent ---- */
@@ -508,6 +525,29 @@ static void station_busy_case(bool freed_by_bus) {
     close(fd);
 }
 
+/* (e) The call the station was busy with ends while the failed start still
+ * counts as starting: its end frame is filtered as a start transition, yet
+ * the station is free, so the next start calls it at once. */
+static void station_freed_during_start(bool before_486) {
+    struct c300x_video_status current;
+    atomic_store(before_486 ? &end_before_486 : &end_after_486, 1);
+    int fd = rtsp_open();
+    assert(rtsp_play(fd, "/doorbell") == 500);
+    close(fd);
+    assert(atomic_load(&ondemand_invites) == 1);
+    assert(!atomic_load(&end_before_486) && !atomic_load(&end_after_486));
+    usleep(100000);
+    assert(count_events("doorbell.media.closed") == 0);
+    atomic_store(&station_busy, 0);
+    assert(c300x_video_activate(runtime->video, 1));
+    fd = rtsp_open();
+    assert(rtsp_play(fd, "/doorbell") == 200);
+    assert(atomic_load(&ondemand_invites) == 2);
+    status(&current);
+    assert(strcmp(current.media_owner, "agent") == 0);
+    close(fd);
+}
+
 static uint16_t bound_port(int fd) {
     struct sockaddr_in address;
     socklen_t length = sizeof(address);
@@ -567,6 +607,8 @@ int main(int argc, char **argv) {
     else if (strcmp(argv[1], "ha_answer") == 0) ha_answer();
     else if (strcmp(argv[1], "station_busy_bus_end") == 0) station_busy_case(true);
     else if (strcmp(argv[1], "station_busy_timeout") == 0) station_busy_case(false);
+    else if (strcmp(argv[1], "station_freed_before_486") == 0) station_freed_during_start(true);
+    else if (strcmp(argv[1], "station_freed_after_486") == 0) station_freed_during_start(false);
     else assert(!"unknown case");
 
     printf("ondemand_invites=%d\n", atomic_load(&ondemand_invites));

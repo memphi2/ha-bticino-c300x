@@ -18,6 +18,9 @@ Station:
   station cannot reach Home Assistant; a tap opens **Settings > Integration**,
   which names the reason. The page then keeps asking every five minutes, so
   the **Alarm** and **Home Assistant** buttons come back by themselves.
+- **Reboot station** and **Remove agent** on the **Integration** tab now ask
+  in the station's own confirmation window with **Yes** and **No**, and say
+  what happens, instead of showing a second button further down the tab.
 
 ## v2.9.1 - 2026-11-24
 

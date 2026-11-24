@@ -2,6 +2,7 @@ import QtQuick 1.1
 import "js/c300x_i18n.js" as I18n
 import Components 1.0
 import Components.Styles 1.0
+import Components.Settings 1.0
 import "js/c300x_maintenance.js" as Maintenance
 import "js/c300x_ha.js" as Bridge
 
@@ -16,13 +17,20 @@ Item {
     property string pending: ""
     property double expiresAt: 0
     function label(key) { return I18n.text(trsl.language, key) + trsl.empty }
-    function clearConfirmation() { pending = ""; expiresAt = 0; expiry.stop() }
+    function clearConfirmation() {
+        var open = pending !== ""
+        pending = ""
+        expiresAt = 0
+        expiry.stop()
+        if (open) dismissPopup()
+    }
     function ask(action) {
         if (!visible || busy || pending || !(action === "reboot" ? canReboot : action === "remove" && canRemove)) return
         status = ""
         expiresAt = Date.now() + expiry.interval
         pending = action
         expiry.restart()
+        installPopup(confirmation)
     }
     function confirmAction() {
         var action = pending
@@ -36,6 +44,17 @@ Item {
     }
     Timer { id: expiry; interval: 10000; onTriggered: panel.clearConfirmation() }
     property string status: ""
+    Component {
+        id: confirmation
+        ConfirmPopup {
+            sourceSizeWidth: 400
+            sourceSizeHeight: panel.pending === "remove" ? 190 : 130
+            maxLine: 6
+            message: panel.pending ? panel.label("maintenance_confirm_" + panel.pending) : ""
+            onDeleteClicked: panel.confirmAction()
+            onCancelClicked: panel.clearConfirmation()
+        }
+    }
 
     function aboutToShow() {
         hidden()
@@ -138,26 +157,6 @@ Item {
             enabled: panel.canRemove && !panel.busy && !panel.pending
             opacity: enabled ? 1 : 0.45
             onMouseClicked: panel.ask("remove")
-        }
-        BasicButton {
-            visible: panel.pending !== ""
-            style: IconAndLabelStyle {
-                defaultImage: "images/settings/list_option_btn.svg"
-                background.width: Math.min(320, panel.width - 64)
-                pressedImage: "images/settings/list_option_btn_p.svg"
-                description: panel.label(panel.pending === "reboot" ? "maintenance_confirm_reboot" : "maintenance_confirm_remove")
-            }
-            onMouseClicked: panel.confirmAction()
-        }
-        BasicButton {
-            visible: panel.pending !== ""
-            style: IconAndLabelStyle {
-                defaultImage: "images/settings/list_option_btn.svg"
-                background.width: Math.min(320, panel.width - 64)
-                pressedImage: "images/settings/list_option_btn_p.svg"
-                description: panel.label("maintenance_cancel")
-            }
-            onMouseClicked: panel.clearConfirmation()
         }
         UbuntuLightText {
             width: parent.width

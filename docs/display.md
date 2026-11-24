@@ -483,8 +483,10 @@ only maintenance operations the agent has enabled are offered.
 | **Reboot station** | Restarts the station. |
 | **Remove agent** | Removes the device agent; see [Remove Agent](advanced-maintenance.md#remove-agent). |
 
-Reboot and removal need a second, explicit confirmation within ten seconds;
-leaving the tab or the screen going off cancels it. **Status messages** is a
+Reboot and removal ask first, in the station's own confirmation window with
+**Yes** and **No**. Nothing is sent before **Yes**; the question closes by
+itself after ten seconds, and leaving the tab, a call or the screen going off
+cancels it. **Status messages** is a
 station preference, not an integration option, and survives restarts. If the
 agent cannot read or save it, the switch shows **Setting unavailable**; reopen
 the tab before trying again.

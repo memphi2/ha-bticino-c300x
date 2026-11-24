@@ -91,7 +91,7 @@ The optional `dashboard` object changes that tile:
 - Two buttons on the home page open the Alarm and Home Assistant pages,
   arranged like the station's own buttons or as a fixed pair, as set under
   **Home page buttons**.
-- A **Home Assistant** tab in the Settings menu
+- An **Integration** tab in the Settings menu
   ([Station Settings Tab](#station-settings-tab)).
 - The swipe threshold of the touch screen rises from 4 to 16 pixels, so a tap
   that moves a little is no longer taken for a swipe.
@@ -462,13 +462,13 @@ removes a notice.
 
 ## Station Settings Tab
 
-The Display patch adds a **Home Assistant** tab to the station's **Settings**
-menu, below **Configuration**. These controls work without Home Assistant;
+The Display patch adds an **Integration** tab (it **Integrazione**) to the
+station's **Settings** menu, below **Configuration**. These controls work without Home Assistant;
 only maintenance operations the agent has enabled are offered.
 
 <table>
   <tr>
-    <td align="center"><strong>Home Assistant tab</strong><br><img src="images/readme/display-settings-home-assistant-en.webp" alt="Station Settings, Home Assistant tab with SSH, HA feedback, Reboot station and Remove agent" width="360"></td>
+    <td align="center"><strong>Integration tab</strong><br><img src="images/readme/display-settings-home-assistant-en.webp" alt="Station Settings, Integration tab with SSH, HA feedback, Reboot station and Remove agent" width="360"></td>
     <td align="center"><strong>Generals: Tone buttons</strong><br><img src="images/readme/display-settings-tone-buttons-en.webp" alt="Station Settings, Generals tab with the Tone buttons switch" width="360"></td>
   </tr>
 </table>

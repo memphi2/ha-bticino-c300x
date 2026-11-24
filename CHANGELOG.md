@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.9.2 - Unreleased
+
+Station:
+
+- The tab the Display patch adds to the station's **Settings** is called
+  **Integration** (it **Integrazione**) instead of **Home Assistant**. The
+  **Home Assistant** button on the home page keeps its name.
+
 ## v2.9.1 - 2026-11-24
 
 Station:

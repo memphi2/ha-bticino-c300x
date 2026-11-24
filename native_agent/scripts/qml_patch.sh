@@ -933,7 +933,7 @@ render_settings() {
             print "        style: CheckableButtonStyle {"
             print "            defaultImage: \"images/settings/settings-menu_btn.svg\""
             print "            checkedImage: \"images/settings/settings-menu_btn_p.svg\""
-            print "            description: \"Home Assistant\""
+            print "            description: (trsl.language === \"it\" ? \"Integrazione\" : \"Integration\") + trsl.empty"
             print "        }"
             print "    }"
             print "    PageLoader {"

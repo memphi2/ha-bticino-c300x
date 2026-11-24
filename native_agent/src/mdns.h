@@ -17,6 +17,8 @@ struct c300x_mdns {
     int wanted;
     uint32_t ipv4;
     char instance_id[33];
+    char device_id[64]; /* Read once from the interface MAC. */
+    long long last_response_ms;
 };
 
 long long c300x_mdns_home_assistant_present_ms(

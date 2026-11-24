@@ -357,7 +357,10 @@ def test_ring_capture_view_serves_local_mp4(
     assert response.headers["Content-Type"] == "video/mp4"
 
 
-@pytest.mark.parametrize("file_name", ["missing.mp4", "../bad.mp4", "bad.wav"])
+@pytest.mark.parametrize(
+    "file_name",
+    ["missing.mp4", "../bad.mp4", "bad.wav", "a\x00.mp4", "a%00.mp4", "a\n.mp4"],
+)
 def test_ring_capture_view_rejects_missing_or_invalid_files(
     tmp_path: Path,
     file_name: str,
@@ -376,6 +379,26 @@ def test_ring_capture_view_rejects_missing_or_invalid_files(
                 file_name,
             )
         )
+
+
+def test_ring_capture_view_serves_a_name_with_a_percent_sign_once_decoded(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """aiohttp hands the view the decoded name; it is not decoded a second time."""
+
+    capture_dir = tmp_path / "config" / "media" / "c300x"
+    capture_dir.mkdir(parents=True)
+    (capture_dir / "door%41.mp4").write_bytes(b"mp4")
+    (capture_dir / "doorA.mp4").write_bytes(b"other")
+    monkeypatch.setattr(media_module.web, "FileResponse", lambda path, *, headers: path)
+    hass = _fake_hass({})
+    hass.config = _FakeConfig(tmp_path / "config")
+    request = SimpleNamespace(app={"hass": hass}, path="/x")
+
+    path = asyncio.run(C300XRingCaptureMediaView().get(request, "door%41.mp4"))  # type: ignore[arg-type]
+
+    assert path == capture_dir / "door%41.mp4"
 
 
 def test_convert_video_message_to_mp4_muxes_video_and_audio(

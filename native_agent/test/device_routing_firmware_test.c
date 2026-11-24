@@ -29,6 +29,6 @@ int main(int argc, char **argv)
     int ok = strcmp(argv[3], "apply") == 0
         ? c300x_device_routing_apply(&status, error, sizeof(error))
         : c300x_device_routing_restore(&status, error, sizeof(error));
-    printf("ok=%d state=%s error=%s\n", ok, status.state, error);
+    printf("ok=%d state=%s error=%s root_writable=%d\n", ok, status.state, error, status.root_writable);
     return ok ? 0 : 1;
 }

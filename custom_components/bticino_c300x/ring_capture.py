@@ -9,6 +9,7 @@ import logging
 import math
 import shutil
 import threading
+import unicodedata
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
@@ -90,7 +91,8 @@ async def async_capture_doorbell_ring_call(
     """Record a short C300X doorbell RTSP clip on Home Assistant."""
 
     duration = _validate_duration(duration_seconds)
-    target = _capture_output_path(hass, output_path)
+    # Path.resolve() reads the filesystem: never on the event loop.
+    target = await asyncio.to_thread(_capture_output_path, hass, output_path)
     with reserve_capture_output(target):
         return await _async_capture_to_output(
             hass, entry, target, wav_output_dir=wav_output_dir, duration=duration,
@@ -110,7 +112,7 @@ async def _async_capture_to_output(
     if on_demand and announcement_path is not None:
         raise HomeAssistantError("C300X announcements require ring capture mode")
     runtime = entry.runtime_data
-    root = _capture_work_dir(hass, wav_output_dir)
+    root = await asyncio.to_thread(_capture_work_dir, hass, wav_output_dir)
     announcement = await _async_announcement_input_path(hass, announcement_path)
     if on_demand:
         ensure_on_demand_capture_runtime(entry, runtime)
@@ -580,6 +582,7 @@ def _ring_capture_file_name(file_name: str) -> str:
         or Path(candidate).name != candidate
         or "/" in candidate
         or "\\" in candidate
+        or any(unicodedata.category(char) == "Cc" for char in candidate)
         or Path(candidate).suffix.lower() != ".mp4"
     ):
         raise ValueError("invalid ring capture file name")
@@ -653,7 +656,8 @@ def _safe_c300x_path(hass: Any, target: Path, path_kind: str) -> Path:
         raise HomeAssistantError(f"C300X {path_kind} path must be absolute")
     try:
         resolved = target.resolve(strict=False)
-    except OSError as err:
+    except (OSError, ValueError) as err:
+        # ValueError: an embedded NUL byte.
         raise HomeAssistantError(f"Invalid C300X {path_kind} path") from err
 
     allowed_roots = [Path("/media/c300x"), Path("/config/c300x")]

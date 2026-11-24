@@ -71,16 +71,19 @@ int c300x_device_display_is_qt5(void)
 
 int c300x_device_routing_read_status(struct c300x_device_routing_status *status)
 {
+    int patched = strcmp(test_case, "user-failure-patched") == 0;
     memset(status, 0, sizeof(*status));
-    c300x_copy_string(status->state, sizeof(status->state), "stock");
+    status->patched = patched;
+    c300x_copy_string(status->state, sizeof(status->state), patched ? "patched" : "stock");
     return 1;
 }
 
 int c300x_device_routing_apply(struct c300x_device_routing_status *status, char *error, size_t size)
 {
-    (void)status;
     assert(!ensured && !restored);
     applied++;
+    /* Patched, but the replaced binary keeps / from going read-only. */
+    status->root_writable = strcmp(test_case, "busy-root") == 0;
     c300x_copy_string(error, size, "routing detail");
     return strcmp(test_case, "routing-failure") != 0;
 }
@@ -92,13 +95,13 @@ int c300x_device_user_ensure_homeassistant(struct c300x_device_user_status *stat
     assert(applied == 1 && strlen(label) <= C300X_DEVICE_USER_LABEL_LEN - 1);
     ensured++;
     c300x_copy_string(error, size, "user detail");
-    return strcmp(test_case, "user-failure") != 0;
+    return strncmp(test_case, "user-failure", 12) != 0;
 }
 
 int c300x_device_routing_restore(struct c300x_device_routing_status *status, char *error, size_t size)
 {
-    (void)status;
     restored++;
+    status->root_writable = strcmp(test_case, "busy-root") == 0;
     c300x_copy_string(error, size, "restore detail");
     return strcmp(test_case, "restore-failure") != 0;
 }
@@ -210,6 +213,7 @@ int main(int argc, char **argv)
         assert(strstr(response_body, "\"status_available\":true") != NULL);
         assert(strstr(response_body, "\"account_label\":\"A \\\"quoted\\\" label\"") != NULL);
     } else if (strcmp(test_case, "success") == 0 || strcmp(test_case, "overflow") == 0
+        || strcmp(test_case, "busy-root") == 0
         || (strcmp(test_case, "qt5") == 0 && strcmp(operation, "ensure") == 0)
         || (strcmp(test_case, "missing") == 0 && strcmp(operation, "restore") == 0)) {
         assert(response_status == 200 && writes == 1
@@ -217,13 +221,19 @@ int main(int argc, char **argv)
         assert(strcmp(write_reason, strcmp(operation, "restore") == 0
             ? "restore_homeassistant_media_user_setup" : "ensure_homeassistant_user") == 0);
         assert(restored == (strcmp(operation, "restore") == 0));
+        assert(strstr(response_body, strcmp(test_case, "busy-root") == 0
+            ? "\"root_writable\":true" : "\"root_writable\":false") != NULL);
     } else {
         const char *error = strcmp(test_case, "routing-failure") == 0 ? "device_routing_failed"
-            : strcmp(test_case, "user-failure") == 0 ? "device_user_update_failed"
+            : strncmp(test_case, "user-failure", 12) == 0 ? "device_user_update_failed"
             : strcmp(test_case, "restore-failure") == 0 ? "device_routing_restore_failed"
             : strcmp(operation, "restore") == 0 ? "media_user_label_restore_failed"
             : "media_user_label_setup_failed";
         assert(response_status == 500 && writes == 0 && strstr(response_body, error) != NULL);
+        /* A user that could not be set up leaves the routing as it was. */
+        if (strncmp(test_case, "user-failure", 12) == 0) {
+            assert(restored == (strcmp(test_case, "user-failure") == 0));
+        }
     }
     c300x_http_maintenance_close(&owner);
     assert(closes == asynchronous);

@@ -281,11 +281,15 @@ def _result_path(hass: Any, result_path: str | None) -> Path:
 
 async def _async_read_wav(hass: Any, path: Path) -> dict[str, Any]:
     def _read() -> dict[str, Any]:
-        with wave.open(str(path), "rb") as wav:
-            width = wav.getsampwidth()
-            channels = wav.getnchannels()
-            rate = wav.getframerate()
-            audio = wav.readframes(wav.getnframes())
+        try:
+            with wave.open(str(path), "rb") as wav:
+                width = wav.getsampwidth()
+                channels = wav.getnchannels()
+                rate = wav.getframerate()
+                audio = wav.readframes(wav.getnframes())
+        except (OSError, EOFError, wave.Error) as err:
+            # A truncated or non-RIFF file: EOFError or wave.Error.
+            raise HomeAssistantError("C300X ring analysis WAV file could not be read") from err
         if width != 2 or channels != 1:
             raise HomeAssistantError("C300X Wyoming audio must be mono 16-bit WAV")
         return {"rate": rate, "width": width, "channels": channels, "audio": audio}

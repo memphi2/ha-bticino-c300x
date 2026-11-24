@@ -1098,7 +1098,8 @@ static int remove_route_target(
             while (updated_len > 0 && (line[updated_len - 1] == ' ' || line[updated_len - 1] == '\t')) {
                 updated_len--;
             }
-            if (output_len + updated_len + 1 > route->len) {
+            /* Only a line that had one gets its newline back. */
+            if (output_len + updated_len + (line_end != NULL ? 1 : 0) > route->len) {
                 free(output);
                 set_error(error, error_len, "route_too_large");
                 return 0;
@@ -1115,6 +1116,10 @@ static int remove_route_target(
         cursor = line_end + 1;
     }
     output[output_len] = '\0';
+    if (output_len == route->len && memcmp(output, route->data, output_len) == 0) {
+        free(output);
+        return 1;
+    }
     free(route->data);
     route->data = output;
     route->len = output_len;

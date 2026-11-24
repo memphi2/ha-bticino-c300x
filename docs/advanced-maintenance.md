@@ -126,12 +126,28 @@ step is complete.
 
 - **Agent does not start after reboot (Repair):** the startup link is missing
   or invalid. Run the agent-update Repair, or reinstall over SSH.
-- **Update refused after an interrupted update:** the agent rolls back reported
-  apply errors itself, but not an update cut off by a power loss. Over SSH,
-  look for `<file>.update-backup` files next to the agent files, the init script
-  and the init link; each is the file as it was before the update. If the installed
-  file next to it works, delete the backup; if it is missing or broken, move
-  the backup over it first.
+- **Update cut off (power loss, crash):** the agent rolls back reported apply
+  errors itself. An update cut off before it finished leaves
+  `<file>.update-backup` files next to the agent files, the init script and the
+  init link; the next agent update clears them before it starts. When the
+  installed files match the installed bundle, that update had finished and
+  only the leftovers are removed; otherwise each backup is moved back first.
+  Run the agent-update Repair again; no SSH step is needed.
+- **Display patch write interrupted (power loss, crash, forced stop):** the
+  agent finishes it itself, at its next start and before the next Display
+  patch write: the display files from before the write are put back, `/` goes
+  read-only again and the display restarts. Diagnostics show the Display patch
+  status `transaction`: `pending` until then, `recovered` after it.
+  If it reports `stuck` (Repairs shows "C300X display write left unfinished"),
+  the display files were left as they are and the files from before the write
+  stay in the hidden folder `.c300x-qml-transaction.<number>` in
+  `/home/bticino/bin/gui/skins/default`. Check the display, then apply the
+  Display patch again, which rebuilds every display file from the stock
+  backups; if the warning stays, reboot the device so that the agent tries
+  again. A leftover of agent 2.9.0 or older is restored only when every file
+  in it is proven complete and no later write has replaced the display files
+  (then it is only removed), otherwise never: once the display works, delete
+  that folder over SSH.
 - **Camera size back from 960x576 reports missing or invalid backup data:** keep
   the recovery files and resolve the error before retrying; never guess the
   original file.
@@ -140,10 +156,18 @@ When agent removal fails:
 
 | Removal reports | What to do |
 | --- | --- |
-| The agent could not be stopped | Nothing was restored or deleted. |
+| The agent could not be stopped | Nothing was restored or deleted; the agent keeps running or is started again. |
+| Failed to restore a display, firewall or media patch | Agent files, startup entries and backups are kept; the agent is started again. Resolve the reported error, then retry removal. |
 | Read-only remount failed, startup entries restored | Agent and backups are kept; no reboot is requested. Reboot the device fully, then retry removal. |
 | Startup rollback failed | Restore the startup entries from the reported recovery location before rebooting. Do not delete them or force removal. |
 | Deletion failed partway | Startup stays disabled; no reboot is requested. Keep the recovery directory and device backups, repair the agent installation, restore its startup entries, then reboot. |
+
+When a removal stopped the agent and then gives up before its final deletion,
+it restarts the agent and checks that it runs, so Home Assistant can reach the
+station and retry; the message says "Agent started again so the removal can be
+retried", or names the init script's `restart` command to run over SSH. After a
+failed startup rollback or a deletion that had started, the agent stays
+stopped.
 
 The recovery directory holds startup entries and an identity manifest, not
 copies of deleted agent files. A successful removal requests a reboot; the
@@ -235,13 +259,15 @@ the maintenance entity only if you intend this removal. Keep the HA entry until
 the device operation reports its outcome; do not repeatedly retry an uncertain
 result or manually delete recovery files.
 
-The current removal script restores supported QML, firewall and media patches,
+The current removal script restores supported QML and media patches,
 including the stock routing program the Home Assistant media user changed,
-removes startup files and the agent directory (including `config.json`), and on
+strips the agent's IPv4 and IPv6 rule blocks from the live firewall scripts and
+keeps the rest of them (a backup only recreates a missing script), removes
+startup files and the agent directory (including `config.json`), and on
 success also removes its managed device-file backup root before scheduling a
 device reboot. It starts SSH for recovery. On restoration failure it reports an
-error and retains agent files/backups; this is not a promise that every earlier
-step was rolled back. Only a display library without a valid stock backup does
+error, retains agent files/backups and starts the agent again; this is not a
+promise that every earlier step was rolled back. Only a display library without a valid stock backup does
 not stop it: the library keeps the wider tap tolerance. It is not a factory reset and does not erase HA media or
 HA backups. Review any remaining device users/settings separately; never assume
 all device credentials or unrelated firmware configuration were reset.

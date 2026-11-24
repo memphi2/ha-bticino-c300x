@@ -36,6 +36,7 @@ def test_extracted_http_modules_have_separate_budgets() -> None:
         "callback_queue.c": (6_500, 220),
         "http_auth.c": (5_500, 165),
         "http_maintenance.c": (8_000, 220),
+        "qml_recovery.c": (1_000, 30),
         "http_device_user.c": (13_000, 340),
         "command_transaction.c": (4_500, 120),
         "http_service_commands.c": (10_000, 285),

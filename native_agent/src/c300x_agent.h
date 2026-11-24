@@ -146,6 +146,7 @@ struct c300x_config {
     int memos_enabled;
     char memos_text_root[C300X_MAX_PATH_LEN];
     char memos_voice_root[C300X_MAX_PATH_LEN];
+    char memos_records_dir[C300X_MAX_PATH_LEN];
     int memos_watch;
     int memos_max;
 };

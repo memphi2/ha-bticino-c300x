@@ -10,10 +10,12 @@ from typing import Any
 from uuid import uuid4
 
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceValidationError
 
 from .capabilities import entry_device_ui_enabled_or_patch_active
 from .dashboard_config import configured_actions
 from .entry_types import BticinoC300XConfigEntry
+from .exceptions import service_validation_error
 from .schema_compat import vol
 
 MAX_NOTIFICATIONS = 8
@@ -87,7 +89,8 @@ class DisplayNotifications:
         self.busy: set[str] = set()
         self._pending: dict[str, asyncio.Task[dict[str, Any]]] = {}
 
-    def show(self, data: dict[str, Any]) -> None:
+    def show(self, data: dict[str, Any], *, led: bool = True) -> None:
+        """Store a notice; only notices with led count for the station's LED."""
         if self.closed:
             raise ValueError("display_notifications_unloaded")
         self._purge()
@@ -103,6 +106,7 @@ class DisplayNotifications:
             "priority": data["priority"],
             "actions": [dict(action) for action in data["actions"]],
             "deadline": self._loop.time() + data["expires_in"],
+            "led": led,
         }
         # Budget escaped JSON too: Unicode text can expand in the native response.
         while (
@@ -142,7 +146,7 @@ class DisplayNotifications:
             {
                 key: value
                 for key, value in item.items()
-                if key not in {"deadline", "sequence"}
+                if key not in {"deadline", "sequence", "led"}
             }
             for item in sorted(
                 self._items.values(),
@@ -154,9 +158,9 @@ class DisplayNotifications:
         ]
 
     def has_unread(self) -> bool:
-        """Snapshot live notices without purging or scheduling another event."""
+        """Snapshot live LED notices without purging or scheduling another event."""
         now = self._loop.time()
-        return any(item["deadline"] > now for item in self._items.values())
+        return any(item["led"] and item["deadline"] > now for item in self._items.values())
 
     def close(self) -> None:
         self.closed = True
@@ -192,6 +196,24 @@ class DisplayNotifications:
         self._schedule()
 
 
+# The ValueError keys show and dismiss raise; each is a translated exception.
+_SERVICE_ERROR_KEYS = frozenset({
+    "display_disabled",
+    "display_notification_queue_full",
+    "display_notifications_unloaded",
+    "unknown_notification_action",
+})
+
+
+def display_notification_service_error(err: ValueError) -> ServiceValidationError:
+    """Return the translated service error for a show or dismiss refusal."""
+
+    key = str(err)
+    if key in _SERVICE_ERROR_KEYS:
+        return service_validation_error(key)
+    return ServiceValidationError(key)
+
+
 def notifications_for_entry(
     hass: HomeAssistant, entry: BticinoC300XConfigEntry
 ) -> DisplayNotifications:
@@ -219,13 +241,14 @@ def notification_payload(entry: BticinoC300XConfigEntry) -> list[dict[str, Any]]
 
 
 def show_notification(
-    hass: HomeAssistant, entry: BticinoC300XConfigEntry, data: dict[str, Any]
+    hass: HomeAssistant, entry: BticinoC300XConfigEntry, data: dict[str, Any],
+    *, led: bool = True,
 ) -> None:
     data = SHOW_SCHEMA(data)
     allowed = configured_actions(entry)
     if any(action["action_id"] not in allowed for action in data["actions"]):
         raise ValueError("unknown_notification_action")
-    notifications_for_entry(hass, entry).show(data)
+    notifications_for_entry(hass, entry).show(data, led=led)
 
 
 async def async_notification_action(

@@ -20,16 +20,40 @@ def apply_identity_binary(tmp_path_factory):
         "-D_DEFAULT_SOURCE", "-D_POSIX_C_SOURCE=200809L",
         str(ROOT / "native_agent/test/device_routing_apply_identity_test.c"),
         *(str(ROOT / "native_agent/src" / name) for name in
-          ("device_patch_io.c", "sha256.c", "string_util.c")), "-o", str(binary),
+          ("device_patch_io.c", "root_mount.c", "sha256.c", "string_util.c")), "-o", str(binary),
     ], capture_output=True, text=True, timeout=60)
     assert result.returncode == 0, result.stderr
     return binary
 
 
-def run(binary, target, backup, action):
+def run(binary, target, backup, action, **env):
     return subprocess.run([str(binary), str(target.parent), str(backup.parent), action],
-                          env={**os.environ, "C300X_DEVICE_PATCH_NO_REMOUNT": "1"},
+                          env={**os.environ, "C300X_DEVICE_PATCH_NO_REMOUNT": "1", **env},
                           capture_output=True, text=True, timeout=10)
+
+
+def stock_copy(tmp_path, firmware="1.7.19"):
+    original = FIRMWARE_ROOT / f"rootfs-{firmware}/home/bticino/bin/bt_answering_machine"
+    if not original.is_file():
+        pytest.skip(f"Extracted firmware unavailable: {original}")
+    target = tmp_path / "bin/bt_answering_machine"
+    backup = tmp_path / "backup/bt_answering_machine"
+    target.parent.mkdir()
+    backup.parent.mkdir()
+    shutil.copy2(original, target)
+    return target, backup
+
+
+def test_failed_sync_leaves_the_stock_binary(apply_identity_binary, tmp_path):
+    """A patched copy that fsync could not write out must not replace the vendor binary."""
+    target, backup = stock_copy(tmp_path)
+    stock = target.read_bytes()
+    result = run(apply_identity_binary, target, backup, "apply", C300X_TEST_FSYNC_FAIL="1")
+    assert result.returncode != 0, result.stdout
+    assert "error=routing_target_replace_failed" in result.stdout
+    assert target.read_bytes() == stock
+    assert not list(target.parent.glob("*.tmp"))
+    assert run(apply_identity_binary, target, backup, "apply").returncode == 0
 
 
 def test_c100x_remains_unsupported(apply_identity_binary, tmp_path):
@@ -114,3 +138,19 @@ def test_apply_whole_identity(apply_identity_binary, tmp_path, firmware, case):
         if case != "stock_symlink":
             assert "state=unsupported" in run(binary, target, backup, "status").stdout
     assert not list(target.parent.glob("*.tmp"))
+
+
+def test_apply_on_a_busy_root_is_done(apply_identity_binary, tmp_path):
+    """remount,ro fails while the daemon still runs the replaced binary.
+
+    The patch is on disk; the apply must succeed (so the HA user setup goes
+    on) and report root_writable instead of remount_ro_failed.
+    """
+    target, backup = stock_copy(tmp_path)
+    stock = target.read_bytes()
+    result = run(apply_identity_binary, target, backup, "apply", C300X_DEVICE_PATCH_NO_REMOUNT="ro_busy")
+    assert result.returncode == 0, result.stdout
+    assert "state=patched" in result.stdout and "root_writable=1" in result.stdout
+    assert target.read_bytes() != stock and backup.read_bytes() == stock
+    result = run(apply_identity_binary, target, backup, "apply")
+    assert result.returncode == 0 and "root_writable=0" in result.stdout

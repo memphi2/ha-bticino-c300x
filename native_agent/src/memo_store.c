@@ -8,8 +8,8 @@
 #include "string_util.h"
 
 #include <ctype.h>
-#include <dirent.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <strings.h>
@@ -18,7 +18,6 @@
 #include <sys/syscall.h>
 #endif
 #include <sys/stat.h>
-#include <time.h>
 #include <unistd.h>
 
 #ifdef __arm__
@@ -33,15 +32,6 @@ static int memo_stat_path(const char *path, C300X_MEMO_STAT_STRUCT *status)
     return (int)syscall(SYS_stat64, path, status);
 #else
     return stat(path, status);
-#endif
-}
-
-static int memo_lstat_path(const char *path, C300X_MEMO_STAT_STRUCT *status)
-{
-#ifdef __arm__
-    return (int)syscall(SYS_lstat64, path, status);
-#else
-    return lstat(path, status);
 #endif
 }
 
@@ -134,85 +124,6 @@ void c300x_read_voicemail_info(
     fclose(file);
 }
 
-static int memo_path_exists(const char *path)
-{
-    C300X_MEMO_STAT_STRUCT st;
-
-    return memo_stat_path(path, &st) == 0;
-}
-
-static int memo_path_is_directory(const char *path)
-{
-    C300X_MEMO_STAT_STRUCT st;
-
-    return memo_stat_path(path, &st) == 0 && S_ISDIR(st.st_mode);
-}
-
-static int memo_remove_tree(const char *path)
-{
-    DIR *directory;
-    struct dirent *entry;
-
-    directory = opendir(path);
-    if (directory == NULL) {
-        return errno == ENOENT;
-    }
-    while ((entry = readdir(directory)) != NULL) {
-        char child[C300X_MAX_PATH_LEN];
-        C300X_MEMO_STAT_STRUCT st;
-
-        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
-            continue;
-        }
-        if (!c300x_join_path(child, sizeof(child), path, entry->d_name)) {
-            closedir(directory);
-            return 0;
-        }
-        if (memo_lstat_path(child, &st) != 0) {
-            closedir(directory);
-            return 0;
-        }
-        if (S_ISDIR(st.st_mode)) {
-            if (!memo_remove_tree(child)) {
-                closedir(directory);
-                return 0;
-            }
-        } else if (unlink(child) != 0) {
-            closedir(directory);
-            return 0;
-        }
-    }
-    closedir(directory);
-    return rmdir(path) == 0 || errno == ENOENT;
-}
-
-static int write_file_bytes(
-    const char *path,
-    const unsigned char *data,
-    size_t len,
-    mode_t mode
-)
-{
-    FILE *file = fopen(path, "wb");
-    int fd;
-
-    if (file == NULL) {
-        return 0;
-    }
-    if (len > 0 && fwrite(data, 1, len, file) != len) {
-        (void)fclose(file);
-        return 0;
-    }
-    fd = fileno(file);
-    if (fd >= 0) {
-        (void)fchmod(fd, mode);
-    }
-    if (fclose(file) != 0) {
-        return 0;
-    }
-    return 1;
-}
-
 static int valid_utf8_text(const unsigned char *data, size_t len)
 {
     size_t index = 0;
@@ -297,140 +208,118 @@ static int text_memo_has_visible_content(const unsigned char *data, size_t len)
     return 0;
 }
 
-static int next_text_memo_entry_name(
-    const char *root,
-    int max_memos,
-    char *entry_name,
-    size_t entry_name_len
-)
+int c300x_text_memo_normalize(unsigned char *text, size_t *text_len)
 {
-    int max_entries = max_memos;
+    size_t len = *text_len;
 
-    if (max_entries <= 0 || max_entries > C300X_MAX_VOICEMAIL_MESSAGES) {
-        max_entries = C300X_MAX_VOICEMAIL_MESSAGES;
+    if (len == 0 || len > C300X_MAX_MEMO_TEXT_LEN) {
+        return 0;
     }
-    for (int number = 1; number <= max_entries; number++) {
-        char candidate_name[C300X_MAX_VOICEMAIL_ID_LEN];
-        char candidate_path[C300X_MAX_PATH_LEN];
+    len = normalize_text_memo_bytes(text, len);
+    text[len] = '\0';
+    *text_len = len;
+    return len > 0 && text_memo_has_visible_content(text, len) && valid_utf8_text(text, len);
+}
 
-        snprintf(candidate_name, sizeof(candidate_name), "memo_%d", number);
-        if (snprintf(candidate_path, sizeof(candidate_path), "%s/%s", root, candidate_name) >= (int)sizeof(candidate_path)) {
+#define C300X_STAGED_MEMO "message.txt"
+#define C300X_RECORDS_DIR_FLAGS (O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+
+/* The records directory sits in the world-writable /var/tmp: it is opened
+ * without following a symlink, and mode and owner go through the descriptor,
+ * never by name. Only a directory made here gets the vendor's 0777 and owner. */
+static int open_records_dir(const char *records_dir, const C300X_MEMO_STAT_STRUCT *owner)
+{
+    int fd = open(records_dir, C300X_RECORDS_DIR_FLAGS);
+
+    if (fd >= 0 || errno != ENOENT || mkdir(records_dir, 0777) != 0) {
+        return fd;
+    }
+    fd = open(records_dir, C300X_RECORDS_DIR_FLAGS);
+    if (fd >= 0 && (fchmod(fd, 0777) != 0 || (owner != NULL && fchown(fd, owner->st_uid, owner->st_gid) != 0))) {
+        (void)close(fd);
+        return -1;
+    }
+    return fd;
+}
+
+static int write_staged_memo(int dir_fd, const C300X_MEMO_STAT_STRUCT *owner,
+                             const unsigned char *text, size_t text_len)
+{
+    size_t written = 0;
+    int fd = openat(dir_fd, C300X_STAGED_MEMO, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0644);
+
+    if (fd < 0) {
+        return 0;
+    }
+    while (written < text_len) {
+        ssize_t result = write(fd, text + written, text_len - written);
+        if (result <= 0) {
+            (void)close(fd);
             return 0;
         }
-        if (!memo_path_exists(candidate_path)) {
-            snprintf(entry_name, entry_name_len, "%s", candidate_name);
-            return 1;
+        written += (size_t)result;
+    }
+    if (fchmod(fd, 0644) != 0 || (owner != NULL && fchown(fd, owner->st_uid, owner->st_gid) != 0)) {
+        (void)close(fd);
+        return 0;
+    }
+    return close(fd) == 0;
+}
+
+/* The GUI writes message.txt into the records directory and bt_answering_machine
+ * moves it into the new memo. A name found there is removed, never followed,
+ * and the file is made anew. */
+int c300x_text_memo_stage(const char *records_dir, const char *owner_path,
+                          const unsigned char *text, size_t text_len, char *error, size_t error_len)
+{
+    C300X_MEMO_STAT_STRUCT status;
+    const C300X_MEMO_STAT_STRUCT *owner = memo_stat_path(owner_path, &status) == 0 ? &status : NULL;
+    int dir_fd = open_records_dir(records_dir, owner);
+    int ok;
+
+    if (dir_fd < 0) {
+        set_error(error, error_len, "memo_records_dir_missing");
+        return 0;
+    }
+    ok = (unlinkat(dir_fd, C300X_STAGED_MEMO, 0) == 0 || errno == ENOENT)
+        && write_staged_memo(dir_fd, owner, text, text_len);
+    if (!ok) {
+        (void)unlinkat(dir_fd, C300X_STAGED_MEMO, 0);
+        set_error(error, error_len, "memo_create_failed");
+    }
+    (void)close(dir_fd);
+    return ok;
+}
+
+void c300x_text_memo_unstage(const char *records_dir)
+{
+    int dir_fd = open(records_dir, C300X_RECORDS_DIR_FLAGS);
+
+    if (dir_fd >= 0) {
+        (void)unlinkat(dir_fd, C300X_STAGED_MEMO, 0);
+        (void)close(dir_fd);
+    }
+}
+
+int c300x_text_memo_newest(const char *root, const int *numbers, int count)
+{
+    long long newest_time = -1;
+    int newest = 0;
+
+    for (int index = 0; index < count; index++) {
+        char path[C300X_MAX_PATH_LEN];
+        char date[8];
+        int read;
+        long long unix_time;
+
+        if (snprintf(path, sizeof(path), "%s/memo_%d/msg_info.ini", root, numbers[index]) >= (int)sizeof(path)) {
+            continue;
+        }
+        c300x_read_voicemail_info(path, &read, date, sizeof(date), &unix_time);
+        if (unix_time > newest_time || (unix_time == newest_time && numbers[index] > newest)) {
+            newest_time = unix_time;
+            newest = numbers[index];
         }
     }
-    return 0;
-}
-
-static void format_memo_date(time_t now, char *date, size_t date_len)
-{
-    struct tm tm_value;
-
-    if (date_len == 0) {
-        return;
-    }
-    date[0] = '\0';
-    if (localtime_r(&now, &tm_value) == NULL) {
-        return;
-    }
-    strftime(date, date_len, "%d/%m/%Y %H:%M", &tm_value);
-}
-
-int c300x_text_memo_create(
-    const char *root,
-    int max_memos,
-    const unsigned char *text,
-    size_t text_len,
-    int read,
-    char *entry_name,
-    size_t entry_name_len,
-    char *error,
-    size_t error_len
-)
-{
-    unsigned char normalized[C300X_MAX_MEMO_TEXT_LEN + 1];
-    char entry_path[C300X_MAX_PATH_LEN];
-    char tmp_path[C300X_MAX_PATH_LEN];
-    char message_path[C300X_MAX_PATH_LEN];
-    char info_path[C300X_MAX_PATH_LEN];
-    char info_content[256];
-    char date[64];
-    time_t now;
-
-    if (entry_name_len > 0) {
-        entry_name[0] = '\0';
-    }
-    if (root == NULL || root[0] == '\0' || !memo_path_is_directory(root)) {
-        set_error(error, error_len, "memos_dir_missing");
-        return 0;
-    }
-    if (text == NULL || text_len == 0 || text_len > C300X_MAX_MEMO_TEXT_LEN) {
-        set_error(error, error_len, "invalid_text");
-        return 0;
-    }
-    memcpy(normalized, text, text_len);
-    text_len = normalize_text_memo_bytes(normalized, text_len);
-    normalized[text_len] = '\0';
-    if (
-        text_len == 0
-        || text_len > C300X_MAX_MEMO_TEXT_LEN
-        || !text_memo_has_visible_content(normalized, text_len)
-        || !valid_utf8_text(normalized, text_len)
-    ) {
-        set_error(error, error_len, "invalid_text");
-        return 0;
-    }
-    if (!next_text_memo_entry_name(root, max_memos, entry_name, entry_name_len)) {
-        set_error(error, error_len, "memo_store_full");
-        return 0;
-    }
-    if (snprintf(entry_path, sizeof(entry_path), "%s/%s", root, entry_name) >= (int)sizeof(entry_path)) {
-        set_error(error, error_len, "invalid_memo_path");
-        return 0;
-    }
-    if (snprintf(tmp_path, sizeof(tmp_path), "%s/.%s.tmp.%ld", root, entry_name, (long)getpid()) >= (int)sizeof(tmp_path)) {
-        set_error(error, error_len, "invalid_memo_path");
-        return 0;
-    }
-    (void)memo_remove_tree(tmp_path);
-    if (mkdir(tmp_path, 0755) != 0) {
-        set_error(error, error_len, "memo_create_failed");
-        return 0;
-    }
-    if (
-        !c300x_join_suffix(message_path, sizeof(message_path), tmp_path, "/message.txt")
-        || !c300x_join_suffix(info_path, sizeof(info_path), tmp_path, "/msg_info.ini")
-    ) {
-        (void)memo_remove_tree(tmp_path);
-        set_error(error, error_len, "invalid_memo_path");
-        return 0;
-    }
-    now = time(NULL);
-    format_memo_date(now, date, sizeof(date));
-    snprintf(
-        info_content,
-        sizeof(info_content),
-        "[Message Information]\nRead=%d\nDate=%s\nUnixTime=%lld\nMediaType=1\n",
-        read ? 1 : 0,
-        date,
-        (long long)now
-    );
-    if (
-        !write_file_bytes(message_path, normalized, text_len, 0644)
-        || !write_file_bytes(info_path, (const unsigned char *)info_content, strlen(info_content), 0644)
-    ) {
-        (void)memo_remove_tree(tmp_path);
-        set_error(error, error_len, "memo_create_failed");
-        return 0;
-    }
-    if (rename(tmp_path, entry_path) != 0) {
-        (void)memo_remove_tree(tmp_path);
-        set_error(error, error_len, "memo_create_failed");
-        return 0;
-    }
-    set_error(error, error_len, "ok");
-    return 1;
+    return newest;
 }

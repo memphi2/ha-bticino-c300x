@@ -107,6 +107,9 @@ The card's sliders icon reads and changes **brightness**, **contrast** and
 changes that one setting. These are station settings, not browser filters, so
 saved recordings and snapshots are never recoloured.
 
+While the sliders panel is open, the card hides the play, mute and volume
+controls under it; they return when the panel closes.
+
 - **Ring Call:** uses the stock controls of the video call. Opening the sliders
   does not answer.
 - **On-demand video:** start live video first; the sliders icon appears about
@@ -400,6 +403,7 @@ data:
   title: Front window
   message: The front window is still open.
   data:
+    display: true
     notification_id: front_window
     severity: warning
     wake_duration: 30
@@ -412,29 +416,83 @@ The target is fixed to the entry, so do not set `target`; `title` defaults to
 
 | Field | Values |
 | --- | --- |
+| `display`, `tts`, `led` | Channel switches, `true` or `false`; see below. |
 | `severity` | `info` (default), `warning`, `error`. A higher severity can replace a lower one, not the reverse. |
-| `wake_duration`, `sound_duration` | 0-300 seconds, default 30; `0` turns the effect off. |
+| `wake_duration`, `sound_duration` | 0-300 seconds, default 30; `0` turns the effect off. Only with `display`. |
 | `expires_in` | 1 second to 7 days, default one hour. |
 | `notification_id` | Optional; lowercase letters, digits, `_`, `-`, up to 64 characters. The same ID replaces a notice. |
-| `mode` | `display` (default): notice, wake and tone. `led`: unread notice and the station's message LED only. `speech`: spoken only. `both`: notice and wake, spoken, no tone. |
-| `tts_engine`, `language` | Engine and language for spoken modes. |
+| `tts_engine`, `language` | Engine and language for the speech. Only with `tts`. |
+| `mode` | Legacy; see below. |
 
 Title and message allow 80 and 500 characters; no URLs, audio files or
 executable actions. This is supplementary information, **not a fire alarm or
 other life-safety alerting system**.
 
-For a quiet reminder use `mode: led` without wake, sound or TTS fields (they
-are rejected there). HA refuses the call if the agent does not report LED
-support. Success means HA stored the notice, not that the LED changed; the LED
-reflects all unread HA notices.
+Each switch turns on one channel; combine them freely, at least one on:
 
-In `speech` and `both` the [Speaker](#speaker-announcements-and-tts) says the
-message, not the title. Set engine and language once under **Configure >
-Speech** (for example `tts.piper`); a language is saved the way the engine
-names it, such as `de_DE` for `de`. A notification can name its own
-`tts_engine` and `language`. Without any engine, HA uses its default, which is
-the cloud engine where Home Assistant Cloud is set up. In `both` a
-`sound_duration` above 0 is refused. Speech can still fail after the notice is
+| Switch | Channel |
+| --- | --- |
+| `display` | Notice with popup, screen wake and tone, for `wake_duration` and `sound_duration`. |
+| `tts` | The [Speaker](#speaker-announcements-and-tts) says the message, not the title. |
+| `led` | The station's message LED, with an unread notice on the HA page. |
+
+| Switches on | Result |
+| --- | --- |
+| `display` | Notice, popup, wake, tone. The LED stays off. |
+| `tts` | Spoken only; nothing is stored. |
+| `led` | Notice and LED; no popup, wake, tone or speech. |
+| `display`, `tts` | Notice, popup and wake, spoken; no tone. |
+| `display`, `led` | Notice, popup, wake, tone and LED. |
+| `tts`, `led` | Notice and LED, spoken; no popup, wake or tone. |
+| `display`, `tts`, `led` | Notice, popup and wake, spoken, LED; no tone. |
+
+- **Speech wins over the tone.** With `display` and `tts` there is no tone,
+  even when `sound_duration` is set; popup and wake still run. The station has
+  one speaker, and the tone would hold it while the message should be spoken.
+- A switch left out counts as `false`. All switches `false` is refused.
+- Positive `wake_duration` or `sound_duration` without `display`, and
+  `tts_engine` or `language` without `tts`, are refused. With only `tts`,
+  `severity`, `expires_in` and `notification_id` are refused, because nothing
+  is stored.
+- `led` needs an agent that reports message LED support; otherwise HA refuses
+  the call and nothing is shown or spoken. Success means HA stored the notice,
+  not that the LED changed. The LED stays on while any unread HA notice that
+  asked for it is live; a replacement without `led` releases it. An unread
+  station memo keeps the LED on by itself.
+
+To light the message LED as well, add `led: true`. This needs an agent that
+reports message LED support, which depends on the station hardware:
+
+```yaml
+action: notify.bticino_c300x
+data:
+  title: Front window
+  message: The front window is still open.
+  data:
+    display: true
+    led: true
+```
+
+**Without switches** (and without `mode`) the call works as `mode: display`
+always did: notice, popup, wake and tone, and the notice also lights the LED
+where the agent supports it.
+
+**Legacy `mode`.** Existing automations keep working; new ones should use the
+switches. `mode` cannot be combined with any switch; HA refuses that.
+
+| `mode` | Same as | Difference |
+| --- | --- | --- |
+| `display` | `display` | The notice also lights the LED where supported, without requiring it. `tts_engine` and `language` are ignored instead of refused. |
+| `speech` | `tts` | Durations, `severity`, `expires_in` and `notification_id` are ignored instead of refused. |
+| `both` | `display`, `tts` | Lights the LED like `display`. |
+| `led` | `led` | None. |
+
+Set engine and language for the speech once under **Configure > Speech** (for
+example `tts.piper`); a language is saved the way the engine names it, such as
+`de_DE` for `de`. A notification can name its own `tts_engine` and
+`language`. Without any engine, HA uses its default, which is the cloud engine
+where Home Assistant Cloud is set up. Engine, language and speaker are checked
+before anything is shown or stored. Speech can still fail after the notice is
 shown, for example when the engine is unreachable or a door call holds the
 speaker; the action then fails and says why. `tts.speak` on the speaker works
 without the display pages.
@@ -442,9 +500,10 @@ without the display pages.
 Popup, wake and beep run only on the stock Home or HA page while no call is
 active or ringing. Alarmo, PIN entry, settings and other protected pages
 suppress them: the action succeeds, keeps the notice and logs the suppression;
-speech still plays. Effects stop on a touch, standby, a call or leaving the
-page and are never queued. HA keeps notices in memory and sends each once;
-without a connected display the action fails, with no retry. Success does not
+speech and the LED still follow their switches. Effects stop on a touch,
+standby, a call or leaving the page and are never queued. HA keeps notices in
+memory and sends each once; without a connected display a call with `display`
+fails, with no retry. Success does not
 prove the notice was seen or heard, so test on the device before relying on
 it. Notices from `bticino_c300x.show_display_notification` are described in
 [Display Notifications](display.md#display-notifications).

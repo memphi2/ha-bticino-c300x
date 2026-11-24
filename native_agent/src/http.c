@@ -4,7 +4,7 @@
 #include "c300x_agent.h"
 #include "capabilities.h"
 #include "callback_queue.h"
-#include "http_maintenance.h"
+#include "qml_recovery.h"
 #include "http_identity.h"
 #include "http_device_user.h"
 #include "http_service_commands.h"
@@ -39,6 +39,7 @@
 #include "recent_events.h"
 #include "ringer_control.h"
 #include "ringer_protocol.h"
+#include "root_mount.h"
 #include "sha256.h"
 #include "smartphone_forwarding.h"
 #include "string_util.h"
@@ -55,6 +56,11 @@
 #include "video_audio_settings.h"
 #include "video_rtsp.h"
 #include "video_snapshot.h"
+#include "memo_deleted.h"
+#include "memo_vendor.h"
+#include "firewall_file.h"
+#include "detached_command.h"
+#include "http_origin.h"
 #include <arpa/inet.h>
 #include <ctype.h>
 #include <dirent.h>
@@ -79,7 +85,7 @@
 #include <time.h>
 #include <unistd.h>
 #define C300X_MAX_SUBSCRIPTIONS 4
-#define C300X_MAX_SUBSCRIPTION_EVENTS 24
+#define C300X_MAX_SUBSCRIPTION_EVENTS 32
 #define C300X_MAX_URL_LEN 512
 #define C300X_MAX_VOICEMAIL_WATCHES (C300X_MAX_VOICEMAIL_MESSAGES + 1)
 #define C300X_MESSAGE_WATCH_MASK (IN_CREATE | IN_DELETE | IN_MODIFY | IN_CLOSE_WRITE | IN_MOVED_FROM | IN_MOVED_TO | IN_ATTRIB | IN_DELETE_SELF | IN_MOVE_SELF)
@@ -88,9 +94,6 @@
 #define C300X_MAX_MEMO_TEXT_JSON_LEN ((C300X_MAX_MEMO_TEXT_LEN * 6) + 1)
 #define C300X_MAX_PATH_JSON_LEN ((C300X_MAX_PATH_LEN * 6) + 1)
 #define C300X_TOKEN_FINGERPRINT_LEN 32
-#define C300X_ANSWERING_DIRECTORY_VIDEO_MESSAGE 0
-#define C300X_ANSWERING_DIRECTORY_VOICE_MEMO 2
-#define C300X_ANSWERING_DIRECTORY_TEXT_MEMO 3
 #define C300X_UI_LISTEN_HOST "127.0.0.1"
 #define C300X_FIREWALL_BEGIN "# c300x-native-agent firewall begin"
 #define C300X_FIREWALL_END "# c300x-native-agent firewall end"
@@ -113,7 +116,7 @@
 /* Every stored text and voice memo with a text that escapes to six bytes
  * per byte must fit: the list is not paged. */
 #define C300X_MEMOS_RESPONSE_SIZE \
-    (1024 + (2 * C300X_MAX_VOICEMAIL_MESSAGES * (C300X_MAX_MEMO_TEXT_JSON_LEN + 768)))
+    (3072 + (2 * C300X_MAX_VOICEMAIL_MESSAGES * (C300X_MAX_MEMO_TEXT_JSON_LEN + 768)))
 enum listener_kind {
     LISTENER_API = C300X_HTTP_KIND_API,
     LISTENER_UI = C300X_HTTP_KIND_UI
@@ -390,7 +393,7 @@ static void system_metrics_dispatch_now(
     struct agent_runtime *runtime,
     time_t now
 );
-static void handle_answering_messages_get(int client_fd, struct agent_runtime *runtime);
+static void handle_answering_messages_get(int client_fd, const struct c300x_config *config, struct agent_runtime *runtime);
 static void handle_answering_message_video_get(
     int client_fd,
     struct agent_runtime *runtime,
@@ -452,7 +455,6 @@ static void handle_firewall_action(
     const char *action,
     const char *confirmation
 );
-static int run_detached_command(const char *program, const char *argument, int delay_ms);
 static int apply_gui_ringer_command(
     int client_fd, const struct c300x_ringer_command *command, void *ctx
 );
@@ -716,7 +718,7 @@ static void forward_to_homeassistant(
     const char *body
 )
 {
-    if (!runtime_network_online(runtime, time(NULL))) {
+    if (!runtime_network_online(runtime, c300x_monotonic_seconds())) {
         send_homeassistant_unavailable(client_fd);
         return;
     }
@@ -1309,28 +1311,6 @@ static int entry_number_from_prefixed_name(const char *name, const char *prefix,
     }
     *number = (int)parsed;
     return 1;
-}
-
-static int send_answering_delete_command(
-    const struct c300x_config *config,
-    int entry_number,
-    int directory,
-    char *reply,
-    size_t reply_len,
-    char *error,
-    size_t error_len
-)
-{
-    char command[64];
-
-    if (entry_number <= 0 || directory < 0) {
-        if (error_len > 0) {
-            snprintf(error, error_len, "%s", "invalid_answering_delete_target");
-        }
-        return 0;
-    }
-    snprintf(command, sizeof(command), "*8*94#%d#%d##", entry_number, directory);
-    return c300x_openwebnet_send(config, command, reply, reply_len, error, error_len);
 }
 
 static const char *trim_ascii(char *value)
@@ -2129,6 +2109,12 @@ static void json_events_array_range(
             return;
         }
     }
+    while (ptr < end && isspace((unsigned char)*ptr)) {
+        ptr++;
+    }
+    if (ptr < end && *ptr != ']') {
+        subscription->event_count = -1; /* More than fit: never drop some silently. */
+    }
 }
 
 static int subscription_matches_event(const struct subscription *subscription, const char *event_type)
@@ -2408,8 +2394,9 @@ static void handle_subscriptions_post(
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"https_unavailable\"}\n");
         return;
     }
-    if (subscription.event_count == 0) {
-        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"events_required\"}\n");
+    if (subscription.event_count <= 0) {
+        send_json(client_fd, 400, "Bad Request", subscription.event_count < 0
+            ? "{\"ok\":false,\"error\":\"too_many_events\"}\n" : "{\"ok\":false,\"error\":\"events_required\"}\n");
         return;
     }
     had_existing = runtime->subscription_count > 0;
@@ -2607,17 +2594,11 @@ static void handle_ui_media_closed(
     struct agent_runtime *runtime
 )
 {
+    (void)config;
     if (runtime != NULL) {
-        /* The GUI also emits onCallEnded during on-demand startup. Apply the
-         * same transition guard as UDP before consuming the close event. */
-        if (
-            runtime->video != NULL
-            && !c300x_media_session_stop_in_progress(runtime->video)
-            && !c300x_video_ignore_transient_media_closed(runtime->video)
-            && c300x_video_consume_media_closed_event(runtime->video)
-        ) {
-            dispatch_event(config, runtime, "doorbell.media.closed", "{}", 0);
-        }
+        /* The GUI's onCallEnded also fires during on-demand startup and when
+         * HA answers a ring, so it never ends HA media: the bus, SIP and
+         * stream stops publish doorbell.media.closed. */
         ui_event_notify(runtime, "media.closed");
     }
     send_json(client_fd, 200, "OK", "{\"ok\":true,\"event\":\"media.closed\"}\n");
@@ -3396,10 +3377,8 @@ static int mqtt_runtime_config_is_valid(const struct c300x_config *config, const
     return 1;
 }
 
-static void firewall_remount_rw_if_needed(const char *path);
-static void firewall_remount_ro_if_needed(const char *path);
-static int run_detached_command(const char *program, const char *argument, int delay_ms);
-static void close_extra_fds_for_exec(void);
+#define firewall_remount_rw_if_needed(path) ((void)c300x_firewall_remount(path, "rw"))
+#define firewall_remount_ro_if_needed(path) ((void)c300x_firewall_remount(path, "ro"))
 
 static int process_cmdline_contains(const char *needle)
 {
@@ -3878,32 +3857,7 @@ static void handle_legacy_mqtt_post(
         send_json(client_fd, 409, "Conflict", "{\"ok\":false,\"error\":\"legacy_mqtt_backup_missing\"}\n");
         return;
     }
-    if (enabled && config->mqtt_enabled) {
-        updated = calloc(1, sizeof(*updated));
-        if (updated == NULL) {
-            send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"out_of_memory\"}\n");
-            return;
-        }
-        *updated = *config;
-        updated->mqtt_enabled = 0;
-        if (!c300x_save_mqtt_config(config, updated, error, sizeof(error), &native_config_changed)) {
-            char error_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ERROR_LEN)];
-            char body[2048];
-            c300x_json_string(error, error_json, sizeof(error_json));
-            snprintf(body, sizeof(body), "{\"ok\":false,\"error\":\"config_save_failed\",\"detail\":%s}\n", error_json);
-            send_json(client_fd, 500, "Internal Server Error", body);
-            free(updated);
-            return;
-        }
-        *config = *updated;
-        free(updated);
-        if (runtime != NULL) {
-            c300x_mqtt_close(&runtime->mqtt);
-        }
-        if (native_config_changed) {
-            record_agent_write(config, runtime, "config", "mqtt_disabled_for_legacy");
-        }
-    }
+    /* Switch the files first: a failure leaves the bridge that ran. */
     bridge_was_running = legacy_mqtt_bridge_running();
     firewall_remount_rw_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
     if (enabled) {
@@ -3922,11 +3876,41 @@ static void handle_legacy_mqtt_post(
         should_stop_legacy = 1;
     }
     firewall_remount_ro_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
+    if (enabled && config->mqtt_enabled) {
+        updated = calloc(1, sizeof(*updated));
+        if (updated != NULL) {
+            *updated = *config;
+            updated->mqtt_enabled = 0;
+        }
+        snprintf(error, sizeof(error), "out_of_memory");
+        if (updated == NULL || !c300x_save_mqtt_config(config, updated, error, sizeof(error), &native_config_changed)) {
+            char error_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ERROR_LEN)];
+            char body[2048];
+            c300x_json_string(error, error_json, sizeof(error_json));
+            snprintf(body, sizeof(body), "{\"ok\":false,\"error\":\"config_save_failed\",\"detail\":%s}\n", error_json);
+            send_json(client_fd, 500, "Internal Server Error", body);
+            free(updated);
+            if (changed) { /* Back to the native bridge that was working. */
+                firewall_remount_rw_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
+                (void)legacy_mqtt_disable_patch(&changed);
+                firewall_remount_ro_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
+            }
+            return;
+        }
+        *config = *updated;
+        free(updated);
+        if (runtime != NULL) {
+            c300x_mqtt_close(&runtime->mqtt);
+        }
+        if (native_config_changed) {
+            record_agent_write(config, runtime, "config", "mqtt_disabled_for_legacy");
+        }
+    }
     if (should_stop_legacy) {
         legacy_mqtt_stop_processes();
     }
     if (should_start_bridge) {
-        (void)run_detached_command(C300X_LEGACY_MQTT_SCRIPT, NULL, 0);
+        (void)c300x_run_detached_command(C300X_LEGACY_MQTT_SCRIPT, NULL, 0);
     }
     if (changed) {
         record_agent_write(config, runtime, "legacy_mqtt", enabled ? "enable" : "disable");
@@ -4155,10 +4139,26 @@ static void handle_mqtt_post(
         send_json(client_fd, 400, "Bad Request", body);
         MQTT_POST_RETURN();
     }
+    /* Legacy files first: a failure on either side leaves the bridge that ran. */
+    int legacy_off = updated->mqtt_enabled && legacy_mqtt_installed();
+    if (legacy_off) {
+        firewall_remount_rw_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
+        if (!legacy_mqtt_disable_patch(&legacy_changed)) {
+            firewall_remount_ro_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
+            send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"legacy_mqtt_disable_failed\"}\n");
+            MQTT_POST_RETURN();
+        }
+        firewall_remount_ro_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
+    }
     if (!c300x_config_persisted_equal(config, updated)) {
         int changed = 0;
         if (!c300x_save_mqtt_config(config, updated, error, sizeof(error), &changed)) {
             char error_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ERROR_LEN)];
+            if (legacy_changed) {
+                firewall_remount_rw_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
+                (void)legacy_mqtt_enable_patch(&changed);
+                firewall_remount_ro_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
+            }
             c300x_json_string(error, error_json, sizeof(error_json));
             snprintf(body, sizeof(body), "{\"ok\":false,\"error\":\"config_save_failed\",\"detail\":%s}\n", error_json);
             send_json(client_fd, 500, "Internal Server Error", body);
@@ -4171,14 +4171,7 @@ static void handle_mqtt_post(
             record_agent_write(config, runtime, "config", "mqtt");
         }
     }
-    if (updated->mqtt_enabled && legacy_mqtt_installed()) {
-        firewall_remount_rw_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
-        if (!legacy_mqtt_disable_patch(&legacy_changed)) {
-            firewall_remount_ro_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
-            send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"legacy_mqtt_disable_failed\"}\n");
-            MQTT_POST_RETURN();
-        }
-        firewall_remount_ro_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
+    if (legacy_off) {
         legacy_mqtt_stop_processes();
         if (legacy_changed) {
             record_agent_write(config, runtime, "legacy_mqtt", "disable_for_native");
@@ -4267,7 +4260,7 @@ static int dispatch_event_internal(
         return 0;
     }
     c300x_recent_events_record(&runtime->recent_events, event_json);
-    if (!runtime_network_online(runtime, time(NULL))) {
+    if (!runtime_network_online(runtime, c300x_monotonic_seconds())) {
         for (int index = 0; index < runtime->subscription_count; index++) {
             struct subscription *subscription = &runtime->subscriptions[index];
             if (!subscription_matches_event(subscription, event_type)) {
@@ -5010,6 +5003,9 @@ static void handle_udp_event(
         }
     }
     if (map_openwebnet_event(runtime, msg, type, sizeof(type), data, sizeof(data))) {
+        if (strcmp(type, "doorbell.media.closed") == 0 && runtime != NULL) {
+            c300x_video_note_bus_call_end(runtime->video);
+        }
         if (
             strcmp(type, "doorbell.view_requested") == 0
             && doorbell_view_requested_is_ondemand_start_transition(runtime, msg)
@@ -5069,6 +5065,9 @@ static int create_udp_event_socket(const struct c300x_config *config, int *joine
         return -1;
     }
     set_fd_cloexec(fd);
+    /* poll() can report a datagram the kernel then drops (bad checksum): a
+     * blocking recvfrom() would hold the whole loop until the next one. */
+    set_fd_nonblocking(fd);
     allow_socket_reuse(fd);
     memset(&address, 0, sizeof(address));
     address.sin_family = AF_INET;
@@ -6665,7 +6664,7 @@ static void handle_answering_get(int client_fd, const struct c300x_config *confi
     send_json(client_fd, 200, "OK", body);
 }
 
-static void handle_answering_messages_get(int client_fd, struct agent_runtime *runtime)
+static void handle_answering_messages_get(int client_fd, const struct c300x_config *config, struct agent_runtime *runtime)
 {
     struct voicemail_snapshot *snapshot = calloc(1, sizeof(*snapshot));
     char *body = allocate_response_buffer(client_fd, C300X_LARGE_RESPONSE_SIZE);
@@ -6681,6 +6680,8 @@ static void handle_answering_messages_get(int client_fd, struct agent_runtime *r
         return;
     }
     voicemail_refresh_watches(&runtime->voicemail);
+    /* The refresh drops pending inotify events: report what they announced. */
+    voicemail_event_dispatch_if_changed(config, runtime);
     voicemail_read_snapshot(&runtime->voicemail, snapshot);
     if (snapshot->newest_at[0] != '\0') {
         c300x_json_escape_string(snapshot->newest_at, newest_at, sizeof(newest_at));
@@ -6830,11 +6831,11 @@ static void handle_answering_message_delete(
     char message_id[C300X_MAX_VOICEMAIL_ID_LEN];
     char message_path[C300X_MAX_PATH_LEN];
     char message_id_json[256];
-    char reply[C300X_MAX_FRAME_LEN];
     char error[C300X_MAX_ERROR_LEN];
     char body[512];
     int message_number = 0;
     int path_present;
+    int sent;
 
     if (!config->answering_machine_messages_enabled || !runtime->voicemail.enabled) {
         send_json(client_fd, 404, "Not Found", "{\"ok\":false,\"error\":\"video_messages_disabled\"}\n");
@@ -6857,15 +6858,13 @@ static void handle_answering_message_delete(
     if (path_present < 0) {
         return;
     }
-    if (!send_answering_delete_command(
-        config,
-        message_number,
-        C300X_ANSWERING_DIRECTORY_VIDEO_MESSAGE,
-        reply,
-        sizeof(reply),
-        error,
-        sizeof(error)
-    )) {
+    sent = c300x_memo_vendor_delete(config, message_number, C300X_ANSWERING_DIRECTORY_VIDEO_MESSAGE,
+                                    error, sizeof(error));
+    if (sent == C300X_MEMO_VENDOR_REFUSED) {
+        send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"video_message_delete_refused\"}\n");
+        return;
+    }
+    if (sent != C300X_MEMO_VENDOR_DONE) {
         send_device_error(client_fd, error);
         return;
     }
@@ -6918,6 +6917,7 @@ static int append_memo_entries(
             read_json = "true";
         }
         c300x_json_escape_string(message->id, message_id, sizeof(message_id));
+        c300x_memo_deleted_seen(kind, message->id);
         if (message->date[0] != '\0') {
             c300x_json_escape_string(message->date, date, sizeof(date));
             date_json = date;
@@ -7026,7 +7026,7 @@ static void handle_memos_get(int client_fd, const struct agent_runtime *runtime)
     }
     if (!append_memo_entries(body, C300X_MEMOS_RESPONSE_SIZE, &used, text, "text", &first)
         || !append_memo_entries(body, C300X_MEMOS_RESPONSE_SIZE, &used, voice, "voice", &first)
-        || !c300x_appendf(body, C300X_MEMOS_RESPONSE_SIZE, &used, "]}\n")) {
+        || !c300x_memo_deleted_finish_json(body, C300X_MEMOS_RESPONSE_SIZE, &used)) {
         send_response_too_large(client_fd);
         free(text);
         free(voice);
@@ -7077,53 +7077,44 @@ static void handle_text_memo_create(
 {
     char text_b64[1024];
     unsigned char text[C300X_MAX_MEMO_TEXT_LEN + 1];
-    size_t text_len = 0;
-    int read = 0;
-    char entry_name[C300X_MAX_VOICEMAIL_ID_LEN];
+    struct c300x_memo_vendor_text memo;
     char error[C300X_MAX_ERROR_LEN];
     char body[512];
+    int result;
 
     if (!config->memos_enabled || !runtime->text_memos.enabled) {
         send_json(client_fd, 404, "Not Found", "{\"ok\":false,\"error\":\"memos_disabled\"}\n");
         return;
     }
+    memset(&memo, 0, sizeof(memo));
     c300x_json_string_field(request->body, "text_b64", text_b64, sizeof(text_b64));
     if (
         text_b64[0] == '\0'
-        || !base64_decode_bytes(text_b64, text, sizeof(text) - 1, &text_len)
+        || !base64_decode_bytes(text_b64, text, sizeof(text) - 1, &memo.text_len)
+        || !c300x_text_memo_normalize(text, &memo.text_len)
     ) {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_text\"}\n");
         return;
     }
-    (void)c300x_json_bool_field(request->body, "read", &read);
-    if (!c300x_text_memo_create(
-        runtime->text_memos.root,
-        runtime->text_memos.max_messages,
-        text,
-        text_len,
-        read,
-        entry_name,
-        sizeof(entry_name),
-        error,
-        sizeof(error)
-    )) {
-        if (strcmp(error, "memos_dir_missing") == 0) {
-            send_json(client_fd, 404, "Not Found", "{\"ok\":false,\"error\":\"memos_dir_missing\"}\n");
+    (void)c300x_json_bool_field(request->body, "read", &memo.read);
+    memo.client_fd = client_fd;
+    memo.owns = c300x_openwebnet_async_owns(&runtime->openwebnet);
+    memo.records_dir = config->memos_records_dir;
+    memo.text_root = runtime->text_memos.root;
+    memo.text = text;
+    result = c300x_memo_vendor_create_text(config, &memo, error, sizeof(error));
+    if (result == C300X_MEMO_VENDOR_REFUSED) {
+        send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"memo_create_refused\"}\n");
+        return;
+    }
+    if (result != C300X_MEMO_VENDOR_DONE) {
+        if (error[0] == '\0') {
+            if (c300x_openwebnet_async_refusal(&runtime->openwebnet) != NULL) {
+                c300x_memo_vendor_create_text_abort(&memo);
+            }
             return;
         }
-        if (strcmp(error, "memo_store_full") == 0) {
-            send_json(client_fd, 409, "Conflict", "{\"ok\":false,\"error\":\"memo_store_full\"}\n");
-            return;
-        }
-        if (strcmp(error, "invalid_text") == 0) {
-            send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_text\"}\n");
-            return;
-        }
-        if (strcmp(error, "invalid_memo_path") == 0) {
-            send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_memo_path\"}\n");
-            return;
-        }
-        send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"memo_create_failed\"}\n");
+        send_device_error(client_fd, error);
         return;
     }
     voicemail_refresh_watches(&runtime->text_memos);
@@ -7132,9 +7123,9 @@ static void handle_text_memo_create(
     snprintf(
         body,
         sizeof(body),
-        "{\"ok\":true,\"created\":true,\"id\":\"text/%s\",\"kind\":\"text\",\"read\":%s}\n",
-        entry_name,
-        read ? "true" : "false"
+        "{\"ok\":true,\"created\":true,\"id\":\"text/memo_%d\",\"kind\":\"text\",\"read\":%s}\n",
+        memo.number,
+        memo.read_set ? "true" : "false"
     );
     send_json(client_fd, 201, "Created", body);
 }
@@ -7151,7 +7142,6 @@ static void handle_memos_delete(
     char kind[16];
     char entry_name[C300X_MAX_VOICEMAIL_ID_LEN];
     char memo_path[C300X_MAX_PATH_LEN];
-    char reply[C300X_MAX_FRAME_LEN];
     char error[C300X_MAX_ERROR_LEN];
     char body[1024];
     char memo_id_json[256];
@@ -7159,6 +7149,7 @@ static void handle_memos_delete(
     int memo_number = 0;
     int memo_directory = 0;
     int path_present;
+    int sent;
 
     if (!config->memos_enabled) {
         send_json(client_fd, 404, "Not Found", "{\"ok\":false,\"error\":\"memos_disabled\"}\n");
@@ -7189,15 +7180,12 @@ static void handle_memos_delete(
     if (path_present < 0) {
         return;
     }
-    if (!send_answering_delete_command(
-        config,
-        memo_number,
-        memo_directory,
-        reply,
-        sizeof(reply),
-        error,
-        sizeof(error)
-    )) {
+    sent = c300x_memo_vendor_delete(config, memo_number, memo_directory, error, sizeof(error));
+    if (sent == C300X_MEMO_VENDOR_REFUSED) {
+        send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"memo_delete_refused\"}\n");
+        return;
+    }
+    if (sent != C300X_MEMO_VENDOR_DONE) {
         send_device_error(client_fd, error);
         return;
     }
@@ -7206,6 +7194,7 @@ static void handle_memos_delete(
         return;
     }
 
+    c300x_memo_deleted_add(kind, entry_name);
     voicemail_refresh_watches(&runtime->text_memos);
     voicemail_refresh_watches(&runtime->voice_memos);
     memos_event_dispatch_if_changed(config, runtime);
@@ -7267,51 +7256,6 @@ static void handle_answering_post(
     send_json(client_fd, 200, "OK", body);
 }
 
-static int run_detached_command(const char *program, const char *argument, int delay_ms)
-{
-    pid_t pid = fork();
-    if (pid < 0) {
-        return 0;
-    }
-    if (pid == 0) {
-        if (delay_ms > 0) {
-            sleep_ms(delay_ms);
-        }
-        close_extra_fds_for_exec();
-        if (argument != NULL) {
-            execl(program, program, argument, (char *)NULL);
-        } else {
-            execl(program, program, (char *)NULL);
-        }
-        _exit(127);
-    }
-    if (delay_ms <= 0) {
-        int status = 0;
-        if (waitpid(pid, &status, 0) < 0) {
-            return 0;
-        }
-        return WIFEXITED(status) && WEXITSTATUS(status) == 0;
-    }
-    return 1;
-}
-
-static void close_extra_fds_for_exec(void)
-{
-    long max_fd = sysconf(_SC_OPEN_MAX);
-    long fd;
-
-    if (max_fd < 0) {
-        max_fd = 1024;
-    }
-    if (max_fd > 4096) {
-        max_fd = 4096;
-    }
-    for (fd = STDERR_FILENO + 1; fd < max_fd; fd++) {
-        close((int)fd);
-    }
-}
-
-
 static int maintenance_firewall_supported(const struct c300x_config *config)
 {
     return (
@@ -7326,136 +7270,6 @@ static int maintenance_ipv6_firewall_supported(const struct c300x_config *config
         maintenance_auth_available(config)
         && config->maintenance_ipv6_firewall_enabled
     );
-}
-
-static int firewall_path_requires_remount(const char *path)
-{
-    return path != NULL && strncmp(path, "/etc/", 5) == 0;
-}
-
-static void firewall_remount_rw_if_needed(const char *path)
-{
-    if (firewall_path_requires_remount(path)) {
-        int status = system("mount -o remount,rw / >/dev/null 2>&1");
-        (void)status;
-    }
-}
-
-static void firewall_remount_ro_if_needed(const char *path)
-{
-    if (firewall_path_requires_remount(path)) {
-        int status = system("mount -o remount,ro / >/dev/null 2>&1");
-        (void)status;
-    }
-}
-
-static int firewall_read_file(
-    const char *path,
-    char *buffer,
-    size_t buffer_len,
-    int *exists
-)
-{
-    FILE *file;
-    size_t read_len;
-
-    if (exists != NULL) {
-        *exists = 0;
-    }
-    if (buffer_len == 0) {
-        return 0;
-    }
-    buffer[0] = '\0';
-    file = fopen(path, "rb");
-    if (file == NULL) {
-        return errno == ENOENT;
-    }
-    if (exists != NULL) {
-        *exists = 1;
-    }
-    read_len = fread(buffer, 1, buffer_len - 1, file);
-    if (ferror(file)) {
-        fclose(file);
-        return 0;
-    }
-    buffer[read_len] = '\0';
-    if (read_len == buffer_len - 1 && fgetc(file) != EOF) {
-        fclose(file);
-        return 0;
-    }
-    fclose(file);
-    return 1;
-}
-
-static int firewall_write_file(
-    const char *path,
-    const char *content,
-    mode_t mode
-)
-{
-    char temporary_path[C300X_MAX_PATH_LEN + 8];
-    FILE *file;
-    int fd;
-
-    if (!mkdir_parent(path, 0755)) {
-        return 0;
-    }
-    if (snprintf(temporary_path, sizeof(temporary_path), "%s.tmp", path) >= (int)sizeof(temporary_path)) {
-        return 0;
-    }
-    file = fopen(temporary_path, "w");
-    if (file == NULL) {
-        return 0;
-    }
-    if (fputs(content, file) == EOF) {
-        (void)fclose(file);
-        (void)unlink(temporary_path);
-        return 0;
-    }
-    fd = fileno(file);
-    if (fd >= 0) {
-        (void)fchmod(fd, mode);
-    }
-    if (fclose(file) != 0) {
-        (void)unlink(temporary_path);
-        return 0;
-    }
-    if (rename(temporary_path, path) != 0) {
-        (void)unlink(temporary_path);
-        return 0;
-    }
-    return 1;
-}
-
-static int firewall_backup_available(const char *backup_path)
-{
-    return path_exists(backup_path);
-}
-
-static size_t length_without_final_newlines(const char *text)
-{
-    size_t len = strlen(text);
-    while (len > 0 && text[len - 1] == '\n') {
-        len--;
-    }
-    return len;
-}
-
-/* The block goes in with or without a blank line before it, so cutting it out
- * cannot tell the vendor's trailing blank lines from ours. A backup that
- * differs only in those is the original file, byte for byte. */
-static void firewall_use_matching_backup(const char *backup_path, char *desired, size_t desired_len)
-{
-    char *backup = calloc(1, desired_len);
-    int backup_exists = 0;
-    size_t len = length_without_final_newlines(desired);
-
-    if (backup != NULL && desired[0] != '\0' && firewall_backup_available(backup_path)
-        && firewall_read_file(backup_path, backup, desired_len, &backup_exists) && backup_exists
-        && length_without_final_newlines(backup) == len && memcmp(backup, desired, len) == 0) {
-        c300x_copy_string(desired, desired_len, backup);
-    }
-    free(backup);
 }
 
 static int firewall_block_bounds_for(
@@ -7887,7 +7701,7 @@ static void send_firewall_status_body(
         strcmp(state, "patched") == 0 ? "true" : strcmp(state, "partial") == 0 ? "null" : "false",
         family_json,
         exists ? "true" : "false",
-        firewall_backup_available(backup_path) ? "true" : "false",
+        c300x_firewall_backup_available(backup_path) ? "true" : "false",
         config->api_port,
         config->video_rtsp_port,
         C300X_TALKBACK_RTP_PORT,
@@ -7921,7 +7735,7 @@ static void handle_firewall_status(
         free(current);
         return;
     }
-    if (!firewall_read_file(config->maintenance_firewall_path, current, C300X_FIREWALL_BUFFER_SIZE, &exists)) {
+    if (!c300x_firewall_read_file(config->maintenance_firewall_path, current, C300X_FIREWALL_BUFFER_SIZE, &exists)) {
         send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"firewall_status_failed\"}\n");
         free(current);
         return;
@@ -7937,27 +7751,6 @@ static void handle_firewall_status(
     free(current);
 }
 
-static int firewall_backup_original_if_needed(
-    const char *backup_path,
-    const char *backup_content,
-    int *backup_written
-)
-{
-    if (backup_written != NULL) {
-        *backup_written = 0;
-    }
-    if (firewall_backup_available(backup_path)) {
-        return 1;
-    }
-    if (!firewall_write_file(backup_path, backup_content, 0600)) {
-        return 0;
-    }
-    if (backup_written != NULL) {
-        *backup_written = 1;
-    }
-    return 1;
-}
-
 static int firewall_apply(
     const struct c300x_config *config,
     int *exists,
@@ -7969,12 +7762,11 @@ static int firewall_apply(
     struct firewall_workspace *workspace = calloc(1, sizeof(*workspace));
     int current_exists = 0;
     int backup_written = 0;
-    int target_written = 0;
 
     if (workspace == NULL) {
         return 0;
     }
-    if (!firewall_read_file(config->maintenance_firewall_path, workspace->current, sizeof(workspace->current), &current_exists)) {
+    if (!c300x_firewall_read_file(config->maintenance_firewall_path, workspace->current, sizeof(workspace->current), &current_exists)) {
         free(workspace);
         return 0;
     }
@@ -8000,7 +7792,7 @@ static int firewall_apply(
         free(workspace);
         return 0;
     }
-    if (strcmp(workspace->current, workspace->desired) == 0 && firewall_backup_available(config->maintenance_firewall_backup_path)) {
+    if (strcmp(workspace->current, workspace->desired) == 0 && c300x_firewall_backup_available(config->maintenance_firewall_backup_path)) {
         if (exists != NULL) {
             *exists = current_exists;
         }
@@ -8016,28 +7808,23 @@ static int firewall_apply(
         free(workspace);
         return 1;
     }
-    firewall_remount_rw_if_needed(config->maintenance_firewall_path);
-    if (current_exists && !firewall_backup_original_if_needed(config->maintenance_firewall_backup_path, workspace->original_backup, &backup_written)) {
-        firewall_remount_ro_if_needed(config->maintenance_firewall_path);
+    if (!c300x_firewall_install(config->maintenance_firewall_path, config->maintenance_firewall_backup_path, workspace->original_backup,
+            workspace->current, workspace->desired, &backup_written)) {
         free(workspace);
         return 0;
     }
-    if (strcmp(workspace->current, workspace->desired) != 0) {
-        if (!firewall_write_file(config->maintenance_firewall_path, workspace->desired, 0755)) {
-            firewall_remount_ro_if_needed(config->maintenance_firewall_path);
-            free(workspace);
-            return 0;
-        }
-        target_written = 1;
-    }
-    firewall_remount_ro_if_needed(config->maintenance_firewall_path);
     if (exists != NULL) {
         *exists = 1;
     }
     if (changed_files != NULL) {
-        *changed_files = backup_written + target_written;
+        *changed_files = backup_written;
     }
     if (!firewall_apply_runtime_rules(config)) {
+        /* No boot script with rules iptables just refused. */
+        if (strcmp(workspace->current, workspace->desired) != 0 && c300x_firewall_remount(config->maintenance_firewall_path, "rw")) {
+            (void)c300x_firewall_write_file(config->maintenance_firewall_path, workspace->current, 0755);
+            firewall_remount_ro_if_needed(config->maintenance_firewall_path);
+        }
         snprintf(state, state_len, "%s", "runtime_apply_failed");
         free(workspace);
         return 0;
@@ -8062,7 +7849,7 @@ static int firewall_restore(
     if (workspace == NULL) {
         return 0;
     }
-    if (!firewall_read_file(config->maintenance_firewall_path, workspace->current, sizeof(workspace->current), &current_exists)) {
+    if (!c300x_firewall_read_file(config->maintenance_firewall_path, workspace->current, sizeof(workspace->current), &current_exists)) {
         free(workspace);
         return 0;
     }
@@ -8075,10 +7862,10 @@ static int firewall_restore(
         free(workspace);
         return 0;
     }
-    firewall_use_matching_backup(config->maintenance_firewall_backup_path, workspace->desired, sizeof(workspace->desired));
-    if (workspace->desired[0] == '\0' && firewall_backup_available(config->maintenance_firewall_backup_path)) {
+    c300x_firewall_use_matching_backup(config->maintenance_firewall_backup_path, workspace->desired, sizeof(workspace->desired));
+    if (workspace->desired[0] == '\0' && c300x_firewall_backup_available(config->maintenance_firewall_backup_path)) {
         int backup_exists = 0;
-        if (!firewall_read_file(
+        if (!c300x_firewall_read_file(
             config->maintenance_firewall_backup_path,
             workspace->desired,
             sizeof(workspace->desired),
@@ -8100,13 +7887,13 @@ static int firewall_restore(
         return 1;
     }
     firewall_remount_rw_if_needed(config->maintenance_firewall_path);
-    if (workspace->desired[0] == '\0' && !firewall_backup_available(config->maintenance_firewall_backup_path)) {
+    if (workspace->desired[0] == '\0' && !c300x_firewall_backup_available(config->maintenance_firewall_backup_path)) {
         if (unlink(config->maintenance_firewall_path) != 0 && errno != ENOENT) {
             firewall_remount_ro_if_needed(config->maintenance_firewall_path);
             free(workspace);
             return 0;
         }
-    } else if (!firewall_write_file(config->maintenance_firewall_path, workspace->desired, 0755)) {
+    } else if (!c300x_firewall_write_file(config->maintenance_firewall_path, workspace->desired, 0755)) {
         firewall_remount_ro_if_needed(config->maintenance_firewall_path);
         free(workspace);
         return 0;
@@ -8114,7 +7901,7 @@ static int firewall_restore(
     target_written = 1;
     firewall_remount_ro_if_needed(config->maintenance_firewall_path);
     if (exists != NULL) {
-        *exists = workspace->desired[0] != '\0' || firewall_backup_available(config->maintenance_firewall_backup_path);
+        *exists = workspace->desired[0] != '\0' || c300x_firewall_backup_available(config->maintenance_firewall_backup_path);
     }
     if (changed_files != NULL) {
         *changed_files = target_written;
@@ -8156,7 +7943,7 @@ static void handle_ipv6_firewall_status(
         free(current);
         return;
     }
-    if (!firewall_read_file(config->maintenance_ipv6_firewall_path, current, C300X_FIREWALL_BUFFER_SIZE, &exists)) {
+    if (!c300x_firewall_read_file(config->maintenance_ipv6_firewall_path, current, C300X_FIREWALL_BUFFER_SIZE, &exists)) {
         send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"firewall_status_failed\"}\n");
         free(current);
         return;
@@ -8183,12 +7970,11 @@ static int ipv6_firewall_apply(
     struct firewall_workspace *workspace = calloc(1, sizeof(*workspace));
     int current_exists = 0;
     int backup_written = 0;
-    int target_written = 0;
 
     if (workspace == NULL) {
         return 0;
     }
-    if (!firewall_read_file(config->maintenance_ipv6_firewall_path, workspace->current, sizeof(workspace->current), &current_exists)) {
+    if (!c300x_firewall_read_file(config->maintenance_ipv6_firewall_path, workspace->current, sizeof(workspace->current), &current_exists)) {
         free(workspace);
         return 0;
     }
@@ -8220,7 +8006,7 @@ static int ipv6_firewall_apply(
         free(workspace);
         return 0;
     }
-    if (strcmp(workspace->current, workspace->desired) == 0 && firewall_backup_available(config->maintenance_ipv6_firewall_backup_path)) {
+    if (strcmp(workspace->current, workspace->desired) == 0 && c300x_firewall_backup_available(config->maintenance_ipv6_firewall_backup_path)) {
         if (exists != NULL) {
             *exists = current_exists;
         }
@@ -8236,28 +8022,23 @@ static int ipv6_firewall_apply(
         free(workspace);
         return 1;
     }
-    firewall_remount_rw_if_needed(config->maintenance_ipv6_firewall_path);
-    if (current_exists && !firewall_backup_original_if_needed(config->maintenance_ipv6_firewall_backup_path, workspace->original_backup, &backup_written)) {
-        firewall_remount_ro_if_needed(config->maintenance_ipv6_firewall_path);
+    if (!c300x_firewall_install(config->maintenance_ipv6_firewall_path, config->maintenance_ipv6_firewall_backup_path, workspace->original_backup,
+            workspace->current, workspace->desired, &backup_written)) {
         free(workspace);
         return 0;
     }
-    if (strcmp(workspace->current, workspace->desired) != 0) {
-        if (!firewall_write_file(config->maintenance_ipv6_firewall_path, workspace->desired, 0755)) {
-            firewall_remount_ro_if_needed(config->maintenance_ipv6_firewall_path);
-            free(workspace);
-            return 0;
-        }
-        target_written = 1;
-    }
-    firewall_remount_ro_if_needed(config->maintenance_ipv6_firewall_path);
     if (exists != NULL) {
         *exists = 1;
     }
     if (changed_files != NULL) {
-        *changed_files = backup_written + target_written;
+        *changed_files = backup_written;
     }
     if (!ipv6_firewall_apply_runtime_rules(config)) {
+        /* No boot script with rules iptables just refused. */
+        if (strcmp(workspace->current, workspace->desired) != 0 && c300x_firewall_remount(config->maintenance_ipv6_firewall_path, "rw")) {
+            (void)c300x_firewall_write_file(config->maintenance_ipv6_firewall_path, workspace->current, 0755);
+            firewall_remount_ro_if_needed(config->maintenance_ipv6_firewall_path);
+        }
         snprintf(state, state_len, "%s", "runtime_apply_failed");
         free(workspace);
         return 0;
@@ -8282,7 +8063,7 @@ static int ipv6_firewall_restore(
     if (workspace == NULL) {
         return 0;
     }
-    if (!firewall_read_file(config->maintenance_ipv6_firewall_path, workspace->current, sizeof(workspace->current), &current_exists)) {
+    if (!c300x_firewall_read_file(config->maintenance_ipv6_firewall_path, workspace->current, sizeof(workspace->current), &current_exists)) {
         free(workspace);
         return 0;
     }
@@ -8301,10 +8082,10 @@ static int ipv6_firewall_restore(
         free(workspace);
         return 0;
     }
-    firewall_use_matching_backup(config->maintenance_ipv6_firewall_backup_path, workspace->desired, sizeof(workspace->desired));
-    if (workspace->desired[0] == '\0' && firewall_backup_available(config->maintenance_ipv6_firewall_backup_path)) {
+    c300x_firewall_use_matching_backup(config->maintenance_ipv6_firewall_backup_path, workspace->desired, sizeof(workspace->desired));
+    if (workspace->desired[0] == '\0' && c300x_firewall_backup_available(config->maintenance_ipv6_firewall_backup_path)) {
         int backup_exists = 0;
-        if (!firewall_read_file(
+        if (!c300x_firewall_read_file(
             config->maintenance_ipv6_firewall_backup_path,
             workspace->desired,
             sizeof(workspace->desired),
@@ -8326,13 +8107,13 @@ static int ipv6_firewall_restore(
         return 1;
     }
     firewall_remount_rw_if_needed(config->maintenance_ipv6_firewall_path);
-    if (workspace->desired[0] == '\0' && !firewall_backup_available(config->maintenance_ipv6_firewall_backup_path)) {
+    if (workspace->desired[0] == '\0' && !c300x_firewall_backup_available(config->maintenance_ipv6_firewall_backup_path)) {
         if (unlink(config->maintenance_ipv6_firewall_path) != 0 && errno != ENOENT) {
             firewall_remount_ro_if_needed(config->maintenance_ipv6_firewall_path);
             free(workspace);
             return 0;
         }
-    } else if (!firewall_write_file(config->maintenance_ipv6_firewall_path, workspace->desired, 0755)) {
+    } else if (!c300x_firewall_write_file(config->maintenance_ipv6_firewall_path, workspace->desired, 0755)) {
         firewall_remount_ro_if_needed(config->maintenance_ipv6_firewall_path);
         free(workspace);
         return 0;
@@ -8340,7 +8121,7 @@ static int ipv6_firewall_restore(
     target_written = 1;
     firewall_remount_ro_if_needed(config->maintenance_ipv6_firewall_path);
     if (exists != NULL) {
-        *exists = workspace->desired[0] != '\0' || firewall_backup_available(config->maintenance_ipv6_firewall_backup_path);
+        *exists = workspace->desired[0] != '\0' || c300x_firewall_backup_available(config->maintenance_ipv6_firewall_backup_path);
     }
     if (changed_files != NULL) {
         *changed_files = target_written;
@@ -8363,7 +8144,7 @@ static int firewall_patch_currently_active(
     if (current == NULL) {
         return 0;
     }
-    if (firewall_read_file(path, current, C300X_FIREWALL_BUFFER_SIZE, &exists)) {
+    if (c300x_firewall_read_file(path, current, C300X_FIREWALL_BUFFER_SIZE, &exists)) {
         state = state_for_content(current, exists);
         active = strcmp(state, "patched") == 0;
     }
@@ -8537,7 +8318,7 @@ static void handle_restart_agent(
         send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"maintenance_command_failed\"}\n");
         return;
     }
-    if (!run_detached_command(C300X_AGENT_INIT_SCRIPT, "restart", 500)) {
+    if (!c300x_run_detached_command(C300X_AGENT_INIT_SCRIPT, "restart", 500)) {
         send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"maintenance_command_failed\"}\n");
         return;
     }
@@ -8820,6 +8601,8 @@ static void handle_agent_update_apply(
     if (installed_truncated) {
         workspace->installed_manifest[0] = '\0';
     }
+    /* A root this agent left writable is no reason for root_already_writable. */
+    c300x_root_close_left_open();
     if (!apply_agent_update_files(config, workspace->manifest, workspace->installed_manifest,
             &summary, apply_agent_update_firewall_patches)) {
         int status = agent_update_error_status(summary.error);
@@ -8832,7 +8615,7 @@ static void handle_agent_update_apply(
     }
     record_agent_write(config, runtime, "agent_update", "apply");
     if (summary.runtime_changed) {
-        (void)run_detached_command(C300X_AGENT_INIT_SCRIPT, "restart", 500);
+        (void)c300x_run_detached_command(C300X_AGENT_INIT_SCRIPT, "restart", 500);
     }
     snprintf(
         workspace->body,
@@ -8919,6 +8702,17 @@ static void handle_api_request(
         }
         return;
     }
+    {
+        /* With noAuth a LAN web page could otherwise open the door. */
+        char origin[256] = "", host[256] = "", content_type[128] = "";
+        (void)header_value(request, "origin", origin, sizeof(origin));
+        (void)header_value(request, "host", host, sizeof(host));
+        (void)header_value(request, "content-type", content_type, sizeof(content_type));
+        if (!c300x_http_cross_site_safe(request->method, origin, host, content_type)) {
+            send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"cross_site_request\"}\n");
+            return;
+        }
+    }
 
     if (strcmp(request->method, "GET") == 0 && strcmp(request->path, "/api/v1/health") == 0) {
         send_json(client_fd, 200, "OK", "{\"ok\":true,\"agent\":\"native-c\",\"version\":\"" C300X_NATIVE_AGENT_VERSION "\"}\n");
@@ -8964,11 +8758,11 @@ static void handle_api_request(
     if (c300x_http_maintenance_route(&runtime->maintenance, client_fd, config, request)
         || c300x_http_device_user_route(&runtime->maintenance, client_fd, config, request)
         || c300x_http_audio_codec_route(&runtime->maintenance, client_fd, config,
-            runtime->audio_codec_running_state, request, run_detached_command)
+            runtime->audio_codec_running_state, request, c300x_run_detached_command)
         || c300x_http_camera_quality_route(&runtime->maintenance, client_fd, config, runtime->video, request,
-            run_detached_command)
+            c300x_run_detached_command)
         || c300x_http_service_commands_route(&runtime->maintenance, client_fd, config, request,
-            run_detached_command)
+            c300x_run_detached_command)
         || c300x_http_announce_route(&runtime->announce, client_fd, request)) {
         return;
     }
@@ -9154,7 +8948,7 @@ static void handle_api_request(
         return;
     }
     if (strcmp(request->method, "GET") == 0 && strcmp(request->path, "/api/v1/answering-machine/messages") == 0) {
-        handle_answering_messages_get(client_fd, runtime);
+        handle_answering_messages_get(client_fd, config, runtime);
         return;
     }
     if (strncmp(request->path, "/api/v1/answering-machine/messages/", strlen("/api/v1/answering-machine/messages/")) == 0) {
@@ -9393,7 +9187,7 @@ static int handle_ui_request(
 )
 {
     if (!strncmp(request->path, "/ui/maintenance", sizeof("/ui/maintenance") - 1))
-        return c300x_display_maintenance(&runtime->maintenance, client_fd, config, request, run_detached_command);
+        return c300x_display_maintenance(&runtime->maintenance, client_fd, config, request, c300x_run_detached_command);
     if (strcmp(request->path, "/ui/preferences") == 0) {
         handle_ui_preferences(client_fd, config, request);
         return 1;
@@ -9426,7 +9220,7 @@ static int handle_ui_request(
             send_loopback_required(client_fd);
             return 1;
         }
-        handle_answering_messages_get(client_fd, runtime);
+        handle_answering_messages_get(client_fd, config, runtime);
         return 1;
     }
 
@@ -9732,6 +9526,7 @@ int c300x_run(struct c300x_config *config)
     c300x_touch_tone_init(&runtime->touch_tone, touch_tone_changed, runtime);
     c300x_display_alerts_init(&runtime->display_alerts);
     c300x_http_maintenance_init(&runtime->maintenance, maintenance_record_write, runtime);
+    c300x_qml_recovery_start(&runtime->maintenance, config);
     c300x_announce_init(&runtime->announce);
     (void)c300x_openwebnet_async_init(&runtime->openwebnet, &runtime->request_queue);
     (void)c300x_video_control_init(&runtime->video_control, &runtime->request_queue);
@@ -9842,7 +9637,7 @@ int c300x_run(struct c300x_config *config)
         int callback_poll_index;
         int display_poll_index;
         int shutdown_poll_index;
-        time_t now = time(NULL);
+        time_t now = c300x_monotonic_seconds();
         int network_online = runtime_network_online(runtime, now);
 
         for (index = 0; index < listener_count; index++) {
@@ -9990,6 +9785,7 @@ int c300x_run(struct c300x_config *config)
         runtime->last_poll_timeout_ms = poll_timeout_ms;
         runtime->last_poll_count = (int)poll_count;
         int poll_result = poll(poll_fds, poll_count, poll_timeout_ms);
+        now = c300x_monotonic_seconds();
         if (shutdown_requested) {
             result = 0;
             break;
@@ -10076,7 +9872,7 @@ int c300x_run(struct c300x_config *config)
         }
         if (mqtt_poll_index >= 0) {
             runtime_set_wake_reason(runtime, "mqtt");
-            c300x_mqtt_handle_poll(&runtime->mqtt, config, poll_fds[mqtt_poll_index].revents, time(NULL));
+            c300x_mqtt_handle_poll(&runtime->mqtt, config, poll_fds[mqtt_poll_index].revents, now);
             handle_mqtt_commands(config, runtime);
         }
         if (voicemail_poll_index >= 0) {
@@ -10126,12 +9922,12 @@ int c300x_run(struct c300x_config *config)
         }
         c300x_ui_events_expire_waiters(
             &runtime->ui_events,
-            time(NULL),
+            now,
             ui_event_send_json,
             NULL
         );
-        c300x_mdns_announce_if_due(&mdns, config, time(NULL));
-        c300x_mqtt_tick(&runtime->mqtt, config, time(NULL));
+        c300x_mdns_announce_if_due(&mdns, config, now);
+        c300x_mqtt_tick(&runtime->mqtt, config, now);
         handle_mqtt_commands(config, runtime);
         if (system_metrics_monitor_active(config)) {
             system_metrics_dispatch_if_due(config, runtime, time(NULL));
@@ -10145,6 +9941,7 @@ cleanup:
         result = 0;
     }
     if (runtime != NULL) {
+        c300x_command_job_terminate(&runtime->maintenance.job);
         /* Before the API port is free: the next agent finds what this one leaves. */
         c300x_announce_close(&runtime->announce);
     }

@@ -80,7 +80,15 @@ static int start_job(struct c300x_command_job *job, const char *program,
     for (int fd = STDERR_FILENO + 1; fd < fd_limit; fd++) {
         error |= posix_spawn_file_actions_addclose(&actions, fd);
     }
-    error |= posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETPGROUP);
+    {
+        /* The agent ignores SIGPIPE, and an ignored signal stays ignored
+         * across exec: scripts and their pipelines get the default back. */
+        sigset_t defaults;
+        sigemptyset(&defaults);
+        sigaddset(&defaults, SIGPIPE);
+        error |= posix_spawnattr_setsigdefault(&attr, &defaults);
+    }
+    error |= posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_SETSIGDEF);
     error |= posix_spawnattr_setpgroup(&attr, 0);
     if (error == 0) {
         c300x_command_job_init(job);
@@ -194,13 +202,27 @@ void c300x_command_job_tick(struct c300x_command_job *job)
             break;
         }
     }
-    if (!job->complete && (job->failed
-        || (job->deadline_ms > 0 && c300x_monotonic_ms() >= job->deadline_ms))) {
+    int alive = reaped == 0 || (reaped < 0 && wait_error != ECHILD);
+    long long now = c300x_monotonic_ms();
+    /* A child reaped in this tick has ended by itself, even on the deadline tick. */
+    if (!job->complete && (job->failed || (alive && job->deadline_ms > 0 && now >= job->deadline_ms))) {
+        job->timed_out = !job->failed;
         job->failed = 1;
         job->complete = 1;
-        if (reaped == 0 || (reaped < 0 && wait_error != ECHILD)) {
-            (void)kill(-job->pid, SIGKILL);
+        if (alive && job->term_grace_ms > 0) {
+            /* A script with a rollback trap gets to run it; its output stays
+             * open so that the trap cannot die of SIGPIPE. */
+            (void)kill(-job->pid, SIGTERM);
+            job->kill_ms = now + job->term_grace_ms;
+        } else {
+            if (alive) {
+                (void)kill(-job->pid, SIGKILL);
+            }
+            close_output(job);
         }
+    } else if (alive && job->kill_ms > 0 && now >= job->kill_ms) {
+        (void)kill(-job->pid, SIGKILL);
+        job->kill_ms = -1;
         close_output(job);
     }
     if (reaped == job->pid || (reaped < 0 && wait_error == ECHILD)) {
@@ -212,8 +234,28 @@ void c300x_command_job_tick(struct c300x_command_job *job)
     }
 }
 
+void c300x_command_job_terminate(struct c300x_command_job *job)
+{
+    /* One SIGTERM only: a second one would cut the job's trap short. */
+    if (job->pid > 0 && job->term_grace_ms > 0 && job->kill_ms == 0) {
+        (void)kill(-job->pid, SIGTERM);
+        job->kill_ms = c300x_monotonic_ms() + job->term_grace_ms;
+    }
+}
+
 void c300x_command_job_close(struct c300x_command_job *job)
 {
+    /* Agent shutdown: a job with a grace period ends as at its deadline. */
+    c300x_command_job_terminate(job);
+    if (job->pid > 0 && job->term_grace_ms > 0 && job->kill_ms > 0) {
+        pid_t reaped;
+        while ((reaped = waitpid(job->pid, NULL, WNOHANG)) == 0 && c300x_monotonic_ms() < job->kill_ms) {
+            (void)usleep(10000);
+        }
+        if (reaped != 0) {
+            job->pid = 0;
+        }
+    }
     if (job->pid > 0) {
         (void)kill(-job->pid, SIGKILL);
         (void)waitpid(job->pid, NULL, WNOHANG);

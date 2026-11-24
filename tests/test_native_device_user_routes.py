@@ -35,8 +35,9 @@ def route_binary(request, tmp_path_factory):
     (operation, case)
     for operation in ("ensure", "restore")
     for case in ("unauthorized", "unconfirmed")
-] + [("ensure", case) for case in ("routing-failure", "user-failure", "invalid", "false")]
-  + [("restore", "restore-failure"), ("status", "qt5"), ("ensure", "qt5")])
+] + [("ensure", case) for case in ("routing-failure", "user-failure", "user-failure-patched", "invalid", "false")]
+  + [("restore", "restore-failure"), ("status", "qt5"), ("ensure", "qt5"),
+     ("ensure", "busy-root"), ("restore", "busy-root")])
 def test_route_state_machine(route_binary, tmp_path, operation, case):
     script = tmp_path / "job.sh"
     body = ('case "$1" in\n'
@@ -66,3 +67,25 @@ def test_route_state_machine(route_binary, tmp_path, operation, case):
                                  "UBSAN_OPTIONS": "halt_on_error=1"})
     assert result.returncode == 0, result.stderr
     assert not (tmp_path / "ran").exists()
+
+
+@pytest.mark.parametrize("sanitize", [False, True], ids=["host", "asan-ubsan"])
+def test_remove_route_target_keeps_an_unparsable_last_line(tmp_path, sanitize):
+    """A last line without a newline once overflowed the size check.
+
+    It kept an HA mention that cannot be parsed, so nothing was removed and
+    the newline that was never there was counted: ensure answered
+    route_too_large on every try.
+    """
+    binary = tmp_path / "route-target"
+    flags = ["-fsanitize=address,undefined", "-fno-omit-frame-pointer"] if sanitize else []
+    result = subprocess.run(
+        ["cc", "-std=c11", "-O1", "-g", "-Wall", "-Wextra", "-Werror",
+         "-D_DEFAULT_SOURCE", "-D_POSIX_C_SOURCE=200809L", *flags,
+         str(NATIVE / "test/device_user_route_target_test.c"),
+         *[str(NATIVE / "src" / name) for name in ("string_util.c", "json_util.c", "json_parse.c", "time_util.c")],
+         "-o", str(binary)], capture_output=True, text=True, timeout=60,
+    )
+    assert result.returncode == 0, result.stderr
+    result = subprocess.run([str(binary)], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, result.stderr

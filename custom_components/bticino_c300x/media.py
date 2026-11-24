@@ -199,10 +199,12 @@ class C300XRingCaptureMediaView(HomeAssistantView):
         """Return a local ring-capture MP4 file."""
 
         hass: HomeAssistant = request.app["hass"]
+        # aiohttp has already decoded the path; a second unquote would turn
+        # "%2500" into a NUL byte and break names that contain "%".
         path: Path | None = await hass.async_add_executor_job(
             ring_capture_media_path,
             hass,
-            unquote(file_name),
+            file_name,
         )
         if path is None:
             raise web.HTTPNotFound()

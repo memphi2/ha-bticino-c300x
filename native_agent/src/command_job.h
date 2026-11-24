@@ -13,6 +13,11 @@ struct c300x_command_job {
     int failed;
     int exit_status; /* -1 unless the command exited by itself */
     int complete;
+    int timed_out; /* the deadline passed, not an output overflow */
+    /* Set after the start: 0 kills the process group at once at the deadline
+     * or close; otherwise SIGTERM first and SIGKILL this much later. */
+    int term_grace_ms;
+    long long kill_ms; /* 0: no SIGTERM sent yet; -1: SIGKILL sent */
     long long deadline_ms;
     size_t used;
     char output[C300X_COMMAND_OUTPUT_SIZE];
@@ -38,6 +43,9 @@ int c300x_command_job_start_output(struct c300x_command_job *job, const char *pr
     char *const argv[], int timeout_ms);
 int c300x_command_job_prepare(const struct c300x_command_job *job, struct pollfd *fd);
 void c300x_command_job_tick(struct c300x_command_job *job);
+/* A job with a grace period gets its one SIGTERM now; the deadline or close
+ * sends SIGKILL once the grace period has passed. */
+void c300x_command_job_terminate(struct c300x_command_job *job);
 void c300x_command_job_close(struct c300x_command_job *job);
 
 #endif

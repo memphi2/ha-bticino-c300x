@@ -130,7 +130,7 @@
           "actions_json": "Aktionen, die das Display und seine Benachrichtigungen ausführen dürfen, als JSON: ein Eintrag je Aktion mit domain und service, optional target und data. Leer lassen, wenn du keine nutzt.",
           "dashboard_prevent_return": "An: Die Home-Assistant- und die Alarm-Seite bleiben offen, wenn der Bildschirm in den Standby geht. Aus: Das Display kehrt dann zur Startseite zurück.",
           "dashboard_navigation": "So wechselt das Display die Seiten. Die Favoritenleiste zeigt die ersten vier Seiten als Schaltflächen am unteren Rand. Bei mehr als vier Seiten heißt die vierte Schaltfläche „Mehr“ und öffnet die Liste der übrigen Seiten. Die Reihenfolge folgt den Seitenpositionen.",
-          "dashboard_dynamic_homepage": "Wo die Knöpfe Alarm und Home Assistant auf der Startseite des C300X stehen. Wie das Original: Jeder Knopf erscheint nur, solange er etwas zu öffnen hat, und reiht sich zwischen die originalen Knöpfe ein, auch untereinander, wenn die Reihe voll ist. Fest nebeneinander: Beide behalten zwei feste Plätze nebeneinander; ein Knopf ohne Inhalt lässt seinen Platz leer. Eine Änderung wendet den Display-Patch erneut an und startet das Display einmal neu."
+          "dashboard_dynamic_homepage": "Wo die Knöpfe Alarm und Home Assistant auf der Startseite des C300X stehen. Werkseinstellung: Jeder Knopf erscheint nur, solange er etwas zu öffnen hat, und reiht sich zwischen die originalen Knöpfe ein, auch untereinander, wenn die Reihe voll ist. Fest nebeneinander: Beide behalten zwei feste Plätze nebeneinander; ein Knopf ohne Inhalt lässt seinen Platz leer. Eine Änderung wendet den Display-Patch erneut an und startet das Display einmal neu."
         }
       },
       "user_dashboard_entity_display": {
@@ -243,7 +243,7 @@
           "actions_json": "Aktionen, die das Display und seine Benachrichtigungen ausführen dürfen, als JSON: ein Eintrag je Aktion mit domain und service, optional target und data. Leer lassen, wenn du keine nutzt.",
           "dashboard_prevent_return": "An: Die Home-Assistant- und die Alarm-Seite bleiben offen, wenn der Bildschirm in den Standby geht. Aus: Das Display kehrt dann zur Startseite zurück.",
           "dashboard_navigation": "So wechselt das Display die Seiten. Die Favoritenleiste zeigt die ersten vier Seiten als Schaltflächen am unteren Rand. Bei mehr als vier Seiten heißt die vierte Schaltfläche „Mehr“ und öffnet die Liste der übrigen Seiten. Die Reihenfolge folgt den Seitenpositionen.",
-          "dashboard_dynamic_homepage": "Wo die Knöpfe Alarm und Home Assistant auf der Startseite des C300X stehen. Wie das Original: Jeder Knopf erscheint nur, solange er etwas zu öffnen hat, und reiht sich zwischen die originalen Knöpfe ein, auch untereinander, wenn die Reihe voll ist. Fest nebeneinander: Beide behalten zwei feste Plätze nebeneinander; ein Knopf ohne Inhalt lässt seinen Platz leer. Eine Änderung wendet den Display-Patch erneut an und startet das Display einmal neu."
+          "dashboard_dynamic_homepage": "Wo die Knöpfe Alarm und Home Assistant auf der Startseite des C300X stehen. Werkseinstellung: Jeder Knopf erscheint nur, solange er etwas zu öffnen hat, und reiht sich zwischen die originalen Knöpfe ein, auch untereinander, wenn die Reihe voll ist. Fest nebeneinander: Beide behalten zwei feste Plätze nebeneinander; ein Knopf ohne Inhalt lässt seinen Platz leer. Eine Änderung wendet den Display-Patch erneut an und startet das Display einmal neu."
         }
       },
       "reconfigure_dashboard_entity_display": {
@@ -783,7 +783,7 @@
       },
       "speech": {
         "title": "Sprachausgabe",
-        "description": "Gesprochene Meldungen (Notify-Aktion mit mode speech oder both) nutzen diese Engine und Sprache. Mit einer lokalen Engine wie Piper verlässt nichts dein Netz. Ohne Auswahl nimmt Home Assistant seine Standard-Engine, die mit Home Assistant Cloud die aus der Cloud ist. tts_engine und language in einer Meldung gehen diesen Einstellungen vor.",
+        "description": "Gesprochene Meldungen (Notify-Aktion mit tts: true oder dem alten mode speech oder both) nutzen diese Engine und Sprache. Mit einer lokalen Engine wie Piper verlässt nichts dein Netz. Ohne Auswahl nimmt Home Assistant seine Standard-Engine, die mit Home Assistant Cloud die aus der Cloud ist. tts_engine und language in einer Meldung gehen diesen Einstellungen vor.",
         "data": {
           "tts_engine": "Sprachausgabe-Engine",
           "tts_language": "Sprache"
@@ -842,7 +842,7 @@
           "actions_json": "Aktionen, die das Display und seine Benachrichtigungen ausführen dürfen, als JSON: ein Eintrag je Aktion mit domain und service, optional target und data. Leer lassen, wenn du keine nutzt.",
           "dashboard_prevent_return": "An: Die Home-Assistant- und die Alarm-Seite bleiben offen, wenn der Bildschirm in den Standby geht. Aus: Das Display kehrt dann zur Startseite zurück.",
           "dashboard_navigation": "So wechselt das Display die Seiten. Die Favoritenleiste zeigt die ersten vier Seiten als Schaltflächen am unteren Rand. Bei mehr als vier Seiten heißt die vierte Schaltfläche „Mehr“ und öffnet die Liste der übrigen Seiten. Die Reihenfolge folgt den Seitenpositionen.",
-          "dashboard_dynamic_homepage": "Wo die Knöpfe Alarm und Home Assistant auf der Startseite des C300X stehen. Wie das Original: Jeder Knopf erscheint nur, solange er etwas zu öffnen hat, und reiht sich zwischen die originalen Knöpfe ein, auch untereinander, wenn die Reihe voll ist. Fest nebeneinander: Beide behalten zwei feste Plätze nebeneinander; ein Knopf ohne Inhalt lässt seinen Platz leer. Eine Änderung wendet den Display-Patch erneut an und startet das Display einmal neu."
+          "dashboard_dynamic_homepage": "Wo die Knöpfe Alarm und Home Assistant auf der Startseite des C300X stehen. Werkseinstellung: Jeder Knopf erscheint nur, solange er etwas zu öffnen hat, und reiht sich zwischen die originalen Knöpfe ein, auch untereinander, wenn die Reihe voll ist. Fest nebeneinander: Beide behalten zwei feste Plätze nebeneinander; ein Knopf ohne Inhalt lässt seinen Platz leer. Eine Änderung wendet den Display-Patch erneut an und startet das Display einmal neu."
         }
       },
       "dashboard_entity_display": {
@@ -1418,6 +1418,18 @@
     "gui_function_patch_required": {
       "message": "Diese Aktion benötigt den C300X-Display-Patch. Aktiviere und wende den Display-Patch zuerst in den Integrationsoptionen an."
     },
+    "display_disabled": {
+      "message": "Display-Benachrichtigungen brauchen die Home-Assistant-Seiten auf dem C300X-Display. Schalte sie zuerst in den Integrationsoptionen ein."
+    },
+    "unknown_notification_action": {
+      "message": "Eine Schaltfläche der Benachrichtigung nutzt eine Aktions-ID, die bei den C300X-Aktionen nicht eingerichtet ist."
+    },
+    "display_notification_queue_full": {
+      "message": "Das C300X-Display hat bereits die Höchstzahl an Benachrichtigungen mit gleicher oder höherer Priorität. Schließe eine oder warte, bis eine abläuft."
+    },
+    "display_notifications_unloaded": {
+      "message": "Die C300X-Display-Benachrichtigungen werden gerade neu geladen. Versuche es gleich noch einmal."
+    },
     "doorbell_video_not_available": {
       "message": "Doorbell-Video ist nicht aktiviert oder wird vom installierten C300X-Device-Agent nicht unterstützt."
     },
@@ -1459,6 +1471,9 @@
     },
     "unknown_entry": {
       "message": "Der ausgewählte BTicino-C300X-Eintrag existiert nicht."
+    },
+    "entry_not_loaded": {
+      "message": "Der BTicino-C300X-Eintrag ist nicht geladen. Aktiviere ihn oder warte, bis er gestartet ist."
     },
     "voice_memo_not_available": {
       "message": "Es ist kein C300X-Sprach-Memo verfügbar."
@@ -1542,6 +1557,10 @@
           "core_patch_unsupported": "Der installierte C300X Device-Agent unterstützt das Anwenden des Core-Media-Hooks nicht."
         }
       }
+    },
+    "device_qml_transaction_stuck": {
+      "title": "C300X-Displayschreibvorgang nicht abgeschlossen",
+      "description": "Ein Schreibvorgang des Display-Patches auf {entry_title} wurde unterbrochen (Stromausfall, Absturz oder erzwungener Stopp), und der Geräte-Agent konnte ihn nicht selbst abschließen. Die Displaydateien bleiben, wie sie sind; nichts geht verloren: Die Dateien von vor diesem Schreibvorgang liegen auf dem Gerät in einem versteckten Ordner `.c300x-qml-transaction.*` in /home/bticino/bin/gui/skins/default.\n\nVorgehen: Prüfe das C300X-Display. Funktioniert es, wende den Display-Patch in der Integration erneut an (aus- und wieder einschalten); dabei werden alle Displaydateien aus den Originalsicherungen neu erstellt. Bleibt die Warnung, starte das C300X neu, damit der Agent es beim Start erneut versucht. Ein Rest von Agent 2.9.0 oder älter wird nie automatisch zurückgespielt: Sobald das Display funktioniert, entferne diesen Ordner per SSH (siehe Erweiterte Wartung, Wiederherstellung, in der Dokumentation)."
     },
     "device_user_required": {
       "title": "C300X Media-User-Setup erforderlich",
@@ -1721,7 +1740,7 @@
     },
     "dashboard_dynamic_homepage": {
       "options": {
-        "stock": "Wie das Original (bei Bedarf, auch untereinander)",
+        "stock": "Werkseinstellung (bei Bedarf, auch untereinander)",
         "side_by_side": "Fest nebeneinander"
       }
     },

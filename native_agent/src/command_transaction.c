@@ -2,6 +2,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <spawn.h>
 #include <string.h>
 #include <sys/wait.h>
@@ -33,7 +34,15 @@ static int spawn_transaction(const char *program, const char *argument, int pipe
             error |= posix_spawn_file_actions_addclose(&actions, pipes[i]);
         }
     }
-    error |= posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETPGROUP);
+    {
+        /* The agent ignores SIGPIPE, and an ignored signal stays ignored
+         * across exec: scripts and their pipelines get the default back. */
+        sigset_t defaults;
+        sigemptyset(&defaults);
+        sigaddset(&defaults, SIGPIPE);
+        error |= posix_spawnattr_setsigdefault(&attr, &defaults);
+    }
+    error |= posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_SETSIGDEF);
     error |= posix_spawnattr_setpgroup(&attr, 0);
     if (error == 0) {
         error = posix_spawn(pid, program, &actions, &attr, argv, environ);

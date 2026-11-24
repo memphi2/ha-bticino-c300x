@@ -277,6 +277,22 @@ def test_read_wav_rejects_non_mono_16_bit_audio(tmp_path: Path) -> None:
         asyncio.run(_async_read_wav(hass, source))
 
 
+@pytest.mark.parametrize(
+    "content", [None, b"", b"RIFF", b"not a wav file at all", b"RIFF\x24\x00\x00\x00WAVEfmt "]
+)
+def test_read_wav_reports_an_unreadable_file_as_a_home_assistant_error(
+    tmp_path: Path, content: bytes | None
+) -> None:
+    hass = _FakeHass(tmp_path)
+    source = tmp_path / "c300x" / "latest.raw.wav"
+    if content is not None:
+        source.parent.mkdir(parents=True, exist_ok=True)
+        source.write_bytes(content)
+
+    with pytest.raises(HomeAssistantError, match="could not be read"):
+        asyncio.run(_async_read_wav(hass, source))
+
+
 def test_write_wyoming_event_serializes_header_and_payload() -> None:
     writer = _FakeWyomingWriter()
 

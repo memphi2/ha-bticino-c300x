@@ -316,6 +316,16 @@ def test_resolve_media_returns_ring_capture_proxy_url(tmp_path: Path) -> None:
     assert media.mime_type == "video/mp4"
 
 
+@pytest.mark.parametrize("identifier", ["capture/a%00.mp4", "capture/a%0A.mp4"])
+def test_resolve_media_rejects_a_capture_name_with_a_control_character(
+    tmp_path: Path, identifier: str
+) -> None:
+    source = C300XStoredMediaSource(_FakeHass([], tmp_path / "config"))  # type: ignore[arg-type]
+
+    with pytest.raises(Unresolvable):
+        asyncio.run(source.async_resolve_media(_item(identifier)))
+
+
 def test_resolve_media_rejects_missing_entry_or_media(monkeypatch) -> None:
     async def _empty(_entry: Any) -> dict[str, Any]:
         return {"messages": [], "memos": []}

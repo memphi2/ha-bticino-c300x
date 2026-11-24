@@ -40,12 +40,13 @@ def test_rollback_restart_survives_ten_seconds_and_keeps_single_writer(lab):
     wait_until(lambda: observations.joinpath("probed").exists())
     time.sleep(10.2)
     assert api_get(lab.port, "/api/v1/health")["ok"]
-    assert snapshot(gui) == before
+    # The write's transaction directory stays until the restarted GUI is up.
+    assert snapshot(gui, gui_only=True) == before
     assert response(lab.request(QML + "/actions/apply", {"confirm": "apply_qml_patch"}), 409)["error"] == "maintenance_busy"
     assert response(lab.request(GUI, {"confirm": "reload_gui"}), 409)["error"] == "maintenance_busy"
     observations.joinpath("release-probe").touch()
     result = response(pending)
     assert result["ok"] is False and result["state"] == "reload_failed"
     assert result["gui_running"] is True
-    assert snapshot(gui) == snapshot(observations / "2") == before
+    assert snapshot(gui) == snapshot(observations / "2", gui_only=True) == before
     assert observations.joinpath("count").read_text() == "2"

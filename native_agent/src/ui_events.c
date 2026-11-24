@@ -2,6 +2,7 @@
 
 #include "http_util.h"
 #include "json_util.h"
+#include "time_util.h"
 
 #include <errno.h>
 #include <stdio.h>
@@ -190,7 +191,7 @@ int c300x_ui_events_store_waiter(
         if (events->waiters[index].fd < 0) {
             events->waiters[index].fd = client_fd;
             events->waiters[index].since = since;
-            events->waiters[index].deadline = time(NULL) + C300X_UI_EVENT_WAIT_SECONDS;
+            events->waiters[index].deadline = c300x_monotonic_seconds() + C300X_UI_EVENT_WAIT_SECONDS;
             return 0;
         }
         if (
@@ -209,7 +210,7 @@ int c300x_ui_events_store_waiter(
         close_waiter(events, oldest_index, 0, send_json_fn, ctx);
         events->waiters[oldest_index].fd = client_fd;
         events->waiters[oldest_index].since = since;
-        events->waiters[oldest_index].deadline = time(NULL) + C300X_UI_EVENT_WAIT_SECONDS;
+        events->waiters[oldest_index].deadline = c300x_monotonic_seconds() + C300X_UI_EVENT_WAIT_SECONDS;
         return 0;
     }
     return 0;

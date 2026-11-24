@@ -1,7 +1,7 @@
 import {
   c300xLanguage,
   c300xLocalize,
-} from "./c300x-translations.js?v=0ec1ebcd886b1321";
+} from "./c300x-translations.js?v=0192c2a09a110325";
 import {
   C300X_CAMERA_OBJECT_ID,
   C300X_DEFAULT_CONFIG,
@@ -9,7 +9,7 @@ import {
   c300xEntryId,
   c300xFirstEntity,
   c300xResolveEntity,
-} from "./c300x-entity-resolver.js?v=0ec1ebcd886b1321";
+} from "./c300x-entity-resolver.js?v=0192c2a09a110325";
 
 export const C300X_CARD_EDITOR_TAG = "c300x-doorbell-call-card-editor";
 
@@ -46,27 +46,37 @@ export class C300XDoorbellCallCardEditor extends HTMLElement {
     const languageChanged = c300xLanguage(this._hass) !== c300xLanguage(hass);
     this._hass = hass;
     const entity = c300xResolveEntity(hass, this._config, "camera", C300X_CAMERA_OBJECT_ID);
-    if (!this.shadowRoot || languageChanged || entity !== this._displayedEntity) {
+    if (!this._form || languageChanged || entity !== this._displayedEntity) {
       this._render();
       return;
     }
-    const form = this.shadowRoot.querySelector("ha-form");
-    if (form) {
-      form.hass = hass;
+    this._form.hass = hass;
+  }
+
+  // HA calls setConfig after every config-changed: the form is made once and
+  // only gets new data, or the field being edited would lose the focus.
+  _ensureForm() {
+    if (this._form) {
+      return this._form;
     }
+    const root = this.shadowRoot || this.attachShadow({ mode: "open" });
+    root.innerHTML = `
+      <ha-form></ha-form>
+    `;
+    const form = root.querySelector("ha-form");
+    form.computeLabel = (schema) => this._label(schema.name);
+    form.addEventListener("value-changed", (event) => {
+      this._setConfig(event.detail.value || {});
+    });
+    this._form = form;
+    return form;
   }
 
   _render() {
     if (!this._config || !this._hass) {
       return;
     }
-    const root = this.shadowRoot || this.attachShadow({ mode: "open" });
-    const doorbellOnlyMode = this._config.mode === "doorbell_call";
-    root.innerHTML = `
-      <ha-form></ha-form>
-    `;
-
-    const form = root.querySelector("ha-form");
+    const form = this._ensureForm();
     form.hass = this._hass;
     // An inferred camera is display-only until the user changes the picker.
     this._displayedEntity = c300xResolveEntity(
@@ -81,7 +91,15 @@ export class C300XDoorbellCallCardEditor extends HTMLElement {
       show_media_history: this._config.show_media_history !== false,
       show_picture_controls: this._config.show_picture_controls !== false,
     };
-    form.schema = [
+    const schemaKey = `${this._config.mode === "doorbell_call"}:${c300xLanguage(this._hass)}`;
+    if (schemaKey !== this._schemaKey) {
+      this._schemaKey = schemaKey;
+      form.schema = this._schema(this._config.mode === "doorbell_call");
+    }
+  }
+
+  _schema(doorbellOnlyMode) {
+    return [
       {
         name: "mode",
         required: true,
@@ -142,10 +160,6 @@ export class C300XDoorbellCallCardEditor extends HTMLElement {
         },
       ]),
     ];
-    form.computeLabel = (schema) => this._label(schema.name);
-    form.addEventListener("value-changed", (event) => {
-      this._setConfig(event.detail.value || {});
-    });
   }
 
   _setConfig(config) {

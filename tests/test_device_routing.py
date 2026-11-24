@@ -150,7 +150,9 @@ def test_python_and_agent_patch_tables_match() -> None:
         encoding="utf-8"
     )
     assert "*mode = (mode_t)(st.st_mode & 07777);" in io_source
-    assert "remount_root_ro_or_error(error, error_len)" in source
+    # A busy read-only remount after the rename is a done write on a
+    # writable root; only the removal still fails on it.
+    assert 'int root_writable = !c300x_patch_remount_root("ro");' in source
     assert 'set_error(error, error_len, "remount_ro_failed");' in source
 
 

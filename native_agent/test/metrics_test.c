@@ -288,7 +288,16 @@ static void check_heartbeat_and_watchdog(struct c300x_config *config, struct age
     test_idle += 150;
     system_metrics_dispatch_if_due(config, runtime, now + 30);
     assert(c300x_recent_events_count(&runtime->recent_events) == 1);
-    assert(runtime->metrics.high_cpu_since == now + 30);
+    time_t high_since = (time_t)(test_now_ms / 1000) + 1;
+    assert(runtime->metrics.high_cpu_since == high_since);
+    c300x_recent_events_clear(&runtime->recent_events);
+    /* The wall clock jumps an hour ahead 30 s later: still no trip. */
+    test_now_ms += 30000;
+    test_busy += 2850;
+    test_idle += 150;
+    system_metrics_dispatch_if_due(config, runtime, now + 60 + 3600);
+    assert(runtime->metrics.high_cpu_since == high_since);
+    assert(runtime->metrics.watchdog_tripped_at == 0);
     c300x_recent_events_clear(&runtime->recent_events);
 }
 

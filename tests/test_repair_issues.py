@@ -57,6 +57,7 @@ from custom_components.bticino_c300x.repair_issues import (  # noqa: E402
     DEVICE_AGENT_UI_EVENT_WATCHDOG_ISSUE,
     DEVICE_AGENT_UPDATE_REQUIRED_ISSUE,
     DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE,
+    DEVICE_QML_TRANSACTION_STUCK_ISSUE,
     DEVICE_USER_REQUIRED_ISSUE,
     FRONTEND_CARD_SETUP_HINT_ISSUE,
     INVALID_ACTION_MAP_ISSUE,
@@ -1160,6 +1161,35 @@ def test_present_core_qml_hook_clears_repair_issue() -> None:
         repair_issue_id(DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE, entry.entry_id)
         in DELETED_ISSUES
     )
+
+
+@pytest.mark.parametrize("transaction", ["stuck", "pending", "recovered", None])
+def test_a_stuck_display_write_raises_a_warning_issue(transaction: str | None) -> None:
+    entry = FakeEntry(
+        data={CONF_VIDEO_ENABLED: True},
+        runtime_data=FakeRuntimeData(
+            qml_patch_status={
+                "available": True,
+                "patched": True,
+                "state": "patched",
+                "core_patched": True,
+                "core_state": "patched",
+                "transaction": transaction,
+            },
+        ),
+    )
+
+    async_sync_entry_repair_issues(FakeHass(), entry)
+
+    issue_id = repair_issue_id(DEVICE_QML_TRANSACTION_STUCK_ISSUE, entry.entry_id)
+    if transaction == "stuck":
+        issue = CREATED_ISSUES[issue_id]
+        assert issue["severity"] == "warning"
+        assert issue["is_fixable"] is False
+        assert issue["translation_key"] == DEVICE_QML_TRANSACTION_STUCK_ISSUE
+    else:
+        assert issue_id not in CREATED_ISSUES
+        assert issue_id in DELETED_ISSUES
 
 
 def test_missing_device_user_media_identity_creates_repair_issue() -> None:

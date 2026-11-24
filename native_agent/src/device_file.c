@@ -5,6 +5,7 @@
 #endif
 
 #include "device_file.h"
+#include "root_mount.h"
 
 #include "c300x_agent.h"
 
@@ -41,15 +42,10 @@ static int no_remount(void) {
 }
 
 int c300x_device_file_remount(const char *mode) {
-    char command[64];
     if (no_remount()) {
         return 1;
     }
-    if (snprintf(command, sizeof(command), "mount -o remount,%s / >/dev/null 2>&1", mode)
-        >= (int)sizeof(command)) {
-        return 0;
-    }
-    return system(command) == 0;
+    return c300x_root_remount(mode);
 }
 
 int c300x_device_file_read(const char *path, char **data, size_t *len, mode_t *mode) {
@@ -90,10 +86,9 @@ int c300x_device_file_read(const char *path, char **data, size_t *len, mode_t *m
  * rename it over the target. A mid-write failure (short fwrite, fsync error,
  * full partition, power loss) therefore leaves the ORIGINAL file intact instead
  * of a truncated/corrupt live config. When the target already exists we copy its
- * owner+mode onto the temp first (the rename gives a new inode), preserving what
- * the old in-place write kept for free; new targets (backup creation) get the
- * private mode and the caller sets it explicitly afterwards. */
-int c300x_device_file_write(const char *path, const char *data, size_t len) {
+ * owner+mode onto the temp first (the rename gives a new inode); a new target
+ * gets new_mode on the temp, so nothing is chmodded by name after the rename. */
+int c300x_device_file_write_mode(const char *path, const char *data, size_t len, mode_t new_mode) {
     C300X_DEVICE_FILE_STAT st;
     int have_meta = stat_path(path, &st) == 0 && S_ISREG(st.st_mode);
     char tmp[C300X_MAX_PATH_LEN];
@@ -125,12 +120,9 @@ int c300x_device_file_write(const char *path, const char *data, size_t len) {
     if (fflush(fp) != 0) {
         ok = 0;
     }
-    if (ok && have_meta) {
-        /* rename creates a new inode, so restore the original owner/mode */
-        if (fchown(fd, st.st_uid, st.st_gid) != 0
-            || fchmod(fd, st.st_mode & 07777) != 0) {
-            ok = 0;
-        }
+    if (ok && (have_meta ? fchown(fd, st.st_uid, st.st_gid) != 0 || fchmod(fd, st.st_mode & 07777) != 0
+                         : fchmod(fd, new_mode) != 0)) {
+        ok = 0;
     }
     if (ok && fsync(fd) != 0) {
         ok = 0;
@@ -143,6 +135,10 @@ int c300x_device_file_write(const char *path, const char *data, size_t len) {
     }
     (void)unlink(tmp);
     return 0;
+}
+
+int c300x_device_file_write(const char *path, const char *data, size_t len) {
+    return c300x_device_file_write_mode(path, data, len, 0600);
 }
 
 /* Copy source to dest preserving source mode; used for one-time backup and for

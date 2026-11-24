@@ -5,14 +5,14 @@
 Firmware 3.0.6 beta. On a 3.0.6 station (Dave, PR #126) the display pages
 loaded at start, the Alarm and Home Assistant buttons sat in the right place
 and stayed after a configuration change; everything else in this beta is
-checked offline only. Includes 2.9.0; on firmware 1.7.x and 2.0.2 it works like
-2.9.0.
+checked offline only. Includes 2.9.1; on firmware 1.7.x and 2.0.2 it works like
+2.9.1.
 
 - On firmware 3.0.6 the display overlay also carries the 2.9.0
   **Settings > Home Assistant** tab (HA feedback, SSH, reboot, agent removal).
   Checked offline against the original Qt 5 files only.
 - On firmware 3.0.6 the 2.9.0 Display option **Home page buttons** works on
-  the Qt 5 display too: **Like the original** places the Alarm and Home
+  the Qt 5 display too: **Stock** places the Alarm and Home
   Assistant buttons among the station's own, as in Dave's 3.0.x fix in PR #126;
   **Fixed side by side** keeps the pair. The patch status reports the layout
   only while the display pages are active.
@@ -104,6 +104,102 @@ Display:
   The preload validates complete resource tables before handing pointers to
   Qt; damaged files are quarantined without registering them.
   Offline fault injection does not establish device or watchdog safety.
+
+## v2.9.1 - 2026-11-24
+
+Station:
+
+- The Display option **Home page buttons** calls the station's own layout
+  **Stock** (de **Werkseinstellung**) instead of **Like the original**. Only the
+  name changes; the stored setting stays as it is.
+- Text memos written from Home Assistant are saved by the station itself, the
+  way its own display saves them. The new memo shows on the display at once,
+  without a GUI restart, the memo badge counts it correctly, and it can be
+  deleted on the station and from HA.
+- Memos deleted from Home Assistant disappear from the station display without
+  a GUI restart. A delete the station refuses fails at once with
+  `memo_delete_refused` (`video_message_delete_refused` for video messages)
+  instead of a timeout after 3 s.
+
+Notifications:
+
+- Notify takes three switches, `display`, `tts` and `led`, in any combination
+  with at least one on. With `display` and `tts` the message is spoken instead
+  of the tone; popup and wake still run. With the switches, only notices with
+  `led` light the message LED. `mode` keeps working as before; `mode: both` now accepts
+  `sound_duration` and drops the tone instead of refusing the call.
+- Refused display notifications show a translated message instead of a raw
+  key.
+
+Camera and card:
+
+- While the picture sliders panel is open, the card hides the play, mute and
+  volume controls under it; they return when the panel closes.
+- A stream the browser refuses to play with sound starts muted, and the card
+  says to tap it for sound.
+
+Fixed:
+
+- Display patch writes that run past their deadline get a SIGTERM and 15 s to
+  put the display files back, restart the display and remount `/` read-only,
+  instead of being killed at once. A write cut off by a power loss or crash is
+  finished at the next agent start; one the agent cannot finish is reported
+  in Repairs.
+- Opening the station's Memo page could delete station memos when the agent's
+  memo list was incomplete, for example with memos switched off in the agent
+  or more memos than the list holds.
+- After the Home Assistant media user patched the call-routing program, its
+  setup could stop halfway with `/` left writable, and agent updates were
+  refused with `update_root_already_writable` until a reboot. The setup now
+  finishes, and the agent makes `/` read-only again with its next write.
+- When the station's display answers a ring, Home Assistant keeps the camera
+  on external media for the whole display call (up to 65 s, or until the call
+  ends), and the card no longer offers a stream the station would refuse.
+  After the station answers an on-demand start with busy, the agent does not
+  call it again for up to 65 s, or until the call it is busy with ends.
+- When Home Assistant answers a ring, the card no longer turns busy without a
+  picture, and the camera no longer stays streaming after the hang-up. A
+  failed stream start no longer leaves the card busy, and a ring call this
+  browser answered keeps its hang-up button after a reload or lost connection.
+- The doorbell card no longer grows for a moment when a stream starts over
+  plain HTTP or shows a long message; notices and errors fit the footer.
+- All display pages follow a changed `listen.uiPort`. Under 2.9.0 the HA and
+  Alarm pages, the home buttons, alerts, memo sync and the touch tone still
+  needed port 8090. After a port change, restart the agent and reapply the
+  Display patch.
+- The agent restart after an update waits for the old agent to exit, so the
+  new one no longer fails to start and leaves the station without an agent.
+- A removal that fails after stopping the agent starts it again, so Home
+  Assistant can reach the station and retry. Removal takes only the agent's
+  rules out of the firewall scripts and no longer copies back a backup that
+  may be incomplete.
+- An agent update cut off by a power loss no longer blocks every later update;
+  the next update clears what it left.
+- A new RTSP connection replaces the oldest one that never authenticated, so
+  idle connections no longer lock Home Assistant out of the live stream. The
+  RTSP listener stays up after a failed accept.
+- The native MQTT bridge reconnects when the broker stays silent, skips a
+  message too large for it instead of reconnecting forever, and no longer
+  holds up the agent while it resolves or connects to the broker.
+- A clock step, such as the NTP sync after boot, no longer trips the CPU
+  watchdog, which ended calls and streams, or fires the agent's timers early.
+- With **Keep the page open on screen standby** on, the Alarm and Home
+  Assistant pages no longer stay frozen when the screen wakes.
+- On a Home Assistant host without IPv6, event registration and diagnostics
+  no longer fail when the station's address also resolves to IPv6.
+- The single-area Alarmo fallback applies only to Alarmo panels, so another
+  alarm panel no longer gets Alarmo's readiness and code rules.
+- Cross-site browser requests to the agent API are refused, and SIP dialog ids
+  are random.
+- The card editor keeps the focus while typing, and the media readiness opens
+  Repairs from the keyboard.
+- Service calls without `entry_id` ignore ignored and disabled entries. Agent
+  failures are reported as errors of the device, not of the call's input.
+
+Upgrade:
+
+- The agent-update Repair installs the 2.9.1 agent together with its display
+  files.
 
 ## v2.9.0 - 2026-11-24
 

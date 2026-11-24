@@ -2,7 +2,10 @@
 
 import os
 import shutil
+import signal
 import stat
+import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -167,3 +170,36 @@ def test_activation_rejects_nonregular_files_without_following_them(device, arti
     assert "Unsupported display activation file" in result.stderr
     assert sentinel.read_bytes() == b"untouched"
     assert target.is_symlink() if kind == "symlink" else target.is_dir()
+
+
+def test_a_sigterm_during_the_activation_rollback_repeats_it_and_exits_130(device):
+    """The write's GUI restart fails and the agent's deadline SIGTERM hits the
+    process group while the start script is put back: the cut step runs once
+    more in the same process and the activation is the previous one again."""
+
+    device.ok("apply")
+    before = snapshot(device)
+    source = overlay.SCRIPT.read_text()
+    start, end = source.index("reload_gui() {"), source.index("\nremount_rw() {")
+    script = device.root / "reload-failure.sh"
+    script.write_text(source[:start] + "reload_gui() { return 1; }\n" + source[end:])
+    script.chmod(0o700)
+    held = device.root / "held"
+    env = command_failure(
+        device, "cp",
+        f'case "$*" in *"/.qt5/wrapper {device.wrapper}.c300x-recovery."*) [ ! -e "{held}" ];; *) false;; esac',
+        effect=f': > "{held}"; while :; do sleep 0.02; done',
+    )
+    process = subprocess.Popen([str(script), "media-user-label-apply"], env=device.environment(**env),
+                               text=True, start_new_session=True,
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    deadline = time.monotonic() + 20
+    while not held.exists():
+        assert process.poll() is None and time.monotonic() < deadline, process.communicate()
+        time.sleep(0.01)
+    os.killpg(process.pid, signal.SIGTERM)
+    _, stderr = process.communicate(timeout=20)
+    assert process.returncode == 130, stderr
+    assert snapshot(device) == before
+    assert not list(device.gui.glob(".c300x-qml-transaction.*"))
+    assert not list(device.root.rglob("*.c300x-recovery.*"))

@@ -234,6 +234,56 @@ def test_a_recovery_killed_at_any_step_is_finished_by_the_next_one(
     assert _calls(tmp_path, "mount") == [] and _calls(tmp_path, "killall") == []
 
 
+def test_a_sigterm_during_the_rollback_gui_restart_still_restarts_the_gui_and_remounts(
+    tmp_path: Path,
+) -> None:
+    """The write's GUI restart fails, the rollback restarts the previous GUI
+    and the agent's deadline SIGTERM hits the process group in the middle of
+    it: the cut restart runs again, then the transaction goes and / is read-only."""
+
+    gui, backup = tmp_path / "gui", tmp_path / "backup"
+    gui.mkdir()
+    _write_original_gui(gui)
+    before = _gui_files(gui)
+    env = _commands(tmp_path)
+    commands = tmp_path / "recovery-commands"
+    log, held = tmp_path / "calls.log", tmp_path / "held"
+    (commands / "killall").write_text(
+        f'#!/bin/sh\nprintf "%s\\n" "killall $*" >> "{log}"\n'
+        f'if [ "$(grep -c "^killall" "{log}")" = {2 * len(RESTART)} ] && [ ! -e "{held}" ]; then\n'
+        f'  : > "{held}"; while :; do sleep 0.02; done\nfi\n')
+    # No GUI comes back after the write's restart; the rollback's does.
+    (commands / "pidof").write_text(
+        f'#!/bin/sh\nprintf "%s\\n" "pidof $*" >> "{log}"\n'
+        f'[ "$(grep -c "^killall" "{log}")" -ge {3 * len(RESTART)} ]\n')
+    log.unlink(missing_ok=True)
+    result = qml._terminate_when_held(tmp_path, gui, backup, "core-apply", env)
+    assert result.returncode == 130, result.stderr
+    assert result.stdout == ""
+    assert _gui_files(gui) == before
+    assert _calls(tmp_path, "killall") == RESTART * 3
+    assert _calls(tmp_path, "mount") == ["mount -o remount,rw /", "mount -o remount,ro /"]
+    assert not (tmp_path / "c300x-qml-root-rw").exists()
+
+
+def test_a_sigterm_during_the_final_remount_retries_it_and_exits_131(tmp_path: Path) -> None:
+    """A committed write is not a rollback: exit 131, and / still goes read-only."""
+
+    gui, backup = tmp_path / "gui", tmp_path / "backup"
+    gui.mkdir()
+    _write_original_gui(gui)
+    env = _commands(tmp_path, ("mount", "-o remount,ro /"))
+    result = qml._terminate_when_held(tmp_path, gui, backup, "core-apply", env)
+    assert result.returncode == 131, result.stderr
+    assert result.stdout == ""
+    assert not list(gui.glob(".c300x-qml-transaction.*"))
+    assert _calls(tmp_path, "mount") == ["mount -o remount,rw /", "mount -o remount,ro /",
+                                         "mount -o remount,ro /"]
+    assert not (tmp_path / "c300x-qml-root-rw").exists()
+    status = json.loads(_run_qml_patch_raw(tmp_path, gui, backup, "status").stdout)
+    assert status["core_state"] == "patched" and "transaction" not in status
+
+
 @pytest.mark.parametrize("write_first", [False, True])
 def test_a_terminated_display_library_step_exits_131_and_finishes_root_and_gui(
     tmp_path: Path, write_first: bool,

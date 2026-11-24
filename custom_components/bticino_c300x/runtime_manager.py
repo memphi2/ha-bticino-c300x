@@ -277,6 +277,10 @@ class C300XRuntimeManager:
         )
 
         async def _async_refresh_runtime_registration() -> None:
+            from .qml_status_watch import async_schedule_qml_status_refresh
+
+            # A reconnect can follow an agent restart the metrics did not show.
+            async_schedule_qml_status_refresh(self.hass, self.entry, restarted=False)
             await self._async_refresh_display_registration(api)
 
         self.on_runtime_registration_created = _async_refresh_runtime_registration

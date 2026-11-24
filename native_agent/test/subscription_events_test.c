@@ -1,15 +1,37 @@
 /* A subscription's event list is taken whole or refused, never cut. */
 #include <assert.h>
+#include <stdarg.h>
+#include <stdlib.h>
 #include "../src/http.c"
+
+/* Appends or stops the test: no length comes from an unchecked snprintf. */
+__attribute__((format(printf, 4, 5)))
+static void test_append(char *out, size_t size, size_t *used, const char *format, ...)
+{
+    va_list args;
+    int written;
+
+    if (*used >= size) {
+        abort();
+    }
+    va_start(args, format);
+    written = vsnprintf(out + *used, size - *used, format, args);
+    va_end(args);
+    if (written < 0 || (size_t)written >= size - *used) {
+        abort();
+    }
+    *used += (size_t)written;
+}
 
 static int parse(int count, char *body, size_t len)
 {
     static struct subscription subscription;
-    size_t used = (size_t)snprintf(body, len, "{\"events\":[");
+    size_t used = 0;
+    test_append(body, len, &used, "{\"events\":[");
     for (int index = 0; index < count; index++) {
-        used += (size_t)snprintf(body + used, len - used, "%s\"event_%d\"", index ? ", " : "", index);
+        test_append(body, len, &used, "%s\"event_%d\"", index ? ", " : "", index);
     }
-    snprintf(body + used, len - used, " ]}");
+    test_append(body, len, &used, " ]}");
     json_events_array_range(body, body + strlen(body), &subscription);
     return subscription.event_count;
 }

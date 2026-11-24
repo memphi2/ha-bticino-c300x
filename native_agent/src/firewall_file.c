@@ -9,7 +9,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
 #include <unistd.h>
 
 int c300x_firewall_read_file(const char *path, char *buffer, size_t buffer_len, int *exists)
@@ -41,10 +40,8 @@ int c300x_firewall_read_file(const char *path, char *buffer, size_t buffer_len, 
 
 int c300x_firewall_write_file(const char *path, const char *content, mode_t new_mode)
 {
-    int existed = access(path, F_OK) == 0;
     return mkdir_parent(path, 0755)
-        && c300x_device_file_write(path, content, strlen(content))
-        && (existed || chmod(path, new_mode) == 0)
+        && c300x_device_file_write_mode(path, content, strlen(content), new_mode)
         && c300x_device_file_sync_parents(path);
 }
 

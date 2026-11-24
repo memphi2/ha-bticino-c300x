@@ -18,6 +18,8 @@ int c300x_device_file_read(const char *path, char **data, size_t *len, mode_t *m
 /* Temp file, fsync, rename: the target is the old or the new content, never
  * a part of it. An existing target keeps its owner and mode. */
 int c300x_device_file_write(const char *path, const char *data, size_t len);
+/* The same; a new target gets new_mode before the rename (plain write: 0600). */
+int c300x_device_file_write_mode(const char *path, const char *data, size_t len, mode_t new_mode);
 int c300x_device_file_copy(const char *source, const char *dest);
 int c300x_device_file_mkdir_p(const char *path);
 /* Where the originals are kept, on the writable data partition

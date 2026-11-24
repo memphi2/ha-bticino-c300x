@@ -2,8 +2,8 @@
 
 ## Supported Release Line
 
-- `2.10.x`: beta 2.10.0b1 for firmware 3.0.6 (home page buttons checked on a station, the rest offline only); includes 2.9.0
-- `2.9.x`: current stable (2.9.0)
+- `2.10.x`: beta 2.10.0b1 for firmware 3.0.6 (home page buttons checked on a station, the rest offline only); includes 2.9.1
+- `2.9.x`: current stable (2.9.1)
 - `2.8.x`: previous stable; upgrade to 2.9.x for maintenance fixes
 - `2.7.x`: no longer maintained; upgrade to 2.9.x
 - `2.6.0`: withdrawn because the energy page did not load on the display

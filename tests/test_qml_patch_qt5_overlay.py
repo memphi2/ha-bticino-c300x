@@ -97,7 +97,11 @@ class Device:
         self.boot_id.write_text("boot-1\n")
 
     def run(self, action: str, **env: str) -> subprocess.CompletedProcess[str]:
-        environment = {
+        return subprocess.run([str(SCRIPT), action], capture_output=True, text=True,
+                              env=self.environment(**env), check=False)
+
+    def environment(self, **env: str) -> dict[str, str]:
+        return {
             **os.environ,
             "C300X_QML_QT5_MARKER": str(self.root / "libQt5Core.so.5"),
             "C300X_QML_QT5_ROOT": str(self.qt5_root),
@@ -117,7 +121,6 @@ class Device:
             "C300X_QML_BOOT_ID": str(self.boot_id),
             **env,
         }
-        return subprocess.run([str(SCRIPT), action], capture_output=True, text=True, env=environment, check=False)
 
     def ok(self, action: str, **env: str) -> dict[str, object]:
         result = self.run(action, **env)

@@ -17,7 +17,12 @@ from pathlib import Path
 
 import pytest
 import test_qml_patch_script as qml
-from test_qml_patch_script import _gui_files, _killed_apply, _run_qml_patch_raw, _write_original_gui
+from test_qml_patch_script import (
+    _gui_files,
+    _killed_apply,
+    _run_qml_patch_raw,
+    _write_original_gui,
+)
 
 
 def _commands(tmp_path: Path, hold: tuple[str, str] | None = None) -> dict[str, str]:

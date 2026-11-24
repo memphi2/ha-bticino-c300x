@@ -10,7 +10,8 @@ def test_picture_source(tmp_path: Path) -> None:
     subprocess.run(
         ["cc", "-std=c11", "-D_DEFAULT_SOURCE", "-Wall", "-Wextra", "-Werror",
          native / "src/picture_source.c", native / "test/picture_source_test.c",
-         *(f"-Wl,--wrap={name}" for name in ("open", "close", "readlink", "fstat", "ioctl")),
+         *(f"-Wl,--wrap={name}" for name in ("open", "close", "readlink", "fstat", "ioctl",
+                                                     "opendir", "readdir", "closedir")),
          "-o", binary],
         check=True,
     )

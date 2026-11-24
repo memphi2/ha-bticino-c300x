@@ -8,6 +8,11 @@ Firmware 3.0.6 beta, not yet tested on a device. Includes 2.9.0; on firmware
 - On firmware 3.0.6 the display overlay also carries the 2.9.0
   **Settings > Home Assistant** tab (HA feedback, SSH, reboot, agent removal).
   Checked offline against the original Qt 5 files only.
+- On firmware 3.0.6 the 2.9.0 Display option **Home page buttons** works on
+  the Qt 5 display too: **Like the original** places the Alarm and Home
+  Assistant buttons among the station's own, as in Dave's 3.0.x fix in PR #126;
+  **Fixed side by side** keeps the pair. Both layouts and the patch status
+  were checked offline against the original Qt 5 files only.
 - The Qt 5 display, the additional Low sizes, routing and downgrade recovery
   stay as in 2.9.0b2. The native agent is rebuilt as 2.10.0b1; an agent update
   is required.
@@ -82,29 +87,123 @@ Display:
   Qt; damaged files are quarantined without registering them.
   Offline fault injection does not establish device or watchdog safety.
 
-## v2.9.0 - Unreleased
+## v2.9.0 - 2026-11-24
 
+Discovery:
+
+- Home Assistant follows the station to a new IPv4 address, for example after
+  a DHCP change. The agent announces itself again over mDNS once no authenticated
+  HA request has arrived for 15 minutes, and reopens the announcement when its
+  address changes, retrying if that fails. HA moves the entry only after the
+  station at the new address proves, through the new identity proof endpoint,
+  that it knows the saved token. HA sends it only a fresh random value; no token
+  is ever sent to an unproven address. When the station did not answer, HA checks
+  again up to two more times, 10 minutes apart. Entries with a host name or IPv6
+  address, or a token shorter than 32 characters, still need **Reconfigure**.
+  Needs the agent update.
+- The mDNS record carries a per-start instance, so Home Assistant recognizes an
+  agent restart while the service is still cached.
+
+Station:
+
+- Notifications can use `mode: led` to light only the station's envelope LED.
+  No popup, screen wake, tone or speech is requested. Clearing a Home Assistant
+  notice does not clear the indicator for an unread station memo. Once Home
+  Assistant releases the LED, it stays on only while a station memo is unread.
+- The station's **Settings > Home Assistant** groups HA feedback, SSH, reboot
+  and agent removal. These controls use the local agent, even if HA is offline,
+  and accept requests only from the station's own GUI. The original touch-tone
+  switch stays under **General**.
+- The Alarm and Home Assistant buttons on the station home page no longer stay
+  hidden when their first reads after a start fail. The page retries for about
+  a minute and reads again when it is shown or the display bridge registers.
+  Needs the Display patch from the agent update.
+- New Display option **Home page buttons**. **Like the original** shows the
+  Alarm and Home Assistant buttons only when they have something to open, as
+  buttons among the station's own, which wrap like them. After the agent update
+  most stations use this layout; entries that still store the old setting as
+  off keep the fixed pair. The Display form shows which one an entry uses;
+  choose **Fixed side by side** to keep the pair used since 2.3.0. Based on a
+  fix by Dave in PR #126. Needs the agent update.
+
+Camera and card:
+
+- The doorbell card and `bticino_c300x.camera_picture` can adjust live brightness,
+  contrast and colour saturation. Ring Calls use the stock GUI controls. On-demand
+  sliders appear shortly after live video starts, once the station reads its
+  values back: on firmware 1.7.19 (tested on a station), on 2.0.2 with either
+  video decoder and on 3.0.6, which runs only on TVP5150 boards (both checked
+  offline only). A setting the station does not confirm is put back, and the
+  card says whether it was not applied, the station is busy or the controls are
+  unavailable. Changes last until the video ends. The sliders sit on a
+  see-through panel, so the picture stays visible while adjusting. Requires
+  the updated agent; archived media is unchanged.
+- The doorbell card is as tall as its picture instead of stretching to the height
+  of its dashboard place. A visitor snapshot keeps its own proportions, and the
+  enlarged preview fits it so the buttons below stay on screen. Playback controls
+  over saved media no longer sit on a dark bar.
+- Camera quality offers a matching visitor snapshot size when changing stream
+  size, including when returning to the factory setting.
 - Direct RTSP viewers on slow WiFi can recover when a short write accepts only
   part of a video or audio packet. The agent finishes that packet before sending
   anything else on the connection, without lengthening the wait for other viewers.
-- Notifications can use `mode: led` to light only the station's envelope LED.
-  No popup, screen wake, tone or speech is requested. Clearing a Home Assistant
-  notice does not clear the indicator for an unread station memo.
-- The station's **Settings > Home Assistant** groups HA feedback, SSH, reboot
-  and agent removal. These controls use the local agent, even if HA is offline.
-  The original touch-tone switch stays under **General**.
-- The doorbell card and `bticino_c300x.camera_picture` can adjust live brightness,
-  contrast and colour saturation. Ring Calls use the stock GUI controls. On-demand
-  controls require live source readback on C300X firmware 1.7.19. Live writes
-  have not been confirmed on hardware. Requires the updated agent; archived media
-  is unchanged.
-- Advertise a per-start instance in the existing mDNS record so Home Assistant
-  can recognize an agent restart while the service is still cached.
-- Camera quality offers a matching visitor snapshot size when changing stream
-  size, including when returning to the factory setting.
-- The updater reports a writable root filesystem before replacing files, and
-  distinguishes a failed read-only remount from other installation failures.
-  Capabilities and self-test now agree on the detected firmware family.
+
+Entities:
+
+- CPU usage, device temperature and the audio codec selector are enabled by
+  default when the station supports them. Enabling the codec selector does not
+  change the station's codec. Load, memory and detailed agent diagnostics stay
+  disabled by default. Entities already in Home Assistant keep their current
+  enabled state.
+
+Fixed:
+
+- Removing the agent restores the station's original call-routing program before
+  deleting its backup. Since 1.2.1, removal with the HA media user enabled left
+  the patched program in place and deleted its only original copy. If the restore
+  fails, removal stops and keeps the agent files, startup and backups. Needs the
+  agent update.
+- Deleting a memo or video message could be answered with `invalid_memo_entry`
+  or `invalid_message_entry` although the delete succeeded. Needs the agent update.
+- From this agent on, an agent update refuses to start while `/` is already
+  writable (409 `update_root_already_writable`); the Repair says to restart the
+  station normally first. A failed return to read-only is reported separately
+  as `update_root_readonly_failed`.
+- Capabilities and self-test agree on the detected firmware family. When the
+  device firmware field is empty, the agent falls back to the station's web
+  server version. Needs the agent update.
+- When the agent has lost Home Assistant's display registration, for example
+  after an agent restart, HA registers again right away instead of treating the
+  display bridge as unsupported, so unread snapshot notices and dashboard
+  refreshes reach the station again.
+- The SSH switch shows SSH as off once its listener has stopped, even while an
+  earlier SSH session is still open. Needs the agent update.
+- `bticino_c300x.write_text_memo` shows a readable message instead of a bare
+  key when the installed agent cannot write text memos.
+- The station Settings tab, the ringer, the picture controls, the display
+  preferences and the media-closed hook follow a changed `listen.uiPort`. Other
+  display pages still call port 8090, so keep the installer's default. After a
+  port change, restart the agent and reapply the Display patch; until then the
+  patch is reported as partially patched.
+- With the fixed side-by-side Alarm and Home Assistant buttons, the station's
+  own buttons no longer slide off screen next to the Quick actions panel (#119)
+  or on stations that show only Memo and Settings, and a hidden Alarm button
+  keeps its place empty instead of letting Home Assistant move into it. Needs
+  the agent update.
+
+Settings:
+
+- The Display option **Stay on the page after an action** is now **Keep the page
+  open on screen standby**, which is what it always did: when on, the Home
+  Assistant and Alarm pages stay open when the screen goes to standby. The
+  Display menu entry describes it the same way. For entries that never saved
+  this option, the settings form now shows it on, as the display applies it;
+  before, it showed off, and saving the form unchanged turned it off.
+
+Documentation:
+
+- The documentation is reorganised into fewer, task-based pages, including a
+  quick start, a user guide and a page for the station display.
 
 ## v2.8.3 - 2026-11-23
 

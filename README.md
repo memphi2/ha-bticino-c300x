@@ -94,7 +94,7 @@ Use one **C300X Doorbell Call Card** in **Doorstation + Home Call** mode.
 | Ring Call | Set **Forwarding** to **Home Assistant**. When someone rings, the card shows the picture; press **Answer**, later **Hang Up**. With **Smartphone**, calls go to the Door Entry app instead. |
 | Home Call | Audio-only call from Home Assistant to the station display. |
 | Talkback | Speak through the browser microphone. Needs HTTPS or Home Assistant Cloud and microphone permission. |
-| Picture controls | Brightness, contrast and colour saturation during a Ring Call; for on-demand video only on firmware 1.7.19, once the station reads them back live. Saved media stays unchanged. |
+| Picture controls | Brightness, contrast and colour saturation during a Ring Call; for on-demand video on firmware 1.7.19, 2.0.2 (either video decoder) and 3.0.6 (TVP5150 boards only), once the station reads them back live; 2.0.2 and 3.0.6 are untested on a device. Saved media stays unchanged. |
 
 Talking in Home Assistant's own camera view is optional and off by default
 (Home Assistant 2026.11+, **Two-way audio** in Labs and the option **Talk

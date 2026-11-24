@@ -68,12 +68,15 @@ CONF_WEBHOOK_ID = "webhook_id"
 CONF_WEATHER_ENTITY_ID = "weather_entity_id"
 CONF_WEBRTC_ICE_POLICY = "webrtc_ice_policy"
 
-# One source of truth for the home-page button mode. It used to live only in
-# config_flow_dashboard, where the form offered it ticked while the Display
-# patch apply read an absent key as off, so saving the dashboard step switched
-# the device's home page without anyone choosing it. const.py has no heavy
-# imports, so the runtime can read it without pulling the config flow in.
+# One source of truth for the home-page button layout: True is the stock
+# layout, False the fixed pair side by side. The form, the change detection and
+# the Display patch apply all read an absent key with this default. const.py
+# has no heavy imports, so the runtime can read it without the config flow.
 DEFAULT_DASHBOARD_DYNAMIC_HOMEPAGE = True
+# The installed layout as the Display patch status reports it.
+HOME_BUTTONS_STOCK = "stock"
+HOME_BUTTONS_SIDE_BY_SIDE = "side_by_side"
+HOME_BUTTONS_LAYOUTS = frozenset({HOME_BUTTONS_STOCK, HOME_BUTTONS_SIDE_BY_SIDE})
 DEFAULT_AGENT_PORT = 8091
 DEFAULT_EVENT_RESET_SECONDS = 30
 DEFAULT_RECONNECT_GRACE_SECONDS = 15

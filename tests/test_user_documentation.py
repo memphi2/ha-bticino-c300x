@@ -149,15 +149,236 @@ def test_three_documentation_rules_are_closed_with_evidence_only():
     assert f"](../{ICE_LINK})" in audit
 
 
+def _c_skip(text, index):
+    """The index after the string, character literal or comment at ``index``, else ``index``."""
+    if text.startswith("/*", index):
+        return text.index("*/", index) + 2
+    if text.startswith("//", index):
+        return text.index("\n", index)
+    if text[index] in "\"'":
+        end = index + 1
+        while text[end] != text[index]:
+            end += 2 if text[end] == "\\" else 1
+        return end + 1
+    return index
+
+
+def _c_args(text, index):
+    """The top-level arguments of the parenthesis at ``index`` and the index of its closing one."""
+    args, depth, start = [], 0, index + 1
+    while True:
+        end = _c_skip(text, index)
+        if end != index:
+            index = end
+            continue
+        if text[index] in "([{":
+            depth += 1
+        elif text[index] in ")]}":
+            depth -= 1
+            if not depth:
+                args.append(text[start:index])
+                return [arg.strip() for arg in args], index
+        elif text[index] == "," and depth == 1:
+            args.append(text[start:index])
+            start = index + 1
+        index += 1
+
+
+def _c_functions(source):
+    """Every function defined in the C ``source``, by name, with its full text."""
+    functions = {}
+    for match in re.finditer(r"^[A-Za-z_][^;{}()\n]*?\b(\w+)\([^;{}]*?\)\s*\{", source, re.MULTILINE):
+        end = match.end() - 1
+        assert source[end] == "{"
+        depth = 0
+        while True:
+            skipped = _c_skip(source, end)
+            if skipped != end:
+                end = skipped
+                continue
+            depth += {"{": 1, "}": -1}.get(source[end], 0)
+            end += 1
+            if not depth:
+                break
+        functions[match[1]] = source[match.start():end]
+    return functions
+
+
+def _c_function(source, name):
+    """The text of the C function ``name`` defined in ``source``; fails when it is not defined there."""
+    functions = _c_functions(source)
+    assert name in functions, f"no C function {name}"
+    return functions[name]
+
+
+_C_KEYWORDS = {"if", "for", "while", "switch", "return", "sizeof"}
+_ERROR_MEMBER = re.compile(r'\\"error\\"\s*:\s*\\"((?:[^"\\]|\\[^"])*)\\"')
+_CODE = re.compile(r"[a-z0-9_]+")
+_FORMAT = re.compile(r"%[-+ #0]*\d*(?:\.\d+)?(?:hh|h|ll|l|z|j|t)?[a-zA-Z]")
+# Calls that get a client socket without answering it.
+_NO_ANSWER = {"close_agent_socket": "closes the socket and sends nothing"}
+
+
+def _c_calls(text):
+    """``(callee, arguments)`` of each call in the body of the C function ``text``."""
+    blank = _c_blank(text)
+    body = blank.index("{")
+    for call in re.finditer(r"\b(\w+)\s*\(", blank[body:]):
+        if call[1] not in _C_KEYWORDS:
+            yield call[1], _c_args(text, body + call.end() - 1)[0]
+
+
+def _c_params(text):
+    """The parameter names of the C function ``text``."""
+    params, _ = _c_args(text, text.index("("))
+    return [re.search(r"(\w+)\s*(?:\[[^]]*\])?$", param)[1] for param in params if param not in ("", "void")]
+
+
+def _c_literals(expression):
+    """The string literal ``expression`` is, or the two of ``cond ? "a" : "b"``; None for anything else."""
+    blank = _c_blank(expression)
+    if re.fullmatch(r"[^?:]+\?[\s]*:[\s]*", blank):
+        question = blank.index("?")
+        colon = blank.index(":", question)
+        sides = [expression[question + 1:colon], expression[colon + 1:]]
+    elif blank.strip():
+        return None
+    else:
+        sides = [expression]
+    return ["".join(re.findall(r'"((?:[^"\\]|\\.)*)"', side)) for side in sides]
+
+
+def _client_answers(functions, roots, resolved=None, ignore=None):
+    """``(status, code)`` of each error answer a client socket gets, and the ``resolved`` helpers met.
+
+    ``roots`` holds ``(function, socket expression)`` pairs. A call that hands the socket to a function
+    of ``functions`` is followed with its arguments bound to that function's parameters. Any other call
+    that gets the socket answers the client, unless ``_NO_ANSWER`` or ``ignore`` names it with a reason.
+    The body of an answer, its last argument followed back through the callers, must be a string literal
+    (or a ``?:`` of two), a buffer that an ``snprintf`` of the function owning it fills, or a call to a
+    ``resolved`` helper whose codes the caller reads in another way. A code is the
+    ``\\"error\\":\\"<code>\\"`` member of that body, or the literal given for the member's ``%s``; its
+    status is the HTTP status among the other arguments. Anything else fails, so no answer goes unread.
+    """
+    resolved, ignore = resolved or {}, {**_NO_ANSWER, **(ignore or {})}
+    answers, helpers = set(), set()
+
+    def bound(expression, frame):
+        return frame[1].get(expression, (expression, frame))
+
+    def codes_of(literals, where):
+        for code in literals:
+            assert _CODE.fullmatch(code), f"{where}: the error code {code!r} is not [a-z0-9_]+"
+        return literals
+
+    def body_codes(expression, frame, where):
+        expression, frame = bound(expression, frame)
+        literals = _c_literals(expression)
+        if literals is not None:
+            return codes_of([code for literal in literals for code in _ERROR_MEMBER.findall(literal)], where)
+        fills = [args for callee, args in _c_calls(functions[frame[0]]) if callee == "snprintf" and args[0] == expression]
+        callee = re.match(r"(\w+)\s*\(", expression)
+        if callee and callee[1] in resolved:
+            helpers.add(callee[1])
+            return []
+        assert fills, f"{where}: the body {expression!r} is neither a literal nor a buffer built in {frame[0]}"
+        codes = []
+        for args in fills:
+            formats = _c_literals(args[2])
+            assert formats is not None and len(formats) == 1, f"{where}: the format of {expression!r} is not a literal"
+            for member in _ERROR_MEMBER.finditer(formats[0]):
+                if member[1] != "%s":
+                    codes += codes_of([member[1]], where)
+                    continue
+                argument = args[3 + len(_FORMAT.findall(formats[0][:member.start(1)].replace("%%", "")))]
+                argument, owner = bound(argument, frame)
+                literals = _c_literals(argument)
+                assert literals is not None, f"{where}: the error code {argument!r} in {owner[0]} is not a literal"
+                codes += codes_of(literals, where)
+        return codes
+
+    def visit(name, fd, bindings, depth):
+        assert name in functions, f"no C function {name}"
+        assert depth < 16, f"{name}: the client socket is handed on too deeply"
+        frame = (name, bindings)
+        for callee, args in _c_calls(functions[name]):
+            if fd not in args:
+                continue
+            if callee in functions:
+                params = _c_params(functions[callee])
+                visit(callee, params[args.index(fd)], {p: bound(a, frame) for p, a in zip(params, args, strict=True)}, depth + 1)
+                continue
+            if callee in ignore:
+                continue
+            where = f"{name}: {callee}({', '.join(args)})"
+            codes = body_codes(args[-1], frame, where)
+            if not codes:
+                continue
+            others = [bound(arg, frame)[0] for index, arg in enumerate(args[:-1]) if index != args.index(fd)]
+            statuses = [int(status) for arg in others for status in re.findall(r"\b[1-5]\d\d\b", _c_blank(arg))]
+            assert len(statuses) in (1, len(codes)), f"{where}: no literal HTTP status for {codes}"
+            answers.update(zip(statuses * len(codes) if len(statuses) == 1 else statuses, codes, strict=True))
+
+    for name, fd in roots:
+        visit(name, fd, {}, 0)
+    return answers, helpers
+
+
+def _c_blank(text):
+    """``text`` with its string and character literals and comments turned into spaces, at the same length."""
+    blanked, index = [], 0
+    while index < len(text):
+        end = _c_skip(text, index)
+        blanked.append(" " * (end - index) if end != index else text[index])
+        index = max(end, index + 1)
+    return "".join(blanked)
+
+
+def _api_error_rows(heading):
+    """``(status, code)`` of each row of the error table in the API.md section after ``heading``."""
+    section = (ROOT / "native_agent/API.md").read_text().split(heading, 1)[1].split("\n### ", 1)[0]
+    table = section.split("\nErrors:\n", 1)[1].strip().split("\n\n", 1)[0].splitlines()
+    assert table[:2] == ["| Status | `error` | Meaning |", "| --- | --- | --- |"], heading
+    rows = set()
+    for line in table[2:]:
+        row = re.match(r"\|\s*`?(\d{3})`?\s*\|\s*`?([a-z0-9_]+)`?\s*\|", line)
+        assert row, f"unreadable error row after {heading}: {line}"
+        rows.add((int(row[1]), row[2]))
+    return rows
+
+
 def test_the_api_lists_every_error_the_agent_update_answers_with():
-    source = (ROOT / "native_agent/src/agent_update.c").read_text()
-    body = source.split("const char *agent_update_error_json", 1)[1].split("\n}\n", 1)[0]
-    codes = re.findall(r'\\"error\\":\\"([a-z_]+)\\"', body)
-    assert "update_root_already_writable" in codes
+    # The handler refuses a request itself, also through the send_* helpers it
+    # hands its client socket to, before the install starts.
+    functions = _c_functions((ROOT / "native_agent/src/http.c").read_text())
+    replies, helpers = _client_answers(functions, [("handle_agent_update_apply", "client_fd")], resolved={
+        "agent_update_error_json": "a failed install: the codes of its enum switch, with the status "
+                                   "agent_update_error_status picks, are added below",
+    })
+    assert helpers == {"agent_update_error_json"}
+    assert (403, "maintenance_unauthorized") in replies
+    # A failed install answers agent_update_error_json(error) with the status
+    # agent_update_error_status(error) picks for the same error.
+    handler = functions["handle_agent_update_apply"]
+    assert "agent_update_error_status(summary.error)" in handler
+    assert "agent_update_error_json(summary.error)" in handler
+    update = _c_functions((ROOT / "native_agent/src/agent_update.c").read_text())
+    text = update["agent_update_error_json"]
+    returns = re.findall(r"\breturn\b([^;]*);", _c_blank(text))
+    assert returns and not any(value.strip() for value in returns), "agent_update_error_json returns a non-literal"
+    install = set(_ERROR_MEMBER.findall(text))
+    cases = dict(re.findall(r'(?:case (\w+)|default):\s*return "(?:[^"\\]|\\.)*?\\"error\\"\s*:\s*\\"([a-z0-9_]+)\\"',
+                            text))
+    assert set(cases.values()) == install
+    special, status, other = re.search(r"return error == (\w+) \? (\d{3}) : (\d{3});",
+                                       update["agent_update_error_status"]).groups()
+    replies |= {(int(status) if error == special else int(other), code) for error, code in cases.items()}
+    assert (409, "update_root_already_writable") in replies
+    assert replies == _api_error_rows("`POST /api/v1/maintenance/update/apply`")
+    # read_bounded_text_file also fails for a file that is empty or holds only line breaks.
     api = (ROOT / "native_agent/API.md").read_text()
-    section = api.split("`POST /api/v1/maintenance/update/apply`", 1)[1].split("\n### ", 1)[0]
-    for code in codes:
-        assert f"`{code}`" in section
+    row = api.split("| `400` | `update_manifest_missing` |", 1)[1].split("\n", 1)[0]
+    assert "missing, empty or only line breaks, unreadable or 8 KiB or larger" in row
 
 
 def test_the_api_names_every_display_call_that_follows_the_ui_port():
@@ -173,21 +394,86 @@ def test_the_api_names_every_display_call_that_follows_the_ui_port():
 
 
 def test_the_api_lists_every_error_the_picture_route_answers_with():
-    sources = (ROOT / "native_agent/src/picture_control.c").read_text()
-    codes = set(re.findall(r'\\"error\\":\\"([a-z_]+)\\"', sources)) - {"method_not_allowed"}
-    ringer = (ROOT / "native_agent/src/ringer_control.c").read_text()
-    codes |= set(re.findall(r'"(picture_gui_[a-z]+)"', ringer))
-    assert {"media_busy", "picture_gui_timeout"} <= codes
-    api = (ROOT / "native_agent/API.md").read_text()
-    section = api.split("### `GET`, `POST /api/v1/video/picture`", 1)[1].split("\n### ", 1)[0]
-    for code in codes:
-        assert f"`{code}`" in section
-    assert "| `409` | `media_busy` |" in section
+    picture = _c_functions((ROOT / "native_agent/src/picture_control.c").read_text())
+    source = (ROOT / "native_agent/src/ringer_control.c").read_text()
+    ringer = _c_functions(source)
+    assert not picture.keys() & ringer.keys()
+    # picture_request answers itself or hands the client to the GUI path in
+    # ringer_control.c. That path keeps it as control->client_fd and answers
+    # it wherever a function there passes that socket on.
+    blank = _c_blank(source)
+    assert len(re.findall(r"\bclient_fd\b", blank)) == len(re.findall(r"\bcontrol->client_fd\b", blank))
+    roots = [("picture_request", "fd")] + [(name, "control->client_fd") for name in ringer]
+    replies, helpers = _client_answers(picture | ringer, roots, ignore={
+        "apply": "c300x_ringer_control_next sets it only for a ringer ack (completed=), never for a picture command",
+    })
+    assert not helpers
+    ringer_only = {
+        "ringer_gui_busy": "gui_request answers it to a ringer command; a picture command gets picture_gui_busy",
+        "ringer_not_applied": "the ringer branch of c300x_ringer_control_expire",
+        "ringer_gui_timeout": "the ringer branch of c300x_ringer_control_expire",
+        "ringer_gui_not_applied": "the completed= branch of c300x_ringer_control_next, which answers "
+                                  "the ack of a picture command as stale before",
+    }
+    assert set(ringer_only) <= {code for _, code in replies}
+    replies = {(status, code) for status, code in replies if code not in ringer_only}
+    assert {(409, "picture_gui_busy"), (504, "picture_gui_timeout"), (503, "ringer_gui_unavailable")} <= replies
+    # handle_client checks every request before any route runs. A picture body
+    # that is not a JSON object gets its invalid_json, never invalid_picture_control.
+    http = _c_functions((ROOT / "native_agent/src/http.c").read_text())
+    client = http["handle_client"]
+    checks = client[client.index("if (!parse_request("):client.index("if (kind == LISTENER_API)")]
+    assert client.index("if (kind == LISTENER_API)") < client.index("handle_api_request(")
+    http["request_checks"] = "static void request_checks(int client_fd)\n{\n" + checks + "}"
+    generic, _ = _client_answers(http, [("request_checks", "client_fd")])
+    route_unknown = {"bad_request": "the request line or headers do not parse, so no route is known yet"}
+    assert set(route_unknown) <= {code for _, code in generic}
+    replies |= {(status, code) for status, code in generic if code not in route_unknown}
+    assert (400, "invalid_json") in replies
+    assert replies == _api_error_rows("### `GET`, `POST /api/v1/video/picture`")
+    section = (ROOT / "native_agent/API.md").read_text().split("### `GET`, `POST /api/v1/video/picture`", 1)[1]
+    unavailable = section.split("| `picture_controls_unavailable` |", 1)[1].split("\n", 1)[0]
+    # picture_reply answers it when the GUI sends malformed values.
+    assert "the GUI answered with missing or out-of-range values" in unavailable
+    # The tvp5150 driver answers contrast from its cache and ignores I2C write
+    # errors, but the write ioctl, the other re-reads and the deadline still
+    # make picture_source_execute refuse and roll back a contrast write.
+    text = " ".join(section.split("\nErrors:", 1)[0].split())
+    assert "Once a TVP5150 contrast write ioctl succeeds, its read-back always matches" in text
+    assert "a failed I2C contrast write cannot be detected" in text
+    assert "Only brightness and saturation have a genuine read-back there." in text
+    assert "A contrast write is still answered as not applied and rolled back when the write ioctl fails" in text
+    assert "always confirmed" not in text
 
 
 def test_the_api_names_the_unread_refusal_of_display_bridge_events():
     source = (ROOT / "native_agent/src/http.c").read_text()
     assert '\\"error\\":\\"invalid_unread\\"' in source
+    # Only a body that carries unread is validated; any other body is accepted.
+    event = _c_function((ROOT / "native_agent/src/memo_led.c").read_text(), "c300x_memo_led_event")
+    presence = event.index('c300x_json_find_member(body, body + strlen(body), "unread", &value)) return 1;')
+    assert presence < event.index("c300x_json_object_valid(body)")
     api = (ROOT / "native_agent/API.md").read_text()
     section = api.split("optional boolean `unread`", 1)[1].split("\n### ", 1)[0]
-    assert "`400 invalid_unread`" in section
+    refusal = " ".join(section.split("`400 invalid_unread`", 1)[1].split(";", 1)[0].split())
+    condition = "when the body carries `unread` and "
+    assert refusal.startswith(condition)
+    cases = refusal.removeprefix(condition)
+    for case in ("the topic is another one", "the value is not a boolean", "the body is not a valid JSON object"):
+        assert case in cases
+    assert "A body without `unread` is not checked for it." in " ".join(section.split())
+
+
+def test_display_docs_name_the_home_page_button_layouts_as_the_form_does():
+    strings = json.loads((ROOT / "custom_components/bticino_c300x/strings.json").read_text())
+    label = strings["options"]["step"]["dashboard"]["data"]["dashboard_dynamic_homepage"]
+    options = strings["selector"]["dashboard_dynamic_homepage"]["options"]
+    display = section("display.md", "Enable the Display Pages")
+    row = next(line for line in display.splitlines() if line.startswith(f"| **{label}** |"))
+    assert f"**{options['stock']}** (default)" in row
+    assert f"**{options['side_by_side']}**" in row
+    assert "restarts the display once" in row
+    reference = (DOCS / "feature-reference.md").read_text(encoding="utf-8")
+    row = next(line for line in reference.splitlines() if line.startswith("| Display > Display and Display patch |"))
+    assert label in row
+    assert "Changing the home page buttons applies it again and restarts the display once" in row

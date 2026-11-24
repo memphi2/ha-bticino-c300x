@@ -21,7 +21,7 @@ from .agent_contracts import (
 )
 from .agent_contracts.self_test import normalize_self_test_contract
 from .api_errors import C300XAgentApiResponseError
-from .const import DEFAULT_AGENT_PORT, SMARTPHONE_FORWARDING_MODES
+from .const import DEFAULT_AGENT_PORT, HOME_BUTTONS_LAYOUTS, SMARTPHONE_FORWARDING_MODES
 from .fingerprint import fnv1a64_fingerprint
 from .forwarding import coerce_forwarding_mode_state
 from .validation_patterns import ACTIVATION_ID_RE
@@ -504,6 +504,7 @@ def normalize_qml_patch_status(data: Any) -> dict[str, Any]:
             state = "original"
         else:
             state = "unknown"
+    home_buttons = data.get("home_buttons")
     return {
         "available": bool(data.get("available", True)),
         "patched": patched,
@@ -514,6 +515,13 @@ def normalize_qml_patch_status(data: Any) -> dict[str, Any]:
         "core_backup_available": _optional_bool(data.get("core_backup_available")),
         "gui_running": _optional_bool(data.get("gui_running")),
         "qt5_overlay": _optional_string(data.get("qt5_overlay")),
+        # The installed home page button layout; None from an agent that
+        # does not report it or a page in neither layout.
+        "home_buttons": (
+            home_buttons
+            if isinstance(home_buttons, str) and home_buttons in HOME_BUTTONS_LAYOUTS
+            else None
+        ),
         "raw": data.get("raw", data),
     }
 

@@ -9,9 +9,14 @@ from unittest.mock import Mock
 
 import pytest
 
-from custom_components.bticino_c300x import display_patch_sync, runtime_manager
+from custom_components.bticino_c300x import (
+    display_patch_sync,
+    qml_patch,
+    runtime_manager,
+)
 from custom_components.bticino_c300x.api import C300XAgentApi, C300XAgentApiError
 from custom_components.bticino_c300x.const import (
+    CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
     CONF_DEVICE_UI_ENABLED,
     CONF_DISPLAY_SETTING_PENDING,
 )
@@ -30,7 +35,8 @@ def _entry(setting: bool | None, capabilities: dict[str, Any] | None = None, dat
 
 
 def _device(
-    monkeypatch: pytest.MonkeyPatch, status: dict[str, Any], *, fail: bool = False, follows: bool = True
+    monkeypatch: pytest.MonkeyPatch, status: dict[str, Any], *, fail: bool = False, follows: bool = True,
+    home_buttons: str | None = None,
 ) -> list[str]:
     calls: list[str] = []
 
@@ -43,7 +49,10 @@ def _device(
     def action(name: str, after: bool):
         async def run(_entry: Any, _changed: Any) -> dict[str, Any]:
             calls.append(name)
-            return {"patched": after if follows else not after}
+            result: dict[str, Any] = {"patched": after if follows else not after}
+            if home_buttons is not None:
+                result["home_buttons"] = home_buttons
+            return result
 
         return run
 
@@ -135,6 +144,16 @@ def _manager(entry: Any, updates: list[dict[str, Any]]) -> runtime_manager.C300X
     return manager
 
 
+def _quiet_start(monkeypatch: pytest.MonkeyPatch, entry: Any) -> None:
+    async def nothing(*_args: Any) -> Any:
+        return None
+
+    for name in ("_async_track_display_updates", "_async_configure_display_bridge",
+                 "_async_sync_device_user", "_async_refresh_self_test"):
+        monkeypatch.setattr(runtime_manager, name, nothing)
+    entry.runtime_data.resources = SimpleNamespace()
+
+
 def _start(monkeypatch: pytest.MonkeyPatch, entry: Any, results: list[bool | None]) -> list[Any]:
     seen: list[Any] = []
 
@@ -142,14 +161,8 @@ def _start(monkeypatch: pytest.MonkeyPatch, entry: Any, results: list[bool | Non
         seen.append(target)
         return results.pop(0)
 
-    async def nothing(*_args: Any) -> Any:
-        return None
-
     monkeypatch.setattr(display_patch_sync, "async_apply_display_setting", apply_setting)
-    for name in ("_async_track_display_updates", "_async_configure_display_bridge",
-                 "_async_sync_device_user", "_async_refresh_self_test"):
-        monkeypatch.setattr(runtime_manager, name, nothing)
-    entry.runtime_data.resources = SimpleNamespace()
+    _quiet_start(monkeypatch, entry)
     return seen
 
 
@@ -187,6 +200,61 @@ def test_a_start_cut_off_during_the_apply_keeps_the_mark(monkeypatch):
     with pytest.raises(asyncio.CancelledError):
         asyncio.run(_manager(entry, []).async_sync_device_state())
     assert entry.data == {CONF_DISPLAY_SETTING_PENDING: True}
+
+
+def _side_by_side_entry() -> Any:
+    entry = _entry(True, data={CONF_DISPLAY_SETTING_PENDING: True})
+    entry.options[CONF_DASHBOARD_DYNAMIC_HOMEPAGE] = False
+    return entry
+
+
+def test_a_layout_change_whose_reapply_failed_is_applied_at_the_next_start(monkeypatch):
+    """Both layouts report patched; only the reported layout shows the device kept the old one."""
+
+    entry = _entry(True, data={CONF_DISPLAY_SETTING_PENDING: True})
+    entry.runtime_data.qml_patch_status = {"patched": True}
+
+    async def unreachable(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        raise C300XAgentApiError("unreachable")
+
+    async def nothing(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    monkeypatch.setattr(qml_patch, "async_apply_qml_patch_and_confirm", unreachable)
+    monkeypatch.setattr(runtime_manager, "_async_update_listener", nothing)
+    listener = runtime_manager._entry_update_listener(entry)
+    entry.options = {**entry.options, CONF_DASHBOARD_DYNAMIC_HOMEPAGE: False}
+    asyncio.run(listener(None, entry))
+    assert display_patch_sync.display_setting_pending(entry)
+
+    calls = _device(monkeypatch, {"patched": True, "home_buttons": "stock"}, home_buttons="side_by_side")
+    _quiet_start(monkeypatch, entry)
+    asyncio.run(_manager(entry, []).async_sync_device_state())
+    assert calls == ["apply"]
+    assert not display_patch_sync.display_setting_pending(entry)
+
+
+def test_the_mark_stays_until_the_device_reports_the_wanted_layout(monkeypatch):
+    calls = _device(monkeypatch, {"patched": True, "home_buttons": "stock"}, home_buttons="stock")
+    assert _apply(_side_by_side_entry()) is None
+    assert calls == ["apply"]
+
+
+def test_a_matching_layout_is_not_applied_again(monkeypatch):
+    calls = _device(monkeypatch, {"patched": True, "home_buttons": "side_by_side"})
+    assert _apply(_side_by_side_entry()) is False
+    assert calls == []
+
+
+def test_a_status_without_the_layout_is_taken_as_it_is(monkeypatch):
+    # An agent that does not name its layout cannot confirm one; asking it
+    # again at every start would never end.
+    calls = _device(monkeypatch, {"patched": True})
+    assert _apply(_side_by_side_entry()) is False
+    assert calls == []
+    calls = _device(monkeypatch, {"patched": False})
+    assert _apply(_side_by_side_entry()) is True
+    assert calls == ["apply"]
 
 
 def test_other_settings_saved_leave_the_device_alone(monkeypatch):

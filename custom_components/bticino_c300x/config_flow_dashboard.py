@@ -62,6 +62,11 @@ from .schema_compat import vol
 
 DASHBOARD_PREVENT_RETURN_DEFAULT = False
 DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT = DEFAULT_DASHBOARD_DYNAMIC_HOMEPAGE
+# The home page button layouts offered for dashboard_dynamic_homepage, which
+# stores True for the stock layout and False for the fixed pair.
+DASHBOARD_HOME_BUTTONS_STOCK = "stock"
+DASHBOARD_HOME_BUTTONS_SIDE_BY_SIDE = "side_by_side"
+DASHBOARD_HOME_BUTTONS = (DASHBOARD_HOME_BUTTONS_STOCK, DASHBOARD_HOME_BUTTONS_SIDE_BY_SIDE)
 _DASHBOARD_ENTITY_NAME_FIELD_SUFFIX = " - Name"
 _DASHBOARD_ENTITY_CUSTOM_NAME_FIELD_SUFFIX = " - Custom name"
 _DASHBOARD_ENTITY_SECONDARY_FIELD_SUFFIX = " - Secondary line"
@@ -238,6 +243,16 @@ def dashboard_entity_display_overrides_from_fields(
     return result
 
 
+def dashboard_dynamic_homepage(value: Any) -> bool:
+    """Return the stored layout for a form choice or a stored value.
+
+    Only "side by side", as a choice or as a stored False, keeps the fixed
+    pair; anything else, an absent value included, is the stock layout.
+    """
+
+    return value is not False and value != DASHBOARD_HOME_BUTTONS_SIDE_BY_SIDE
+
+
 def dashboard_schema(
     default_actions_json: str = "",
     default_dashboard_prevent_return: bool = DASHBOARD_PREVENT_RETURN_DEFAULT,
@@ -268,6 +283,18 @@ def dashboard_schema(
             ): selector.SelectSelector(selector.SelectSelectorConfig(
                 options=list(DASHBOARD_NAVIGATIONS),
                 translation_key=CONF_DASHBOARD_NAVIGATION,
+                mode=selector.SelectSelectorMode.DROPDOWN,
+            )),
+            vol.Optional(
+                CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
+                default=(
+                    DASHBOARD_HOME_BUTTONS_STOCK
+                    if dashboard_dynamic_homepage(default_dashboard_dynamic_homepage)
+                    else DASHBOARD_HOME_BUTTONS_SIDE_BY_SIDE
+                ),
+            ): selector.SelectSelector(selector.SelectSelectorConfig(
+                options=list(DASHBOARD_HOME_BUTTONS),
+                translation_key=CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
                 mode=selector.SelectSelectorMode.DROPDOWN,
             )),
             _optional_suggested(

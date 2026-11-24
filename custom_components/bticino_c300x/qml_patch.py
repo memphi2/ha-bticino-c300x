@@ -10,6 +10,13 @@ from typing import Any
 from .agent_update import async_retry_update_maintenance_busy
 from .api_errors import C300XAgentApiError
 from .display_activation import display_activation_confirmed, require_display_activation
+from .const import (
+    CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
+    DEFAULT_DASHBOARD_DYNAMIC_HOMEPAGE,
+    HOME_BUTTONS_SIDE_BY_SIDE,
+    HOME_BUTTONS_STOCK,
+)
+from .entry_config import entry_config_value
 from .entry_locks import entry_lock
 from .entry_types import BticinoC300XConfigEntry
 
@@ -54,13 +61,34 @@ async def async_apply_qml_patch_and_confirm(
     )
 
 
+def entry_dynamic_homepage(entry: BticinoC300XConfigEntry) -> bool:
+    """Return the entry's home page layout: True stock, False side by side.
+
+    An absent key is the stock layout, the same default the form shows.
+    """
+
+    return bool(
+        entry_config_value(
+            entry,
+            CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
+            DEFAULT_DASHBOARD_DYNAMIC_HOMEPAGE,
+        )
+    )
+
+
+def entry_home_buttons(entry: BticinoC300XConfigEntry) -> str:
+    """Return the entry's layout under the name the patch status reports."""
+
+    return HOME_BUTTONS_STOCK if entry_dynamic_homepage(entry) else HOME_BUTTONS_SIDE_BY_SIDE
+
+
 def _apply_full_patch_action(
     entry: BticinoC300XConfigEntry,
 ) -> Callable[[], Awaitable[dict[str, Any]]]:
-    """Return the Display-patch apply call with automatic home buttons."""
+    """Return the Display-patch apply call with the entry's home page layout."""
 
     return lambda: entry.runtime_data.api.async_apply_qml_patch(
-        dynamic_homepage=True
+        dynamic_homepage=entry_dynamic_homepage(entry)
     )
 
 

@@ -21,7 +21,11 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from .agent_update import async_retry_update_maintenance_busy
 from .api import C300XAgentApiError
 from .capabilities import entry_device_ui_configured, maintenance_action_is_advertised
-from .const import CONF_DISPLAY_SETTING_PENDING, SIGNAL_QML_PATCH_CHANGED
+from .const import (
+    CONF_DISPLAY_SETTING_PENDING,
+    HOME_BUTTONS_LAYOUTS,
+    SIGNAL_QML_PATCH_CHANGED,
+)
 from .display_activation import display_activation_confirmed
 from .entry_types import BticinoC300XConfigEntry
 from .error_text import compact_error_text
@@ -29,22 +33,31 @@ from .qml_patch import (
     async_apply_qml_patch_and_confirm,
     async_refresh_qml_patch_status,
     async_restore_qml_patch_and_confirm,
+    entry_home_buttons,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
 
-def _differs(status: dict[str, Any], wanted: bool) -> bool | None:
-    """Whether the device differs from the setting; None when it does not say."""
+def _differs(status: dict[str, Any], wanted: bool, home_buttons: str) -> bool | None:
+    """Whether the device differs from the setting; None when it does not say.
+
+    Both home page layouts are patched, so an installed page also differs when
+    it reports the other layout. An agent that does not report the layout is
+    taken at its patched state: asking it again would never end.
+    """
 
     if status.get("qt5_overlay") == "failed":
         # Repeated setup/settings saves must not retry a quarantined overlay.
         return None
     patched = status.get("patched")
     if isinstance(patched, bool):
-        if patched is wanted and not display_activation_confirmed(status, required=wanted):
+        if patched is not wanted:
+            return True
+        if not display_activation_confirmed(status, required=wanted):
             return True if status.get("qt5_overlay") in ("incomplete", "off") and wanted else None
-        return patched is not wanted
+        installed = status.get("home_buttons")
+        return wanted and installed in HOME_BUTTONS_LAYOUTS and installed != home_buttons
     # Only some of the files are there: neither the pages nor the original.
     return True if status.get("state") == "partial" else None
 
@@ -69,8 +82,9 @@ async def async_apply_display_setting(
     if not maintenance_action_is_advertised(capabilities, "qml_patch" if wanted else "qml_restore"):
         return False
     run = async_apply_qml_patch_and_confirm if wanted else async_restore_qml_patch_and_confirm
+    home_buttons = entry_home_buttons(entry)
     try:
-        differs = _differs(await async_refresh_qml_patch_status(entry, wait_busy=True), wanted)
+        differs = _differs(await async_refresh_qml_patch_status(entry, wait_busy=True), wanted, home_buttons)
         if not differs:
             return None if differs is None else False
         status = await async_retry_update_maintenance_busy(
@@ -85,7 +99,7 @@ async def async_apply_display_setting(
             compact_error_text(err),
         )
         return None
-    if status.get("patched") is not wanted or not display_activation_confirmed(status, required=wanted):
+    if _differs(status, wanted, home_buttons) is not False:
         _LOGGER.warning("C300X Display patch did not reach the state of the Display setting")
         return None
     return True

@@ -55,6 +55,9 @@ from .config_flow_dashboard import (
     DASHBOARD_PREVENT_RETURN_DEFAULT as _DASHBOARD_PREVENT_RETURN_DEFAULT,
 )
 from .config_flow_dashboard import (
+    dashboard_dynamic_homepage as _dashboard_dynamic_homepage,
+)
+from .config_flow_dashboard import (
     dashboard_entity_display_has_fields as _dashboard_entity_display_has_fields,
 )
 from .config_flow_dashboard import (
@@ -861,7 +864,7 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
                         _DASHBOARD_PREVENT_RETURN_DEFAULT,
                     )
                 ),
-                default_dashboard_dynamic_homepage=bool(
+                default_dashboard_dynamic_homepage=_dashboard_dynamic_homepage(
                     (user_input or {}).get(
                         CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
                         _DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT,
@@ -1326,7 +1329,7 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
                         feature_defaults[CONF_DASHBOARD_PREVENT_RETURN],
                     )
                 ),
-                default_dashboard_dynamic_homepage=bool(
+                default_dashboard_dynamic_homepage=_dashboard_dynamic_homepage(
                     (user_input or {}).get(
                         CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
                         feature_defaults[CONF_DASHBOARD_DYNAMIC_HOMEPAGE],
@@ -1784,7 +1787,7 @@ class BticinoC300XOptionsFlow(
                         feature_defaults[CONF_DASHBOARD_PREVENT_RETURN],
                     )
                 ),
-                default_dashboard_dynamic_homepage=bool(
+                default_dashboard_dynamic_homepage=_dashboard_dynamic_homepage(
                     (user_input or {}).get(
                         CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
                         feature_defaults[CONF_DASHBOARD_DYNAMIC_HOMEPAGE],

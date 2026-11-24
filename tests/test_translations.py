@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import json
 import re
 from pathlib import Path
@@ -159,6 +160,21 @@ def test_stay_open_option_names_the_screen_standby_it_acts_on() -> None:
             help_text = form["data_description"]["dashboard_prevent_return"]
             assert standby in help_text, (path.name, step, help_text)
             assert alarm_page in help_text, (path.name, step, help_text)
+
+
+def test_the_home_page_buttons_name_the_home_page_like_the_rest_of_german() -> None:
+    """The German texts call the station's home page "Startseite" everywhere."""
+
+    data = _load_json(TRANSLATIONS / "de.json")
+    for area, step in (
+        ("config", "user_dashboard"), ("config", "reconfigure_dashboard"),
+        ("options", "dashboard"),
+    ):
+        form = data[area]["step"][step]
+        for text in (form["data"]["dashboard_dynamic_homepage"],
+                     form["data_description"]["dashboard_dynamic_homepage"]):
+            assert "Startseite" in text, (step, text)
+            assert "Hauptseite" not in text, (step, text)
 
 
 def test_doorbell_state_translations_cover_all_raw_agent_values() -> None:
@@ -705,16 +721,134 @@ def test_camera_quality_english_translation_matches_base_strings() -> None:
     assert base == english
 
 
+def _is_errors(node: ast.expr) -> bool:
+    """Whether ``node`` names an errors dict: ``errors``, ``setting_errors``, ``self._errors``."""
+    name = node.id if isinstance(node, ast.Name) else getattr(node, "attr", "")
+    return name.endswith("errors")
+
+
+def _error_keys(node: ast.expr | None, scope: ast.AST, seen: frozenset[str] = frozenset()) -> set[str]:
+    """The error keys ``node`` can be: a literal, both branches of ``a if c else b``,
+    or a variable of ``scope`` assigned one of these."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return {node.value}
+    if isinstance(node, ast.IfExp):
+        return _error_keys(node.body, scope, seen) | _error_keys(node.orelse, scope, seen)
+    if not isinstance(node, ast.Name) or node.id in seen:
+        return set()
+    keys: set[str] = set()
+    for assign in ast.walk(scope):
+        pairs = []
+        if isinstance(assign, ast.Assign):
+            for target in assign.targets:
+                pairs.append((target, assign.value))
+                if isinstance(target, ast.Tuple) and isinstance(assign.value, ast.Tuple):
+                    pairs += zip(target.elts, assign.value.elts, strict=False)
+        elif isinstance(assign, ast.AnnAssign):
+            pairs.append((assign.target, assign.value))
+        for target, value in pairs:
+            if isinstance(target, ast.Name) and target.id == node.id:
+                keys |= _error_keys(value, scope, seen | {node.id})
+    return keys
+
+
+class _FlowErrors(ast.NodeVisitor):
+    """The keys a module puts into a form's errors, and whether it reports ``err.reason``.
+
+    Only error contexts count: ``errors[field] = key``, ``errors = {...}`` (also a
+    comprehension), ``errors.setdefault(field, key)``, an ``errors=`` argument, the
+    dict a ``*_errors`` function returns, and any ``"base": key`` entry. A variable
+    counts only through such a context, resolved in the function that holds it.
+    """
+
+    def __init__(self, tree: ast.Module) -> None:
+        self.scope: ast.AST = tree
+        self.keys: set[str] = set()
+        self.reason = False
+        self.visit(tree)
+
+    def report(self, node: ast.expr | None) -> None:
+        self.keys |= _error_keys(node, self.scope)
+        self.reason |= isinstance(node, ast.Attribute) and node.attr == "reason"
+
+    def report_dict(self, node: ast.expr | None) -> None:
+        if isinstance(node, ast.Dict):
+            for value in node.values:
+                self.report(value)
+        elif isinstance(node, ast.DictComp):
+            self.report(node.value)
+
+    def visit_FunctionDef(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+        outer, self.scope = self.scope, node
+        if node.name.endswith("_errors"):
+            for result in ast.walk(node):
+                if isinstance(result, ast.Return):
+                    self.report_dict(result.value)
+        self.generic_visit(node)
+        self.scope = outer
+
+    visit_AsyncFunctionDef = visit_FunctionDef
+
+    def visit_Assign(self, node: ast.Assign) -> None:
+        for target in node.targets:
+            if isinstance(target, ast.Subscript) and _is_errors(target.value):
+                self.report(node.value)
+            elif _is_errors(target):
+                self.report_dict(node.value)
+        self.generic_visit(node)
+
+    def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
+        if _is_errors(node.target):
+            self.report_dict(node.value)
+        self.generic_visit(node)
+
+    def visit_Call(self, node: ast.Call) -> None:
+        function = node.func
+        if isinstance(function, ast.Attribute) and function.attr == "setdefault" and _is_errors(function.value):
+            self.report(node.args[1] if len(node.args) > 1 else None)
+        for keyword in node.keywords:
+            if keyword.arg == "errors":
+                self.report_dict(keyword.value)
+        self.generic_visit(node)
+
+    def visit_Dict(self, node: ast.Dict) -> None:
+        for key, value in zip(node.keys, node.values, strict=True):
+            if isinstance(key, ast.Constant) and key.value == "base":
+                self.report(value)
+        self.generic_visit(node)
+
+
+def _flow_reported_errors() -> set[str]:
+    """Every error key a setup, reconfigure or options form can show."""
+
+    paths = sorted(INTEGRATION.glob("config_flow*.py"))
+    # The flows check the callback URL with this module's helper.
+    paths.append(INTEGRATION / "callback_url.py")
+    flows = [_FlowErrors(ast.parse(path.read_text(encoding="utf-8"))) for path in paths]
+    reported = set().union(*(flow.keys for flow in flows))
+    # errors["base"] = err.reason reports the reason the device installer raised.
+    assert any(flow.reason for flow in flows)
+    integration = "\n".join(path.read_text(encoding="utf-8") for path in INTEGRATION.glob("*.py"))
+    constants = dict(re.findall(r'^([A-Z][A-Z0-9_]*) = "([a-z_]+)"$', integration, re.MULTILINE))
+    installer = (INTEGRATION / "device_installer.py").read_text(encoding="utf-8")
+    for key, constant in re.findall(r'C300XDeviceInstallError\((?:"([a-z_]+)"|([A-Z][A-Z0-9_]*))\)', installer):
+        reported.add(key or constants[constant])
+    return reported
+
 
 def test_every_flow_error_message_belongs_to_an_error_the_flows_report() -> None:
-    """A message for an error no flow reports is dead text that drifts unnoticed."""
+    """A message for an error no flow reports is dead text that drifts unnoticed.
 
-    source = "\n".join(path.read_text(encoding="utf-8") for path in INTEGRATION.rglob("*.py"))
+    Only places where a flow reports an error count: a key that is also, for
+    example, a repair issue id must not keep its form message alive.
+    """
+
+    reported = _flow_reported_errors()
     strings = json.loads((INTEGRATION / "strings.json").read_text(encoding="utf-8"))
     unused = sorted(
         f"{section}.error.{key}"
         for section in ("config", "options")
         for key in strings[section].get("error", {})
-        if f'"{key}"' not in source
+        if key not in reported
     )
     assert unused == []

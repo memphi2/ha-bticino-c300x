@@ -77,16 +77,14 @@ def test_device_home_page_buttons_do_not_poll() -> None:
     )
     helper = (ROOT / "device_qml" / "js" / "c300x_ha.js").read_text(encoding="utf-8")
 
-    assert 'objectName: \\"alarmButton\\"' in text
-    assert 'objectName: \\"haButton\\"' in text
-    assert 'id: homeAssistantButtonRow' in text
+    assert 'print_home_assistant_button("alarmButton", "alarmButtonVisible", "keylock_icon-small"' in text
+    assert 'print_home_assistant_button("haButton", "haButtonVisible", "call/icon_call-home"' in text
+    assert 'id: displayBridgeButtonRow' in text
     assert "width: buttonPrototype.width * 2 + foobar.spacing" in text
-    assert "spacing: foobar.spacing" in text
-    assert "function displayBridgeButtonCount()" in text
-    assert 'pressedIcon: \\"images/keylock_icon-small_p.svg\\"' in text
-    assert 'defaultIcon: \\"images/keylock_icon-small.svg\\"' in text
-    assert 'pressedIcon: \\"images/call/icon_call-home_p.svg\\"' in text
-    assert 'defaultIcon: \\"images/call/icon_call-home.svg\\"' in text
+    assert "x: buttonPrototype.width + foobar.spacing" in text
+    assert "+ (page.alarmButtonVisible ? 1 : 0) + (page.haButtonVisible ? 1 : 0) + 2" in text
+    assert 'pressedIcon: \\"images/" icon "_p.svg\\""' in text
+    assert 'defaultIcon: \\"images/" icon ".svg\\""' in text
     assert "HAConfig.homeButtons" in text
     assert "function startMessageNotificationWatch()" in text
     assert "MemoSync.startEventWatch(handleMessageNotificationEvent)" in text

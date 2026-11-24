@@ -679,53 +679,81 @@ json_write_status() {
     fi
 }
 
-backup_file() {
-    backup_rel="$1"
-    backup_src="$GUI_DIR/$backup_rel"
-    backup_dest="$BACKUP_DIR/$backup_rel"
-    if [ -e "$backup_dest" ]; then
-        return 0
+stock_file_valid() {
+    stock_file="$1"
+    stock_rel="$2"
+    if [ ! -f "$stock_file" ] || [ -L "$stock_file" ] || [ ! -s "$stock_file" ]; then
+        printf 'Incomplete stock file: %s\n' "$stock_file" >&2
+        return 1
     fi
-    if [ ! -f "$backup_src" ]; then
-        return 0
+    stock_file_unpatched "$stock_file" "$stock_rel" || return 1
+    if ! grep -q '^import QtQuick' "$stock_file" \
+        || ! awk 'NF { last = $0 } END { exit !(last ~ /^}[[:space:]]*$/) }' "$stock_file"; then
+        printf 'Incomplete stock file: %s\n' "$stock_file" >&2
+        return 1
     fi
-    case "$backup_rel" in
+}
+
+stock_file_unpatched() {
+    stock_file="$1"
+    stock_rel="$2"
+    case "$stock_rel" in
         HomePage.qml|MemoPage.qml)
-            require_clean_original_page "$backup_src" "$backup_rel"
+            require_clean_original_page "$stock_file" "$stock_rel"
             ;;
         Components/Settings/CallBlockPopup.qml)
-            require_clean_call_block_popup "$backup_src"
+            require_clean_call_block_popup "$stock_file"
             ;;
         Components/Settings/GeneralsChoice.qml)
-            require_clean_general_settings "$backup_src"
+            require_clean_general_settings "$stock_file"
             ;;
         Settings.qml)
-            ! file_contains "$backup_src" c300xSettings || { echo "Missing original Settings.qml backup" >&2; return 1; }
-            render_settings "$backup_src" >/dev/null || return 1
+            ! file_contains "$stock_file" c300xSettings || { echo "Missing original Settings.qml backup" >&2; return 1; }
+            render_settings "$stock_file" >/dev/null || return 1
             ;;
         EventManager.qml)
-            if grep -F -q 'function c300xNotifyMediaClosed()' "$backup_src"; then
+            if grep -F -q 'function c300xNotifyMediaClosed()' "$stock_file"; then
                 printf 'Refusing to back up an already patched EventManager.qml\n' >&2
                 return 1
             fi
             ;;
         MainApp.qml)
-            if grep -F -q 'sourceUrl: "Alarm.qml"' "$backup_src" \
-                || grep -F -q 'sourceUrl: "HomeAssistant.qml"' "$backup_src" \
-                || grep -F -q 'c300xDisplayPreferences' "$backup_src"; then
+            if grep -F -q 'sourceUrl: "Alarm.qml"' "$stock_file" \
+                || grep -F -q 'sourceUrl: "HomeAssistant.qml"' "$stock_file" \
+                || grep -F -q 'c300xDisplayPreferences' "$stock_file"; then
                 printf 'Refusing to back up an already patched MainApp.qml\n' >&2
                 return 1
             fi
             ;;
     esac
+}
+
+stock_backup_valid() {
+    stock_file_valid "$BACKUP_DIR/$1" "$1"
+}
+
+backup_file() {
+    backup_rel="$1"
+    backup_src="$GUI_DIR/$backup_rel"
+    backup_dest="$BACKUP_DIR/$backup_rel"
+    if [ -e "$backup_dest" ]; then
+        stock_backup_valid "$backup_rel"
+        return
+    fi
+    if [ ! -f "$backup_src" ]; then
+        return 0
+    fi
+    stock_file_valid "$backup_src" "$backup_rel"
     mkdir -p "$(dirname "$backup_dest")"
     backup_temp_dir="$(mktemp -d "$backup_dest.tmp.XXXXXX")" || return 1
     if ! cp -p "$backup_src" "$backup_temp_dir/original" \
+        || ! sync \
         || ! mv -f "$backup_temp_dir/original" "$backup_dest"; then
         rm -rf "$backup_temp_dir"
         return 1
     fi
     rmdir "$backup_temp_dir"
+    sync
 }
 
 install_file() {
@@ -1758,6 +1786,7 @@ restore_file() {
     restore_original="$BACKUP_DIR/$restore_rel"
     restore_dest="$GUI_DIR/$restore_rel"
     if [ -e "$restore_original" ]; then
+        stock_backup_valid "$restore_rel" || return 1
         if [ -f "$restore_dest" ] && cmp -s "$restore_original" "$restore_dest"; then
             return 0
         fi
@@ -1773,6 +1802,11 @@ restore_file() {
 
 restore_changed_count() {
     check_settings_paths || return 1
+    for rel in Settings.qml Components/Settings/GeneralsChoice.qml MainApp.qml HomePage.qml MemoPage.qml; do
+        if [ -e "$BACKUP_DIR/$rel" ]; then
+            stock_backup_valid "$rel" || return 1
+        fi
+    done
     changed=0
     if [ -e "$BACKUP_DIR/Components/Settings/GeneralsChoice.qml" ]; then
         if ! cmp -s "$BACKUP_DIR/Components/Settings/GeneralsChoice.qml" "$GUI_DIR/Components/Settings/GeneralsChoice.qml"; then
@@ -1826,6 +1860,7 @@ restore_core_changed_count() {
         printf '0\n'
         return 0
     fi
+    stock_backup_valid EventManager.qml || return 1
     if [ ! -f "$restore_dest" ] || ! cmp -s "$restore_original" "$restore_dest"; then
         changed=$((changed + 1))
     fi
@@ -1880,6 +1915,7 @@ restore_media_user_label_changed_count() {
         printf '0\n'
         return 0
     fi
+    stock_backup_valid Components/Settings/CallBlockPopup.qml || return 1
     if [ ! -f "$restore_dest" ] || ! cmp -s "$restore_original" "$restore_dest"; then
         printf '1\n'
     else

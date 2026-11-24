@@ -3,6 +3,8 @@
 bt_daemon starts the display start script once and never starts it again (its
 software watchdog reboots the station instead), so the restart is the agent's
 job alone. Real processes stand in for the start script and the display program.
+The Qt 5 display (firmware 3.0.6) gets the waiting restart; firmware 1.7.19 and
+2.0.2 restart the display exactly as release 2.9.1 does.
 """
 
 from __future__ import annotations
@@ -32,6 +34,7 @@ exit $found
 """
 
 KILLALL = """#!/bin/sh
+echo "killall $*" >> "$C300X_TEST_CALLS"
 signal=TERM
 case "$1" in -*) signal=${1#-}; shift ;; esac
 found=1
@@ -89,7 +92,10 @@ class Station:
             "C300X_TEST_REGISTRY": str(self.registry),
             "C300X_TEST_LOG": str(self.log),
             "C300X_TEST_PROGRAM": str(self.program),
+            "C300X_TEST_CALLS": str(root / "calls.log"),
         }
+        (root / "libQt5Core.so.5").write_text("")
+        (root / "boot_id").write_text("boot-1\n")
 
     def boot(self, **env: str) -> None:
         """Start the GUI the way bt_daemon does: the start script, once."""
@@ -100,10 +106,14 @@ class Station:
             time.sleep(0.05)
         assert self.running()
 
-    def reload(self, **env: str) -> subprocess.CompletedProcess[str]:
+    def reload(self, *, qt5: bool = True, **env: str) -> subprocess.CompletedProcess[str]:
         environment = {
             **self.env,
-            "C300X_QML_QT5_MARKER": str(self.root / "no-qt5"),
+            "C300X_QML_QT5_MARKER": str(self.root / ("libQt5Core.so.5" if qt5 else "no-qt5")),
+            "C300X_AGENT_DIR": str(self.root / "agent"),
+            "C300X_BACKUP_ROOT": str(self.root / "backups"),
+            "C300X_QML_QT5_LOG": str(self.root / "display-qt5.log"),
+            "C300X_QML_BOOT_ID": str(self.root / "boot_id"),
             "C300X_QML_GUI_DIR": str(self.root / "gui"),
             "C300X_QML_BACKUP_DIR": str(self.root / "backup"),
             "C300X_QML_GUI_WRAPPER": str(self.wrapper),
@@ -129,6 +139,10 @@ class Station:
 
     def events(self) -> list[str]:
         return self.log.read_text().splitlines() if self.log.exists() else []
+
+    def calls(self) -> list[str]:
+        calls = self.root / "calls.log"
+        return calls.read_text().splitlines() if calls.exists() else []
 
     def stop_all(self) -> None:
         for entry in self.registry.iterdir():
@@ -187,3 +201,35 @@ def test_back_to_back_restarts_never_run_two_displays(station: Station) -> None:
     starts = [event for event in station.events() if event.startswith("start ")]
     ends = [event for event in station.events() if event.startswith("end ")]
     assert len(starts) == 3 and len(ends) == 2
+
+
+def test_firmware_1_7_and_2_0_stop_only_the_display_program_and_run_the_script_with_sh(
+    station: Station,
+) -> None:
+    """2.9.1's restart: killall BtClass, then /bin/sh with the start script."""
+
+    station.boot()
+    old = station.running()
+    result = station.reload(qt5=False, C300X_QML_GUI_RELOAD_DELAY_SECONDS="1")
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["gui_running"] is True
+    running = _settled(station)
+    assert len(running) == 1 and running != old
+    assert station.calls() == ["killall BtClass"]
+    assert [event.split()[0] for event in station.events()] == ["wrapper", "start", "end", "wrapper", "start"]
+    # Started by /bin/sh without the Qt 5 reload hint.
+    assert station.events()[3].startswith("wrapper reload= ")
+
+
+def test_firmware_1_7_and_2_0_do_not_force_a_display_that_ignores_the_stop_request(
+    station: Station,
+) -> None:
+    """No wait, no SIGKILL: a display program still running is left alone, as in 2.9.1."""
+
+    station.boot(C300X_TEST_IGNORE_TERM="1")
+    old = station.running()
+    result = station.reload(qt5=False, C300X_QML_GUI_STOP_SECONDS="1")
+    assert result.returncode == 0, result.stderr
+    assert station.running() == old
+    assert station.calls() == ["killall BtClass"]
+    assert [event.split()[0] for event in station.events()] == ["wrapper", "start"]

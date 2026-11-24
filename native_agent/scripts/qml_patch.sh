@@ -426,9 +426,7 @@ start_gui() {
     if [ -x "$GUI_WRAPPER" ]; then
         gui_shell=
     fi
-    if [ "$QT5_DISPLAY" = "1" ]; then
-        : > "$QT5_LOG.start" 2>/dev/null || true
-    fi
+    : > "$QT5_LOG.start" 2>/dev/null || true
     (
         cd "$GUI_ROOT"
         C300X_GUI_RELOAD=1 $gui_session $gui_shell "$GUI_WRAPPER" >/tmp/BtClass_qws.agent.log 2>&1 &
@@ -463,9 +461,42 @@ run_touch_phase() {
     touch_patch "$1"
 }
 
+# Firmware 1.7.19 and 2.0.2: the restart of release 2.9.1, unchanged.
+reload_gui_qt4() {
+    if command -v killall >/dev/null 2>&1; then
+        killall BtClass >/dev/null 2>&1 || true
+    fi
+    sleep "$GUI_RELOAD_DELAY_SECONDS"
+    if command -v pidof >/dev/null 2>&1 && pidof BtClass >/dev/null 2>&1; then
+        return 0
+    fi
+    if [ -f "$GUI_WRAPPER" ]; then
+        # A session of its own: the agent kills this script's process group
+        # when a job passes its time limit, and the GUI must outlive that.
+        gui_session=
+        if command -v setsid >/dev/null 2>&1; then
+            gui_session=setsid
+        fi
+        (
+            cd "$GUI_ROOT"
+            $gui_session /bin/sh "$GUI_WRAPPER" >/tmp/BtClass_qws.agent.log 2>&1 &
+        )
+    fi
+    sleep "$GUI_RELOAD_DELAY_SECONDS"
+    if ! command -v pidof >/dev/null 2>&1; then
+        return 1
+    fi
+    # Process presence only: the firmware exposes no QML readiness handshake here.
+    pidof BtClass >/dev/null 2>&1
+}
+
 reload_gui() {
     if [ "$RELOAD_GUI" != "1" ]; then
         return 0
+    fi
+    if [ "$QT5_DISPLAY" != "1" ]; then
+        reload_gui_qt4
+        return
     fi
     if ! stop_gui; then
         printf 'The display program did not stop; no second one is started\n' >&2

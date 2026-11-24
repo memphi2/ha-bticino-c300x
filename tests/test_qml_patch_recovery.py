@@ -24,9 +24,6 @@ from test_qml_patch_script import (
     _write_original_gui,
 )
 
-# One GUI restart: the start script, then the display program.
-RESTART = ["killall BtClass_qws", "killall BtClass"]
-
 
 def _commands(tmp_path: Path, hold: tuple[str, str] | None = None) -> dict[str, str]:
     """killall/pidof/mount log their calls and report a running GUI; every
@@ -112,7 +109,7 @@ def test_a_legacy_leftover_with_verified_copies_is_restored_and_the_gui_restarte
     # legacy transaction does not name them.
     assert {rel: after[rel] for rel in before} == before
     assert not list(gui.glob(".c300x-qml-transaction.*"))
-    assert _calls(tmp_path, "killall") == RESTART
+    assert _calls(tmp_path, "killall") == ["killall BtClass"]
     assert _calls(tmp_path, "mount") == ["mount -o remount,rw /", "mount -o remount,ro /"]
     assert not (tmp_path / "c300x-qml-root-rw").exists()
 
@@ -191,7 +188,7 @@ def test_a_legacy_restore_cut_off_midway_is_finished_despite_newer_files(tmp_pat
     after = _gui_files(gui)
     assert {rel: after[rel] for rel in before} == before
     assert not leftover.exists()
-    assert _calls(tmp_path, "killall") == RESTART
+    assert _calls(tmp_path, "killall") == ["killall BtClass"]
 
 
 def test_a_leftover_without_a_file_list_needs_no_gui_restart(tmp_path: Path) -> None:
@@ -226,7 +223,7 @@ def test_a_recovery_killed_at_any_step_is_finished_by_the_next_one(
     assert result.returncode == 0, result.stderr
     assert _gui_files(gui) == before
     assert not list(gui.glob(".c300x-qml-transaction.*"))
-    assert _calls(tmp_path, "killall") == (RESTART if restarts_again else [])
+    assert _calls(tmp_path, "killall") == (["killall BtClass"] if restarts_again else [])
     assert _calls(tmp_path, "mount")[-1] == "mount -o remount,ro /"
     assert not (tmp_path / "c300x-qml-root-rw").exists()
     finished = _run(tmp_path, gui, backup, "recover", env)
@@ -250,18 +247,18 @@ def test_a_sigterm_during_the_rollback_gui_restart_still_restarts_the_gui_and_re
     log, held = tmp_path / "calls.log", tmp_path / "held"
     (commands / "killall").write_text(
         f'#!/bin/sh\nprintf "%s\\n" "killall $*" >> "{log}"\n'
-        f'if [ "$(grep -c "^killall" "{log}")" = {2 * len(RESTART)} ] && [ ! -e "{held}" ]; then\n'
+        f'if [ "$(grep -c "^killall" "{log}")" = 2 ] && [ ! -e "{held}" ]; then\n'
         f'  : > "{held}"; while :; do sleep 0.02; done\nfi\n')
     # No GUI comes back after the write's restart; the rollback's does.
     (commands / "pidof").write_text(
         f'#!/bin/sh\nprintf "%s\\n" "pidof $*" >> "{log}"\n'
-        f'[ "$(grep -c "^killall" "{log}")" -ge {3 * len(RESTART)} ]\n')
+        f'[ "$(grep -c "^killall" "{log}")" -ge 3 ]\n')
     log.unlink(missing_ok=True)
     result = qml._terminate_when_held(tmp_path, gui, backup, "core-apply", env)
     assert result.returncode == 130, result.stderr
     assert result.stdout == ""
     assert _gui_files(gui) == before
-    assert _calls(tmp_path, "killall") == RESTART * 3
+    assert _calls(tmp_path, "killall") == ["killall BtClass"] * 3
     assert _calls(tmp_path, "mount") == ["mount -o remount,rw /", "mount -o remount,ro /"]
     assert not (tmp_path / "c300x-qml-root-rw").exists()
 
@@ -312,6 +309,6 @@ def test_a_terminated_display_library_step_exits_131_and_finishes_root_and_gui(
     assert result.returncode == 131, result.stderr
     assert result.stdout == ""
     # The write's own GUI restart, then the one after the library step.
-    assert _calls(tmp_path, "killall") == RESTART * (2 if write_first else 1)
+    assert _calls(tmp_path, "killall") == ["killall BtClass"] * (2 if write_first else 1)
     assert _calls(tmp_path, "mount")[-1] == "mount -o remount,ro /"
     assert json.loads(_run_qml_patch_raw(tmp_path, gui, backup, "status").stdout)["patched"] is True

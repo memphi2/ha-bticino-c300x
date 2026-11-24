@@ -20,7 +20,6 @@ def startup_env(tmp_path, *, succeeds_on=2):
     observations.mkdir()
     scripts = {
         "killall": '#!/bin/sh\nset -eu\n'
-        '[ "$1" = BtClass ] || exit 0\n'
         'count=0\n[ ! -f "$C300X_TEST_OBSERVATIONS/count" ] || '
         'count=$(cat "$C300X_TEST_OBSERVATIONS/count")\n'
         'count=$((count + 1))\n'

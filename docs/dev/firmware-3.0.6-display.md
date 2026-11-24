@@ -177,7 +177,9 @@ new one, started after a fixed two seconds. The old `reload_gui` also returned
 without starting anything when the old program was still alive after those two
 seconds.
 
-`reload_gui` now:
+On the Qt 5 display `reload_gui` now does the following; firmware 1.7.19 and
+2.0.2 keep the restart of release 2.9.1 (`killall BtClass`, then the start
+script through `/bin/sh`).
 
 1. Notes the PIDs of `BtClass`, stops the wrapper (`killall BtClass_qws`, its
    own trap ends the program) and `BtClass`, and waits until those PIDs are

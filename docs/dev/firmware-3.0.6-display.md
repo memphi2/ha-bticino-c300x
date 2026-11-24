@@ -513,6 +513,24 @@ The original-QtQml runtime probe emits `FIRMWARE_QT_VERSION=5.15.7`,
 content with `display_wrapper_unknown`; tests require nonzero restore exit and
 unchanged recovery artifacts on failed restoration, not merely a diagnostic.
 
+## Known Trap: One Marker For Camera And Display
+
+`/usr/lib/libQt5Core.so.5` is the only firmware marker on this branch, and it
+drives two unrelated paths:
+
+- the camera: `c300x_device_display_is_qt5()` in `config.c` makes
+  `camera_quality.c` (`low_stream()`), `camera_restore.c`, the capability
+  `camera_resolution_fixed` and the video config in `http.c` use the
+  low-resolution stream only (3.0.x has no high-resolution branch);
+- the display: `qml_patch.sh` (`C300X_QML_QT5_MARKER`) and the installer take
+  the rcc overlay path instead of QML files on disk.
+
+The C100X (branch `c100x_1.5.8`) also ships Qt 5 (5.10), but with QML files on
+disk, and its camera need not share the 3.0.x limit. When the C100X work is
+merged, the marker would send it down both 3.0.x paths at once. Split the decision into a camera fact
+and a display fact before that merge; until then, do not reuse this marker for
+anything new.
+
 ## Before Merge On Devices
 
 1. Cold boot 3.0.6 with full/core-only/off states; inspect GUI process and

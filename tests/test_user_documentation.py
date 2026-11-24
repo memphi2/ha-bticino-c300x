@@ -500,3 +500,10 @@ def test_announcement_docs_name_each_stations_own_sound_files():
     announcements = section("user-guide.md", "Speaker Announcements and TTS").replace("\n", " ")
     assert "same sound parts" not in announcements
     assert "each station's own sound files" in announcements
+
+
+def test_the_qt5_marker_is_named_as_the_trap_for_the_c100x_merge():
+    audit = (DOCS / "dev/firmware-3.0.6-display.md").read_text(encoding="utf-8")
+    trap = audit.split("## Known Trap: One Marker For Camera And Display\n", 1)[1].split("\n## ", 1)[0]
+    for name in ("libQt5Core.so.5", "camera_quality.c", "qml_patch.sh", "C100X"):
+        assert name in trap

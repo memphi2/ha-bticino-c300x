@@ -163,6 +163,11 @@ touch fix for lost taps is not part of it; it changes a Qt 4 library that
   start script remain. It leaves the installed agent and recovery untouched.
   Older agents and direct SSH/manual installations do not have this guard;
   complete removal and checking the running stock GUI remain mandatory.
+- **If the station keeps restarting:** if the station keeps restarting after
+  an update, rename `/home/bticino/cfg/extra/c300x-native-agent/display-qt5.rcc`
+  over SSH; the next start uses the original display. Then turn off
+  **Home Assistant pages on the display** and do not run the core hook Repair,
+  so that Home Assistant does not write the file back, and report it.
 - **What to report:** the Display patch status, the integration diagnostics
   and, if you can reach the device, `/tmp/c300x-display-qt5.log` (the display's
   error output, at most 64 KB, cleared by a restart of the device).

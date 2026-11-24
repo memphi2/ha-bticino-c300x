@@ -20,11 +20,12 @@ update behaviour below is checked offline only. Includes 2.9.1; on firmware
   only after the old display and its start script have ended. Several
   requests close together end in one restart, a restart never starts while
   display files are being written, and a restart that outlasts a call keeps
-  running: the patch status reports it as `gui_restart: pending`, and Home
-  Assistant, both installers and the media-user label wait for its outcome
-  instead of reporting a failure. The display counts as started only once it
-  has written its watchdog file and kept running for 8 seconds; one that
-  never writes it within 40 seconds counts as failed.
+  running: the patch status reports it as `gui_restart: pending`; Home
+  Assistant and both installers wait for its outcome instead of reporting a
+  failure, and the media-user label accepts a restart still running. The
+  display counts as started only once it has written its watchdog file and
+  kept running for 8 seconds; one that never writes it within 40 seconds
+  counts as failed.
 - On firmware 3.0.6 a display that fails with the pages is restarted once
   more and then starts as shipped until the station restarts; applying the
   Display patch, the core hook Repair or an agent update tries the pages

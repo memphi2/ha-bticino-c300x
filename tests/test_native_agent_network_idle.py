@@ -197,8 +197,9 @@ def test_agent_listener_sockets_cannot_leak_into_gui_reload_children() -> None:
     reuse_body = _function_body(util_text, "void", "allow_socket_reuse")
     listener_body = _function_body(text, "int", "make_listener")
     udp_body = _function_body(text, "int", "create_udp_event_socket")
-    detached_body = _function_body(text, "static int", "run_detached_command")
-    cleanup_body = _function_body(text, "static void", "close_extra_fds_for_exec")
+    detached_text = (ROOT / "native_agent" / "src" / "detached_command.c").read_text(encoding="utf-8")
+    detached_body = _function_body(detached_text, "int", "c300x_run_detached_command")
+    cleanup_body = _function_body(detached_text, "static void", "close_extra_fds")
     mqtt_connect_body = _function_body(mqtt_text, "static int", "socket_connect_timeout")
 
     assert "SO_REUSEPORT" not in reuse_body
@@ -213,7 +214,7 @@ def test_agent_listener_sockets_cannot_leak_into_gui_reload_children() -> None:
         maxsplit=1,
     )[0]
     assert "set_fd_cloexec(client_fd)" in accept_body
-    assert "close_extra_fds_for_exec()" in detached_body
+    assert detached_body.index("close_extra_fds();") < detached_body.index("pause_ms(delay_ms);")
     assert "close((int)fd)" in cleanup_body
     assert mqtt_connect_body.index("set_fd_cloexec(fd)") < mqtt_connect_body.index(
         "set_nonblocking(fd)"

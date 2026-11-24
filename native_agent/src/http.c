@@ -57,6 +57,7 @@
 #include "video_snapshot.h"
 #include "memo_deleted.h"
 #include "firewall_file.h"
+#include "detached_command.h"
 #include <arpa/inet.h>
 #include <ctype.h>
 #include <dirent.h>
@@ -454,7 +455,6 @@ static void handle_firewall_action(
     const char *action,
     const char *confirmation
 );
-static int run_detached_command(const char *program, const char *argument, int delay_ms);
 static int apply_gui_ringer_command(
     int client_fd, const struct c300x_ringer_command *command, void *ctx
 );
@@ -3394,8 +3394,6 @@ static int mqtt_runtime_config_is_valid(const struct c300x_config *config, const
 
 #define firewall_remount_rw_if_needed(path) ((void)c300x_firewall_remount(path, "rw"))
 #define firewall_remount_ro_if_needed(path) ((void)c300x_firewall_remount(path, "ro"))
-static int run_detached_command(const char *program, const char *argument, int delay_ms);
-static void close_extra_fds_for_exec(void);
 
 static int process_cmdline_contains(const char *needle)
 {
@@ -3922,7 +3920,7 @@ static void handle_legacy_mqtt_post(
         legacy_mqtt_stop_processes();
     }
     if (should_start_bridge) {
-        (void)run_detached_command(C300X_LEGACY_MQTT_SCRIPT, NULL, 0);
+        (void)c300x_run_detached_command(C300X_LEGACY_MQTT_SCRIPT, NULL, 0);
     }
     if (changed) {
         record_agent_write(config, runtime, "legacy_mqtt", enabled ? "enable" : "disable");
@@ -7270,51 +7268,6 @@ static void handle_answering_post(
     send_json(client_fd, 200, "OK", body);
 }
 
-static int run_detached_command(const char *program, const char *argument, int delay_ms)
-{
-    pid_t pid = fork();
-    if (pid < 0) {
-        return 0;
-    }
-    if (pid == 0) {
-        if (delay_ms > 0) {
-            sleep_ms(delay_ms);
-        }
-        close_extra_fds_for_exec();
-        if (argument != NULL) {
-            execl(program, program, argument, (char *)NULL);
-        } else {
-            execl(program, program, (char *)NULL);
-        }
-        _exit(127);
-    }
-    if (delay_ms <= 0) {
-        int status = 0;
-        if (waitpid(pid, &status, 0) < 0) {
-            return 0;
-        }
-        return WIFEXITED(status) && WEXITSTATUS(status) == 0;
-    }
-    return 1;
-}
-
-static void close_extra_fds_for_exec(void)
-{
-    long max_fd = sysconf(_SC_OPEN_MAX);
-    long fd;
-
-    if (max_fd < 0) {
-        max_fd = 1024;
-    }
-    if (max_fd > 4096) {
-        max_fd = 4096;
-    }
-    for (fd = STDERR_FILENO + 1; fd < max_fd; fd++) {
-        close((int)fd);
-    }
-}
-
-
 static int maintenance_firewall_supported(const struct c300x_config *config)
 {
     return (
@@ -8377,7 +8330,7 @@ static void handle_restart_agent(
         send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"maintenance_command_failed\"}\n");
         return;
     }
-    if (!run_detached_command(C300X_AGENT_INIT_SCRIPT, "restart", 500)) {
+    if (!c300x_run_detached_command(C300X_AGENT_INIT_SCRIPT, "restart", 500)) {
         send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"maintenance_command_failed\"}\n");
         return;
     }
@@ -8672,7 +8625,7 @@ static void handle_agent_update_apply(
     }
     record_agent_write(config, runtime, "agent_update", "apply");
     if (summary.runtime_changed) {
-        (void)run_detached_command(C300X_AGENT_INIT_SCRIPT, "restart", 500);
+        (void)c300x_run_detached_command(C300X_AGENT_INIT_SCRIPT, "restart", 500);
     }
     snprintf(
         workspace->body,
@@ -8804,11 +8757,11 @@ static void handle_api_request(
     if (c300x_http_maintenance_route(&runtime->maintenance, client_fd, config, request)
         || c300x_http_device_user_route(&runtime->maintenance, client_fd, config, request)
         || c300x_http_audio_codec_route(&runtime->maintenance, client_fd, config,
-            runtime->audio_codec_running_state, request, run_detached_command)
+            runtime->audio_codec_running_state, request, c300x_run_detached_command)
         || c300x_http_camera_quality_route(&runtime->maintenance, client_fd, config, runtime->video, request,
-            run_detached_command)
+            c300x_run_detached_command)
         || c300x_http_service_commands_route(&runtime->maintenance, client_fd, config, request,
-            run_detached_command)
+            c300x_run_detached_command)
         || c300x_http_announce_route(&runtime->announce, client_fd, request)) {
         return;
     }
@@ -9233,7 +9186,7 @@ static int handle_ui_request(
 )
 {
     if (!strncmp(request->path, "/ui/maintenance", sizeof("/ui/maintenance") - 1))
-        return c300x_display_maintenance(&runtime->maintenance, client_fd, config, request, run_detached_command);
+        return c300x_display_maintenance(&runtime->maintenance, client_fd, config, request, c300x_run_detached_command);
     if (strcmp(request->path, "/ui/preferences") == 0) {
         handle_ui_preferences(client_fd, config, request);
         return 1;

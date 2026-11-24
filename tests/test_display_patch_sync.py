@@ -246,6 +246,32 @@ def test_a_matching_layout_is_not_applied_again(monkeypatch):
     assert calls == []
 
 
+def test_a_qt5_display_follows_the_layout_only_with_a_confirmed_overlay(monkeypatch):
+    active = {"patched": True, "qt5_overlay": "active", "gui_running": True}
+    calls = _device(monkeypatch, {**active, "home_buttons": "stock"})
+
+    async def applied(*_args: Any) -> dict[str, Any]:
+        calls.append("apply")
+        return {**active, "home_buttons": "side_by_side"}
+
+    monkeypatch.setattr(display_patch_sync, "async_apply_qml_patch_and_confirm", applied)
+    assert _apply(_side_by_side_entry()) is True
+    assert calls == ["apply"]
+    # A quarantined overlay is not retried for a layout change either.
+    calls.clear()
+    _device(monkeypatch, {**active, "qt5_overlay": "failed", "home_buttons": "stock"})
+    monkeypatch.setattr(display_patch_sync, "async_apply_qml_patch_and_confirm", applied)
+    assert _apply(_side_by_side_entry()) is None
+    assert calls == []
+    # The wanted layout under an overlay that did not come up stays to do.
+    async def fell_back(*_args: Any) -> dict[str, Any]:
+        return {**active, "qt5_overlay": "failed", "home_buttons": "side_by_side"}
+
+    _device(monkeypatch, {**active, "home_buttons": "stock"})
+    monkeypatch.setattr(display_patch_sync, "async_apply_qml_patch_and_confirm", fell_back)
+    assert _apply(_side_by_side_entry()) is None
+
+
 def test_a_status_without_the_layout_is_taken_as_it_is(monkeypatch):
     # An agent that does not name its layout cannot confirm one; asking it
     # again at every start would never end.

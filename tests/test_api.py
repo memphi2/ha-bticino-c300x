@@ -2502,6 +2502,8 @@ def test_normalize_qml_patch_status_derives_state() -> None:
     for layout in ("stock", "side_by_side"):
         assert normalize_qml_patch_status({"patched": True, "home_buttons": layout})["home_buttons"] == layout
     assert normalize_qml_patch_status({"patched": True, "home_buttons": "other"})["home_buttons"] is None
+    for malformed in ([], {}, 1, True):
+        assert normalize_qml_patch_status({"patched": True, "home_buttons": malformed})["home_buttons"] is None
 
 
 def test_normalize_firewall_status_derives_patched_state() -> None:

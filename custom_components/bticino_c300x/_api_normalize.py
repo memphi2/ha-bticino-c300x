@@ -516,7 +516,11 @@ def normalize_qml_patch_status(data: Any) -> dict[str, Any]:
         "gui_running": _optional_bool(data.get("gui_running")),
         # The installed home page button layout; None from an agent that
         # does not report it or a page in neither layout.
-        "home_buttons": home_buttons if home_buttons in HOME_BUTTONS_LAYOUTS else None,
+        "home_buttons": (
+            home_buttons
+            if isinstance(home_buttons, str) and home_buttons in HOME_BUTTONS_LAYOUTS
+            else None
+        ),
         "raw": data.get("raw", data),
     }
 

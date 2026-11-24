@@ -95,7 +95,7 @@ The agent's PCMU transcode for HA is separate from the firmware codec setting.
   files.
 - Notify sound, speech/TTS, the answering machine, voice memos and memo
   deletion are not part of this test; the C100X has no answering machine (see
-  the [support matrix](c100x-experimental.md#support-matrix)). No alternative sound script or forced capability flag is supported.
+  [Models and Features](feature-reference.md#models-and-features)). No alternative sound script or forced capability flag is supported.
   The [audio investigation](dev/c100x-audio-analysis.md) establishes concrete vendor
   playback/ownership hazards. Integrated safety guards block incompatible
   playback and startup cleanup; they do not add a local speaker/TTS backend.
@@ -726,13 +726,13 @@ Existing offline evidence includes exact original-firmware routing checks,
 temporary-copy display upgrades/recovery, old-reader bundle delivery, host key/
 layout tests and compilation of 29 generated QML files using original Qt 5.10.1
 under QEMU. Compilation does not instantiate vendor QML or validate hardware.
-See [experimental support](c100x-experimental.md) and the
+See the [C100X notes](c100x-experimental.md), the
+[offline checks](dev/release-validation.md#c100x-offline-checks) and the
 [page/control matrix](dev/c100x-display-parity.md) for commands and scope.
 
 Before issue attachment delivery: complete the exact-source review, full local
-gate, browser tests and fresh complete-package/build-lock verification. This full
-gate is now explicitly authorized; earlier preparation used focused checks only.
-It does not create canonical-main release evidence. Display trials now take effect
+gate, browser tests and fresh complete-package/build-lock verification. This
+does not create canonical-main release evidence. Display trials now take effect
 by reboot: only the trial boot confirms readiness, and a failed or interrupted trial
 rolls back at the next start. This still needs the authorized hardware test above;
 this agent-only test does not complete page parity.

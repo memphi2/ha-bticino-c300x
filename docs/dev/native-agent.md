@@ -409,11 +409,11 @@ independent compiler/sysroot provenance. Procedure:
 
 ## Supported Firmware Versions
 
-The `c100x_1.5.8` development branch additionally carries experimental C100X
-1.5.8 detection, routing, package compatibility gates and the display
-activation by reboot. Its
-[separate matrix](../c100x-experimental.md) distinguishes offline evidence from
-unproven hardware behavior; the C300X statements below do not imply the same
+The `c100x_1.5.8` branch adds the C100X 1.5.8 (in test, issue #51):
+detection, routing, package compatibility gates and the display activation by
+reboot. The [model matrix](../feature-reference.md#models-and-features) and
+the [C100X notes](../c100x-experimental.md) separate what is offered from what
+is confirmed on a device; the C300X statements below do not imply the same
 display, audio or credential support on C100X.
 
 The agent is built and ABI-checked against the firmware `1.7.19` root file

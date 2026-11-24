@@ -1,13 +1,15 @@
 # Support Policy
 
-## C100X Development Branch
+## Supported Models
 
-Only the `c100x_1.5.8` branch contains the experimental C100X 1.5.8 work.
-Its offline checks are not device acceptance testing. See the
-[C100X support matrix](docs/c100x-experimental.md) for unavailable features,
-SSH credential prerequisites, update protection and the outstanding hardware
-tests. Do not install a C300X-only stable/beta package over this agent.
-No public C100X release channel is assigned by this branch.
+- **Classe 300X (C300X):** the release lines below.
+- **Classe 100X (C100X), firmware 1.5.8:** in test in
+  [issue #51](https://github.com/memphi2/ha-bticino-c300x/issues/51), from the
+  C100X test package handed out there; it has no Marketplace, HACS or GitHub
+  release channel yet. The package installs on a C100X only, and a C300X
+  package must not be installed over a C100X agent. Features per model:
+  [Models and Features](docs/feature-reference.md#models-and-features);
+  C100X notes: [Classe 100X](docs/c100x-experimental.md).
 
 ## Supported Release Line
 
@@ -24,6 +26,7 @@ No public C100X release channel is assigned by this branch.
 - CI tests the fixed minimum and resolves the latest stable Home Assistant on every run.
 - Python: `3.14`
 - C300X firmware: `1.7.x, 2.0.2 or 3.0.6 (experimental)`
+- C100X firmware: `1.5.8` (in test, issue #51)
 
 ## Maintenance Scope
 

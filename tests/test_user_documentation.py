@@ -507,3 +507,21 @@ def test_the_qt5_marker_is_named_as_the_trap_for_the_c100x_merge():
     trap = audit.split("## Known Trap: One Marker For Camera And Display\n", 1)[1].split("\n## ", 1)[0]
     for name in ("libQt5Core.so.5", "camera_quality.c", "qml_patch.sh", "C100X"):
         assert name in trap
+
+
+def test_the_3_0_6_beta_texts_say_what_ran_on_a_station():
+    """Dave ran the overlay on a 3.0.6 station (PR #126); the rest is offline only."""
+
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    beta = changelog.split("## v2.10.0b1", 1)[1].split("\n## ", 1)[0]
+    texts = {
+        "README.md": (ROOT / "README.md").read_text(encoding="utf-8"),
+        "SUPPORT.md": (ROOT / "SUPPORT.md").read_text(encoding="utf-8"),
+        "display.md": (DOCS / "display.md").read_text(encoding="utf-8"),
+        "quickstart.md": (DOCS / "quickstart.md").read_text(encoding="utf-8"),
+        "CHANGELOG v2.10.0b1": beta,
+    }
+    for name, text in texts.items():
+        flat = " ".join(text.split())
+        assert "not yet tested on a device" not in flat, name
+        assert "offline only" in flat, name

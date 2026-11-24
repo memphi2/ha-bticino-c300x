@@ -4,8 +4,9 @@ The Display patch adds Home Assistant pages to the C300X's own blue interface:
 tiles for your entities, an energy page, an agenda, departure checks, an Alarmo
 page and notices from automations. They are native station pages, not the
 Lovelace card or an embedded Home Assistant dashboard. Display pages run on
-firmware 1.7.x and 2.0.2; on firmware 3.0.6 they are a beta, not yet tested on
-a device ([Display Patch on Firmware 3.0.6](#display-patch-on-firmware-306)).
+firmware 1.7.x and 2.0.2; on firmware 3.0.6 they are a beta: the home page
+buttons were checked on a station, the other pages offline only
+([Display Patch on Firmware 3.0.6](#display-patch-on-firmware-306)).
 
 <p align="center"><img src="images/readme/display-c300x-dashboard-en.webp" alt="C300X home screen with shortcuts to Alarmo and Home Assistant" width="480"></p>
 
@@ -100,7 +101,10 @@ agent and display files together.
 
 ### Display Patch on Firmware 3.0.6
 
-Beta from `2.9.0b1`, not yet tested on a device. On `3.0.6` the display files
+Beta from `2.9.0b1`. On a 3.0.6 station the pages loaded at start, the Alarm
+and Home Assistant buttons sat in the right place and stayed after a
+configuration change. The other pages and the handling of failures and unknown
+displays described below are checked offline only. On `3.0.6` the display files
 are built into the vendor display program, so the Display patch does not
 change them on disk: the agent reads the files it changes out of that program,
 patches them and keeps the result in its own folder, and the vendor start

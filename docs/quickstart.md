@@ -13,8 +13,9 @@ Install integration -> add the station -> install the device agent -> choose opt
 - Home Assistant `2026.10.0` or newer.
 - A BTicino Classe 300X / C300X on firmware `1.7.x` or `2.0.2`. Firmware
   `3.0.6` is supported experimentally, with the low-resolution camera stream;
-  the Home Assistant pages on its display are in the [beta](#beta-versions),
-  not yet tested on a device.
+  the Home Assistant pages on its display are in the [beta](#beta-versions):
+  the home page buttons were checked on a station, the other pages offline
+  only.
 - Root or SSH access on the station for the first agent installation.
 - A trusted local network between Home Assistant and the station.
 

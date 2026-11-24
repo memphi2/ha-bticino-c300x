@@ -2,8 +2,11 @@
 
 ## v2.10.0b1 - Unreleased
 
-Firmware 3.0.6 beta, not yet tested on a device. Includes 2.9.0; on firmware
-1.7.x and 2.0.2 it works like 2.9.0.
+Firmware 3.0.6 beta. On a 3.0.6 station (Dave, PR #126) the display pages
+loaded at start, the Alarm and Home Assistant buttons sat in the right place
+and stayed after a configuration change; everything else in this beta is
+checked offline only. Includes 2.9.0; on firmware 1.7.x and 2.0.2 it works like
+2.9.0.
 
 - On firmware 3.0.6 the display overlay also carries the 2.9.0
   **Settings > Home Assistant** tab (HA feedback, SSH, reboot, agent removal).
@@ -11,8 +14,23 @@ Firmware 3.0.6 beta, not yet tested on a device. Includes 2.9.0; on firmware
 - On firmware 3.0.6 the 2.9.0 Display option **Home page buttons** works on
   the Qt 5 display too: **Like the original** places the Alarm and Home
   Assistant buttons among the station's own, as in Dave's 3.0.x fix in PR #126;
-  **Fixed side by side** keeps the pair. Both layouts and the patch status
-  were checked offline against the original Qt 5 files only.
+  **Fixed side by side** keeps the pair. The patch status reports the layout
+  only while the display pages are active.
+- On firmware 3.0.6 a display that fails with the pages starts as shipped until
+  the station restarts; applying the Display patch, the core hook Repair or an
+  agent update tries the pages once more. The agent restarts the display only
+  after the old one has ended and never starts two. Checked offline only.
+- On firmware 3.0.x a display program or start script the agent does not know
+  no longer stops installation or agent updates: the display stays as shipped,
+  the agent runs without the display pages and Repairs says why.
+- The IPv6 firewall switch is no longer offered on a station without an IPv6
+  firewall start script (firmware 3.0.6).
+- A visitor image that cannot be taken is logged as a warning once per cause,
+  and **Save images** names the cause in its attribute `last_failure`. On
+  firmware 3.0.6 reading the display picture is checked offline only.
+- Direct picture controls on firmware 3.0.6 are checked offline only: until the
+  station has written the contrast once after a start, they may only work
+  during a Ring Call (through the display).
 - The Qt 5 display, the additional Low sizes, routing and downgrade recovery
   stay as in 2.9.0b2. The native agent is rebuilt as 2.10.0b1; an agent update
   is required.

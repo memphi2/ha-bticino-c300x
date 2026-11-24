@@ -231,3 +231,34 @@ def test_home_button_layout_is_offered_only_where_the_display_patch_uses_it(mode
     # Saving the C100X form keeps the hidden C300X value as it was.
     assert run(areas._flow().async_step_dashboard({CONF_DEVICE_UI_ENABLED: True}))["type"] == "menu"
     assert device.options["dashboard_dynamic_homepage"] is False
+
+
+
+def test_a_failed_identity_read_after_install_skips_the_display_steps(monkeypatch):
+    # The installer accepts only a C100X. When the identity read after it
+    # fails, setup must not offer the display steps that C100X lacks.
+    flow = config_flow.BticinoC300XConfigFlow()
+    flow.hass = SimpleNamespace()
+    flow.context = {"source": "user"}
+    flow._setup_connection = {"name": "Door", "agent_host": "a.local", "agent_port": 8091}
+    flow._async_abort_if_manual_setup_duplicate = AsyncMock()
+    flow._async_adopt_agent_unique_id = AsyncMock()  # the read failed: nothing adopted
+    flow.async_abort = lambda **kwargs: kwargs
+    monkeypatch.setattr(config_flow, "async_ensure_installer_dependencies", AsyncMock())
+    monkeypatch.setattr(config_flow, "async_install_device_agent", AsyncMock())
+    monkeypatch.setattr(config_flow, "_async_probe_agent", AsyncMock(return_value="reachable"))
+    migrate = AsyncMock()
+    monkeypatch.setattr(config_flow, "async_migrate_legacy_mqtt_for_connection", migrate)
+    result = asyncio.run(flow.async_step_bootstrap_install({}))
+    assert result["step_id"] == "user_features"
+    migrate.assert_not_awaited()
+    flow._setup_feature_data = {"video_enabled": True}
+
+    async def create(_errors):
+        return flow._setup_dashboard_input
+
+    flow._async_create_setup_entry_from_dashboard = create
+    result = asyncio.run(flow.async_step_user_dashboard())
+    assert result[CONF_DEVICE_UI_ENABLED] is False
+    flow._setup_dashboard_input = {CONF_DEVICE_UI_ENABLED: True}
+    assert asyncio.run(flow.async_step_user_dashboard_pages())["reason"] == "unsupported_display"

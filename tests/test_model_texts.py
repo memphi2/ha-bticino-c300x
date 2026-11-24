@@ -202,3 +202,23 @@ def test_options_and_reconfigure_texts_name_the_model_of_the_entry(monkeypatch):
         "Zugang für Video und Ton auf dem C100X einrichten"
     )
 
+
+def test_repairs_name_the_model_of_their_entry(monkeypatch):
+    from custom_components.bticino_c300x import repair_issues
+
+    assert_c300x_unchanged("repairs")
+    created = []
+    monkeypatch.setattr(repair_issues.ir, "async_create_issue", lambda **values: created.append(values))
+    for entry, model in ((C100X_ENTRY, "C100X"), (C300X_ENTRY, "C300X")):
+        entry = SimpleNamespace(**vars(entry), entry_id="e1", title="Front door")
+        repair_issues._create_issue(
+            None, entry, "device_user_required", severity=repair_issues.ir.IssueSeverity.WARNING,
+        )
+        assert created.pop()["translation_placeholders"] == {"entry_title": "Front door", "model": model}
+
+    assert text("en", "issues", "device_user_required", "title", model="C100X") == "C100X media user setup required"
+    assert text("de", "issues", "device_user_required", "title", model="C100X") == "C100X Media-User-Setup erforderlich"
+    assert text("en", "issues", "frontend_card_setup_hint", "title", model="C100X") == "Add the C100X Lovelace card"
+    assert text(
+        "en", "issues", "device_user_required", "fix_flow", "error", "device_not_registered", model="C100X",
+    ).startswith("The C100X has not been added in the BTicino Door Entry app yet.")

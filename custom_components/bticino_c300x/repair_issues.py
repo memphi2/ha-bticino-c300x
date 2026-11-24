@@ -37,6 +37,7 @@ from .media_setup import (
     media_setup_has_only_device_user_failures,
     summarize_self_test_failures,
 )
+from .model_names import MODEL, entry_model
 
 er: Any
 try:
@@ -651,6 +652,8 @@ def _create_issue(
 ) -> None:
     translation_placeholders = {
         "entry_title": str(getattr(entry, "title", "") or entry.entry_id),
+        # Titles, texts and fix flows name the entry's model.
+        MODEL: entry_model(entry),
     }
     if placeholders:
         translation_placeholders.update(placeholders)

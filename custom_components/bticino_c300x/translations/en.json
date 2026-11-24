@@ -1515,20 +1515,20 @@
       "description": "{entry_title}: the Home Assistant pages did not start on the C100X display after the reboot, so the station went back to its original display at the following boot. Nothing else was changed. Press Activate display pages to try again. If it rolls back again, report it with the agent diagnostics."
     },
     "agent_capability_mismatch": {
-      "title": "C300X device agent capabilities are missing",
-      "description": "The configured C300X device agent for {entry_title} answered without usable capabilities. Update or reconfigure the local device agent, then reload the integration."
+      "title": "{model} device agent capabilities are missing",
+      "description": "The configured {model} device agent for {entry_title} answered without usable capabilities. Update or reconfigure the local device agent, then reload the integration."
     },
     "device_agent_update_required": {
-      "title": "C300X device agent update required",
+      "title": "{model} device agent update required",
       "fix_flow": {
         "step": {
           "confirm": {
-            "title": "Update C300X device agent",
+            "title": "Update {model} device agent",
             "description": "Home Assistant will upload the packaged native agent through the currently configured maintenance API. SSH credentials are not needed. Active display and firewall patches are checked read-only first and refreshed only if they were already active and the packaged patch source changed. If you use local Ring Call handling, also verify the Home Assistant media-user setup in the integration options after the update.\n\nInstalled: {installed_version} (API {installed_api_version}, bundle {installed_bundle_hash})\nPackaged: {available_version} (API {available_api_version}, bundle {available_bundle_hash})\nUpdate path: {update_path}\nDisplay patch status: {qml_patch_status}\nReason: {reason}"
           },
           "ssh_install": {
-            "title": "Reinstall C300X device agent over SSH",
-            "description": "This installed agent cannot update itself yet. Home Assistant will log in with the factory login of the C300X, or with the SSH credentials entered here once the device refused it, to install the packaged agent, then refresh only active display and firewall patches when the packaged patch source changed. The SSH credentials are not stored. If you use local Ring Call handling, also verify the Home Assistant media-user setup in the integration options after the update.\n\nInstalled: {installed_version} (API {installed_api_version}, bundle {installed_bundle_hash})\nPackaged: {available_version} (API {available_api_version}, bundle {available_bundle_hash})\nUpdate path: {update_path}\nDisplay patch status: {qml_patch_status}\nReason: {reason}",
+            "title": "Reinstall {model} device agent over SSH",
+            "description": "This installed agent cannot update itself yet. Home Assistant will log in with the factory login of the {model}, or with the SSH credentials entered here once the device refused it, to install the packaged agent, then refresh only active display and firewall patches when the packaged patch source changed. The SSH credentials are not stored. If you use local Ring Call handling, also verify the Home Assistant media-user setup in the integration options after the update.\n\nInstalled: {installed_version} (API {installed_api_version}, bundle {installed_bundle_hash})\nPackaged: {available_version} (API {available_api_version}, bundle {available_bundle_hash})\nUpdate path: {update_path}\nDisplay patch status: {qml_patch_status}\nReason: {reason}",
             "data": {
               "bootstrap_ssh_username": "SSH username",
               "bootstrap_ssh_password": "SSH password"
@@ -1542,7 +1542,7 @@
           "update_root_readonly_failed": "The update could not return the root filesystem (/) to read-only. The final device state is uncertain; successful rollback is not confirmed. Keep recovery files and check the agent and filesystem state before any further update.",
           "update_apply_failed": "The agent reported a generic update failure; the cause and final device state are unknown. If you previously remounted / writable manually, a normal device restart may help. Check the device state before retrying; this error does not confirm rollback.",
           "update_verify_failed": "The update was sent, but the agent still reports an older or incompatible bundle.",
-          "ssh_login_refused": "The C300X refused the SSH login. Enter the SSH user and password of the device."
+          "ssh_login_refused": "The {model} refused the SSH login. Enter the SSH user and password of the device."
         },
         "abort": {
           "entry_not_loaded": "The BTicino C300X entry is not loaded.",
@@ -1556,24 +1556,24 @@
       "description": "{entry_title} is a Classe 300X, but the installed integration is the Classe 100X test package, which is for the C100X only. It does not update or reinstall a C300X agent. Install the regular release of the integration instead; nothing on the device was changed.\n\nInstalled: {installed_version}. Packaged: {available_version}."
     },
     "device_agent_startup_disabled": {
-      "title": "C300X device agent does not start after reboot",
-      "description": "{entry_title} can reach the C300X device agent now, but the device startup link is missing or invalid. The agent will stop working again after the next C300X reboot. Run the device-agent repair/update action or reinstall the agent over SSH to recreate the startup link."
+      "title": "{model} device agent does not start after reboot",
+      "description": "{entry_title} can reach the {model} device agent now, but the device startup link is missing or invalid. The agent will stop working again after the next {model} reboot. Run the device-agent repair/update action or reinstall the agent over SSH to recreate the startup link."
     },
     "device_agent_self_test_failed": {
-      "title": "C300X device agent self-test found a problem",
-      "description": "{entry_title} reached the C300X device agent, but the read-only self-test reported a failed setup check. Failed checks: {failed_checks}. Reasons: {reasons}. What to do: {actions}. No automatic repair was run. IPv6 firewall is optional unless this HA instance reaches the device over IPv6."
+      "title": "{model} device agent self-test found a problem",
+      "description": "{entry_title} reached the {model} device agent, but the read-only self-test reported a failed setup check. Failed checks: {failed_checks}. Reasons: {reasons}. What to do: {actions}. No automatic repair was run. IPv6 firewall is optional unless this HA instance reaches the device over IPv6."
     },
     "device_agent_ui_event_watchdog": {
-      "title": "C300X display event watcher was protected",
-      "description": "{entry_title} detected too many simultaneous C300X display event watchers. The device agent rejected the extra watcher to prevent a local display polling loop that can overload the C300X. Active watchers: {waiters}/{capacity}. Rejected watchers: {overflows}. Reload the C300X display GUI from the integration if the display dashboard or memo view no longer updates, then refresh diagnostics."
+      "title": "{model} display event watcher was protected",
+      "description": "{entry_title} detected too many simultaneous {model} display event watchers. The device agent rejected the extra watcher to prevent a local display polling loop that can overload the {model}. Active watchers: {waiters}/{capacity}. Rejected watchers: {overflows}. Reload the {model} display GUI from the integration if the display dashboard or memo view no longer updates, then refresh diagnostics."
     },
     "device_core_qml_hook_required": {
-      "title": "C300X core media hook is missing",
+      "title": "{model} core media hook is missing",
       "fix_flow": {
         "step": {
           "confirm": {
-            "title": "Apply C300X core media hook",
-            "description": "Home Assistant will apply only the minimal core media hook required to detect when the C300X display or another media client closes a media session. This is separate from the optional dashboard display patch.\n\nCurrent core hook state: {qml_patch_status}"
+            "title": "Apply {model} core media hook",
+            "description": "Home Assistant will apply only the minimal core media hook required to detect when the {model} display or another media client closes a media session. This is separate from the optional dashboard display patch.\n\nCurrent core hook state: {qml_patch_status}"
           }
         },
         "error": {
@@ -1582,26 +1582,26 @@
         },
         "abort": {
           "entry_not_loaded": "The BTicino C300X entry is not loaded.",
-          "core_patch_unsupported": "The installed C300X device agent does not support applying the core media hook."
+          "core_patch_unsupported": "The installed {model} device agent does not support applying the core media hook."
         }
       }
     },
     "device_qml_transaction_stuck": {
-      "title": "C300X display write left unfinished",
-      "description": "A Display patch write on {entry_title} was interrupted (power loss, crash or a forced stop) and the device agent could not finish it automatically. The display files were left as they are; nothing is lost: the files from before that write are kept on the device in a hidden folder `.c300x-qml-transaction.*` inside /home/bticino/bin/gui/skins/default.\n\nWhat to do: check the C300X display. If it works, apply the Display patch again from the integration (switch it off and on), which rebuilds every display file from the stock backups. If the warning stays, reboot the C300X so the agent tries again at start. A leftover from agent 2.9.0 or older is never restored automatically: once the display works, remove that folder over SSH (see Advanced maintenance, Recovery, in the documentation)."
+      "title": "{model} display write left unfinished",
+      "description": "A Display patch write on {entry_title} was interrupted (power loss, crash or a forced stop) and the device agent could not finish it automatically. The display files were left as they are; nothing is lost: the files from before that write are kept on the device in a hidden folder `.c300x-qml-transaction.*` inside /home/bticino/bin/gui/skins/default.\n\nWhat to do: check the {model} display. If it works, apply the Display patch again from the integration (switch it off and on), which rebuilds every display file from the stock backups. If the warning stays, reboot the {model} so the agent tries again at start. A leftover from agent 2.9.0 or older is never restored automatically: once the display works, remove that folder over SSH (see Advanced maintenance, Recovery, in the documentation)."
     },
     "device_user_required": {
-      "title": "C300X media user setup required",
+      "title": "{model} media user setup required",
       "fix_flow": {
         "step": {
           "confirm": {
             "title": "Create Home Assistant media user",
-            "description": "Home Assistant will ask the device agent to create or repair the dedicated `homeassistant` C300X media user. Existing media users are kept. The agent writes only the required device-side user and routing state."
+            "description": "Home Assistant will ask the device agent to create or repair the dedicated `homeassistant` {model} media user. Existing media users are kept. The agent writes only the required device-side user and routing state."
           }
         },
         "error": {
           "device_user_setup_failed": "The device-user setup failed. Check maintenance access and retry.",
-          "device_not_registered": "The C300X has not been added in the BTicino Door Entry app yet. Flexisip on the device gets its SIP user, domain and certificates only from that registration. Add the device once in the app, then retry. Forwarding can stay on Smartphone afterwards."
+          "device_not_registered": "The {model} has not been added in the BTicino Door Entry app yet. Flexisip on the device gets its SIP user, domain and certificates only from that registration. Add the device once in the app, then retry. Forwarding can stay on Smartphone afterwards."
         },
         "abort": {
           "entry_not_loaded": "The BTicino C300X entry is not loaded."
@@ -1609,11 +1609,11 @@
       }
     },
     "media_setup_repair_required": {
-      "title": "C300X media setup checks failed: {failed_checks}",
+      "title": "{model} media setup checks failed: {failed_checks}",
       "fix_flow": {
         "step": {
           "confirm": {
-            "title": "Repair C300X media setup",
+            "title": "Repair {model} media setup",
             "description": "Home Assistant can run the matching repair for the failed media-readiness checks now. Depending on the failed checks, this can re-check agent reachability, refresh agent setup metadata, apply the IPv4 media firewall, or repair the Home Assistant media-user/routing setup. Ring Call forwarding is never changed by this repair. IPv6 is optional and is not changed by this repair.\n\nFailed checks: {failed_checks}\nFixable checks: {fixable_checks}\nRecommended action: {recommended_action}"
           }
         },
@@ -1626,32 +1626,32 @@
       }
     },
     "invalid_action_map": {
-      "title": "C300X dashboard action allowlist is invalid",
+      "title": "{model} dashboard action allowlist is invalid",
       "description": "The action allowlist for {entry_title} cannot be parsed: {error}. Fix the configured action map, then reload the integration."
     },
     "missing_alarm_entity": {
-      "title": "Configured C300X alarm entity is missing",
+      "title": "Configured {model} alarm entity is missing",
       "description": "{entry_title} references {entity_id}, but Home Assistant does not know that entity. Pick an existing alarm control panel entity in the integration options or clear the alarm setting."
     },
     "media_watchdog_timeout": {
-      "title": "C300X media watchdog stopped a high-load session",
-      "description": "{entry_title} reported sustained device CPU load for at least {duration_seconds} seconds ({cpu_percent}%). Home Assistant closed its active C300X media sessions to avoid keeping the device under load. Reason: {reason}."
+      "title": "{model} media watchdog stopped a high-load session",
+      "description": "{entry_title} reported sustained device CPU load for at least {duration_seconds} seconds ({cpu_percent}%). Home Assistant closed its active {model} media sessions to avoid keeping the device under load. Reason: {reason}."
     },
     "frontend_card_setup_hint": {
-      "title": "Add the C300X Lovelace card",
+      "title": "Add the {model} Lovelace card",
       "fix_flow": {
         "step": {
           "init": {
-            "title": "Set up the C300X Lovelace card",
-            "description": "This update requires the generated C300X Lovelace cards to be refreshed. Run this repair once to update the C300X dashboard view at {dashboard_path} and replace old generated split-card layouts. Ignore it only if you already updated every C300X card manually.",
+            "title": "Set up the {model} Lovelace card",
+            "description": "This update requires the generated {model} Lovelace cards to be refreshed. Run this repair once to update the {model} dashboard view at {dashboard_path} and replace old generated split-card layouts. Ignore it only if you already updated every {model} card manually.",
             "menu_options": {
               "confirm": "Create or refresh card",
               "ignore": "Ignore this hint"
             }
           },
           "confirm": {
-            "title": "Create or refresh the C300X Lovelace card",
-            "description": "Home Assistant will add or update a C300X view in a storage-mode Lovelace dashboard. The view contains the consolidated Doorstation/Home Call card for {entry_title}. Older generated split-card layouts in the selected dashboard are replaced.",
+            "title": "Create or refresh the {model} Lovelace card",
+            "description": "Home Assistant will add or update a {model} view in a storage-mode Lovelace dashboard. The view contains the consolidated Doorstation/Home Call card for {entry_title}. Older generated split-card layouts in the selected dashboard are replaced.",
             "data": {
               "dashboard_path": "Dashboard",
               "view_path": "View path"
@@ -1659,7 +1659,7 @@
           }
         },
         "error": {
-          "camera_entity_missing": "Home Assistant could not find the C300X camera entity for this config entry.",
+          "camera_entity_missing": "Home Assistant could not find the {model} camera entity for this config entry.",
           "lovelace_config_invalid": "The selected Lovelace dashboard config is not writable in the expected format.",
           "lovelace_storage_unavailable": "No storage-mode Lovelace dashboard is available. YAML dashboards must be edited manually.",
           "lovelace_unavailable": "Lovelace is not available yet."
@@ -1670,12 +1670,12 @@
       }
     },
     "unsupported_callback_url": {
-      "title": "C300X callback URL is not usable by the device agent",
+      "title": "{model} callback URL is not usable by the device agent",
       "fix_flow": {
         "step": {
           "configure": {
             "title": "Configure local callback URL",
-            "description": "Enter a Home Assistant base URL reachable from the C300X. HTTP keeps TLS disabled. HTTPS explicitly enables TLS and requires an updated agent and a trusted certificate matching the hostname. Changing HTTP/HTTPS modes restarts only the agent when media is idle; HTTPS adds device load. Check DNS and device time if delivery fails.\n\nSuggested value: {suggested_callback_base_url}",
+            "description": "Enter a Home Assistant base URL reachable from the {model}. HTTP keeps TLS disabled. HTTPS explicitly enables TLS and requires an updated agent and a trusted certificate matching the hostname. Changing HTTP/HTTPS modes restarts only the agent when media is idle; HTTPS adds device load. Check DNS and device time if delivery fails.\n\nSuggested value: {suggested_callback_base_url}",
             "data": {
               "callback_base_url": "Callback base URL (HTTP or HTTPS)"
             }

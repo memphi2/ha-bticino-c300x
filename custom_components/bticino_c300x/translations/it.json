@@ -1515,20 +1515,20 @@
       "description": "{entry_title}: le pagine di Home Assistant non si sono avviate sul display del C100X dopo il riavvio, quindi all'avvio successivo la stazione è tornata al display originale. Nient'altro è stato modificato. Premi Attiva pagine del display per riprovare. Se viene annullato di nuovo, segnalalo con la diagnostica dell'agente."
     },
     "agent_capability_mismatch": {
-      "title": "Mancano le capacità del device agent C300X",
-      "description": "Il device agent C300X configurato per {entry_title} ha risposto senza capacità utilizzabili. Aggiorna o riconfigura il device agent locale, poi ricarica l'integrazione."
+      "title": "Mancano le capacità del device agent {model}",
+      "description": "Il device agent {model} configurato per {entry_title} ha risposto senza capacità utilizzabili. Aggiorna o riconfigura il device agent locale, poi ricarica l'integrazione."
     },
     "device_agent_update_required": {
-      "title": "Aggiornamento del device agent C300X richiesto",
+      "title": "Aggiornamento del device agent {model} richiesto",
       "fix_flow": {
         "step": {
           "confirm": {
-            "title": "Aggiorna device agent C300X",
+            "title": "Aggiorna device agent {model}",
             "description": "Home Assistant caricherà il native agent incluso tramite l'API di manutenzione configurata. Non sono necessarie credenziali SSH. Le patch display e firewall attive vengono controllate in sola lettura e aggiornate solo se erano già attive e la sorgente patch inclusa è cambiata. Se usi Ring Call Solo Home Assistant, verifica anche la patch utente media Home Assistant / patch di routing nelle opzioni dell'integrazione dopo l'aggiornamento.\n\nInstallato: {installed_version} (API {installed_api_version}, bundle {installed_bundle_hash})\nIncluso: {available_version} (API {available_api_version}, bundle {available_bundle_hash})\nPercorso update: {update_path}\nStato patch display: {qml_patch_status}\nMotivo: {reason}"
           },
           "ssh_install": {
-            "title": "Reinstalla device agent C300X via SSH",
-            "description": "Questo agent installato non può ancora aggiornarsi da solo. Home Assistant accederà con il login di fabbrica del C300X, o con le credenziali SSH inserite qui se il dispositivo lo ha rifiutato, per installare l'agent incluso, poi aggiornerà solo le patch display e firewall attive quando la sorgente patch inclusa è cambiata. Le credenziali SSH non vengono salvate. Se usi Ring Call Solo Home Assistant, verifica anche la patch utente media Home Assistant / patch di routing nelle opzioni dell'integrazione dopo l'aggiornamento.\n\nInstallato: {installed_version} (API {installed_api_version}, bundle {installed_bundle_hash})\nIncluso: {available_version} (API {available_api_version}, bundle {available_bundle_hash})\nPercorso update: {update_path}\nStato patch display: {qml_patch_status}\nMotivo: {reason}",
+            "title": "Reinstalla device agent {model} via SSH",
+            "description": "Questo agent installato non può ancora aggiornarsi da solo. Home Assistant accederà con il login di fabbrica del {model}, o con le credenziali SSH inserite qui se il dispositivo lo ha rifiutato, per installare l'agent incluso, poi aggiornerà solo le patch display e firewall attive quando la sorgente patch inclusa è cambiata. Le credenziali SSH non vengono salvate. Se usi Ring Call Solo Home Assistant, verifica anche la patch utente media Home Assistant / patch di routing nelle opzioni dell'integrazione dopo l'aggiornamento.\n\nInstallato: {installed_version} (API {installed_api_version}, bundle {installed_bundle_hash})\nIncluso: {available_version} (API {available_api_version}, bundle {available_bundle_hash})\nPercorso update: {update_path}\nStato patch display: {qml_patch_status}\nMotivo: {reason}",
             "data": {
               "bootstrap_ssh_username": "Nome utente SSH",
               "bootstrap_ssh_password": "Password SSH"
@@ -1542,7 +1542,7 @@
           "update_root_readonly_failed": "L'aggiornamento non è riuscito a riportare il filesystem radice (/) in sola lettura. Lo stato finale del dispositivo è incerto; il ripristino non è confermato. Conserva i file di recupero e verifica l'agente e il filesystem prima di un altro aggiornamento.",
           "update_apply_failed": "L'agente ha segnalato un errore generico di aggiornamento; la causa e lo stato finale del dispositivo sono sconosciuti. Se in precedenza hai rimontato manualmente / in scrittura, un normale riavvio del dispositivo può aiutare. Verifica lo stato del dispositivo prima di riprovare; questo errore non conferma il ripristino.",
           "update_verify_failed": "L'aggiornamento è stato inviato, ma l'agent segnala ancora un bundle vecchio o incompatibile.",
-          "ssh_login_refused": "Il C300X ha rifiutato l'accesso SSH. Inserisci utente e password SSH del dispositivo."
+          "ssh_login_refused": "Il {model} ha rifiutato l'accesso SSH. Inserisci utente e password SSH del dispositivo."
         },
         "abort": {
           "entry_not_loaded": "La voce BTicino C300X non è caricata.",
@@ -1556,24 +1556,24 @@
       "description": "{entry_title} è un Classe 300X, ma l'integrazione installata è il pacchetto di prova per il Classe 100X, pensato solo per il C100X. Non aggiorna né reinstalla un agente C300X. Installa invece la release normale dell'integrazione; sul dispositivo non è stato modificato nulla.\n\nInstallato: {installed_version}. Nel pacchetto: {available_version}."
     },
     "device_agent_startup_disabled": {
-      "title": "Il device agent C300X non parte dopo il riavvio",
-      "description": "{entry_title} raggiunge ora il device agent C300X, ma il link di avvio del dispositivo manca o non e valido. Dopo il prossimo riavvio del C300X l'agent smetterà di funzionare di nuovo. Esegui la riparazione/aggiornamento del device agent oppure reinstalla l'agent via SSH per ricreare il link di avvio."
+      "title": "Il device agent {model} non parte dopo il riavvio",
+      "description": "{entry_title} raggiunge ora il device agent {model}, ma il link di avvio del dispositivo manca o non e valido. Dopo il prossimo riavvio del {model} l'agent smetterà di funzionare di nuovo. Esegui la riparazione/aggiornamento del device agent oppure reinstalla l'agent via SSH per ricreare il link di avvio."
     },
     "device_agent_self_test_failed": {
-      "title": "Il self-test del device agent C300X segnala un problema",
-      "description": "{entry_title} raggiunge il device agent C300X, ma il self-test in sola lettura segnala un controllo di configurazione non riuscito. Controlli non riusciti: {failed_checks}. Motivi: {reasons}. Cosa fare: {actions}. Non è stata eseguita alcuna riparazione automatica. Il firewall IPv6 è opzionale salvo che questa istanza HA raggiunga il dispositivo tramite IPv6."
+      "title": "Il self-test del device agent {model} segnala un problema",
+      "description": "{entry_title} raggiunge il device agent {model}, ma il self-test in sola lettura segnala un controllo di configurazione non riuscito. Controlli non riusciti: {failed_checks}. Motivi: {reasons}. Cosa fare: {actions}. Non è stata eseguita alcuna riparazione automatica. Il firewall IPv6 è opzionale salvo che questa istanza HA raggiunga il dispositivo tramite IPv6."
     },
     "device_agent_ui_event_watchdog": {
-      "title": "Watcher eventi display C300X protetto",
-      "description": "{entry_title} ha rilevato troppi watcher eventi display C300X simultanei. Il device agent ha rifiutato il watcher aggiuntivo per evitare un ciclo di polling locale che può sovraccaricare il C300X. Watcher attivi: {waiters}/{capacity}. Watcher rifiutati: {overflows}. Ricarica la GUI display C300X dall'integrazione se dashboard o memo sul display non si aggiornano più, poi aggiorna la diagnostica."
+      "title": "Watcher eventi display {model} protetto",
+      "description": "{entry_title} ha rilevato troppi watcher eventi display {model} simultanei. Il device agent ha rifiutato il watcher aggiuntivo per evitare un ciclo di polling locale che può sovraccaricare il {model}. Watcher attivi: {waiters}/{capacity}. Watcher rifiutati: {overflows}. Ricarica la GUI display {model} dall'integrazione se dashboard o memo sul display non si aggiornano più, poi aggiorna la diagnostica."
     },
     "device_core_qml_hook_required": {
-      "title": "Hook media core C300X mancante",
+      "title": "Hook media core {model} mancante",
       "fix_flow": {
         "step": {
           "confirm": {
-            "title": "Applica hook media core C300X",
-            "description": "Home Assistant applicherà solo l'hook media core minimo necessario per rilevare quando il display C300X o un altro client media chiude una sessione media. È separato dal patch display dashboard opzionale.\n\nStato hook core attuale: {qml_patch_status}"
+            "title": "Applica hook media core {model}",
+            "description": "Home Assistant applicherà solo l'hook media core minimo necessario per rilevare quando il display {model} o un altro client media chiude una sessione media. È separato dal patch display dashboard opzionale.\n\nStato hook core attuale: {qml_patch_status}"
           }
         },
         "error": {
@@ -1582,26 +1582,26 @@
         },
         "abort": {
           "entry_not_loaded": "La voce BTicino C300X non è caricata.",
-          "core_patch_unsupported": "Il device agent C300X installato non supporta l'applicazione dell'hook media core."
+          "core_patch_unsupported": "Il device agent {model} installato non supporta l'applicazione dell'hook media core."
         }
       }
     },
     "device_qml_transaction_stuck": {
-      "title": "Scrittura del display C300X non completata",
-      "description": "Una scrittura della patch del display su {entry_title} è stata interrotta (mancanza di corrente, crash o arresto forzato) e l'agente del dispositivo non è riuscito a completarla da solo. I file del display sono rimasti come sono; non si perde nulla: i file precedenti a quella scrittura sono conservati sul dispositivo in una cartella nascosta `.c300x-qml-transaction.*` in /home/bticino/bin/gui/skins/default.\n\nCosa fare: controlla il display del C300X. Se funziona, applica di nuovo la patch del display dall'integrazione (disattivala e riattivala): tutti i file del display vengono ricostruiti dai backup originali. Se l'avviso resta, riavvia il C300X perché l'agente riprovi all'avvio. Un residuo dell'agente 2.9.0 o precedente non viene mai ripristinato automaticamente: quando il display funziona, rimuovi quella cartella via SSH (vedi Manutenzione avanzata, Ripristino, nella documentazione)."
+      "title": "Scrittura del display {model} non completata",
+      "description": "Una scrittura della patch del display su {entry_title} è stata interrotta (mancanza di corrente, crash o arresto forzato) e l'agente del dispositivo non è riuscito a completarla da solo. I file del display sono rimasti come sono; non si perde nulla: i file precedenti a quella scrittura sono conservati sul dispositivo in una cartella nascosta `.c300x-qml-transaction.*` in /home/bticino/bin/gui/skins/default.\n\nCosa fare: controlla il display del {model}. Se funziona, applica di nuovo la patch del display dall'integrazione (disattivala e riattivala): tutti i file del display vengono ricostruiti dai backup originali. Se l'avviso resta, riavvia il {model} perché l'agente riprovi all'avvio. Un residuo dell'agente 2.9.0 o precedente non viene mai ripristinato automaticamente: quando il display funziona, rimuovi quella cartella via SSH (vedi Manutenzione avanzata, Ripristino, nella documentazione)."
     },
     "device_user_required": {
-      "title": "Configurazione utente media C300X richiesta",
+      "title": "Configurazione utente media {model} richiesta",
       "fix_flow": {
         "step": {
           "confirm": {
             "title": "Crea utente media Home Assistant",
-            "description": "Home Assistant chiederà al device agent di creare o riparare l'utente media C300X dedicato `homeassistant`. Gli utenti media esistenti restano invariati. L'agent scrive solo lo stato utente e routing necessario sul dispositivo."
+            "description": "Home Assistant chiederà al device agent di creare o riparare l'utente media {model} dedicato `homeassistant`. Gli utenti media esistenti restano invariati. L'agent scrive solo lo stato utente e routing necessario sul dispositivo."
           }
         },
         "error": {
           "device_user_setup_failed": "Configurazione utente dispositivo non riuscita. Controlla l'accesso manutenzione e riprova.",
-          "device_not_registered": "Il C300X non è ancora stato aggiunto nell'app BTicino Door Entry. Flexisip sul dispositivo riceve utente SIP, dominio e certificati solo da questa registrazione. Aggiungi il dispositivo una volta nell'app, poi riprova. In seguito l'inoltro può restare su Smartphone."
+          "device_not_registered": "Il {model} non è ancora stato aggiunto nell'app BTicino Door Entry. Flexisip sul dispositivo riceve utente SIP, dominio e certificati solo da questa registrazione. Aggiungi il dispositivo una volta nell'app, poi riprova. In seguito l'inoltro può restare su Smartphone."
         },
         "abort": {
           "entry_not_loaded": "La voce BTicino C300X non e caricata."
@@ -1609,11 +1609,11 @@
       }
     },
     "media_setup_repair_required": {
-      "title": "Controlli configurazione media C300X falliti: {failed_checks}",
+      "title": "Controlli configurazione media {model} falliti: {failed_checks}",
       "fix_flow": {
         "step": {
           "confirm": {
-            "title": "Ripara configurazione media C300X",
+            "title": "Ripara configurazione media {model}",
             "description": "Home Assistant può eseguire ora la riparazione adatta ai check media-readiness non riusciti. In base agli errori può ricontrollare la raggiungibilità dell'agent, aggiornare i metadati di configurazione agent, applicare il firewall media IPv4 o riparare utente/routing media Home Assistant. Il forwarding Ring Call non viene mai modificato da questa riparazione. IPv6 è opzionale e non viene modificato.\n\nCheck non riusciti: {failed_checks}\nCheck riparabili: {fixable_checks}\nAzione consigliata: {recommended_action}"
           }
         },
@@ -1626,32 +1626,32 @@
       }
     },
     "invalid_action_map": {
-      "title": "Allowlist azioni dashboard C300X non valida",
+      "title": "Allowlist azioni dashboard {model} non valida",
       "description": "L'allowlist delle azioni per {entry_title} non può essere letta: {error}. Correggi la mappa azioni configurata, poi ricarica l'integrazione."
     },
     "missing_alarm_entity": {
-      "title": "Entità allarme C300X configurata mancante",
+      "title": "Entità allarme {model} configurata mancante",
       "description": "{entry_title} fa riferimento a {entity_id}, ma Home Assistant non conosce questa entità. Scegli un'entità pannello di allarme esistente nelle opzioni dell'integrazione oppure svuota l'impostazione allarme."
     },
     "media_watchdog_timeout": {
-      "title": "Il watchdog media C300X ha fermato una sessione ad alto carico",
-      "description": "{entry_title} ha segnalato carico CPU sostenuto del dispositivo per almeno {duration_seconds} secondi ({cpu_percent}%). Home Assistant ha chiuso le sessioni media C300X attive per non mantenere il dispositivo sotto carico. Motivo: {reason}."
+      "title": "Il watchdog media {model} ha fermato una sessione ad alto carico",
+      "description": "{entry_title} ha segnalato carico CPU sostenuto del dispositivo per almeno {duration_seconds} secondi ({cpu_percent}%). Home Assistant ha chiuso le sessioni media {model} attive per non mantenere il dispositivo sotto carico. Motivo: {reason}."
     },
     "frontend_card_setup_hint": {
-      "title": "Aggiungi la card Lovelace C300X",
+      "title": "Aggiungi la card Lovelace {model}",
       "fix_flow": {
         "step": {
           "init": {
-            "title": "Configura la card Lovelace C300X",
-            "description": "Questo aggiornamento richiede l'aggiornamento delle card Lovelace C300X generate. Esegui questa riparazione una sola volta per aggiornare la vista dashboard C300X in {dashboard_path} e sostituire i vecchi layout generati con card separate. Ignorala solo se hai già aggiornato manualmente tutte le card C300X.",
+            "title": "Configura la card Lovelace {model}",
+            "description": "Questo aggiornamento richiede l'aggiornamento delle card Lovelace {model} generate. Esegui questa riparazione una sola volta per aggiornare la vista dashboard {model} in {dashboard_path} e sostituire i vecchi layout generati con card separate. Ignorala solo se hai già aggiornato manualmente tutte le card {model}.",
             "menu_options": {
               "confirm": "Crea o aggiorna la card",
               "ignore": "Ignora questo suggerimento"
             }
           },
           "confirm": {
-            "title": "Crea o aggiorna la card Lovelace C300X",
-            "description": "Home Assistant aggiungerà o aggiornerà una vista C300X in un dashboard Lovelace in modalità storage. La vista contiene la card Doorstation/Home Call consolidata per {entry_title}. I vecchi layout generati con card separate nel dashboard selezionato vengono sostituiti.",
+            "title": "Crea o aggiorna la card Lovelace {model}",
+            "description": "Home Assistant aggiungerà o aggiornerà una vista {model} in un dashboard Lovelace in modalità storage. La vista contiene la card Doorstation/Home Call consolidata per {entry_title}. I vecchi layout generati con card separate nel dashboard selezionato vengono sostituiti.",
             "data": {
               "dashboard_path": "Dashboard",
               "view_path": "Percorso vista"
@@ -1659,7 +1659,7 @@
           }
         },
         "error": {
-          "camera_entity_missing": "Home Assistant non ha trovato l'entità camera C300X per questa voce di configurazione.",
+          "camera_entity_missing": "Home Assistant non ha trovato l'entità camera {model} per questa voce di configurazione.",
           "lovelace_config_invalid": "La configurazione del dashboard Lovelace selezionato non e scrivibile nel formato atteso.",
           "lovelace_storage_unavailable": "Non e disponibile nessun dashboard Lovelace in modalità storage. I dashboard YAML devono essere modificati manualmente.",
           "lovelace_unavailable": "Lovelace non e ancora disponibile."
@@ -1670,19 +1670,19 @@
       }
     },
     "unsupported_callback_url": {
-      "title": "URL callback C300X non utilizzabile dal device agent",
+      "title": "URL callback {model} non utilizzabile dal device agent",
       "fix_flow": {
         "step": {
           "configure": {
             "title": "Configura URL callback locale",
-            "description": "Inserire un URL di base di Home Assistant raggiungibile dal C300X. HTTP lascia TLS disabilitato. HTTPS abilita TLS esplicitamente e richiede un agente aggiornato e un certificato attendibile corrispondente al nome host. Il passaggio HTTP/HTTPS riavvia solo l'agente quando non ci sono sessioni multimediali attive. HTTPS aumenta il carico del dispositivo. In caso di errore, verificare DNS e ora del dispositivo.\n\nValore suggerito: {suggested_callback_base_url}",
+            "description": "Inserire un URL di base di Home Assistant raggiungibile dal {model}. HTTP lascia TLS disabilitato. HTTPS abilita TLS esplicitamente e richiede un agente aggiornato e un certificato attendibile corrispondente al nome host. Il passaggio HTTP/HTTPS riavvia solo l'agente quando non ci sono sessioni multimediali attive. HTTPS aumenta il carico del dispositivo. In caso di errore, verificare DNS e ora del dispositivo.\n\nValore suggerito: {suggested_callback_base_url}",
             "data": {
               "callback_base_url": "URL di base dei callback (HTTP o HTTPS)"
             }
           }
         },
         "error": {
-          "invalid_callback_base_url": "Inserire un URL di base HTTP o HTTPS di Home Assistant raggiungibile dal C300X."
+          "invalid_callback_base_url": "Inserire un URL di base HTTP o HTTPS di Home Assistant raggiungibile dal {model}."
         },
         "abort": {
           "entry_not_loaded": "La voce BTicino C300X non e caricata."

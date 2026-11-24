@@ -394,7 +394,7 @@ def test_fixable_media_setup_repair_uses_ha_issue_fix_flow_schema() -> None:
             "media_setup_repair_required",
         )
         assert "description" not in issue
-        assert "firewall, rtsp" in issue["title"].format(failed_checks="firewall, rtsp")
+        assert "firewall, rtsp" in issue["title"].format(failed_checks="firewall, rtsp", model="C300X")
         fix_flow = _path_value(
             data,
             "issues",

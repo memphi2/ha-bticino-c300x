@@ -76,3 +76,7 @@ def test_identity_helper_knows_the_shipped_hooks():
 @pytest.mark.parametrize("scenario", ["dashboard_navigation", "detail_controls", "alarmo_page"])
 def test_pages_are_operated_like_the_vendor_menus(tmp_path, scenario):
     run_scenario(scenario, tmp_path)
+
+
+def test_alert_covers_the_screen_and_shows_its_action(tmp_path):
+    run_scenario("alert_covers_the_screen", tmp_path)

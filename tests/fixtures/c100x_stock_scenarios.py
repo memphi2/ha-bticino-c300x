@@ -405,6 +405,42 @@ def alarmo_page(work, skin):
     assert not page_warnings(runtime), page_warnings(runtime)
 
 
+def alert_covers_the_screen(work, skin):
+    """A notice fills the screen and shows that Return marks it read."""
+    import time
+    now = int(time.time() * 1000)
+    sent = []
+
+    def alerts(method, url, body):
+        if sent or url.query():
+            return None
+        sent.append(1)
+        return {"id": "a" * 32, "notification_id": "garage_door", "revision": "b" * 32, "wake_duration": 30,
+                "sound_duration": 0, "expires_in": 600, "remaining_ms": 4000, "expires": now + 600000,
+                "message_expires": now + 600000, "severity": "warning", "title": "Garage door",
+                "message": "The garage door has been open for 15 minutes. " * 10}
+
+    from c100x_dashboard_data import build
+    runtime = Runtime(work, skin, {**build(), "/ui/alerts/next": alerts})
+    runtime.wait(1500)
+    panel = runtime.js(
+        "(function() { var button = FIND(c100xAlerts.item, 'alertAcknowledge'); if (!button) return null; "
+        "var bar = FIND(button, 'alertFocusBar'); var scroll = FIND(c100xAlerts.item, 'alertMessageScroll'); "
+        "var at = button.parent.mapToItem(null, 0, 0); "
+        "return {shown: button.parent.visible, x: at.x, y: at.y, width: button.parent.width, "
+        "height: button.parent.height, bar: !!bar && bar.visible && bar.height >= 5, "
+        "more: scroll.contentHeight > scroll.height} })()".replace("FIND", FIND))
+    assert panel and panel["shown"], panel
+    assert (panel["x"], panel["y"], panel["width"], panel["height"]) == (0, 0, 800, 480), panel
+    assert panel["bar"], "Mark read does not show that Return acts on it"
+    assert panel["more"] and runtime.js(FIND + "(c100xAlerts.item, 'c100xMoreBelow').visible")
+    runtime.keys("D", settle=300)
+    assert runtime.js(FIND + "(c100xAlerts.item, 'c100xMoreAbove').visible")
+    runtime.keys("R", settle=600)
+    assert [url for method, url, body in runtime.requests if "notification.garage_door" in url], "not acknowledged"
+    assert not runtime.adapter_warnings(), runtime.adapter_warnings()
+
+
 if __name__ == "__main__":
     globals()[sys.argv[1]](Path(sys.argv[2]), Path(sys.argv[3]), *sys.argv[4:])
     sys.stdout.write(sys.argv[1] + ": passed\n")

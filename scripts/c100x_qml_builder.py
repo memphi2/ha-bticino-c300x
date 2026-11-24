@@ -80,6 +80,36 @@ def adapt_alerts(source: str) -> str:
     source = source.replace("target: root.vendorScreen", "target: root.screenReady ? root.vendorScreen : null")
     source = source.replace("ScreenState.Normal", "c100xHost.normalState").replace("ScreenState.ScreenOff", "c100xHost.offState")
     source = source.replace("Component.onCompleted: initialize()", "Component.onCompleted: { completed = true; initialize() }")
+    # The notice covers the whole screen on the station's own background; Return marks it read,
+    # so that button carries the selection bar the station draws under its selected item.
+    source = swap(source, """        anchors.centerIn: parent
+        width: Math.max(0, parent.width - 24)
+        height: Math.max(0, Math.min(parent.height - 24, 370))
+        color: "#176196"
+        border.color: root.accent
+        border.width: 2
+        radius: 4
+        clip: true
+""", """        anchors.fill: parent
+        color: "black"
+        clip: true
+        Image { anchors.fill: parent; source: "../images/background.jpg" }
+        Rectangle { anchors.fill: parent; color: "#66000000" }
+        Rectangle { width: parent.width; height: 6; color: root.accent }
+""")
+    source = swap(source, "        Flickable {\n            id: messageScroll", "        C100XScroll {\n            id: messageScroll")
+    source = swap(source, 'color: acknowledgeMouse.pressed ? "#124974" : "#207cb6"\n            border.color: "white"; radius: 4',
+                  'color: acknowledgeMouse.pressed ? "#66ffffff" : "#33ffffff"\n            radius: 6\n'
+                  '            Rectangle { objectName: "alertFocusBar"; anchors.bottom: parent.bottom; width: parent.width; height: 5; color: "white" }')
+    source = swap(source, "x: 16; y: 10; width: parent.width - 32; height: 30", "x: 36; y: 22; width: parent.width - 72; height: 30")
+    source = swap(source, "x: 16; y: 44; width: parent.width - 32; height: 58", "x: 36; y: 56; width: parent.width - 72; height: 66")
+    source = swap(source, "x: 16; y: 108; width: parent.width - 32", "x: 36; y: 130; width: parent.width - 72")
+    source = swap(source, "x: 16; y: parent.height - 64; width: parent.width - 32; height: 48",
+                  "x: 36; y: parent.height - 76; width: parent.width - 72; height: 56")
+    source = swap(source, "font.pixelSize: 22\n            color: \"white\"\n            wrapMode: Text.Wrap\n            elide: Text.ElideRight",
+                  "font.pixelSize: 27\n            font.bold: true\n            color: \"white\"\n            wrapMode: Text.Wrap\n            elide: Text.ElideRight")
+    source = swap(source, "                font.pixelSize: 20\n                color: \"white\"\n                wrapMode: Text.Wrap",
+                  "                font.pixelSize: 24\n                color: \"white\"\n                wrapMode: Text.Wrap")
     source = source.replace("id: messageScroll", 'id: messageScroll\n            objectName: "alertMessageScroll"')
     source = source.replace("id: acknowledgeButton", 'id: acknowledgeButton\n            objectName: "alertAcknowledge"')
     if "global." in source or "ScreenState." in source or "AudioState." in source or "BtClass" in source:

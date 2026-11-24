@@ -3,7 +3,7 @@
 import sys
 from pathlib import Path
 
-from c100x_stock_runtime import Runtime
+from c100x_stock_runtime import Probe, Runtime
 
 PREFERENCES = {"ok": True, "feedback_enabled": True}
 
@@ -19,6 +19,30 @@ def bridge_urls(work, skin):
     assert any(url.startswith("http://127.0.0.1:8090/ui/touch-tone/next?enabled=1&") for url in urls), urls
     assert runtime.js("c100xHost.preferences.ready && c100xHost.preferences.feedbackEnabled"), "preferences not read"
     assert not runtime.adapter_warnings(), runtime.adapter_warnings()
+
+
+def action_destroyed_by_click(work, skin):
+    """A click may unload the delegate that owns the action (More list, page change)."""
+    probe = Probe(work, """import QtQuick 2.7
+Item {
+    id: root
+    property QtObject c100xHost: QtObject { property string language: "en" }
+    property var order: []
+    Loader {
+        id: loader
+        sourceComponent: C100XAction {
+            width: 80; height: 40
+            onActionPressed: root.order.push("pressed")
+            onActionReleased: root.order.push("released")
+            onClicked: { root.order.push("clicked"); loader.active = false }
+        }
+    }
+    function run() { loader.item.activate(); return order.join(",") }
+}
+""")
+    assert probe.js("run()") == "pressed,released,clicked"
+    probe.wait(50)
+    assert not probe.warnings, probe.warnings
 
 
 if __name__ == "__main__":

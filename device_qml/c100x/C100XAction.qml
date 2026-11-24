@@ -50,11 +50,12 @@ Item {
             if (keyboardEditing) { actionPressed(point()); clicked(point()) }
             else actionReleased(point())
         } else {
+            var at = point()
             down = true
-            actionPressed(point())
-            clicked(point())
-            actionReleased(point())
+            actionPressed(at)
             down = false
+            actionReleased(at)
+            clicked(at)
         }
     }
     function adjust(direction) {

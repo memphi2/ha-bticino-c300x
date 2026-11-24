@@ -42,3 +42,7 @@ def test_bridge_declares_the_agent_ui_listener():
 
 def test_bridge_requests_reach_the_agent_listener(tmp_path):
     run_scenario("bridge_urls", tmp_path)
+
+
+def test_action_survives_a_click_that_unloads_it(tmp_path):
+    run_scenario("action_destroyed_by_click", tmp_path, firmware=False)

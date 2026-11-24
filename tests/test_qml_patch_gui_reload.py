@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -668,3 +669,36 @@ def test_a_note_of_a_killed_writer_whose_pid_was_reused_does_not_block_the_resta
     finally:
         foreign.kill()
         foreign.wait()
+
+
+def test_a_request_filed_as_the_worker_unlocks_is_served_before_it_exits(station: Station) -> None:
+    """The worker found nothing to do and lets go of its lock; a request filed right then
+    (its requester saw the lock held and started no worker) is served by this worker.
+
+    The request is filed once the reload command, whose closing status read would
+    start a worker, has returned: only the worker's own re-check is left to serve it.
+    """
+
+    station.boot(C300X_TEST_TEARDOWN="1")
+    late = f"{os.getpid()}.7"
+    released = station.root / "reload-returned"
+    flock = station.root / "tools/flock-late-request"
+    flock.write_text(
+        "#!/bin/sh\n"
+        f"if [ \"$1\" = -u ] && [ \"$2\" = 9 ] && mkdir '{station.root}/late-filed' 2>/dev/null; then\n"
+        f"    '{shutil.which('flock')}' -u 9\n"
+        f"    while [ ! -e '{released}' ]; do sleep 0.1; done\n"
+        f"    printf 'keep\\n' > '{station.run_dir}/requests/{late}'\n"
+        "    exit 0\n"
+        "fi\n"
+        f"exec '{shutil.which('flock')}' \"$@\"\n"
+    )
+    flock.chmod(0o755)
+    result = station.reload(C300X_QML_GUI_FLOCK=str(flock))
+    assert result.returncode == 0, result.stderr
+    released.write_text("")
+    answer = station.run_dir / "done" / late
+    assert _wait_for(answer.exists, 30), station.events()
+    assert answer.read_text() == "0\n"
+    assert _kinds(station).count("wrapper") == 3
+    assert len(_settled(station)) == 1

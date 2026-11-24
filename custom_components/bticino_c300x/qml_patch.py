@@ -41,6 +41,13 @@ async def async_refresh_qml_patch_status(
         async_retry_update_maintenance_busy(read) if wait_busy else read()
     )
     _store_qml_patch_status(entry, status)
+    # A real device answer ends an earlier failed read, which raises the core
+    # hook Repairs issue on its own.
+    diagnostics = getattr(
+        getattr(entry.runtime_data, "diagnostics", None), "qml_patch_diagnostics", None
+    )
+    if diagnostics is not None:
+        diagnostics.mark_success(datetime.now(UTC))
     return status
 
 

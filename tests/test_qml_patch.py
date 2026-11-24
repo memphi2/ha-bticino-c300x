@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
 
@@ -9,6 +10,7 @@ import pytest
 
 from custom_components.bticino_c300x.api_errors import C300XAgentApiConnectionError
 from custom_components.bticino_c300x.const import CONF_DASHBOARD_DYNAMIC_HOMEPAGE
+from custom_components.bticino_c300x.data import C300XOperationDiagnostics
 from custom_components.bticino_c300x.entry_locks import clear_entry_locks
 from custom_components.bticino_c300x.qml_patch import (
     async_apply_qml_core_patch_and_confirm,
@@ -493,3 +495,17 @@ def test_a_failed_confirming_read_keeps_the_writes_own_answer(core: bool) -> Non
     assert entry.runtime_data.qml_patch_status == answer
     assert changes == 2
 
+
+def test_a_real_status_read_clears_an_earlier_failed_read() -> None:
+    """The core hook Repairs issue follows the last read; one busy read at
+    startup must not keep it after later reads succeed."""
+
+    api = _FakeApi(status={"available": True, "core_patched": True})
+    entry = _entry(api)
+    diagnostics = C300XOperationDiagnostics()
+    diagnostics.mark_failure("busy", datetime.now(UTC))
+    entry.runtime_data.diagnostics = SimpleNamespace(qml_patch_diagnostics=diagnostics)
+
+    asyncio.run(async_refresh_qml_patch_status(entry))
+
+    assert diagnostics.last_error is None

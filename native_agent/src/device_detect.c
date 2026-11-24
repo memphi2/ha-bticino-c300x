@@ -65,6 +65,11 @@ int c300x_device_display_restartable(void)
     return c300x_device_model() == C300X_DEVICE_MODEL_C300X;
 }
 
+int c300x_device_memo_led_known(void)
+{
+    return c300x_device_model() == C300X_DEVICE_MODEL_C300X;
+}
+
 int c300x_device_display_files_patchable(void)
 {
     return c300x_device_display_kind() == C300X_DISPLAY_QT4_ONDISK;

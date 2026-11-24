@@ -43,5 +43,7 @@ void c300x_device_set_display_adapter_confirmed(int confirmed);
 /* The display program can be restarted: BtClass of the C300X, on every
  * firmware. The C100X's program is another one. */
 int c300x_device_display_restartable(void);
+/* The memo LED is driven only on the C300X; no C100X LED is proven. */
+int c300x_device_memo_led_known(void);
 
 #endif

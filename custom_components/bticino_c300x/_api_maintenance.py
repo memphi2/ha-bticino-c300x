@@ -31,6 +31,7 @@ from .api_errors import (
 
 _MAINTENANCE_JOB_TIMEOUT = 15.0
 # 30 s native deadline, 15 s for the script's rollback after SIGTERM, margin.
+# The media-user label is set and restored by such a write, GUI restart included.
 _QML_WRITE_JOB_TIMEOUT = 50.0
 _UPDATE_REQUEST_TIMEOUT = 20.0
 
@@ -379,7 +380,7 @@ class _ApiMaintenanceMixin(_C300XApiCore):
             "/api/v1/maintenance/device-user/actions/ensure-homeassistant",
             json_data=payload,
             extra_headers=self._maintenance_headers(),
-            request_timeout=self._job_timeout(_UPDATE_REQUEST_TIMEOUT),
+            request_timeout=self._job_timeout(_QML_WRITE_JOB_TIMEOUT),
         )
         return normalize_device_user_status(data)
 
@@ -391,7 +392,7 @@ class _ApiMaintenanceMixin(_C300XApiCore):
             "/api/v1/maintenance/device-user/actions/restore-homeassistant-setup",
             json_data={"confirm": "restore_ha_user_setup"},
             extra_headers=self._maintenance_headers(),
-            request_timeout=self._job_timeout(_UPDATE_REQUEST_TIMEOUT),
+            request_timeout=self._job_timeout(_QML_WRITE_JOB_TIMEOUT),
         )
         return normalize_device_user_status(data)
 

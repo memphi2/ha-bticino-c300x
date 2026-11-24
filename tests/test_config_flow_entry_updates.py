@@ -214,7 +214,7 @@ def _listener_entry_hass():
 
     entry = SimpleNamespace(
         entry_id="e1", runtime_data=None, update_listeners=[], options={},
-        data={CONF_AGENT_HOST: "10.0.0.2", CONF_AGENT_PORT: 8080, CONF_DEVICE_UI_ENABLED: True},
+        data={CONF_AGENT_HOST: "192.0.2.2", CONF_AGENT_PORT: 8080, CONF_DEVICE_UI_ENABLED: True},
     )
     hass = SimpleNamespace(config_entries=SimpleNamespace(async_reload=AsyncMock(), async_schedule_reload=Mock()))
     listener = _entry_update_listener(entry)
@@ -231,7 +231,7 @@ def _listener_entry_hass():
     return entry, hass, SimpleNamespace(hass=hass, async_update_and_abort=update_and_abort), calls
 
 
-@pytest.mark.parametrize("host", ["10.0.0.2", "10.0.0.3"])
+@pytest.mark.parametrize("host", ["192.0.2.2", "192.0.2.3"])
 def test_reconfigure_reloads_once_also_when_only_the_display_mark_changed(host):
     entry, hass, flow, calls = _listener_entry_hass()
 

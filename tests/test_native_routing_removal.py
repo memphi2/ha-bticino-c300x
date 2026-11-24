@@ -11,7 +11,12 @@ from pathlib import Path
 import pytest
 from test_native_agent_removal import ROOT, _assert_kept, _assert_removed, _remove
 from test_native_agent_removal import device as device
-from test_native_routing_firmware_restore import FIRMWARE_ROOT, PATCH_OFFSETS, original, routing_run
+from test_native_routing_firmware_restore import (
+    FIRMWARE_ROOT,
+    PATCH_OFFSETS,
+    original,
+    routing_run,
+)
 from test_native_routing_firmware_restore import routing_binary as routing_binary
 
 C300X_FIRMWARES = ("1.7.19", "2.0.2")

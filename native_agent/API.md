@@ -1226,7 +1226,9 @@ When the media user cannot be set up after the routing binary was patched by
 this request, the routing is restored before the error is returned. Ensure and
 restore answer `"root_writable": true` when the routing write succeeded but `/`
 could not be made read-only again (the replaced binary is still running); a
-reboot makes it read-only.
+reboot makes it read-only. The agent remembers that root as its own, also
+across an agent restart, and its next device write or agent update tries the
+read-only remount again.
 
 ### `POST /api/v1/maintenance/device-user/actions/restore-homeassistant-setup`
 
@@ -1520,7 +1522,7 @@ Errors:
 | `400` | `update_manifest_missing` | The staged `device_agent/bundle.json` is missing, empty or only line breaks, unreadable or 8 KiB or larger. |
 | `400` | `update_bundle_hash_mismatch` | `bundle_hash` differs from the hash in the staged manifest. |
 | `403` | `maintenance_unauthorized` | Maintenance is disabled, or the maintenance token is missing or wrong. |
-| `409` | `update_root_already_writable` | `/` was already writable before the update; the agent refuses to install and leaves the mount as it is. |
+| `409` | `update_root_already_writable` | `/` was already writable before the update (by someone else, or left so by the agent and still busy); the agent refuses to install and leaves the mount as it is. |
 | `500` | `update_root_readonly_failed` | The update could not make `/` read-only again after writing to it. |
 | `500` | `update_apply_failed` | Validation or installation failed. |
 | `500` | `out_of_memory` | The agent could not allocate the memory for the update. |
@@ -1742,7 +1744,9 @@ patch) leave `/` as they found it: on a root that is already writable they
 write without remounting and keep it writable, which is success.
 `root_writable` / `remount_ro_failed` only report a root the agent made
 writable and could not make read-only again; an agent removal stops for a
-reboot only then.
+reboot only then. Such a root stays the agent's own (a mark in `/run` keeps
+it across an agent restart): the next write retries the read-only remount,
+and a retry that is still busy is not a failure.
 
 ### Camera Resolution
 

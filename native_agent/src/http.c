@@ -39,6 +39,7 @@
 #include "recent_events.h"
 #include "ringer_control.h"
 #include "ringer_protocol.h"
+#include "root_mount.h"
 #include "sha256.h"
 #include "smartphone_forwarding.h"
 #include "string_util.h"
@@ -8597,6 +8598,8 @@ static void handle_agent_update_apply(
     if (installed_truncated) {
         workspace->installed_manifest[0] = '\0';
     }
+    /* A root this agent left writable is no reason for root_already_writable. */
+    c300x_root_close_left_open();
     if (!apply_agent_update_files(config, workspace->manifest, workspace->installed_manifest,
             &summary, apply_agent_update_firewall_patches)) {
         int status = agent_update_error_status(summary.error);

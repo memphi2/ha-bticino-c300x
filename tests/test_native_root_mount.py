@@ -1,5 +1,7 @@
-"""Device writers leave / as they found it, also when their writes nest."""
+"""Device writers leave / as they found it, also when their writes nest, and close
+a root this agent left writable, also after an agent restart."""
 
+import os
 import subprocess
 from pathlib import Path
 
@@ -21,5 +23,7 @@ def test_root_is_left_as_found(tmp_path, sanitize):
         capture_output=True, text=True, timeout=60,
     )
     assert result.returncode == 0, result.stderr
-    result = subprocess.run([str(binary)], capture_output=True, text=True, timeout=10)
-    assert result.returncode == 0, result.stderr
+    env = {**os.environ, "C300X_ROOT_LEFT_OPEN_MARK": str(tmp_path / "left-open")}
+    for args in ([], ["leave"], ["restarted"]):
+        result = subprocess.run([str(binary), *args], capture_output=True, text=True, timeout=10, env=env)
+        assert result.returncode == 0, (args, result.stderr)

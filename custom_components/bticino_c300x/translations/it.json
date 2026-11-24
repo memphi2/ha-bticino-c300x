@@ -1313,7 +1313,7 @@
         "name": "Diagnostica agente dispositivo",
         "state": {
           "unknown": "Diagnostica non caricata",
-          "agent_offline": "Agent offline",
+          "agent_offline": "Agente non in linea",
           "agent_reconnecting": "Riconnessione",
           "repair_required": "Riparazione richiesta",
           "subscription_missing": "Sottoscrizione mancante",
@@ -1386,7 +1386,7 @@
         "name": "Rilevamento mDNS agent"
       },
       "gui_function_patch": {
-        "name": "Display patch"
+        "name": "Patch display"
       },
       "firewall_patch": {
         "name": "Firewall API"

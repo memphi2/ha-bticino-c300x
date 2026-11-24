@@ -1386,7 +1386,7 @@
         "name": "Découverte mDNS agent"
       },
       "gui_function_patch": {
-        "name": "Display patch"
+        "name": "Patch display"
       },
       "firewall_patch": {
         "name": "Patch pare-feu API"

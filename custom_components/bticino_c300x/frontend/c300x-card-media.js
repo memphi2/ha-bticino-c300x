@@ -1,6 +1,6 @@
-import { c300xMediaState } from "./c300x-state-model.js?v=0ec1ebcd886b1321";
-import "./c300x-media-controls.js?v=0ec1ebcd886b1321";
-import "./c300x-picture-controls.js?v=0ec1ebcd886b1321";
+import { c300xMediaState } from "./c300x-state-model.js?v=fd15372fe9ca5af1";
+import "./c300x-media-controls.js?v=fd15372fe9ca5af1";
+import "./c300x-picture-controls.js?v=fd15372fe9ca5af1";
 
 // Archive playback never owns a device session. Only the existing card actions
 // may start/answer/hang up; this adapter gives those sessions visual priority.
@@ -35,6 +35,11 @@ export class C300XCardMedia {
       this.configure();
     });
     this.controls?.addEventListener("media-fullscreen", () => this.toggleFullscreen());
+    // The open picture panel covers the toolbar on a short picture; adjusting
+    // the picture needs no volume, so the toolbar steps aside until it closes.
+    this.picture?.addEventListener("picture-toggle", () => {
+      this.controls?.toggleAttribute("picture-open", this.picture.open === true);
+    });
     this.target?.addEventListener("fullscreenchange", () => this.configure());
   }
 

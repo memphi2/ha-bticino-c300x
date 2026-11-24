@@ -1,4 +1,4 @@
-import { mediaLocalize } from "./c300x-media-translations.js?v=0ec1ebcd886b1321";
+import { mediaLocalize } from "./c300x-media-translations.js?v=fd15372fe9ca5af1";
 
 const keys = ["brightness", "contrast", "saturation"];
 
@@ -27,9 +27,8 @@ export class C300XPictureControls extends HTMLElement {
     this.status = root.querySelector("p");
     this.inputs = [...root.querySelectorAll("input")];
     this.button.onclick = () => {
-      if (!this.panel.hidden) { this.close(); return; }
-      this.panel.hidden = false;
-      this.button.setAttribute("aria-expanded", "true");
+      if (this.open) { this.close(); return; }
+      this.setOpen(true);
       void this.request({});
     };
     for (const input of this.inputs) {
@@ -53,8 +52,16 @@ export class C300XPictureControls extends HTMLElement {
   close() {
     this.generation++;
     this.values = null;
-    this.panel.hidden = true;
-    this.button.setAttribute("aria-expanded", "false");
+    this.setOpen(false);
+  }
+
+  get open() { return !this.panel.hidden; }
+  // Every open and close, also the ones the panel does on its own, is told:
+  // the card hides the media toolbar under the open panel.
+  setOpen(open) {
+    this.panel.hidden = !open;
+    this.button.setAttribute("aria-expanded", String(open));
+    this.dispatchEvent(new Event("picture-toggle"));
   }
 
   async request(fields) {

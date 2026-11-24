@@ -31,6 +31,11 @@ Station:
   hidden when their first reads after a start fail. The page retries for about
   a minute and reads again when it is shown or the display bridge registers.
   Needs the Display patch from the agent update.
+- New Display option **Home page buttons**. **Like the original**, the default,
+  shows the Alarm and Home Assistant buttons only when they have something to
+  open, as buttons among the station's own, which wrap like them. **Fixed side
+  by side** keeps the pair used since 2.3.0; entries that stored it keep it.
+  Based on a fix by Dave in PR #126. Needs the agent update.
 
 Camera and card:
 
@@ -41,8 +46,9 @@ Camera and card:
   video decoder and on 3.0.6, which runs only on TVP5150 boards (both checked
   offline only). A setting the station does not confirm is put back, and the
   card says whether it was not applied, the station is busy or the controls are
-  unavailable. Changes last until the video ends. Requires the updated agent;
-  archived media is unchanged.
+  unavailable. Changes last until the video ends. The sliders sit on a
+  see-through panel, so the picture stays visible while adjusting. Requires
+  the updated agent; archived media is unchanged.
 - The doorbell card is as tall as its picture instead of stretching to the height
   of its dashboard place. A visitor snapshot keeps its own proportions, and the
   enlarged preview fits it so the buttons below stay on screen. Playback controls
@@ -90,6 +96,9 @@ Fixed:
   display pages still call port 8090, so keep the installer's default. After a
   port change, restart the agent and reapply the Display patch; until then the
   patch is reported as partially patched.
+- With the fixed side-by-side Alarm and Home Assistant buttons, Memo and
+  Settings no longer slide off screen on stations that show no other buttons.
+  Needs the agent update.
 
 Settings:
 

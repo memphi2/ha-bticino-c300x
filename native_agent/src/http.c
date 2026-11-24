@@ -392,7 +392,7 @@ static void system_metrics_dispatch_now(
     struct agent_runtime *runtime,
     time_t now
 );
-static void handle_answering_messages_get(int client_fd, struct agent_runtime *runtime);
+static void handle_answering_messages_get(int client_fd, const struct c300x_config *config, struct agent_runtime *runtime);
 static void handle_answering_message_video_get(
     int client_fd,
     struct agent_runtime *runtime,
@@ -6661,7 +6661,7 @@ static void handle_answering_get(int client_fd, const struct c300x_config *confi
     send_json(client_fd, 200, "OK", body);
 }
 
-static void handle_answering_messages_get(int client_fd, struct agent_runtime *runtime)
+static void handle_answering_messages_get(int client_fd, const struct c300x_config *config, struct agent_runtime *runtime)
 {
     struct voicemail_snapshot *snapshot = calloc(1, sizeof(*snapshot));
     char *body = allocate_response_buffer(client_fd, C300X_LARGE_RESPONSE_SIZE);
@@ -6677,6 +6677,8 @@ static void handle_answering_messages_get(int client_fd, struct agent_runtime *r
         return;
     }
     voicemail_refresh_watches(&runtime->voicemail);
+    /* The refresh drops pending inotify events: report what they announced. */
+    voicemail_event_dispatch_if_changed(config, runtime);
     voicemail_read_snapshot(&runtime->voicemail, snapshot);
     if (snapshot->newest_at[0] != '\0') {
         c300x_json_escape_string(snapshot->newest_at, newest_at, sizeof(newest_at));
@@ -8989,7 +8991,7 @@ static void handle_api_request(
         return;
     }
     if (strcmp(request->method, "GET") == 0 && strcmp(request->path, "/api/v1/answering-machine/messages") == 0) {
-        handle_answering_messages_get(client_fd, runtime);
+        handle_answering_messages_get(client_fd, config, runtime);
         return;
     }
     if (strncmp(request->path, "/api/v1/answering-machine/messages/", strlen("/api/v1/answering-machine/messages/")) == 0) {
@@ -9261,7 +9263,7 @@ static int handle_ui_request(
             send_loopback_required(client_fd);
             return 1;
         }
-        handle_answering_messages_get(client_fd, runtime);
+        handle_answering_messages_get(client_fd, config, runtime);
         return 1;
     }
 

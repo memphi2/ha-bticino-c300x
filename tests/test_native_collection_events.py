@@ -7,6 +7,8 @@ import json
 import os
 import select
 import shutil
+import signal
+import socket
 import subprocess
 import tempfile
 import time
@@ -51,6 +53,7 @@ class CollectionLab:
     api: int
     callback: CallbackServer
     roots: dict[str, Path]
+    process: subprocess.Popen | None = None
 
     def subscribe(self, *, renewal=False):
         api_post(
@@ -115,6 +118,7 @@ def collection_lab(collection_binary, tmp_path, request):
                 [str(collection_binary), "--config", str(config_path)],
                 cwd=tmp_path, stdout=log, stderr=log,
             )
+            lab.process = process
             try:
                 wait_for_health(api)
                 # Inotify must compare against the correctly parsed startup
@@ -537,3 +541,27 @@ def test_missing_text_does_not_hide_voice_changes(collection_lab):
     assert event["snapshot"] is False
     assert event["data"]["memos"]["voice_total"] == 2
     assert event["data"]["memos"]["text_total"] == 0
+
+
+def test_a_list_read_does_not_swallow_the_change_event(collection_lab):
+    """The list read refreshes the watches, which drops pending inotify
+    events: the change they announced once never reached Home Assistant."""
+    lab = collection_lab
+    assert lab.process is not None
+    with socket.create_connection(("127.0.0.1", lab.api), timeout=3) as client:
+        time.sleep(0.2)
+        start = len(lab.callback.requests)
+        # The new message and the read reach the agent in one poll round;
+        # the HTTP client is served before the inotify fd.
+        os.kill(lab.process.pid, signal.SIGSTOP)
+        try:
+            lab.write("voicemail", "item_2")
+            client.sendall(
+                b"GET /api/v1/answering-machine/messages HTTP/1.1\r\nHost: 127.0.0.1\r\n"
+                b"Authorization: Bearer " + TOKEN.encode() + b"\r\nConnection: close\r\n\r\n")
+        finally:
+            os.kill(lab.process.pid, signal.SIGCONT)
+        assert client.recv(64).startswith(b"HTTP/1.1 200")
+    event = lab.event("voicemail", start)
+    assert event["snapshot"] is False
+    assert collection_data(event, "voicemail")["total"] == 2

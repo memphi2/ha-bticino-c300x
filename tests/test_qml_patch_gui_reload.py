@@ -510,3 +510,22 @@ def test_a_requester_that_stopped_waiting_leaves_no_answer_behind(station: Stati
     assert len(_settled(station)) == 1
     assert _kinds(station).count("wrapper") == 2
     assert list((station.run_dir / "done").iterdir()) == []
+
+
+def test_a_request_filed_while_a_worker_ends_is_still_served(station: Station) -> None:
+    """The requester sees the lock held and starts no worker; the next status read does."""
+
+    import fcntl
+
+    station.boot(C300X_TEST_TEARDOWN="1")
+    station.run_dir.mkdir()
+    with open(station.run_dir / "lock", "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        result = station.reload(C300X_QML_GUI_BUDGET_SECONDS="0")
+        assert result.returncode == 0, result.stderr
+    assert _kinds(station).count("wrapper") == 1
+    status = subprocess.run([str(SCRIPT), "status"], capture_output=True, text=True,
+                            env=station.script_env(), check=False, timeout=30)
+    assert status.returncode == 0, status.stderr
+    assert _wait_for(lambda: _kinds(station).count("wrapper") == 2, 30)
+    assert len(_settled(station)) == 1

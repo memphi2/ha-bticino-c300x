@@ -104,6 +104,11 @@ json_status() {
     fi
     qt5_fields=
     if [ "$QT5_DISPLAY" = "1" ]; then
+        # A request nobody serves (its worker died, or no requester waits any
+        # more) is taken up by the next status read.
+        if [ -d "$GUI_RUN_DIR/requests" ] && gui_requests_waiting; then
+            gui_spawn_worker
+        fi
         qt5_overlay="$(qt5_overlay_state)"
         # Left over from a run cut short: restore-all takes it away.
         if [ "$qt5_overlay" != "off" ] && [ "$state$core_state$media_user_label_state" = "originaloriginaloriginal" ]; then
@@ -549,6 +554,10 @@ gui_worker() {
         done
         if [ -z "$gui_mode" ]; then
             gui_phase idle
+            # A request filed while the lock was still held is served too:
+            # its requester saw a worker and started none.
+            "$GUI_FLOCK" -u 9
+            gui_requests_waiting && "$GUI_FLOCK" -n 9 && continue
             exit 0
         fi
         gui_answer=1
@@ -575,6 +584,29 @@ gui_worker() {
     done
 }
 
+gui_requests_waiting() {
+    for gui_waiting in "$GUI_RUN_DIR"/requests/* "$GUI_RUN_DIR"/serving/*; do
+        case "$gui_waiting" in
+            *.tmp) continue ;;
+        esac
+        [ -f "$gui_waiting" ] && return 0
+    done
+    return 1
+}
+
+gui_spawn_worker() {
+    if "$GUI_FLOCK" -n "$GUI_RUN_DIR/lock" true 2>/dev/null; then
+        gui_session=
+        if command -v setsid >/dev/null 2>&1; then
+            gui_session=setsid
+        fi
+        (
+            exec 9>&-
+            $gui_session $GUI_SHELL "$0" gui-worker </dev/null >/dev/null 2>&1 &
+        )
+    fi
+}
+
 # 0: a display program runs, 1: none could be started, 2: still restarting
 # when the wait ended (not a failure; the worker finishes the restart).
 gui_restart() {
@@ -595,16 +627,7 @@ gui_restart() {
             [ "$gui_answer" = "0" ] && return 0
             return 1
         fi
-        if "$GUI_FLOCK" -n "$GUI_RUN_DIR/lock" true 2>/dev/null; then
-            gui_session=
-            if command -v setsid >/dev/null 2>&1; then
-                gui_session=setsid
-            fi
-            (
-                exec 9>&-
-                $gui_session $GUI_SHELL "$0" gui-worker </dev/null >/dev/null 2>&1 &
-            )
-        fi
+        gui_spawn_worker
         [ "$(date +%s)" -lt "$gui_until" ] || return 2
         sleep 1
     done

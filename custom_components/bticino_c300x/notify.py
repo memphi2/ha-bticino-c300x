@@ -40,15 +40,22 @@ def _async_set_notify_description(
             "expires_in is 1 to 604800 seconds (default 3600). "
             "notification_id replaces an existing notification with the same ID "
             "(1-64 lowercase letters, digits, underscores or hyphens). "
-            "mode is display (default), led (requires memo LED support; stores the "
-            "notice without waiting for the LED; omit wake, sound and TTS settings), "
-            "speech (the message is only spoken over the "
-            "device speaker) or both (shown and spoken, without a tone; sound_duration "
-            "must be 0 or left out). tts_engine names the text-to-speech entity, for "
-            "example tts.piper; without it the engine chosen under Speech in the C300X "
-            "settings is used, else Home Assistant's default. language is optional."
+            "The switches display (popup, wake and tone), tts (spoken over the "
+            "device speaker) and led (the message LED; requires memo LED support) "
+            "are true or false and combine freely; at least one must be on. With "
+            "display and tts the speech replaces the tone. Durations need display, "
+            "tts_engine and language need tts. Without switches the message is "
+            "shown with wake and tone, and its notice lights the LED where the agent "
+            "supports it. The legacy mode (display, led, speech or both) still works "
+            "but cannot be combined with the switches. tts_engine names the "
+            "text-to-speech entity, for example tts.piper; without it the engine "
+            "chosen under Speech in the C300X settings is used, else Home Assistant's "
+            "default. language is optional."
         ),
-        "example": {"severity": "info", "wake_duration": 30, "sound_duration": 30},
+        "example": {
+            "display": True, "severity": "info",
+            "wake_duration": 30, "sound_duration": 30,
+        },
     })
     async_set_service_schema(hass, "notify", name, {
         "name": f"Send a display notification to {title}",
@@ -88,8 +95,7 @@ class C300XNotificationService(BaseNotificationService):
             raise ServiceValidationError("C300X notify targets are fixed per config entry")
         # Everything is checked before anything is shown or spoken.
         options = alert_options(kwargs.get("data"))
-        mode = options["mode"]
-        speech = None if mode not in {"speech", "both"} else prepare_speech(
+        speech = None if not options["tts"] else prepare_speech(
             self.hass, self.entry, message,
             engine=options.get("tts_engine"), language=options.get("language"),
         )
@@ -98,7 +104,7 @@ class C300XNotificationService(BaseNotificationService):
         self._pending.add(task)
         unconfirmed: HomeAssistantError | None = None
         try:
-            if mode != "speech":
+            if options["display"] or options["led"]:
                 try:
                     await async_send_display_alert(
                         self.hass, self.entry, message,

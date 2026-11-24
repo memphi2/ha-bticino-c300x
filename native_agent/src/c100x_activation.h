@@ -7,6 +7,11 @@
 
 #define C100X_ACTIVATION_POLL_FDS 1
 
+/* No call frame and no other activity for this long before a reboot. */
+#ifndef C100X_ACTIVATION_IDLE_MS
+#define C100X_ACTIVATION_IDLE_MS 120000
+#endif
+
 enum c100x_display_action {
     C100X_ACTION_NONE = 0,
     C100X_ACTION_STATUS,
@@ -74,9 +79,14 @@ struct c100x_activation {
     int reboot_reason;
     int reboot_requests;
     const char *blocked;
+    /* A failed boot check at the service start keeps activation off. */
+    const char *boot_check;
 };
 
 void c100x_activation_init(struct c100x_activation *activation, const char *bundle);
+/* Why the station may not be rebooted now, or NULL (c100x_reboot_gate.c). */
+const char *c100x_reboot_gate(const struct c100x_activation *activation,
+    const struct c100x_activation_inputs *inputs);
 int c100x_activation_prepare(const struct c100x_activation *activation, struct pollfd *fd);
 /* One loop step. 1: the station is idle and the reboot is due now. */
 int c100x_activation_tick(struct c100x_activation *activation, const struct c100x_activation_inputs *inputs);

@@ -248,14 +248,27 @@ def test_service_start_rolls_the_trial_back_after_its_trial_boot(tree, sequence)
     assert not (tree[0] / "backup/pending").exists()
 
 
-@pytest.mark.parametrize("damage", ["missing_payload", "symlink_payload", "tampered_journal"])
-def test_service_start_fails_closed_when_the_boot_check_fails(tree, damage):
+@pytest.mark.parametrize(("damage", "reason"), [
+    ("missing_payload", "payload_unavailable"), ("symlink_payload", "payload_unavailable"),
+    ("tampered_journal", "boot_check_failed"),
+])
+def test_service_start_starts_the_agent_and_records_a_failed_boot_check(tree, damage, reason):
     run(tree, "prepare")
     # Only a rollback authenticates the journal; a trial boot keeps it untouched.
     (tree[0] / "backup/pending.trial-boot").write_text(LATER_BOOT + "\n")
     reboot(tree, FURTHER_BOOT)
-    assert not service_start(tree, damage)
+    assert service_start(tree, damage)
     assert (tree[0] / "backup/pending").is_dir()
+    assert (tree[0] / "backup/boot-check-failed").read_text() == reason + "\n"
+
+
+def test_a_passing_service_start_clears_an_old_boot_check_mark(tree):
+    run(tree, "prepare")
+    (tree[0] / "backup/boot-check-failed").write_text("payload_unavailable\n")
+    reboot(tree)
+    assert service_start(tree)
+    assert not (tree[0] / "backup/boot-check-failed").exists()
+    assert (tree[0] / "backup/pending.trial-boot").exists()
 
 
 @pytest.mark.parametrize("mode", ["challenge", "ready", "idle"])

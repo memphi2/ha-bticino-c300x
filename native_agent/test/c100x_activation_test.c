@@ -317,6 +317,45 @@ static void test_display_functions_follow_the_confirmed_adapter(void)
     c100x_activation_close(&activation);
 }
 
+static int json_has(const struct c100x_activation *activation, const char *text)
+{
+    char json[1024];
+    assert(c100x_activation_json(activation, json, sizeof(json)));
+    return strstr(json, text) != NULL;
+}
+
+/* A failed boot check at the service start: activation stays off, a restore still works. */
+static void test_failed_boot_check_keeps_activation_off(void)
+{
+    struct c100x_activation activation;
+    struct c100x_activation_inputs inputs = idle_station(10 * MINUTE);
+    char marker[320];
+    setenv("C100X_BACKUP_DIR", directory, 1);
+    snprintf(marker, sizeof(marker), "%s/boot-check-failed", directory);
+    write_file(marker, "payload_unavailable\n");
+    set_state("prepared", 1, 0, 0);
+    start_with(&activation, inputs.now_ms);
+    assert(json_has(&activation, "\"boot_check\":\"payload_unavailable\""));
+    assert(run_for(&activation, &inputs, inputs.now_ms + 5 * MINUTE) == 0);
+    assert(!strcmp(c100x_activation_request(&activation, C100X_ACTION_PREPARE), "c100x_display_boot_check_failed"));
+    c100x_activation_close(&activation);
+    write_file(marker, "something else\n");
+    set_state("installed", 0, 1, 0);
+    start_with(&activation, inputs.now_ms);
+    assert(json_has(&activation, "\"boot_check\":\"boot_check_failed\""));
+    assert(json_has(&activation, "\"activate\":false"));
+    assert(!c100x_activation_confirmed(&activation) && !c300x_device_display_features());
+    assert(c100x_activation_request(&activation, C100X_ACTION_RESTORE) == NULL);
+    assert(settle(&activation, &inputs) == 0);
+    assert(run_for(&activation, &inputs, inputs.now_ms + 125000) == 1);
+    c100x_activation_close(&activation);
+    unlink(marker);
+    set_state("stock", 0, 0, 0);
+    start_with(&activation, inputs.now_ms);
+    assert(json_has(&activation, "\"boot_check\":\"\""));
+    c100x_activation_close(&activation);
+}
+
 static void test_inert_without_a_c100x(void)
 {
     struct c100x_activation activation;
@@ -347,6 +386,7 @@ int main(int argc, char **argv)
     else if (!strcmp(argv[1], "unknown")) test_unknown_status_fails_closed();
     else if (!strcmp(argv[1], "requests")) test_activate_and_restore_requests();
     else if (!strcmp(argv[1], "features")) test_display_functions_follow_the_confirmed_adapter();
+    else if (!strcmp(argv[1], "boot-check")) test_failed_boot_check_keeps_activation_off();
     else assert(!"unknown case");
     return 0;
 }

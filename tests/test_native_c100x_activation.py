@@ -7,7 +7,8 @@ from pathlib import Path
 import pytest
 
 NATIVE = Path(__file__).resolve().parents[1] / "native_agent"
-SOURCES = ("c100x_activation.c", "c100x_payload.c", "command_job.c", "time_util.c", "json_util.c", "json_parse.c",
+SOURCES = ("c100x_activation.c", "c100x_boot_check.c", "c100x_payload.c", "c100x_reboot_gate.c",
+           "command_job.c", "time_util.c", "json_util.c", "json_parse.c",
            "device_detect.c", "string_util.c")
 
 
@@ -52,7 +53,7 @@ def test_inert_on_a_c300x(c300x_binary, tmp_path):
 
 @pytest.mark.parametrize("case", [
     "idle", "busy", "trial-fails", "trial-confirms", "no-display", "interrupted", "unknown", "requests",
-    "features",
+    "features", "boot-check",
 ])
 def test_c100x_activation(c100x_binary, tmp_path, case):
     _run(c100x_binary, case, tmp_path)

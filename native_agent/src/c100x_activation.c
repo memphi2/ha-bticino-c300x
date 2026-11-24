@@ -1,4 +1,5 @@
 #include "c100x_activation.h"
+#include "c100x_boot_check.h"
 #include "c100x_payload.h"
 #include "device_detect.h"
 #include "json_util.h"
@@ -23,17 +24,6 @@
 #define CONFIRM_ATTEMPTS 3
 /* A lease renewal or the probe's hand-over is not a lost display. */
 #define LEASE_GAP_MS 5000
-/* No call frame and no other activity for this long before a reboot. */
-#ifndef C100X_ACTIVATION_IDLE_MS
-#define C100X_ACTIVATION_IDLE_MS 120000
-#endif
-/* A call without an end frame counts as open for at most this long. */
-#ifndef C100X_ACTIVATION_CALL_HOLD_MS
-#define C100X_ACTIVATION_CALL_HOLD_MS 600000
-#endif
-#ifndef C100X_ACTIVATION_MIN_UPTIME_MS
-#define C100X_ACTIVATION_MIN_UPTIME_MS 120000
-#endif
 /* A station still up this long after a reboot request gets one more. */
 #ifndef C100X_ACTIVATION_REBOOT_RETRY_MS
 #define C100X_ACTIVATION_REBOOT_RETRY_MS 600000
@@ -49,7 +39,7 @@ void c100x_activation_init(struct c100x_activation *activation, const char *bund
 {
     memset(activation, 0, sizeof(*activation));
     c300x_command_job_init(&activation->job);
-    activation->blocked = "";
+    activation->blocked = activation->boot_check = "";
     if (c300x_device_model() != C300X_DEVICE_MODEL_C100X || bundle == NULL
         || strlen(bundle) >= sizeof(activation->bundle)) {
         return;
@@ -57,6 +47,7 @@ void c100x_activation_init(struct c100x_activation *activation, const char *bund
     snprintf(activation->bundle, sizeof(activation->bundle), "%s", bundle);
     activation->enabled = 1;
     activation->refresh = 1;
+    activation->boot_check = c100x_boot_check();
 }
 
 int c100x_activation_busy(const struct c100x_activation *activation)
@@ -72,7 +63,7 @@ int c100x_activation_writing(const struct c100x_activation *activation)
 
 int c100x_activation_confirmed(const struct c100x_activation *activation)
 {
-    return activation->enabled && activation->known && activation->confirmed;
+    return activation->enabled && activation->known && activation->confirmed && !*activation->boot_check;
 }
 
 int c100x_activation_prepare(const struct c100x_activation *activation, struct pollfd *fd)
@@ -84,25 +75,6 @@ int c100x_activation_prepare(const struct c100x_activation *activation, struct p
         return 1000;
     }
     return timeout;
-}
-
-void c100x_activation_door_frame(struct c100x_activation *activation, const char *frame, long long now_ms)
-{
-    int what;
-    if (!activation->enabled || strncmp(frame, "*8*", 3) != 0) {
-        return;
-    }
-    what = atoi(frame + 3);
-    /* Locks and lights are no call. */
-    if (what >= 19 && what <= 22) {
-        return;
-    }
-    activation->call_frame_ms = now_ms;
-    if (what == 1 || what == 2) {
-        activation->call_open_ms = now_ms;
-    } else if (what == 3) {
-        activation->call_open_ms = 0;
-    }
 }
 
 static void set_error(struct c100x_activation *activation, enum c100x_display_action action, const char *text)
@@ -216,6 +188,7 @@ static void job_done(struct c100x_activation *activation)
     c300x_command_job_close(&activation->job);
     c300x_command_job_init(&activation->job);
     activation->running = C100X_ACTION_NONE;
+    activation->boot_check = c100x_boot_check();
 }
 
 static void run_jobs(struct c100x_activation *activation)
@@ -272,24 +245,11 @@ static void trial_step(struct c100x_activation *activation, const struct c100x_a
     activation->queued = C100X_ACTION_BOOT_CONFIRM;
 }
 
-static const char *reboot_gate(const struct c100x_activation *activation,
-    const struct c100x_activation_inputs *inputs)
-{
-    long long now = inputs->now_ms;
-    if (!inputs->reboot_allowed) return "reboot_disabled";
-    if (!inputs->door_events) return "call_state_unknown";
-    if (activation->call_open_ms && now - activation->call_open_ms < C100X_ACTIVATION_CALL_HOLD_MS) return "call_active";
-    if (activation->call_frame_ms && now - activation->call_frame_ms < C100X_ACTIVATION_IDLE_MS) return "call_recent";
-    if (inputs->station_busy || c100x_activation_busy(activation)) return "station_busy";
-    if (inputs->lease && inputs->lease_blocked) return "display_busy";
-    if (now < C100X_ACTIVATION_MIN_UPTIME_MS) return "starting";
-    return NULL;
-}
-
 static int reboot_step(struct c100x_activation *activation, const struct c100x_activation_inputs *inputs)
 {
     long long now = inputs->now_ms;
     enum reboot_reason reason = !activation->known ? REBOOT_NONE
+        : *activation->boot_check ? (activation->reboot_due ? REBOOT_RESTORED : REBOOT_NONE)
         : activation->phase == C100X_PHASE_PREPARED && activation->switched ? REBOOT_PREPARED
         : activation->phase == C100X_PHASE_TRIAL && activation->trial_failed ? REBOOT_TRIAL_FAILED
         : activation->reboot_due ? REBOOT_RESTORED : REBOOT_NONE;
@@ -313,7 +273,7 @@ static int reboot_step(struct c100x_activation *activation, const struct c100x_a
         activation->blocked = "reboot_failed";
         return 0;
     }
-    if ((blocked = reboot_gate(activation, inputs)) != NULL) {
+    if ((blocked = c100x_reboot_gate(activation, inputs)) != NULL) {
         activation->blocked = blocked;
         activation->idle_since_ms = 0;
         return 0;
@@ -338,7 +298,7 @@ int c100x_activation_tick(struct c100x_activation *activation, const struct c100
     activation->started_ms = activation->started_ms ? activation->started_ms : inputs->now_ms;
     run_jobs(activation);
     if (activation->job.pid == 0 && activation->queued == C100X_ACTION_NONE && !activation->refresh
-        && activation->known) {
+        && activation->known && !*activation->boot_check) {
         int pending = activation->phase == C100X_PHASE_PREPARED || activation->phase == C100X_PHASE_TRIAL;
         if (pending && !activation->switched && !activation->recovered) {
             /* A prepare that never switched: the running display never saw it. */
@@ -387,6 +347,9 @@ const char *c100x_activation_request(struct c100x_activation *activation, enum c
     if (!activation->known) {
         return "c100x_display_status_unknown";
     }
+    if (*activation->boot_check && action == C100X_ACTION_PREPARE) {
+        return "c100x_display_boot_check_failed";
+    }
     if (activation->phase == C100X_PHASE_PREPARED || activation->phase == C100X_PHASE_TRIAL
         || activation->phase == C100X_PHASE_STALE) {
         if (action == C100X_ACTION_PREPARE) {
@@ -413,7 +376,7 @@ int c100x_activation_json(const struct c100x_activation *activation, char *out, 
         "{\"supported\":true,\"status_known\":%s,\"busy\":%s,\"phase\":\"%s\",\"trial_switched\":%s,"
         "\"confirmed\":%s,\"generation\":\"%s\",\"available\":\"%s\",\"last_result\":\"%s\","
         "\"last_error\":\"%s\",\"reboot_pending\":%s,\"reboot_blocked\":\"%s\","
-        "\"activate\":%s,\"restore\":%s,\"alert_sound\":false}",
+        "\"activate\":%s,\"restore\":%s,\"alert_sound\":false,\"boot_check\":\"%s\"}",
         activation->known ? "true" : "false",
         c100x_activation_busy(activation) ? "true" : "false",
         phase_names[activation->known ? activation->phase : C100X_PHASE_UNKNOWN],
@@ -425,7 +388,7 @@ int c100x_activation_json(const struct c100x_activation *activation, char *out, 
         activation->error,
         activation->reboot_reason != REBOOT_NONE ? "true" : "false",
         activation->blocked,
-        idle && !pending && !current ? "true" : "false",
-        idle && activation->phase != C100X_PHASE_STOCK ? "true" : "false");
+        idle && !pending && !current && !*activation->boot_check ? "true" : "false",
+        idle && activation->phase != C100X_PHASE_STOCK ? "true" : "false", activation->boot_check);
     return written >= 0 && (size_t)written < out_len;
 }

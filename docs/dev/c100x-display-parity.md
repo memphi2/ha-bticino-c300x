@@ -192,8 +192,18 @@ up for 2 minutes. It asks once per reason and once more after 10 minutes if the
 station is still up; otherwise it reports `reboot_blocked` and waits. There is no
 forced reboot and no night window.
 
+If the service start cannot check a pending trial (the payload is missing or not
+a single-link regular file, or `payload boot` fails, for example after a vendor
+firmware change), the agent still starts. Init writes the reason
+(`payload_unavailable` or `boot_check_failed`) to `boot-check-failed` next to
+the backups and clears it at the next start. The `payload boot` rule has
+already rolled back where it could. While the mark is there, the agent reports
+`boot_check`, keeps the display functions off, refuses `activate` with
+`c100x_display_boot_check_failed`, and neither checks the trial nor reboots for
+it; a `restore` and its reboot still work. The backups stay in place.
+
 `GET /api/v1/maintenance/c100x-display` reports the phase, the confirmation, the
-last result and why a reboot waits; `POST …/actions/activate` and
+last result, a failed boot check and why a reboot waits; `POST …/actions/activate` and
 `…/actions/restore` start the transactions. The confirmed adapter unlocks the key
 beep, the display alerts (without a tone), the display bridge and the ringer
 mute, and Home Assistant switches its device-UI setting on. Turning that setting

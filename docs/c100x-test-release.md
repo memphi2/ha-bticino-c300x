@@ -175,7 +175,10 @@ writable targets/ancestors have unexpected symlinks, or the existing installatio
 cannot be identified. Also require
 `/home/bticino/cfg/extra/c300x-device-file-backups/c100x-display/pending` to be
 absent, including a dangling symlink. Init can run pending GUI recovery on agent
-start, so such a marker is incompatible with this GUI-free first test.
+start, so such a marker is incompatible with this GUI-free first test. If that
+check fails, the agent starts anyway with display activation off and records the
+reason in `boot-check-failed` in the same directory; Home Assistant shows it as a
+repair.
 
 ## Private Pre-Test Backup
 

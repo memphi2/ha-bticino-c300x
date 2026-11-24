@@ -63,6 +63,8 @@ def test_extracted_http_modules_have_separate_budgets() -> None:
         "http_ui_preferences.c": (2_000, 45),
         "c100x_activation.c": (18_000, 440),
         "c100x_payload.c": (1_000, 30),
+        "c100x_boot_check.c": (1_200, 40),
+        "c100x_reboot_gate.c": (2_000, 60),
         "http_c100x_display.c": (3_500, 90),
         "http_c100x_display_api.c": (4_500, 100),
     }

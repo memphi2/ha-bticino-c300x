@@ -1,7 +1,7 @@
 import {
   C300X_TRANSLATIONS,
   c300xLocalize,
-} from "./c300x-translations.js?v=fd15372fe9ca5af1";
+} from "./c300x-translations.js?v=598781cfd4f44c2d";
 import {
   C300X_AUDIO_CODEC_OBJECT_ID,
   C300X_CAMERA_OBJECT_ID,
@@ -15,14 +15,18 @@ import {
   c300xObjectSuffix,
   c300xRelatedEntity,
   c300xResolveEntity,
-} from "./c300x-entity-resolver.js?v=fd15372fe9ca5af1";
+} from "./c300x-entity-resolver.js?v=598781cfd4f44c2d";
 import {
   C300X_CARD_EDITOR_TAG,
   c300xDoorbellCardStubConfig,
-} from "./c300x-card-editor.js?v=fd15372fe9ca5af1";
-import { C300XCardActions } from "./c300x-card-actions.js?v=fd15372fe9ca5af1";
-import { C300XCardLifecycleState } from "./c300x-card-lifecycle.js?v=fd15372fe9ca5af1";
-import { C300X_DOORBELL_CARD_TEMPLATE } from "./c300x-card-template.js?v=fd15372fe9ca5af1";
+} from "./c300x-card-editor.js?v=598781cfd4f44c2d";
+import { C300XCardActions } from "./c300x-card-actions.js?v=598781cfd4f44c2d";
+import {
+  C300XCardLifecycleState,
+  c300xAnsweredRingKey,
+} from "./c300x-card-lifecycle.js?v=598781cfd4f44c2d";
+import { c300xRingLifecycleActive } from "./c300x-ring-preview-state.js?v=598781cfd4f44c2d";
+import { C300X_DOORBELL_CARD_TEMPLATE } from "./c300x-card-template.js?v=598781cfd4f44c2d";
 import {
   c300xCardViewModel,
   c300xIsHomeCallActive,
@@ -30,18 +34,20 @@ import {
   c300xMediaReadinessHasRepair,
   c300xMediaReadinessLabelKey,
   c300xMediaState,
-} from "./c300x-state-model.js?v=fd15372fe9ca5af1";
-import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=fd15372fe9ca5af1";
-import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=fd15372fe9ca5af1";
-import { C300XStreamSnapshots } from "./c300x-stream-snapshots.js?v=fd15372fe9ca5af1";
-import { C300XCardMedia } from "./c300x-card-media.js?v=fd15372fe9ca5af1";
-import { c300xFollowPictureSize } from "./c300x-picture-frame.js?v=fd15372fe9ca5af1";
-import { mediaStamp } from "./c300x-media-translations.js?v=fd15372fe9ca5af1";
+} from "./c300x-state-model.js?v=598781cfd4f44c2d";
+import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=598781cfd4f44c2d";
+import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=598781cfd4f44c2d";
+import { C300XStreamSnapshots } from "./c300x-stream-snapshots.js?v=598781cfd4f44c2d";
+import { C300XCardMedia } from "./c300x-card-media.js?v=598781cfd4f44c2d";
+import { c300xFollowPictureSize } from "./c300x-picture-frame.js?v=598781cfd4f44c2d";
+import { mediaStamp } from "./c300x-media-translations.js?v=598781cfd4f44c2d";
 
 const C300X_NOTICE_TIMEOUT_MS = 2000;
 const C300X_RING_ANSWER_LAUNCH_PARAM = "c300x_ring_answer";
 const C300X_RING_ANSWER_LAUNCH_CLAIMS_KEY = "__c300xRingAnswerLaunchClaims";
 const C300X_RING_ANSWER_LAUNCH_LEGACY_CLAIM = "__legacy__";
+const C300X_ANSWERED_RING_OWNERS_KEY = "__c300xAnsweredRingOwners";
+const C300X_ANSWERED_RING_STORAGE_PREFIX = "c300x_answered_ring:";
 
 function c300xRingAnswerLaunchClaims() {
   const existing = globalThis[C300X_RING_ANSWER_LAUNCH_CLAIMS_KEY];
@@ -51,6 +57,53 @@ function c300xRingAnswerLaunchClaims() {
   const claims = new Set();
   globalThis[C300X_RING_ANSWER_LAUNCH_CLAIMS_KEY] = claims;
   return claims;
+}
+
+// One card per page carries the call this browser answered; a reload finds it
+// again in sessionStorage, keyed to the ring.
+function c300xAnsweredRingOwners() {
+  const existing = globalThis[C300X_ANSWERED_RING_OWNERS_KEY];
+  if (existing instanceof Map) {
+    return existing;
+  }
+  const owners = new Map();
+  globalThis[C300X_ANSWERED_RING_OWNERS_KEY] = owners;
+  return owners;
+}
+
+function c300xClaimAnsweredRing(entityId, card, force = false) {
+  const owners = c300xAnsweredRingOwners();
+  const owner = owners.get(entityId);
+  if (!force && owner && owner !== card && !owner._disposed && owner.isConnected !== false) {
+    return false;
+  }
+  owners.set(entityId, card);
+  return true;
+}
+
+function c300xAnsweredRingStorage(run) {
+  try {
+    return globalThis.sessionStorage ? run(globalThis.sessionStorage) : null;
+  } catch (_err) {
+    return null;
+  }
+}
+
+function c300xStoredAnsweredRing(entityId) {
+  return c300xAnsweredRingStorage((storage) =>
+    storage.getItem(C300X_ANSWERED_RING_STORAGE_PREFIX + entityId)) || "";
+}
+
+function c300xStoreAnsweredRing(entityId, key) {
+  if (c300xStoredAnsweredRing(entityId) === key) return;
+  c300xAnsweredRingStorage((storage) =>
+    storage.setItem(C300X_ANSWERED_RING_STORAGE_PREFIX + entityId, key));
+}
+
+function c300xForgetStoredAnsweredRing(entityId) {
+  c300xAnsweredRingOwners().delete(entityId);
+  c300xAnsweredRingStorage((storage) =>
+    storage.removeItem(C300X_ANSWERED_RING_STORAGE_PREFIX + entityId));
 }
 
 class C300XDoorbellCallCard extends HTMLElement {
@@ -277,6 +330,10 @@ class C300XDoorbellCallCard extends HTMLElement {
     // to the peer that was just closed; an explicit stop by the user is kept
     // in ringPreviewSuppressed and still prevents a restart.
     this._lifecycle.ringPreviewStarted = false;
+    // A ring end is not seen while detached; the next state must match the
+    // answered ring exactly. A reattached card may connect once more.
+    this._lifecycle.answeredRingWatched = false;
+    this._lifecycle.answeredRingReconnected = false;
   }
 
   _disposeResources() {
@@ -291,6 +348,10 @@ class C300XDoorbellCallCard extends HTMLElement {
     this._clearNoticeTimer();
     this._ringbackTone?.dispose();
     this._closePeer(false, { updateState: false });
+    const owners = c300xAnsweredRingOwners();
+    for (const [entityId, owner] of owners) {
+      if (owner === this) owners.delete(entityId);
+    }
   }
 
   getCardSize() {
@@ -363,6 +424,7 @@ class C300XDoorbellCallCard extends HTMLElement {
     return JSON.stringify({
       cameraEntityId: this._resolvedCameraEntityId(),
       cameraState: entity?.state || "",
+      ringKey: c300xAnsweredRingKey(this._resolvedCameraEntityId(), entity),
       deviceActions: ["door_unlock", "stair_light"].map((key) => {
         const id = this._deviceActionEntity(key);
         return [id, this._hass?.states?.[id]?.state, this._actions.deviceActionPending(key),
@@ -381,6 +443,7 @@ class C300XDoorbellCallCard extends HTMLElement {
       isStreaming: attributes.is_streaming === true,
       lifecycle: {
         activeHomeCallSession: this._lifecycle.activeHomeCallSession,
+        answeredRingKey: this._lifecycle.answeredRingKey,
         answeringDoorbell: this._lifecycle.answeringDoorbell,
         doorbellAnswered: this._lifecycle.doorbellAnswered,
         hangupInProgress: this._lifecycle.hangupInProgress,
@@ -507,6 +570,7 @@ class C300XDoorbellCallCard extends HTMLElement {
       }
     }
     this._lifecycle.commitMediaState(mediaState);
+    const answeredHere = this._answeredRingHere(entity);
     const name = this._displayName(entity);
     const hasLocalMedia = this._webrtc.running || !!this._webrtc.remoteStream;
     this._snapshots?.update({
@@ -522,7 +586,7 @@ class C300XDoorbellCallCard extends HTMLElement {
       homeCallMode,
       active: doorstationActive,
       startingCall: this._lifecycle.startingCall,
-      doorbellAnswered: this._lifecycle.doorbellAnswered,
+      doorbellAnswered: this._lifecycle.doorbellAnswered || answeredHere,
       previewStarting: this._lifecycle.previewStarting,
       ringPreviewActive: this._lifecycle.ringPreviewActive,
     });
@@ -586,8 +650,14 @@ class C300XDoorbellCallCard extends HTMLElement {
       webrtcRunning: this._webrtc.running,
       transitionActive: !!this._transitionWebrtc,
       answerLaunch: this._ringAnswerLaunchPending || this._ringAnswerLaunchStarting,
+      answeredHere,
     })) {
       this._startPassiveAnsweredDoorbellPreview();
+    }
+    if (answeredHere && this._shouldReconnectAnsweredRing(mediaState)) {
+      // The call this browser answered lost its peer (network, reload): one
+      // new connection with the microphone; the hang-up stays available.
+      this._startNotificationAnsweredDoorbellStream();
     }
     this._lastRenderSignature = this._renderSignature();
   }
@@ -694,6 +764,8 @@ class C300XDoorbellCallCard extends HTMLElement {
     }
     const generation = this._mediaGeneration;
     const isCurrent = () => !this._disposed && generation === this._mediaGeneration;
+    this._rememberAnsweredRing();
+    this._lifecycle.answeredRingReconnected = true;
     this._ringAnswerLaunchStarting = true;
     let waitingForPromotion = false;
     try {
@@ -1028,6 +1100,7 @@ class C300XDoorbellCallCard extends HTMLElement {
     const entityId = this._resolvedCameraEntityId();
     const entity = this._hass?.states?.[entityId];
     this._cameraEntityState = entity || null;
+    this._observeAnsweredRingEnd(entity);
     this._cancelUnavailableMediaStart(entity);
     this._cancelEndedRingStart(entity);
   }
@@ -1104,9 +1177,58 @@ class C300XDoorbellCallCard extends HTMLElement {
     if (picture && picture.session !== session) {
       picture.configure?.(this._hass, this._entryId(), session);
     }
+    this._observeAnsweredRingEnd(data.new_state);
     this._cancelUnavailableMediaStart(data.new_state);
     this._cancelEndedRingStart(data.new_state);
     this._scheduleUpdate();
+  }
+
+  _answeredRingHere(entity = this._cameraEntity()) {
+    const entityId = this._resolvedCameraEntityId();
+    const key = c300xAnsweredRingKey(entityId, entity);
+    if (!key || !this._lifecycle) return false;
+    if (!this._lifecycle.followAnsweredRing(key)) {
+      if (c300xStoredAnsweredRing(entityId) !== key) return false;
+      this._lifecycle.rememberAnsweredRing(key);
+    }
+    if (!c300xClaimAnsweredRing(entityId, this)) return false;
+    c300xStoreAnsweredRing(entityId, this._lifecycle.answeredRingKey);
+    return true;
+  }
+
+  _rememberAnsweredRing() {
+    const entityId = this._resolvedCameraEntityId();
+    const key = c300xAnsweredRingKey(entityId, this._cameraEntity());
+    if (!this._lifecycle.rememberAnsweredRing(key)) return;
+    c300xClaimAnsweredRing(entityId, this, true);
+    c300xStoreAnsweredRing(entityId, key);
+  }
+
+  _observeAnsweredRingEnd(entity) {
+    const mediaState = c300xMediaState(entity);
+    if (!c300xMediaEntityAvailable(entity) || !mediaState) {
+      // A ring end is not visible here; the ring must match exactly again.
+      if (this._lifecycle) this._lifecycle.answeredRingWatched = false;
+      return;
+    }
+    if (c300xRingLifecycleActive(mediaState)) return;
+    const entityId = this._resolvedCameraEntityId();
+    if (!entityId || !(this._lifecycle?.answeredRingKey || c300xStoredAnsweredRing(entityId))) return;
+    this._lifecycle?.forgetAnsweredRing();
+    c300xForgetStoredAnsweredRing(entityId);
+  }
+
+  _shouldReconnectAnsweredRing(mediaState) {
+    return mediaState === "ring_active"
+      && !this._isHomeCallMode()
+      && this._lifecycle.canReconnectAnsweredRing()
+      && !this._ringAnswerLaunchPending
+      && !this._ringAnswerLaunchStarting
+      && !this._talkbackStarting
+      && !this._transitionWebrtc
+      && !this._webrtc.running
+      && !this._webrtc.pc
+      && !this._webrtc.remoteStream;
   }
 
   _shouldStartNotificationAnsweredDoorbellStream(mediaState) {
@@ -1400,7 +1522,7 @@ class C300XDoorbellCallCard extends HTMLElement {
         hasLocalMedia: this._webrtc.running || !!this._webrtc.remoteStream,
       }),
       startingCall: this._lifecycle.startingCall,
-      doorbellAnswered: this._lifecycle.doorbellAnswered,
+      doorbellAnswered: this._lifecycle.doorbellAnswered || this._answeredRingHere(),
       previewStarting: this._lifecycle.previewStarting,
       ringPreviewActive: this._lifecycle.ringPreviewActive,
     });

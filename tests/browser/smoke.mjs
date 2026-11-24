@@ -9,6 +9,7 @@ import { checkMatchingPictureLayout } from "./matching_picture_layout.mjs";
 import { checkMediaAvailability } from "./media_availability.mjs";
 import { checkPendingMicrophone } from "./pending_microphone.mjs";
 import { checkRingEndStart } from "./ring_end_start.mjs";
+import { checkAnsweredRing } from "./answered_ring.mjs";
 import { checkPictureControls } from "./picture_controls.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -55,6 +56,7 @@ try {
   await checkMediaAvailability(page, artifacts);
   await checkPendingMicrophone(page);
   await checkRingEndStart(page);
+  await checkAnsweredRing(page);
   await checkPictureControls(page);
   await checkMatchingPictureLayout(page, artifacts);
   await checkSnapshotLayout(page, artifacts);

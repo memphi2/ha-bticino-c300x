@@ -1,13 +1,21 @@
 import {
   c300xRingLifecycleActive,
   c300xShouldResetRingPreviewSuppression,
-} from "./c300x-ring-preview-state.js?v=fd15372fe9ca5af1";
+} from "./c300x-ring-preview-state.js?v=598781cfd4f44c2d";
 
 const C300X_EXPLICIT_RING_PREVIEW_STOP_REASONS = new Set([
   "agent_cpu_watchdog",
   "doorbell_media_closed",
   "doorbell_video_stopped",
 ]);
+
+// The ring a browser answered, so it keeps the hang-up after its peer is gone.
+// Seconds only: HA sends the same instant with other precision in states and events.
+export function c300xAnsweredRingKey(entityId, entity) {
+  if (!entityId || !c300xRingLifecycleActive(entity?.attributes?.media_state)) return "";
+  const since = Date.parse(String(entity?.last_changed || "").replace(/\.\d+/, ""));
+  return `${entityId}@${Number.isFinite(since) ? Math.floor(since / 1000) : ""}`;
+}
 
 export class C300XCardLifecycleState {
   constructor() {
@@ -23,6 +31,51 @@ export class C300XCardLifecycleState {
     this.ringPreviewActive = false;
     this.doorbellAnswered = false;
     this.activeHomeCallSession = false;
+    this.answeredRingKey = "";
+    this.answeredRingWatched = false;
+    this.answeredRingHangup = false;
+    this.answeredRingReconnected = false;
+  }
+
+  rememberAnsweredRing(key) {
+    if (!key) return false;
+    if (key !== this.answeredRingKey) {
+      this.answeredRingHangup = false;
+      this.answeredRingReconnected = false;
+    }
+    this.answeredRingKey = key;
+    this.answeredRingWatched = true;
+    return true;
+  }
+
+  followAnsweredRing(key) {
+    if (!key || !this.answeredRingKey) return false;
+    if (key !== this.answeredRingKey) {
+      // A changed camera state is the same ring only if the card saw no end
+      // in between; after a detach it may be the next ring.
+      if (!this.answeredRingWatched) return false;
+      this.answeredRingKey = key;
+    }
+    this.answeredRingWatched = true;
+    return true;
+  }
+
+  forgetAnsweredRing() {
+    this.answeredRingKey = "";
+    this.answeredRingWatched = false;
+    this.answeredRingHangup = false;
+    this.answeredRingReconnected = false;
+  }
+
+  canReconnectAnsweredRing() {
+    return !!this.answeredRingKey
+      && !this.answeredRingHangup
+      && !this.answeredRingReconnected
+      && !this.doorbellAnswered
+      && !this.answeringDoorbell
+      && !this.hangupInProgress
+      && !this.previewStarting
+      && !this.ringPreviewSuppressed;
   }
 
   evaluateMediaState(mediaState) {
@@ -73,7 +126,9 @@ export class C300XCardLifecycleState {
     );
   }
 
-  shouldStartPassiveAnsweredPreview({ mediaState, webrtcRunning, transitionActive, answerLaunch }) {
+  shouldStartPassiveAnsweredPreview({
+    mediaState, webrtcRunning, transitionActive, answerLaunch, answeredHere = false,
+  }) {
     const hadPreview = this.ringPreviewActive || this.ringPreviewStarted;
     // A card that is answering itself gets the stream with its microphone;
     // the receive-only preview is for a call another client answered.
@@ -81,6 +136,7 @@ export class C300XCardLifecycleState {
       mediaState === "ring_active"
       && hadPreview
       && !this.doorbellAnswered
+      && !answeredHere
       && !this.answeringDoorbell
       && !answerLaunch
       && !this.passiveAnsweredPreviewStarted
@@ -100,6 +156,7 @@ export class C300XCardLifecycleState {
     if (clearStatus) {
       this.ringPreviewStarted = false;
     }
+    // The peer is gone, the answered call is not: answeredRingKey stays.
     this.doorbellAnswered = false;
   }
 

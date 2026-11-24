@@ -87,8 +87,8 @@ HTTP handler in the isolated fixture; device writes are substitutes.
 | Unchanged apply | **H** deterministic RCC, current embedded preload, wrapper comparison; missing/stale artifacts repaired | A running PID is not a QML-ready handshake |
 | Optional/core/label removal | **F/H** real core, label, full apply, optional restore and restore-all sequence; complete removal restores wrapper and removes overlay | Confirm native stock screen after removal: **D** |
 | Early startup failure | **F/H** original wrapper under original ARM Bash 5.1.16 and host Bash; stock controls and bounded-log fixtures | Only errors within 60 seconds qualify; exits 0,137,138,140,143, later exits and hangs are not a general watchdog recovery mechanism |
-| Quarantine recovery | **H** the mark holds for the boot that wrote it; partial restore and plain reloads keep it; each apply retries once (see GUI Restart And Quarantine) | Diagnose actual Qt error before retry: **D** |
-| GUI versus agent restart | **F/H** bt_daemon starts the wrapper once and never again; `qml_patch.sh` stops the old display completely before it starts exactly one new wrapper | Display release timing on eglfs/Vivante: **D** |
+| Quarantine recovery | **H** the mark holds for the boot that wrote it; partial restore and plain reloads keep it; the restart of an apply retries once (see Restart design) | Diagnose actual Qt error before retry: **D** |
+| GUI versus agent restart | **F/H** bt_daemon starts the wrapper once and never again; one detached restart worker stops the old display completely before it starts exactly one new wrapper | Display release timing on eglfs/Vivante: **D** |
 | Self-update | **H** changed QML and runtime-only preload reconciliation, optional pages on/off, pending follow-up retained on failure | Complete update/reconnect on firmware: **D** |
 | Downgrade | **F/H** stable 2.8.2 payload refused without verified full removal; actual 3.0.6 restore-all then accepts it; Qt4 originals accepted | Guard requires this running updater; old agents and SSH/manual replacement bypass it; stock GUI restart: **D** |
 | Python/shell installers | **H** require successful core/full status, GUI presence and Qt5 activation; Python publishes bundle identity after activation; an unknown display (below) ends only the display steps | Neither installer proves every page rendered |
@@ -177,43 +177,83 @@ new one, started after a fixed two seconds. The old `reload_gui` also returned
 without starting anything when the old program was still alive after those two
 seconds.
 
-On the Qt 5 display `reload_gui` now does the following; firmware 1.7.19 and
-2.0.2 keep the restart of release 2.9.1 (`killall BtClass`, then the start
-script through `/bin/sh`).
+#### Restart design (rebuild, 2.10.0b1)
 
-1. Notes the PIDs of `BtClass`, stops the wrapper (`killall BtClass_qws`, its
-   own trap ends the program) and `BtClass`, and waits until those PIDs are
-   gone, at most `C300X_QML_GUI_STOP_SECONDS` (10). A program that does not end
-   gets SIGKILL and 3 more seconds. If it still runs, no second program is
-   started and the reload reports failure.
-2. Waits `C300X_QML_GUI_RELOAD_DELAY_SECONDS` (2) for the display to settle.
-3. Starts nothing if a `BtClass` runs by now (some other starter won).
-   Otherwise it starts the wrapper once, executed directly so that a later
-   reload can stop it by name, with `C300X_GUI_RELOAD=1`, in its own session.
-4. On Qt 5 with an active overlay it watches the start for up to
-   `C300X_QML_QT5_START_SECONDS` (10): it ends early when the wrapper marks the
-   overlay failed for this boot, or when `BtClass` has written its watchdog file
-   after the start. The status read after the reload then tells the truth in
-   most cases; there is still no QML readiness handshake.
+The first restart (`3876e2b4`) grew by patching and kept drawing findings: a
+2 s presence check after the start defeated the wrapper's own retry, a stop
+during the wrapper's `sleep 3` armed the vendor SIGTERM trap, which fired only
+after that sleep and killed the next display, and back-to-back restarts left a
+quarantine mark behind. It is replaced as a whole. Firmware 1.7.19 and 2.0.2
+keep the restart of release 2.9.1 (`reload_gui_qt4`), unchanged.
 
-Back-to-back requests (installer `core-apply` then `apply`; update follow-up
-core, full and reload; Reload GUI) run one after the other in the agent's
-maintenance job and each waits for the previous display program to end, so two
-display programs never run at once. A reload job may now take up to 30 s
-(agent) and 35 s (HA request) instead of 10 s and 15 s.
+**One restart worker.** Every Qt 5 restart (`reload`, a write's restart, the
+rollback restart, `recover`) only files a request and waits for its answer.
+The requests are served by one worker, `qml_patch.sh gui-worker`, started in
+a session of its own and holding an `flock` on `<tmp>/c300x-gui-restart/lock`
+for its whole life, so at most one restart is in flight. A worker takes all
+waiting requests at the beginning of a cycle; requests that arrive during a
+cycle are served together by the next one. A request is filed after its files
+were written, so the cycle that takes it starts the display with them.
+The agent's job time limit kills the requesting script's process group, never
+the worker: a restart that has stopped the display always starts one again.
+A request left by a worker that died is taken over by the next worker.
 
-The quarantine mark holds the boot id from `/proc/sys/kernel/random/boot_id`
-(the wrapper and `qml_patch.sh` read it; the preload writes the id the wrapper
-passes in `C300X_QRC_FAILED_ID` when it rejects a resource file). A mark from an
-earlier boot is ignored and counts as absent; full removal deletes it.
+**One cycle:**
+
+1. Stop: SIGTERM to the start scripts (`BtClass_qws`, all its subshells) and to
+   `BtClass`; wait until every noted process is gone, at most
+   `C300X_QML_GUI_STOP_SECONDS` (10), then SIGKILL the rest and wait 3 s more.
+   A start script that does not end, for example one of an earlier beta
+   sleeping before its retry, gets SIGKILL and cannot run its trap later. If a
+   process survives that, nothing is started and the cycle fails.
+2. Settle `C300X_QML_GUI_RELOAD_DELAY_SECONDS` (2) for eglfs/Vivante to release
+   the framebuffer.
+3. Start the installed start script once, executed directly, in its own
+   session, without the worker's lock descriptor.
+4. Verify within `C300X_QML_QT5_START_SECONDS` (30): ready when `BtClass` runs
+   and has written its watchdog file after the start; failed when no start
+   script and no `BtClass` run any more; the overlay failed when the start
+   script wrote this boot's quarantine mark. A `BtClass` still running at the
+   end counts as started (there is no QML readiness handshake).
+5. Retry once: when the overlay failed in a cycle that should retry it (apply,
+   core-apply, media-user-label-apply), stop again, settle, drop the mark and
+   start again.
+6. Fall back to stock: a second overlay failure keeps the mark for this boot,
+   and the start script runs the vendor's own lines. When no display program
+   runs at all after the start, the cycle marks the overlay failed for this
+   boot and starts the verified original start script (the backup) directly.
+
+**The start script** tries the overlay once per start, at boot and on a
+restart alike: no retry loop, no `sleep`, so the vendor trap always runs at
+once. An abnormal exit within 60 s writes the mark for this boot and starts
+`BtClass` as shipped. The mark holds the boot id; a mark of an earlier boot
+counts as absent, so the next boot tries the overlay once more.
+
+**The mark** is written only by a failed overlay start (start script or
+preload) and, while files change, by a write itself. It is dropped by the
+retrying actions and by full removal; a successful overlay start leaves none.
+A plain reload keeps a mark of this boot and starts stock.
+
+**Time budget.** A request waits at most until 24 s after the script started
+(`C300X_QML_GUI_BUDGET_SECONDS`), within the agent's 30 s job limit, and at
+most 5 s after a signal. A cycle still running then is not a failure: the
+write is committed and the worker finishes the restart; the status read
+afterwards shows its outcome. Only a cycle that ended without any display
+program fails the restart (and rolls a write back).
+
+**Install and update.** A failed core-apply or apply on the Qt 5 display does
+not fail the SSH install or the agent update: the agent is installed, the
+display steps are reported (HA log, core Repair, Display patch switch), and
+the core Repair retries them.
 
 | Scenario | Behaviour |
 | --- | --- |
-| Boot, overlay crashes within 60 s | Wrapper writes the mark for this boot and starts the display as shipped. No retry in this boot, so no loop; the next boot tries the overlay once again. |
-| Our reload, first overlay start crashes | The wrapper (started with `C300X_GUI_RELOAD=1`) waits 3 s and tries the overlay once more. A crash that does not repeat is taken as the restart race and leaves no mark. Two crashes write the mark for this boot and start as shipped. |
-| Back-to-back apply | Each restart stops the previous display completely before it starts one wrapper; no competing starter. |
-| Plain reload (button, service, CPU watchdog) | Keeps a mark of this boot; the display starts as shipped. |
-| `apply`, `core-apply`, `media-user-label-apply` (installer, update follow-up, core Repair, Display patch switch, label setup) | Drop a mark (this boot or older) and restart the display once with the overlay, even when no file changed. |
+| Boot, overlay crashes within 60 s | Mark for this boot, display as shipped. Next boot tries again. |
+| Restart, first overlay start crashes (apply family) | The worker stops the stock fallback, settles, drops the mark and starts once more; a second crash keeps the mark and the stock display. |
+| Back-to-back or concurrent restarts | One cycle at a time; requests waiting meanwhile share the next cycle. |
+| Rollback while a start is in progress | Filed as a request; the cycle in flight ends first, then one cycle starts the restored files. No trap of an earlier start script survives. |
+| Job deadline (SIGTERM, SIGKILL) in any phase | The worker finishes the cycle; a display runs afterwards. |
+| Plain reload (button, service, CPU watchdog) | Keeps a mark of this boot; stock display. |
 | Partial restore | Keeps a mark of this boot, drops an older one. |
 | Display setting saves | Do not retry a quarantined overlay (`display_patch_sync`). |
 

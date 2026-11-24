@@ -91,7 +91,8 @@ async def async_capture_doorbell_ring_call(
     """Record a short C300X doorbell RTSP clip on Home Assistant."""
 
     duration = _validate_duration(duration_seconds)
-    target = _capture_output_path(hass, output_path)
+    # Path.resolve() reads the filesystem: never on the event loop.
+    target = await asyncio.to_thread(_capture_output_path, hass, output_path)
     with reserve_capture_output(target):
         return await _async_capture_to_output(
             hass, entry, target, wav_output_dir=wav_output_dir, duration=duration,
@@ -111,7 +112,7 @@ async def _async_capture_to_output(
     if on_demand and announcement_path is not None:
         raise HomeAssistantError("C300X announcements require ring capture mode")
     runtime = entry.runtime_data
-    root = _capture_work_dir(hass, wav_output_dir)
+    root = await asyncio.to_thread(_capture_work_dir, hass, wav_output_dir)
     announcement = await _async_announcement_input_path(hass, announcement_path)
     if on_demand:
         ensure_on_demand_capture_runtime(entry, runtime)

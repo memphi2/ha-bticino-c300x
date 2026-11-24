@@ -1435,3 +1435,26 @@ def test_device_side_steps_use_no_python(tmp_path: Path) -> None:
     assert device_installer._remote_sha256_sync(client, str(tmp_path / "absent")) is None
     assert client.commands
     assert not any("python" in command for command in client.commands)
+
+
+def _on_event_loop() -> bool:
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return False
+    return True
+
+
+def test_install_resolves_the_bundle_off_the_event_loop(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[bool] = []
+
+    def resolve(_remote_dir: str) -> Any:
+        seen.append(_on_event_loop())
+        raise RuntimeError("stop after the bundle lookup")
+
+    monkeypatch.setattr(device_installer, "_resolve_bundle", resolve)
+    request = C300XDeviceInstallRequest(host="c300x.local", ssh_username="root", ssh_password="secret")
+
+    with pytest.raises(RuntimeError, match="stop after the bundle lookup"):
+        asyncio.run(async_install_device_agent(request, api_token="api-token", maintenance_token="m"))
+    assert seen == [False]

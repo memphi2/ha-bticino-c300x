@@ -127,7 +127,8 @@ async def async_install_device_agent(
     """Install the bundled native agent on the device through password SSH."""
 
     _validate_request(request)
-    bundle = _resolve_bundle(request.remote_dir)
+    # About 30 Path.exists() calls: never on the event loop.
+    bundle = await asyncio.to_thread(_resolve_bundle, request.remote_dir)
     config_bytes = _device_config_json(
         api_token=api_token,
         maintenance_token=maintenance_token,

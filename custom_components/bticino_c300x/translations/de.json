@@ -1489,6 +1489,10 @@
     }
   },
   "issues": {
+    "c100x_display_boot_check_failed": {
+      "title": "C100X-Display-Prüfung beim Start der Station fehlgeschlagen",
+      "description": "{entry_title}: Beim Start der Station konnte der Geräteagent die ausstehende Display-Aktivierung nicht prüfen (das Display-Paket fehlte oder die Prüfung schlug fehl, zum Beispiel nach einem Firmware-Update). Der Agent wurde trotzdem gestartet. Die Display-Aktivierung bleibt aus, die Sicherungen der Originalseiten bleiben erhalten. Drücke „Originales Display wiederherstellen“, um dorthin zurückzukehren; schlägt das fehl, aktualisiere zuerst den Geräteagenten über seine Reparatur. Tritt es wieder auf, melde es mit der Agent-Diagnose."
+    },
     "c100x_display_rolled_back": {
       "title": "C100X-Displayseiten wurden zurückgesetzt",
       "description": "{entry_title}: Die Home-Assistant-Seiten sind nach dem Neustart nicht auf dem C100X-Display gestartet, daher hat die Station beim folgenden Start ihr originales Display zurückgeholt. Sonst wurde nichts geändert. Drücke „Displayseiten aktivieren“, um es erneut zu versuchen. Wird wieder zurückgesetzt, melde es mit der Agent-Diagnose."

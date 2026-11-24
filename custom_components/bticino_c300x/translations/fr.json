@@ -1489,6 +1489,10 @@
     }
   },
   "issues": {
+    "c100x_display_boot_check_failed": {
+      "title": "Échec du contrôle de l’écran C100X au démarrage du poste",
+      "description": "{entry_title} : au démarrage du poste, l’agent de l’appareil n’a pas pu contrôler l’activation de l’écran en attente (le paquet de l’écran manquait ou le contrôle a échoué, par exemple après une mise à jour du micrologiciel). L’agent a quand même démarré. L’activation de l’écran reste désactivée et les sauvegardes des pages d’origine sont conservées. Appuyez sur Restaurer l'écran d'origine pour y revenir ; en cas d’échec, mettez d’abord à jour l’agent de l’appareil avec sa réparation. Si cela se reproduit, signalez-le avec les diagnostics de l’agent."
+    },
     "c100x_display_rolled_back": {
       "title": "Les pages de l'écran C100X ont été annulées",
       "description": "{entry_title} : les pages Home Assistant n'ont pas démarré sur l'écran du C100X après le redémarrage, la station est donc revenue à son écran d'origine au démarrage suivant. Rien d'autre n'a été modifié. Appuyez sur Activer les pages de l'écran pour réessayer. Si l'annulation se reproduit, signalez-la avec le diagnostic de l'agent."

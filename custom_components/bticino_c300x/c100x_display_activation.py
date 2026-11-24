@@ -26,6 +26,7 @@ _LOGGER = logging.getLogger(__name__)
 POLL_SECONDS = 30.0
 MAX_POLLS = 120
 ROLLED_BACK_ISSUE = "c100x_display_rolled_back"
+BOOT_CHECK_ISSUE = "c100x_display_boot_check_failed"
 _PENDING_PHASES = frozenset({"prepared", "trial", "stale"})
 _COMPARED = ("status_known", "phase", "confirmed")
 
@@ -48,8 +49,44 @@ def c100x_display_in_progress(status: Mapping[str, Any]) -> bool:
     )
 
 
-def _issue_id(entry: BticinoC300XConfigEntry) -> str:
-    return f"{ROLLED_BACK_ISSUE}_{entry.entry_id}"
+def _issue_id(entry: BticinoC300XConfigEntry, issue: str = ROLLED_BACK_ISSUE) -> str:
+    return f"{issue}_{entry.entry_id}"
+
+
+def _placeholders(entry: BticinoC300XConfigEntry) -> dict[str, str]:
+    return {"entry_title": str(getattr(entry, "title", "") or entry.entry_id)}
+
+
+@callback
+def async_sync_c100x_display_issues(
+    hass: HomeAssistant, entry: BticinoC300XConfigEntry, status: Mapping[str, Any]
+) -> None:
+    """Both display repairs: a failed boot check and a rollback."""
+
+    async_sync_boot_check_issue(hass, entry, status)
+    async_sync_rolled_back_issue(hass, entry, status)
+
+
+@callback
+def async_sync_boot_check_issue(
+    hass: HomeAssistant, entry: BticinoC300XConfigEntry, status: Mapping[str, Any]
+) -> None:
+    """Show a failed boot check of a pending trial while the agent reports it."""
+
+    reason = status.get("boot_check")
+    if isinstance(reason, str) and reason:
+        ir.async_create_issue(
+            hass,
+            DOMAIN,
+            _issue_id(entry, BOOT_CHECK_ISSUE),
+            is_fixable=False,
+            is_persistent=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key=BOOT_CHECK_ISSUE,
+            translation_placeholders=_placeholders(entry),
+        )
+    else:
+        ir.async_delete_issue(hass, DOMAIN, _issue_id(entry, BOOT_CHECK_ISSUE))
 
 
 @callback
@@ -69,7 +106,7 @@ def async_sync_rolled_back_issue(
             is_persistent=False,
             severity=ir.IssueSeverity.WARNING,
             translation_key=ROLLED_BACK_ISSUE,
-            translation_placeholders={"entry_title": str(getattr(entry, "title", "") or entry.entry_id)},
+            translation_placeholders=_placeholders(entry),
         )
     else:
         ir.async_delete_issue(hass, DOMAIN, _issue_id(entry))
@@ -88,7 +125,7 @@ async def _async_follow(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> 
             continue
         if not isinstance(status, Mapping):
             return
-        async_sync_rolled_back_issue(hass, entry, status)
+        async_sync_c100x_display_issues(hass, entry, status)
         if isinstance(runtime.capabilities, dict):
             runtime.capabilities["c100x_display"] = dict(status)
         if c100x_display_in_progress(status):
@@ -105,7 +142,7 @@ def async_follow_c100x_display_if_open(hass: HomeAssistant, entry: BticinoC300XC
 
     status = c100x_display_status(getattr(entry.runtime_data, "capabilities", {}))
     if status is not None:
-        async_sync_rolled_back_issue(hass, entry, status)
+        async_sync_c100x_display_issues(hass, entry, status)
         if c100x_display_in_progress(status):
             async_follow_c100x_display(hass, entry)
 

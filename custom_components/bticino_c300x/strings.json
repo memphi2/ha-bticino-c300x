@@ -1489,6 +1489,10 @@
     }
   },
   "issues": {
+    "c100x_display_boot_check_failed": {
+      "title": "C100X display check failed at the station start",
+      "description": "{entry_title}: when the station started, the device agent could not check the pending display activation (its display package was missing or the check failed, for example after a firmware update). The agent started anyway. Display activation stays off and the backups of the original pages are kept. Press Restore original display to go back to it; if that fails, update the device agent with its repair first. If it happens again, report it with the agent diagnostics."
+    },
     "c100x_display_rolled_back": {
       "title": "C100X display pages were rolled back",
       "description": "{entry_title}: the Home Assistant pages did not start on the C100X display after the reboot, so the station went back to its original display at the following boot. Nothing else was changed. Press Activate display pages to try again. If it rolls back again, report it with the agent diagnostics."

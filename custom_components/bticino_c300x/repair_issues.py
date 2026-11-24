@@ -11,6 +11,9 @@ from homeassistant.helpers import issue_registry as ir
 from .action import ActionValidationError, validate_action_map
 from .agent_update import agent_update_repair_placeholders
 from .c100x_display_activation import (
+    BOOT_CHECK_ISSUE as C100X_DISPLAY_BOOT_CHECK_ISSUE,
+)
+from .c100x_display_activation import (
     ROLLED_BACK_ISSUE as C100X_DISPLAY_ROLLED_BACK_ISSUE,
 )
 from .callback_target import callback_target_is_supported
@@ -70,6 +73,7 @@ ALL_REPAIR_ISSUES = frozenset(
         MEDIA_SETUP_REPAIR_REQUIRED_ISSUE,
         MEDIA_WATCHDOG_TIMEOUT_ISSUE,
         C100X_DISPLAY_ROLLED_BACK_ISSUE,
+        C100X_DISPLAY_BOOT_CHECK_ISSUE,
     }
 )
 

@@ -1489,6 +1489,10 @@
     }
   },
   "issues": {
+    "c100x_display_boot_check_failed": {
+      "title": "Controllo del display C100X non riuscito all'avvio della postazione",
+      "description": "{entry_title}: all'avvio della postazione l'agente del dispositivo non ha potuto controllare l'attivazione del display in sospeso (il pacchetto del display mancava o il controllo non è riuscito, per esempio dopo un aggiornamento del firmware). L'agente è stato avviato comunque. L'attivazione del display resta disattivata e le copie delle pagine originali vengono conservate. Premi Ripristina display originale per tornarci; se non riesce, aggiorna prima l'agente del dispositivo con la sua riparazione. Se succede di nuovo, segnalalo con la diagnostica dell'agente."
+    },
     "c100x_display_rolled_back": {
       "title": "Le pagine del display C100X sono state annullate",
       "description": "{entry_title}: le pagine di Home Assistant non si sono avviate sul display del C100X dopo il riavvio, quindi all'avvio successivo la stazione è tornata al display originale. Nient'altro è stato modificato. Premi Attiva pagine del display per riprovare. Se viene annullato di nuovo, segnalalo con la diagnostica dell'agente."

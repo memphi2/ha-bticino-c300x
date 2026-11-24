@@ -154,12 +154,31 @@ def test_tracker_shows_a_rollback_and_stops_without_change(monkeypatch) -> None:
     entry = tracked_entry(status(phase="trial"), [status(phase="stock", last_result="rolled_back")])
     hass, issues = follow(monkeypatch, entry)
     assert hass.reloads == [entry.entry_id]
-    (kind, issue), = issues
-    assert kind == "create" and issue["translation_key"] == "c100x_display_rolled_back"
+    issue, = [issue for kind, issue in issues if kind == "create"]
+    assert issue["translation_key"] == "c100x_display_rolled_back"
     assert "c100x_display_rolled_back" in ALL_REPAIR_ISSUES
     entry = tracked_entry(status(), [status()])
     hass, _ = follow(monkeypatch, entry)
     assert hass.reloads == []
+
+
+@pytest.mark.parametrize("reason", ["payload_unavailable", "boot_check_failed"])
+def test_a_failed_boot_check_is_a_repair_until_the_agent_clears_it(monkeypatch, reason) -> None:
+    issues: list[tuple[str, Any]] = []
+    monkeypatch.setattr(tracker.ir, "async_create_issue", lambda *a, **kw: issues.append(("create", a[2], kw)))
+    monkeypatch.setattr(tracker.ir, "async_delete_issue", lambda *a, **kw: issues.append(("delete", a[2], {})))
+    monkeypatch.setattr(tracker, "async_follow_c100x_display", lambda hass, entry: None)
+    entry = _FakeEntry(title="C100X", runtime_data=_FakeRuntimeData(
+        capabilities={"c100x_display": status(status_known=False, activate=False, boot_check=reason)}))
+    tracker.async_follow_c100x_display_if_open(None, entry)  # type: ignore[arg-type]
+    created = [kw for kind, _, kw in issues if kind == "create"]
+    assert [kw["translation_key"] for kw in created] == ["c100x_display_boot_check_failed"]
+    assert created[0]["translation_placeholders"]["entry_title"] == "C100X"
+    assert "c100x_display_boot_check_failed" in ALL_REPAIR_ISSUES
+    issues.clear()
+    entry.runtime_data.capabilities["c100x_display"] = status(boot_check="")
+    tracker.async_follow_c100x_display_if_open(None, entry)  # type: ignore[arg-type]
+    assert ("delete", f"c100x_display_boot_check_failed_{entry.entry_id}", {}) in issues
 
 
 def test_tracker_is_cancelled_with_the_entry(monkeypatch) -> None:
@@ -181,7 +200,7 @@ def test_tracker_is_cancelled_with_the_entry(monkeypatch) -> None:
 def test_start_follows_only_an_open_activation(monkeypatch) -> None:
     followed: list[Any] = []
     monkeypatch.setattr(tracker, "async_follow_c100x_display", lambda hass, entry: followed.append(entry))
-    monkeypatch.setattr(tracker, "async_sync_rolled_back_issue", lambda *a: None)
+    monkeypatch.setattr(tracker, "async_sync_c100x_display_issues", lambda *a: None)
     for start, expected in ((status(), 0), (status(phase="trial"), 1), (status(status_known=False), 2),
                             (status(phase="stock", reboot_pending=True), 3)):
         entry = _FakeEntry(runtime_data=_FakeRuntimeData(capabilities={"c100x_display": start}))

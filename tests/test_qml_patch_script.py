@@ -330,7 +330,7 @@ PATCH_OUTPUT_SHA256 = {
     "Components/Settings/GeneralsChoice.qml": "fe4241e1c5d99abb9175f36ec6a9e35ef48033af0c07ab0c46b25309f615e240",
     "C300XSettings.qml": "aa04b8381b5e8c9d6ac3977411b03c1c46897944980486f91b98a7164e5b040f",
     "js/c300x_maintenance.js": "7baebcd3b0b52b92c934eb9b2cfaf27b198bf0064e16db6571a04aa927557c56",
-    "HomePage.qml": "706a0267a0171e1e7b667b74e44bee90cca4af60609bbba80e66dcc8db2257ad",
+    "HomePage.qml": "1d112569fcaa49253da2bdc115b12306c4443dc588c999c26a5b3a1c4a593676",
     "MemoPage.qml": "f7fe6279108429389bc607e6c92df065d75dbbce2d9cdfc6ec1280f30f893e0f",
     "EventManager.qml": "cf68c96d9b702ce9501e70f8a511658483e1bcd5f2c9fcdff2ae214af79e3a6a",
     "Alarm.qml": "b0b874bdcd479a82d2c95341e36baf88383a41aaf8a6a6f39af37c5555b3008d",
@@ -357,7 +357,7 @@ PATCH_OUTPUT_SHA256 = {
     "js/c300x_memos.js": "2e922d5617dfafda1c231581ef1eff46f83f4897a11a7350926641135c46040d",
 }
 
-SIDE_BY_SIDE_HOME_PAGE_SHA256 = "4bab55b313e308266241d1389706ed514074db6fad77cd7ef30cfa2464bb7f98"
+SIDE_BY_SIDE_HOME_PAGE_SHA256 = "834554a75ad00e6ffb6d1f2a7478f3d23a6bb34b669bb575147317a2a5cef2b4"
 
 
 def test_qml_patch_keeps_original_backup_across_reapply(tmp_path: Path) -> None:
@@ -1959,10 +1959,19 @@ def _assert_complete_gui_patch(
     assert home_page.index('objectName: "alarmButton"') < home_page.index(
         'objectName: "haButton"'
     )
-    assert 'pressedIcon: "images/keylock_icon-small_p.svg"' in home_page
-    assert 'defaultIcon: "images/keylock_icon-small.svg"' in home_page
-    assert 'pressedIcon: "images/call/icon_call-home_p.svg"' in home_page
-    assert 'defaultIcon: "images/call/icon_call-home.svg"' in home_page
+    # The skin has these two motifs only as small pictures (28 and 33 px wide;
+    # the station's own button icons are 41 to 49 px). They are drawn at button
+    # icon size, and the label gets the gap to the next button as well, so
+    # "Home Assistant" (125 px in the station font, button 123 px) is not cut.
+    for icon, size in (("keylock_icon-small", "sourceSize.width: 46"), ("call/icon_call-home", "sourceSize.height: 41")):
+        assert (
+            f'                        source: control.pressed ? "images/{icon}_p.svg" : "images/{icon}.svg"\n'
+            f"                        {size}\n"
+        ) in home_page
+    assert home_page.count("                        width: bg.width + foobar.spacing\n") == 2
+    assert home_page.count('source: control.pressed ? "images/function_btn_p.svg" : "images/function_btn.svg"') == 2
+    assert '                        text: "Home Assistant"\n' in home_page
+    assert "defaultIcon: \"images/keylock" not in home_page and "defaultIcon: \"images/call" not in home_page
     assert 'trsl.language === "de" ? "Alarmanlage"' in home_page
     assert 'trsl.language === "it" ? "Allarme"' in home_page
     assert 'trsl.language === "fr" ? "Alarme"' in home_page

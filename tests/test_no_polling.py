@@ -83,8 +83,7 @@ def test_device_home_page_buttons_do_not_poll() -> None:
     assert "width: buttonPrototype.width * 2 + foobar.spacing" in text
     assert "x: buttonPrototype.width + foobar.spacing" in text
     assert "+ (page.alarmButtonVisible ? 1 : 0) + (page.haButtonVisible ? 1 : 0) + 2" in text
-    assert 'pressedIcon: \\"images/" icon "_p.svg\\""' in text
-    assert 'defaultIcon: \\"images/" icon ".svg\\""' in text
+    assert 'source: control.pressed ? \\"images/" icon "_p.svg\\" : \\"images/" icon ".svg\\""' in text
     assert "HAConfig.homeButtons" in text
     assert "function startMessageNotificationWatch()" in text
     assert "MemoSync.startEventWatch(handleMessageNotificationEvent)" in text

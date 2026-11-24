@@ -569,7 +569,7 @@ def test_station_settings_tab_is_named_integration(tmp_path):
         in settings
     )
     assert "Home Assistant" not in settings
-    assert 'description: "Home Assistant"' in (gui / "HomePage.qml").read_text()
+    assert 'text: "Home Assistant"' in (gui / "HomePage.qml").read_text()
 
 
 def test_settings_backup_restore_and_unchanged_reapply(tmp_path):

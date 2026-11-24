@@ -28,6 +28,9 @@ Station:
   (favourites bar or arrows). The value is stored in Home Assistant and shows
   the same in the integration's options; changing it on either side does not
   reload the integration.
+- The **Alarm** and **Home Assistant** buttons on the home page draw their
+  icons at the size of the station's own button icons, and the label
+  "Home Assistant" is shown in full instead of "Home Assist…".
 - An error, warning or PIN prompt on the **Alarm** page and in the header of
   the **Home Assistant** page is no longer replaced at once by the routine
   line of the next status read ("Connected", "loaded"). It stays for 30

@@ -1116,7 +1116,7 @@ patch_home_page() {
             print "        }"
             print "    }"
         }
-        function print_home_assistant_button(name, flag, icon, description, target) {
+        function print_home_assistant_button(name, flag, icon, size, description, target) {
             print "            BasicButton {"
             if (layout == "stock") {
                 print "                id: " name
@@ -1131,12 +1131,30 @@ patch_home_page() {
                     print "                x: buttonPrototype.width + foobar.spacing"
                 }
             }
-            print "                style: HomePageButtonStyle {"
-            print "                    pressedImage: \"images/function_btn_p.svg\""
-            print "                    pressedIcon: \"images/" icon "_p.svg\""
-            print "                    defaultIcon: \"images/" icon ".svg\""
-            print "                    defaultImage: \"images/function_btn.svg\""
-            print "                    description: " description
+            print "                style: Item {"
+            print "                    width: bg.width"
+            print "                    height: bg.height + label.height"
+            print "                    Image {"
+            print "                        id: bg"
+            print "                        source: control.pressed ? \"images/function_btn_p.svg\" : \"images/function_btn.svg\""
+            print "                    }"
+            print "                    Image {"
+            print "                        anchors.centerIn: bg"
+            print "                        source: control.pressed ? \"images/" icon "_p.svg\" : \"images/" icon ".svg\""
+            print "                        " size
+            print "                    }"
+            print "                    UbuntuLightText {"
+            print "                        id: label"
+            print "                        anchors.top: bg.bottom"
+            print "                        anchors.topMargin: 2"
+            print "                        anchors.horizontalCenter: bg.horizontalCenter"
+            print "                        width: bg.width + foobar.spacing"
+            print "                        horizontalAlignment: Text.AlignHCenter"
+            print "                        elide: Text.ElideRight"
+            print "                        color: \"white\""
+            print "                        font.pixelSize: 18"
+            print "                        text: " description
+            print "                    }"
             print "                }"
             print "                onTouched: tabView.activateTab(" target ")"
             print "            }"
@@ -1149,9 +1167,9 @@ patch_home_page() {
                 print "                width: buttonPrototype.width * 2 + foobar.spacing"
                 print "                height: buttonPrototype.height"
             }
-            print_home_assistant_button("alarmButton", "alarmButtonVisible", "keylock_icon-small", "trsl.language === \"de\" ? \"Alarmanlage\" : (trsl.language === \"it\" ? \"Allarme\" : (trsl.language === \"fr\" ? \"Alarme\" : \"Alarm\"))", "alarmPage")
+            print_home_assistant_button("alarmButton", "alarmButtonVisible", "keylock_icon-small", "sourceSize.width: 46", "trsl.language === \"de\" ? \"Alarmanlage\" : (trsl.language === \"it\" ? \"Allarme\" : (trsl.language === \"fr\" ? \"Alarme\" : \"Alarm\"))", "alarmPage")
             print ""
-            print_home_assistant_button("haButton", "haButtonVisible", "call/icon_call-home", "\"Home Assistant\"", "haPage")
+            print_home_assistant_button("haButton", "haButtonVisible", "call/icon_call-home", "sourceSize.height: 41", "\"Home Assistant\"", "haPage")
             if (layout != "stock") {
                 print "            }"
             }

@@ -1561,7 +1561,7 @@ inserting rules.
 
 Reads both optional Display patch state and required core media-hook state.
 `home_buttons` names the home page button layout installed on the device:
-`"stock"` (like the original), `"side_by_side"` (the fixed pair), or `null`
+`"stock"` (the stock layout), `"side_by_side"` (the fixed pair), or `null`
 when the home page carries neither layout.
 
 `POST /api/v1/maintenance/qml-patch/actions/apply-core`
@@ -1598,7 +1598,7 @@ Assistant and energy pages (`Alarm.qml`, `HomeAssistant.qml`,
 `C300XEnergy.qml`) and the local QML JavaScript bridge.
 
 `dynamic_homepage` chooses the home page button layout: `true` installs the
-Alarm and Home Assistant buttons like the original buttons (shown only when
+Alarm and Home Assistant buttons among the station's own buttons (shown only when
 needed), `false` the fixed pair side by side. Without the field the layout
 on the device is kept; a device without the Display patch gets the `true`
 layout.

@@ -130,7 +130,7 @@
           "actions_json": "Azioni che il display e le sue notifiche possono eseguire, in JSON: una voce per azione con domain e service, facoltativamente target e data. Lascia vuoto se non ne usi.",
           "dashboard_prevent_return": "Attivo: le pagine Home Assistant e Allarme restano aperte quando lo schermo va in standby. Disattivo: il display torna alla pagina iniziale.",
           "dashboard_navigation": "Come il display cambia pagina. La barra dei preferiti mostra le prime quattro pagine come pulsanti lungo il bordo inferiore. Con più di quattro pagine, il quarto pulsante diventa «Altro» e apre l'elenco delle altre pagine. L'ordine segue le posizioni delle pagine.",
-          "dashboard_dynamic_homepage": "Dove stanno i pulsanti Allarme e Home Assistant nella pagina iniziale del C300X. Come l'originale: ogni pulsante compare solo quando ha qualcosa da aprire e prende posto tra i pulsanti originali, anche sotto quando la fila è piena. Fissi affiancati: entrambi tengono due posti fissi uno accanto all'altro; un pulsante senza niente da aprire lascia vuoto il suo posto. Una modifica riapplica il patch display e riavvia il display una volta."
+          "dashboard_dynamic_homepage": "Dove stanno i pulsanti Allarme e Home Assistant nella pagina iniziale del C300X. Di fabbrica: ogni pulsante compare solo quando ha qualcosa da aprire e prende posto tra i pulsanti originali, anche sotto quando la fila è piena. Fissi affiancati: entrambi tengono due posti fissi uno accanto all'altro; un pulsante senza niente da aprire lascia vuoto il suo posto. Una modifica riapplica il patch display e riavvia il display una volta."
         }
       },
       "user_dashboard_entity_display": {
@@ -243,7 +243,7 @@
           "actions_json": "Azioni che il display e le sue notifiche possono eseguire, in JSON: una voce per azione con domain e service, facoltativamente target e data. Lascia vuoto se non ne usi.",
           "dashboard_prevent_return": "Attivo: le pagine Home Assistant e Allarme restano aperte quando lo schermo va in standby. Disattivo: il display torna alla pagina iniziale.",
           "dashboard_navigation": "Come il display cambia pagina. La barra dei preferiti mostra le prime quattro pagine come pulsanti lungo il bordo inferiore. Con più di quattro pagine, il quarto pulsante diventa «Altro» e apre l'elenco delle altre pagine. L'ordine segue le posizioni delle pagine.",
-          "dashboard_dynamic_homepage": "Dove stanno i pulsanti Allarme e Home Assistant nella pagina iniziale del C300X. Come l'originale: ogni pulsante compare solo quando ha qualcosa da aprire e prende posto tra i pulsanti originali, anche sotto quando la fila è piena. Fissi affiancati: entrambi tengono due posti fissi uno accanto all'altro; un pulsante senza niente da aprire lascia vuoto il suo posto. Una modifica riapplica il patch display e riavvia il display una volta."
+          "dashboard_dynamic_homepage": "Dove stanno i pulsanti Allarme e Home Assistant nella pagina iniziale del C300X. Di fabbrica: ogni pulsante compare solo quando ha qualcosa da aprire e prende posto tra i pulsanti originali, anche sotto quando la fila è piena. Fissi affiancati: entrambi tengono due posti fissi uno accanto all'altro; un pulsante senza niente da aprire lascia vuoto il suo posto. Una modifica riapplica il patch display e riavvia il display una volta."
         }
       },
       "reconfigure_dashboard_entity_display": {
@@ -842,7 +842,7 @@
           "actions_json": "Azioni che il display e le sue notifiche possono eseguire, in JSON: una voce per azione con domain e service, facoltativamente target e data. Lascia vuoto se non ne usi.",
           "dashboard_prevent_return": "Attivo: le pagine Home Assistant e Allarme restano aperte quando lo schermo va in standby. Disattivo: il display torna alla pagina iniziale.",
           "dashboard_navigation": "Come il display cambia pagina. La barra dei preferiti mostra le prime quattro pagine come pulsanti lungo il bordo inferiore. Con più di quattro pagine, il quarto pulsante diventa «Altro» e apre l'elenco delle altre pagine. L'ordine segue le posizioni delle pagine.",
-          "dashboard_dynamic_homepage": "Dove stanno i pulsanti Allarme e Home Assistant nella pagina iniziale del C300X. Come l'originale: ogni pulsante compare solo quando ha qualcosa da aprire e prende posto tra i pulsanti originali, anche sotto quando la fila è piena. Fissi affiancati: entrambi tengono due posti fissi uno accanto all'altro; un pulsante senza niente da aprire lascia vuoto il suo posto. Una modifica riapplica il patch display e riavvia il display una volta."
+          "dashboard_dynamic_homepage": "Dove stanno i pulsanti Allarme e Home Assistant nella pagina iniziale del C300X. Di fabbrica: ogni pulsante compare solo quando ha qualcosa da aprire e prende posto tra i pulsanti originali, anche sotto quando la fila è piena. Fissi affiancati: entrambi tengono due posti fissi uno accanto all'altro; un pulsante senza niente da aprire lascia vuoto il suo posto. Una modifica riapplica il patch display e riavvia il display una volta."
         }
       },
       "dashboard_entity_display": {
@@ -1721,7 +1721,7 @@
     },
     "dashboard_dynamic_homepage": {
       "options": {
-        "stock": "Come l'originale (se servono, anche uno sotto l'altro)",
+        "stock": "Di fabbrica (se servono, anche uno sotto l'altro)",
         "side_by_side": "Fissi affiancati"
       }
     },

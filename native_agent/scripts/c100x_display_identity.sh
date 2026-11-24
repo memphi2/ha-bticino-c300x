@@ -83,8 +83,15 @@ verify_current() {
         fi
         render_generation "$BACKUP/generations/$ACTIVE_RELEASE" "$ACTIVE_RELEASE" "$WORK/check" \
             && cmp -s "$GUI/main.qml" "$WORK/check/main.qml" || return 1
-        cmp -s "$GUI/MainPage.qml" "$WORK/check/MainPage.qml" || identity "$GUI/MainPage.qml" "$MENU_SHA"
-        return $?
+        cmp -s "$GUI/MainPage.qml" "$WORK/check/MainPage.qml" && return 0
+        identity "$GUI/MainPage.qml" "$MENU_SHA" && return 0
+        # A process death between the two switches can leave another generation's menu hook.
+        for generation in "$BACKUP/generations"/.c100x-*; do
+            [ -d "$generation" ] || continue
+            if render_generation "$generation" "${generation##*/}" "$WORK/other" \
+                && cmp -s "$GUI/MainPage.qml" "$WORK/other/MainPage.qml"; then return 0; fi
+        done
+        return 1
     fi
     if identity "$GUI/MainPage.qml" "$MENU_SHA"; then return 0; fi
     # A power loss before the main switch can leave an inert menu hook only.

@@ -150,6 +150,28 @@ def test_sub_menu_hook_recipe_can_be_upgraded_or_restored(tree, action):
     assert_original(tree)
 
 
+@pytest.mark.parametrize("action", ["apply", "restore"])
+def test_upgrade_killed_between_the_two_stock_files_can_be_repeated_or_restored(tree, action):
+    source = tree[0] / "source"
+    current = (source / "hooks/menu.inc").read_bytes()
+    (source / "hooks/menu.inc").write_bytes((ROOT / "tests/fixtures/c100x_menu_hook_v1.inc").read_bytes())
+    rehash_source(source)
+    run(tree, "apply")
+    old_main = (tree[1] / "main.qml").read_bytes()
+    (source / "hooks/menu.inc").write_bytes(current)
+    rehash_source(source)
+    fault_mv(tree, "kill_before")
+    run(tree, "apply", False)
+    # The menu file already carries the new generation, the main file still the old one.
+    assert (tree[1] / "main.qml").read_bytes() == old_main
+    assert b"ListModel { id: c100xMenu }" in (tree[1] / "MainPage.qml").read_bytes()
+    run(tree, action)
+    if action == "apply":
+        assert (tree[1] / "main.qml").read_bytes() != old_main
+        run(tree, "restore")
+    assert_original(tree)
+
+
 def test_unknown_menu_hook_recipe_is_refused(tree):
     source = tree[0] / "source"
     hook = source / "hooks/menu.inc"

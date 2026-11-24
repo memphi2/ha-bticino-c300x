@@ -122,6 +122,26 @@ def test_unread_events_follow_store_without_listeners_or_read_feedback():
     asyncio.run(run())
 
 
+def test_only_led_notices_count_as_unread_and_replacement_updates_it():
+    loop, changes = Loop(), []
+    store = DisplayNotifications(loop, lambda: changes.append(1))
+    store.show(data("quiet"), led=False)
+    assert not store.has_unread() and changes == [1]
+    assert set(store.payload()[0]) == {
+        "id", "revision", "title", "message", "icon", "priority", "actions",
+    }
+    store.show(data("quiet"), led=True)
+    assert store.has_unread()
+    store.show(data("quiet"), led=False)
+    assert not store.has_unread()
+    # Without the keyword a notice counts, as every notice did before.
+    store.show(data("lit", expires_in=5))
+    assert store.has_unread()
+    loop.now += 5
+    assert not store.has_unread()
+    store.close()
+
+
 def test_reload_snapshot_follows_inflight_notification():
     async def run():
         started, release = asyncio.Event(), asyncio.Event()

@@ -27,6 +27,29 @@ def test_mqtt_output_boundaries(tmp_path, sanitize):
     assert result.returncode == 0, result.stderr
 
 
+MQTT_CONNECT_SOURCES = [str(NATIVE / "src" / name) for name in (
+    "mqtt_connect.c", "openwebnet_waiters.c", "request_queue.c")]
+
+
+@pytest.mark.parametrize("case", ["slow_dns", "cancel", "deadline"])
+@pytest.mark.parametrize("sanitize", [False, True], ids=["host", "asan-ubsan"])
+def test_mqtt_connect_runs_beside_the_loop(tmp_path, sanitize, case):
+    """getaddrinfo and connect once ran on the loop thread at every retry."""
+    binary = tmp_path / "mqtt-connect"
+    flags = ["-fsanitize=address,undefined", "-fno-omit-frame-pointer"] if sanitize else []
+    result = subprocess.run(
+        ["cc", "-std=c11", "-D_DEFAULT_SOURCE", "-g", "-O1", "-Wall", "-Wextra", "-Werror", *flags,
+         "-DMQTT_RESOLVE_CONNECT_TIMEOUT_MS=500", str(NATIVE / "test/mqtt_connect_test.c"),
+         *(str(NATIVE / "src" / name) for name in (
+             "mqtt_bridge.c", "mqtt_output.c", "string_util.c", "http_util.c", "time_util.c")),
+         *MQTT_CONNECT_SOURCES, "-pthread", "-Wl,--wrap=getaddrinfo", "-o", str(binary)],
+        capture_output=True, text=True, timeout=60,
+    )
+    assert result.returncode == 0, result.stderr
+    result = subprocess.run([str(binary), case], capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
+
+
 @pytest.mark.parametrize("sanitize", [False, True], ids=["host", "asan-ubsan"])
 def test_mqtt_poll_state(tmp_path, sanitize):
     binary = tmp_path / "mqtt-poll"
@@ -34,7 +57,8 @@ def test_mqtt_poll_state(tmp_path, sanitize):
     result = subprocess.run(
         ["cc", "-std=c11", "-D_DEFAULT_SOURCE", "-g", "-O1", "-Wall", "-Wextra", "-Werror",
          *flags, str(NATIVE / "test/mqtt_poll_test.c"), str(NATIVE / "src/mqtt_output.c"),
-         str(NATIVE / "src/string_util.c"), "-Wl,--wrap=send", "-o", str(binary)],
+         str(NATIVE / "src/string_util.c"), *MQTT_CONNECT_SOURCES, "-pthread",
+         "-Wl,--wrap=send", "-o", str(binary)],
         capture_output=True, text=True, timeout=30,
     )
     assert result.returncode == 0, result.stderr

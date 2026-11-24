@@ -2,6 +2,7 @@
 #define C300X_MQTT_BRIDGE_H
 
 #include "c300x_agent.h"
+#include "mqtt_connect.h"
 #include "mqtt_output.h"
 
 #include <stddef.h>
@@ -9,6 +10,8 @@
 
 struct c300x_mqtt {
     int fd;
+    struct c300x_mqtt_connect *connecting; /* fd is -1 while this runs */
+    long long connect_deadline_ms;
     int connected;
     int subscribed;
     time_t next_connect_at;

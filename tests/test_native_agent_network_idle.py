@@ -170,7 +170,7 @@ def test_agent_listener_sockets_cannot_leak_into_gui_reload_children() -> None:
     util_text = (ROOT / "native_agent" / "src" / "http_util.c").read_text(
         encoding="utf-8"
     )
-    mqtt_text = (ROOT / "native_agent" / "src" / "mqtt_bridge.c").read_text(
+    mqtt_text = (ROOT / "native_agent" / "src" / "mqtt_connect.c").read_text(
         encoding="utf-8"
     )
     reuse_body = _function_body(util_text, "void", "allow_socket_reuse")

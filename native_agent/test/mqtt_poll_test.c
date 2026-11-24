@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <fcntl.h>
 #include "../src/mqtt_bridge.c"
 
 static long long clock_ms = 1000;
@@ -66,7 +67,7 @@ static void setup(struct c300x_mqtt *mqtt, int *peer)
     mqtt->fd = pair[0];
     mqtt->connect_started_at = 100;
     *peer = pair[1];
-    assert(set_nonblocking(mqtt->fd));
+    assert(fcntl(mqtt->fd, F_SETFL, fcntl(mqtt->fd, F_GETFL) | O_NONBLOCK) == 0);
     blocked = fail_send = 0;
     allowance = sizeof(wire);
     wire_size = 0;

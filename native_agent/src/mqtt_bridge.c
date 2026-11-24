@@ -5,18 +5,19 @@
 
 #include <arpa/inet.h>
 #include <errno.h>
-#include <netdb.h>
 #include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <time.h>
 #include <unistd.h>
 
 #define MQTT_CONNECT_TIMEOUT_MS 1500
+#ifndef MQTT_RESOLVE_CONNECT_TIMEOUT_MS
+#define MQTT_RESOLVE_CONNECT_TIMEOUT_MS 15000
+#endif
 #define MQTT_PACKET_CONNECT 0x10
 #define MQTT_PACKET_CONNACK 0x20
 #define MQTT_PACKET_PUBLISH 0x30
@@ -58,6 +59,8 @@ void c300x_mqtt_close(struct c300x_mqtt *mqtt)
     if (mqtt->fd >= 0) {
         close(mqtt->fd);
     }
+    c300x_mqtt_connect_cancel(mqtt->connecting);
+    mqtt->connecting = NULL;
     mqtt->fd = -1;
     mqtt->connected = 0;
     mqtt->subscribed = 0;
@@ -84,12 +87,6 @@ static void mqtt_disconnect(struct c300x_mqtt *mqtt, const struct c300x_config *
     }
     c300x_mqtt_close(mqtt);
     mqtt_schedule_reconnect(mqtt, config, now);
-}
-
-static int set_nonblocking(int fd)
-{
-    int enabled = 1;
-    return ioctl(fd, FIONBIO, &enabled) == 0;
 }
 
 static size_t write_utf8(unsigned char *out, size_t out_len, const char *value)
@@ -127,62 +124,6 @@ static int mqtt_flush_output(struct c300x_mqtt *mqtt, const struct c300x_config 
         }
     }
     return 1;
-}
-
-static int socket_connect_timeout(const char *host, uint16_t port)
-{
-    char port_text[16];
-    struct addrinfo hints;
-    struct addrinfo *result = NULL;
-    struct addrinfo *item;
-    int fd = -1;
-
-    snprintf(port_text, sizeof(port_text), "%u", port);
-    memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-    if (getaddrinfo(host, port_text, &hints, &result) != 0) {
-        return -1;
-    }
-    for (item = result; item != NULL; item = item->ai_next) {
-        int err = 0;
-        socklen_t err_len = sizeof(err);
-        struct pollfd pfd;
-        fd = socket(item->ai_family, item->ai_socktype, item->ai_protocol);
-        if (fd < 0) {
-            continue;
-        }
-        set_fd_cloexec(fd);
-        if (!set_nonblocking(fd)) {
-            close(fd);
-            fd = -1;
-            continue;
-        }
-        if (connect(fd, item->ai_addr, item->ai_addrlen) == 0) {
-            break;
-        }
-        if (errno != EINPROGRESS) {
-            close(fd);
-            fd = -1;
-            continue;
-        }
-        pfd.fd = fd;
-        pfd.events = POLLOUT;
-        pfd.revents = 0;
-        if (poll(&pfd, 1, MQTT_CONNECT_TIMEOUT_MS) <= 0) {
-            close(fd);
-            fd = -1;
-            continue;
-        }
-        if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &err_len) != 0 || err != 0) {
-            close(fd);
-            fd = -1;
-            continue;
-        }
-        break;
-    }
-    freeaddrinfo(result);
-    return fd;
 }
 
 static int mqtt_send_connect(struct c300x_mqtt *mqtt, const struct c300x_config *config)
@@ -430,12 +371,11 @@ void c300x_mqtt_open_if_needed(
     time_t now
 )
 {
-    int fd;
     if (!config->mqtt_enabled || !network_online) {
         c300x_mqtt_close(mqtt);
         return;
     }
-    if (mqtt->fd >= 0) {
+    if (mqtt->fd >= 0 || mqtt->connecting != NULL) {
         return;
     }
     if (mqtt->next_connect_at > now) {
@@ -445,13 +385,30 @@ void c300x_mqtt_open_if_needed(
         mqtt_schedule_reconnect(mqtt, config, now);
         return;
     }
-    fd = socket_connect_timeout(config->mqtt_host, config->mqtt_port);
+    /* DNS and connect run beside the loop; the wake fd stands in for the
+     * socket until the attempt is over. */
+    mqtt->connecting = c300x_mqtt_connect_start(config->mqtt_host, config->mqtt_port);
+    if (mqtt->connecting == NULL) {
+        mqtt_schedule_reconnect(mqtt, config, now);
+        return;
+    }
+    mqtt->connect_started_at = now;
+    mqtt->connect_deadline_ms = c300x_monotonic_ms() + MQTT_RESOLVE_CONNECT_TIMEOUT_MS;
+}
+
+static void mqtt_connect_finished(struct c300x_mqtt *mqtt, const struct c300x_config *config)
+{
+    time_t now = mqtt->connect_started_at;
+    int fd = c300x_mqtt_connect_finish(mqtt->connecting);
+    if (fd == -2) {
+        return;
+    }
+    mqtt->connecting = NULL;
     if (fd < 0) {
         mqtt_schedule_reconnect(mqtt, config, now);
         return;
     }
     mqtt->fd = fd;
-    mqtt->connect_started_at = now;
     mqtt->phase = MQTT_CONNECT_OUTPUT;
     if (!mqtt_send_connect(mqtt, config)) {
         mqtt_disconnect(mqtt, config, now);
@@ -462,13 +419,13 @@ void c300x_mqtt_open_if_needed(
 
 int c300x_mqtt_fd(const struct c300x_mqtt *mqtt)
 {
-    return mqtt->fd;
+    return mqtt->fd >= 0 ? mqtt->fd : c300x_mqtt_connect_wake_fd(mqtt->connecting);
 }
 
 short c300x_mqtt_poll_events(const struct c300x_mqtt *mqtt)
 {
     if (mqtt->fd < 0) {
-        return 0;
+        return mqtt->connecting != NULL ? POLLIN : 0;
     }
     short events = POLLRDHUP;
     if (mqtt->phase == MQTT_CONNACK || mqtt->phase == MQTT_READY) {
@@ -504,6 +461,10 @@ int c300x_mqtt_poll_timeout_ms(const struct c300x_mqtt *mqtt, time_t now)
 {
     int timeout = mqtt_timer_timeout(mqtt, now);
     long long mono = c300x_monotonic_ms();
+    if (mqtt->connecting != NULL) {
+        long long left = mqtt->connect_deadline_ms - mono;
+        return left > 0 ? (int)left : 0;
+    }
     int output_timeout = c300x_mqtt_output_timeout(&mqtt->output, mono);
     if (output_timeout >= 0 && (timeout < 0 || output_timeout < timeout)) {
         timeout = output_timeout;
@@ -594,6 +555,9 @@ void c300x_mqtt_handle_poll(
 )
 {
     if (mqtt->fd < 0) {
+        if (mqtt->connecting != NULL && (revents & POLLIN) != 0) {
+            mqtt_connect_finished(mqtt, config);
+        }
         return;
     }
     if ((revents & C300X_SOCKET_CLOSED_REVENTS) != 0) {
@@ -655,10 +619,16 @@ void c300x_mqtt_tick(
     time_t now
 )
 {
+    long long mono = c300x_monotonic_ms();
+    if (mqtt->connecting != NULL && mqtt->connect_deadline_ms <= mono) {
+        now = mqtt->connect_started_at;
+        c300x_mqtt_close(mqtt);
+        mqtt_schedule_reconnect(mqtt, config, now);
+        return;
+    }
     if (mqtt->fd < 0) {
         return;
     }
-    long long mono = c300x_monotonic_ms();
     if (c300x_mqtt_output_timeout(&mqtt->output, mono) == 0
         || (mqtt->phase == MQTT_CONNACK && mqtt->connack_deadline_ms <= mono)) {
         mqtt_disconnect(mqtt, config, now);

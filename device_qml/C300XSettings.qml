@@ -16,6 +16,15 @@ Item {
     property bool busy: false
     property string pending: ""
     property double expiresAt: 0
+    property string problem: c300xDisplayPreferences.bridgeProblem
+    property bool answered: false
+    property bool reachable: answered && problem === ""
+    property string address: ""
+    property string contact: ""
+    property string agentVersion: ""
+    property string firmwareVersion: ""
+    property string integrationVersion: ""
+    property string instanceName: ""
     function label(key) { return I18n.text(trsl.language, key) + trsl.empty }
     function clearConfirmation() {
         var open = pending !== ""
@@ -56,24 +65,41 @@ Item {
         }
     }
 
+    function contactText(age) {
+        if (typeof age !== "number") return label("contact_never")
+        if (age < 90) return label("contact_now")
+        if (age < 5400) return label("contact_min").replace("%1", Math.round(age / 60))
+        if (age < 172800) return label("contact_hours").replace("%1", Math.round(age / 3600))
+        return label("contact_days").replace("%1", Math.floor(age / 86400))
+    }
+    function readStatus() {
+        Bridge.stationStatus(function(data) {
+            panel.address = data && /^https?:\/\/[^\/?#@\s]+$/.test(data.home_assistant) ? data.home_assistant : ""
+            panel.contact = data ? panel.contactText(data.last_contact_age) : ""
+            panel.agentVersion = data && data.version ? data.version : ""
+            panel.firmwareVersion = data && data.firmware ? data.firmware : ""
+        }, panel)
+        Bridge.bridgeDetails(function(data, reason) {
+            panel.answered = true
+            c300xDisplayPreferences.bridgeProblem = reason
+            if (!data) return
+            panel.integrationVersion = data.integration_version || ""
+            panel.instanceName = data.instance_name || ""
+        }, panel)
+    }
     function aboutToShow() {
         hidden()
         sshRunning = sshKnown = canReboot = canRemove = false
         status = ""
         c300xDisplayPreferences.load()
         Maintenance.request(panel, deadline, "", null)
+        if (visible) readStatus()
     }
     function hidden() {
         clearConfirmation()
         Maintenance.cancel(panel, deadline)
     }
-    function checkBridge() {
-        if (!c300xDisplayPreferences.bridgeProblem) return
-        Bridge.homeButtons(function(alarm, dashboard, valid, reason) {
-            c300xDisplayPreferences.bridgeProblem = valid ? "" : reason
-        }, panel)
-    }
-    onVisibleChanged: if (visible) checkBridge(); else hidden()
+    onVisibleChanged: if (visible) readStatus(); else hidden()
     Component.onDestruction: hidden()
     Timer {
         id: deadline
@@ -84,86 +110,155 @@ Item {
         }
     }
 
-    Column {
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.top: parent.top
-        anchors.topMargin: 10
-        spacing: 6
-        width: parent.width - 64
-        UbuntuLightText {
-            objectName: "bridgeReason"
-            visible: text !== ""
-            width: parent.width
-            color: "#f1c40f"
-            font.pixelSize: 16
-            wrapMode: Text.WordWrap
-            text: c300xDisplayPreferences.bridgeProblem ? panel.label(c300xDisplayPreferences.bridgeProblem) : ""
-        }
-        Repeater {
-            model: 2
-            Item {
+    Flickable {
+        id: scroller
+        anchors.fill: parent
+        anchors.topMargin: 8
+        clip: true
+        contentHeight: content.height
+        boundsBehavior: Flickable.StopAtBounds
+        interactive: contentHeight > height
+        Column {
+            id: content
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: 400
+            Repeater {
+                model: [
+                    {k: "Home Assistant", v: panel.label(panel.reachable ? "status_ok" : panel.problem ? "status_down" : "status_checking")
+                        + (panel.reachable && panel.instanceName ? " (" + panel.instanceName + ")" : ""),
+                     c: panel.reachable ? "#58d68d" : panel.problem ? "#f1c40f" : "white"},
+                    {k: panel.label("status_server"), v: panel.address || "-", c: "white"},
+                    {k: panel.label("status_contact"), v: panel.contact || "-", c: "white"},
+                    {k: "", v: "Integration " + (panel.reachable && panel.integrationVersion ? panel.integrationVersion : "-")
+                        + " \u00b7 Agent " + (panel.agentVersion || "-") + " \u00b7 Firmware " + (panel.firmwareVersion || "-"), c: "white"}
+                ]
+                Item {
+                    width: content.width
+                    height: 24
+                    UbuntuLightText {
+                        anchors.verticalCenter: parent.verticalCenter
+                        color: "#c7d0d9"
+                        font.pixelSize: 18
+                        text: modelData.k
+                    }
+                    UbuntuLightText {
+                        objectName: "statusValue" + index
+                        anchors.left: parent.left
+                        anchors.leftMargin: modelData.k ? 140 : 0
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        color: modelData.c
+                        font.pixelSize: 18
+                        elide: Text.ElideRight
+                        text: modelData.v
+                    }
+                }
+            }
+            UbuntuLightText {
+                objectName: "bridgeReason"
+                visible: text !== ""
                 width: parent.width
+                color: "#f1c40f"
+                font.pixelSize: 18
+                wrapMode: Text.WordWrap
+                text: panel.problem ? panel.label(panel.problem) : ""
+            }
+            Repeater {
+                model: [
+                    {h: panel.label("section_display")},
+                    {t: c300xDisplayPreferences.label, s: c300xDisplayPreferences.feedbackEnabled,
+                     e: c300xDisplayPreferences.ready && !c300xDisplayPreferences.busy, a: "feedback"},
+                    {h: panel.label("section_station")},
+                    {t: "SSH", s: panel.sshRunning, e: panel.sshKnown && !panel.busy, a: "ssh"}
+                ]
+                Item {
+                    width: content.width
+                    height: modelData.h ? 26 : 37
+                    Rectangle {
+                        visible: !!modelData.h
+                        anchors.bottom: parent.bottom
+                        width: parent.width
+                        height: 1
+                        color: "#5c6fd0"
+                    }
+                    UbuntuLightText {
+                        anchors.left: parent.left
+                        anchors.right: toggle.left
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.verticalCenterOffset: modelData.h ? 1 : 0
+                        color: modelData.h ? "#c7d0d9" : "white"
+                        font.pixelSize: 18
+                        elide: Text.ElideRight
+                        text: modelData.h || modelData.t
+                    }
+                    BasicButton {
+                        id: toggle
+                        visible: !modelData.h
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        checked: modelData.s === true
+                        enabled: modelData.e === true && !panel.pending
+                        opacity: enabled ? 1 : 0.45
+                        style: CheckableButtonStyle {
+                            defaultImage: "images/ringtones/switch-bg_btn.svg"
+                            checkedImage: "images/ringtones/switch-bg_btn_p.svg"
+                            defaultIconLeft: "images/ringtones/switch_btn.svg"
+                            defaultIconRight: "images/ringtones/disable_icon.svg"
+                            checkedIconLeft: "images/ringtones/enable_icon.svg"
+                            checkedIconRight: "images/ringtones/switch_btn_p.svg"
+                        }
+                        onMouseClicked: {
+                            if (modelData.a === "ssh")
+                                Maintenance.request(panel, deadline, "/ssh", {enabled: !checked})
+                            else
+                                c300xDisplayPreferences.setFeedbackEnabled(!checked)
+                        }
+                    }
+                }
+            }
+            Item { width: 1; height: 6 }
+            Item {
+                width: content.width
                 height: 50
-                UbuntuLightText {
-                    anchors.left: parent.left
-                    anchors.verticalCenter: parent.verticalCenter
-                    color: "white"
-                    font.pixelSize: 20
-                    text: index === 0 ? "SSH" : c300xDisplayPreferences.label
-                }
-                BasicButton {
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-                    checked: index === 0 ? panel.sshRunning : c300xDisplayPreferences.feedbackEnabled
-                    enabled: !panel.pending && (index === 0 ? panel.sshKnown && !panel.busy :
-                             c300xDisplayPreferences.ready && !c300xDisplayPreferences.busy)
-                    opacity: enabled ? 1 : 0.45
-                    style: CheckableButtonStyle {
-                        defaultImage: "images/ringtones/switch-bg_btn.svg"
-                        checkedImage: "images/ringtones/switch-bg_btn_p.svg"
-                        defaultIconLeft: "images/ringtones/switch_btn.svg"
-                        defaultIconRight: "images/ringtones/disable_icon.svg"
-                        checkedIconLeft: "images/ringtones/enable_icon.svg"
-                        checkedIconRight: "images/ringtones/switch_btn_p.svg"
-                    }
-                    onMouseClicked: {
-                        if (index === 0)
-                            Maintenance.request(panel, deadline, "/ssh", {enabled: !checked})
-                        else
-                            c300xDisplayPreferences.setFeedbackEnabled(!checked)
+                Row {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    spacing: 8
+                    Repeater {
+                        model: ["reboot", "remove"]
+                        BasicButton {
+                            style: IconAndLabelStyle {
+                                defaultImage: "images/settings/list_option_btn.svg"
+                                pressedImage: "images/settings/list_option_btn_p.svg"
+                                background.width: 236
+                                background.height: 50
+                                description: panel.label("maintenance_" + modelData)
+                            }
+                            enabled: (modelData === "reboot" ? panel.canReboot : panel.canRemove) && !panel.busy && !panel.pending
+                            opacity: enabled ? 1 : 0.45
+                            onMouseClicked: panel.ask(modelData)
+                        }
                     }
                 }
             }
-        }
-        BasicButton {
-            style: IconAndLabelStyle {
-                defaultImage: "images/settings/list_option_btn.svg"
-                background.width: Math.min(320, panel.width - 64)
-                pressedImage: "images/settings/list_option_btn_p.svg"
-                description: panel.label("maintenance_reboot")
+            UbuntuLightText {
+                visible: text !== ""
+                width: parent.width
+                color: "white"
+                font.pixelSize: 18
+                wrapMode: Text.WordWrap
+                text: panel.status ? panel.label(panel.status) : ""
             }
-            enabled: panel.canReboot && !panel.busy && !panel.pending
-            opacity: enabled ? 1 : 0.45
-            onMouseClicked: panel.ask("reboot")
         }
-        Item { width: 1; height: 20 }
-        BasicButton {
-            style: IconAndLabelStyle {
-                defaultImage: "images/settings/list_option_btn.svg"
-                background.width: Math.min(320, panel.width - 64)
-                pressedImage: "images/settings/list_option_btn_p.svg"
-                description: panel.label("maintenance_remove")
-            }
-            enabled: panel.canRemove && !panel.busy && !panel.pending
-            opacity: enabled ? 1 : 0.45
-            onMouseClicked: panel.ask("remove")
-        }
-        UbuntuLightText {
-            width: parent.width
-            color: "white"
-            font.pixelSize: 18
-            wrapMode: Text.WordWrap
-            text: panel.status ? panel.label(panel.status) : ""
-        }
+    }
+    Rectangle {
+        visible: scroller.contentHeight > scroller.height
+        anchors.right: parent.right
+        anchors.rightMargin: 10
+        width: 4
+        radius: 2
+        color: "#c7d0d9"
+        opacity: 0.7
+        y: scroller.y + scroller.contentY / scroller.contentHeight * scroller.height
+        height: scroller.height * scroller.height / scroller.contentHeight
     }
 }

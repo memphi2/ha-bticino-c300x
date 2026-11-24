@@ -58,7 +58,7 @@ const ui = vm.createContext({panel, Maintenance: api, deadline, visible:true, bu
     dismissPopup() { ui.dismissed++; ui.open = false }, confirmation: "confirmation"});
 vm.runInContext(qml.slice(qml.indexOf("    function clearConfirmation"), qml.indexOf("    Timer {")), ui);
 for (const action of ["reboot", "remove"]) {
-    assert.ok(qml.includes('onMouseClicked: panel.ask("' + action + '")'));
+    assert.ok(qml.includes('model: ["reboot", "remove"]') && qml.includes("onMouseClicked: panel.ask(modelData)"));
     // The question is the vendor's own popup. Nothing is sent before "Yes".
     ui.popups.length = 0;
     ui.dismissed = 0;
@@ -91,10 +91,10 @@ for (const action of ["reboot", "remove"]) {
 assert.match(qml, /import Components\.Settings 1\.0\n/);
 assert.match(qml, /Component \{\n        id: confirmation\n        ConfirmPopup \{\n            sourceSizeWidth: 400\n            sourceSizeHeight: panel\.pending === "remove" \? 190 : 130\n            maxLine: 6\n            message: panel\.pending \? panel\.label\("maintenance_confirm_" \+ panel\.pending\) : ""\n            onDeleteClicked: panel\.confirmAction\(\)\n            onCancelClicked: panel\.clearConfirmation\(\)\n/);
 assert.ok(!qml.includes('visible: panel.pending !== ""'), "no second confirmation inside the tab");
-assert.equal(qml.split("!panel.pending").length - 1, 3, "switches and both actions rest while the question is open");
+assert.equal(qml.split("!panel.pending").length - 1, 2, "switches and both actions rest while the question is open");
 assert.match(qml, /onTriggered: panel.clearConfirmation\(\)/);
 assert.match(qml, /function hidden\(\) \{\s*clearConfirmation\(\)/);
-assert.match(qml, /onVisibleChanged: if \(visible\) checkBridge\(\); else hidden\(\)/);
+assert.match(qml, /onVisibleChanged: if \(visible\) readStatus\(\); else hidden\(\)/);
 const translations = vm.createContext({});
 vm.runInContext(fs.readFileSync(path.join(dir, "js/c300x_i18n.js"), "utf8")
     .replace(/^\.pragma library/, ""), translations);

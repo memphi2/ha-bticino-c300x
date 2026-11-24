@@ -380,44 +380,102 @@ def test_home_page_shows_the_home_assistant_connection(tmp_path, layout):
     assert (gui / "HomePage.qml").read_text() == home
 
 
-def test_integration_tab_names_the_reason_while_the_problem_lasts():
-    node = shutil.which("node")
-    if node is None:
-        pytest.skip("node is not installed")
-    result = subprocess.run([node, "-e", r"""
+TAB_HARNESS = r"""
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const root = process.argv[1];
 const qml = fs.readFileSync(root + '/device_qml/C300XSettings.qml', 'utf8');
-const calls = [];
-const preferences = {bridgeProblem: ''};
-const panel = vm.createContext({c300xDisplayPreferences: preferences,
-    Bridge: {homeButtons(callback, owner) { calls.push({callback, owner}); }}});
-panel.panel = panel;
-vm.runInContext(qml.match(/^    function checkBridge\(\) \{[\s\S]*?^    \}/m)[0], panel);
-panel.checkBridge();
-assert.equal(calls.length, 0, 'no extra read while Home Assistant works');
-preferences.bridgeProblem = 'bridge_unreachable';
-panel.checkBridge();
-assert.equal(calls.length, 1);
-assert.equal(typeof calls[0].owner.checkBridge, 'function', 'the panel is the owner, so a hidden tab drops the read');
-calls[0].callback(false, false, false, 'bridge_not_registered');
-assert.equal(preferences.bridgeProblem, 'bridge_not_registered', 'the reason follows the latest answer');
-calls[0].callback(true, true, true, '');
-assert.equal(preferences.bridgeProblem, '', 'a valid read removes the line');
-assert.match(qml, /onVisibleChanged: if \(visible\) checkBridge\(\); else hidden\(\)/);
-assert.match(qml, /text: c300xDisplayPreferences\.bridgeProblem \? panel\.label\(c300xDisplayPreferences\.bridgeProblem\) : ""/);
 const texts = vm.createContext({});
 vm.runInContext(fs.readFileSync(root + '/device_qml/js/c300x_i18n.js', 'utf8').replace(/^\.pragma library\s*/, ''), texts);
-for (const key of ['bridge_unreachable', 'bridge_not_registered']) {
-    const seen = new Set(['de', 'en', 'it', 'fr'].map(language => texts.text(language, key)));
-    assert.equal(seen.size, 4, key);
-    for (const text of seen) assert.ok(text.length > 20 && text.length <= 130, text);
+function tab(language) {
+    const calls = {status: [], details: []};
+    const preferences = {bridgeProblem: ''};
+    const panel = vm.createContext({c300xDisplayPreferences: preferences, visible: true, pending: '', saving: false,
+        answered: false, address: '', contact: '', agentVersion: '', firmwareVersion: '', integrationVersion: '',
+        instanceName: '', status: '', Math,
+        label(key) { return texts.text(language || 'de', key); },
+        Bridge: {
+            stationStatus(callback, owner) { calls.status.push({callback, owner}); },
+            bridgeDetails(callback, owner) { calls.details.push({callback, owner}); },
+        }});
+    panel.panel = panel;
+    Object.defineProperty(panel, 'problem', {get() { return preferences.bridgeProblem; }});
+    Object.defineProperty(panel, 'reachable', {get() { return panel.answered && preferences.bridgeProblem === ''; }});
+    vm.runInContext(qml.slice(qml.indexOf('    function contactText'), qml.indexOf('    function aboutToShow')), panel);
+    return {panel, calls, preferences};
+}
+"""
+
+
+def _run_tab_harness(body: str) -> None:
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not installed")
+    result = subprocess.run([node, "-e", TAB_HARNESS + body, str(ROOT)], capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_integration_tab_shows_the_connection_status():
+    """The block answers "does it work, and with which Home Assistant" on the station.
+
+    The address, the last contact and the versions of agent and firmware come
+    from the agent, so they also show while Home Assistant cannot be reached.
+    """
+
+    _run_tab_harness(r"""
+let {panel, calls, preferences} = tab('de');
+panel.readStatus();
+assert.deepEqual([calls.status.length, calls.details.length], [1, 1]);
+assert.equal(typeof calls.details[0].owner.readStatus, 'function', 'the panel owns the reads, so a hidden tab drops them');
+assert.equal(panel.reachable, false, 'not called reachable before Home Assistant answered');
+calls.status[0].callback({ok: true, version: '2.9.2', firmware: '1.7.19', registered: true,
+    home_assistant: 'http://192.0.2.10:8123', last_contact_age: 120});
+calls.details[0].callback({ok: true, integration_version: '2.9.2', instance_name: 'Zuhause',
+    preventReturnToHomepage: true, navigation: 'tabs'}, '');
+assert.deepEqual([panel.reachable, panel.address, panel.contact, panel.agentVersion, panel.firmwareVersion,
+    panel.integrationVersion, panel.instanceName],
+    [true, 'http://192.0.2.10:8123', 'vor 2 Min', '2.9.2', '1.7.19', '2.9.2', 'Zuhause']);
+// Not reachable: the reason is kept for the home page symbol, the local facts stay.
+panel.readStatus();
+calls.status[1].callback({ok: true, version: '2.9.2', firmware: '1.7.19', registered: true,
+    home_assistant: 'https://ha.example.org', last_contact_age: 10800});
+calls.details[1].callback(null, 'bridge_unreachable');
+assert.deepEqual([panel.reachable, preferences.bridgeProblem, panel.address, panel.contact],
+    [false, 'bridge_unreachable', 'https://ha.example.org', 'vor 3 Std']);
+panel.readStatus();
+calls.details[2].callback({}, '');
+assert.deepEqual([panel.reachable, preferences.bridgeProblem], [true, ''], 'the next answer clears the reason');
+// The agent sends scheme, host and port only. Anything else is not shown at all.
+for (const bad of ['http://192.0.2.10:8123/api/webhook/abc', 'http://ha.local:8123?token=x', 'http://ha.local#x',
+                   'http://user:pw@ha.local:8123', 'ftp://ha.local', 'ha.local:8123', '', null, 7, 'http://ha.local/ ']) {
+    panel.readStatus();
+    calls.status.at(-1).callback({ok: true, home_assistant: bad, last_contact_age: null});
+    assert.equal(panel.address, '', String(bad));
+}
+panel.readStatus();
+calls.status.at(-1).callback(null);
+assert.deepEqual([panel.address, panel.contact, panel.agentVersion], ['', '', ''], 'an agent that does not answer shows dashes');
+for (const [age, text] of [[null, 'nie seit Start'], [undefined, 'nie seit Start'], [0, 'gerade eben'], [89, 'gerade eben'],
+        [90, 'vor 2 Min'], [5399, 'vor 90 Min'], [5400, 'vor 2 Std'], [172799, 'vor 48 Std'], [172800, 'vor 2 Tagen'],
+        [864000, 'vor 10 Tagen']]) {
+    assert.equal(panel.contactText(age), text, String(age));
+}
+assert.equal(tab('en').panel.contactText(600), '10 min ago');
+assert.equal(tab('it').panel.contactText(7200), '2 h fa');
+assert.equal(tab('fr').panel.contactText(null), 'jamais depuis le demarrage');
+for (const key of ['status_ok', 'status_down', 'status_checking', 'status_server', 'status_contact', 'contact_never',
+        'contact_now', 'contact_min', 'contact_hours', 'contact_days', 'section_display', 'section_station',
+        'bridge_unreachable', 'bridge_not_registered']) {
+    for (const language of ['de', 'en', 'it', 'fr']) assert.notEqual(texts.text(language, key), key, language + ' ' + key);
 }
 assert.match(texts.text('en', 'bridge_unreachable'), /http, or https with a trusted certificate/);
-""", str(ROOT)], capture_output=True, text=True, check=False)
-    assert result.returncode == 0, result.stdout + result.stderr
+// One block: state, reason, and no smaller than the vendor's own settings text (18 px).
+assert.match(qml, /text: panel\.problem \? panel\.label\(panel\.problem\) : ""/);
+assert.match(qml, /onVisibleChanged: if \(visible\) readStatus\(\); else hidden\(\)/);
+const sizes = [...qml.matchAll(/font\.pixelSize: (\d+)/g)].map(match => Number(match[1]));
+assert.ok(sizes.length >= 5 && Math.min(...sizes) >= 18, String(sizes));
+""")
 
 
 def test_station_settings_tab_is_named_integration(tmp_path):

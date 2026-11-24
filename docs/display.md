@@ -476,6 +476,18 @@ only maintenance operations the agent has enabled are offered.
   </tr>
 </table>
 
+The tab starts with a short status block:
+
+| Line | Meaning |
+| --- | --- |
+| **Home Assistant** | **reachable** with the name of the Home Assistant instance, or **not reachable** with the reason underneath (see [Home Assistant not reachable](#home-assistant-not-reachable)). |
+| **HA server** | The address the station calls Home Assistant at: `http` or `https`, host and port. Nothing else of the address is shown. |
+| **Last contact** | How long ago the agent and Home Assistant last exchanged a request, or **never since start**. Read when the tab opens. |
+| **Integration · Agent · Firmware** | The three versions. The integration version is known only while Home Assistant answers. |
+
+Address, last contact, agent and firmware version come from the agent on the
+station, so they also show while Home Assistant cannot be reached.
+
 | Control | Effect |
 | --- | --- |
 | **Status messages** | Shows (default) or hides coloured action confirmations and routine messages on the Home Assistant and Alarm pages, such as "Page loaded", "Connected", "Sending" or "Ready to arm". Text at a control, errors, a required PIN, sensors that block arming, connection warnings and real alarm or entity states always stay visible; while a command runs, the Alarm page still names it in its state box. |

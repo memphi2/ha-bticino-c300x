@@ -5,6 +5,7 @@ import datetime
 import json
 import sys
 from collections.abc import AsyncIterator
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -1742,3 +1743,36 @@ def test_a_snapshot_schedules_the_read_that_brings_the_items_back(event, key, ta
         return task
 
     assert asyncio.run(run()) is not None
+
+
+def _display_setting_call(hass: object, entry: object, payload: object, secret: str = "shared-secret") -> tuple[int, dict]:
+    response = asyncio.run(
+        _async_handle_webhook(
+            hass,  # type: ignore[arg-type]
+            entry,  # type: ignore[arg-type]
+            _FakeRequest("", payload, extra_headers={HEADER_SHARED_SECRET: secret} if secret else None),  # type: ignore[arg-type]
+        )
+    )
+    return response.status, json.loads(response.body)
+
+
+def test_display_status_carries_what_the_integration_tab_shows() -> None:
+    hass = _FakeHass()
+    hass.states = SimpleNamespace(get=lambda _entity_id: None)
+    hass.config = SimpleNamespace(language=None, location_name="Zuhause")
+    entry = SimpleNamespace(
+        entry_id="entry-1",
+        title="C300X",
+        data={CONF_SHARED_SECRET: "shared-secret", "api_token": "token-1", "webhook_id": "hook-1"},
+        options={"dashboard_navigation": "pager", "dashboard_prevent_return": False},
+    )
+    status, body = _display_setting_call(hass, entry, {"type": "status"})
+    assert status == 200
+    manifest = json.loads(
+        (Path(__file__).resolve().parents[1] / "custom_components/bticino_c300x/manifest.json").read_text()
+    )
+    assert body["integration_version"] == manifest["version"]
+    assert body["instance_name"] == "Zuhause"
+    assert body["navigation"] == "pager" and body["preventReturnToHomepage"] is False
+    text = json.dumps(body)
+    assert "shared-secret" not in text and "token-1" not in text and "hook-1" not in text

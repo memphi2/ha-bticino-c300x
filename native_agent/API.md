@@ -1900,6 +1900,7 @@ requests to Home Assistant require an active display bridge.
 | `GET` | `/ui/ringer/next` | Core GUI ringer command/acknowledgment channel. |
 | `GET` | `/ui/alerts/next` | One sleeping GUI alert delivery connection; no acknowledgement or queue. |
 | `GET`, `POST` | `/ui/preferences` | Local display feedback preference, independent of HA registration. |
+| `GET` | `/ui/status` | Local facts for the station's Integration tab: agent and firmware version, whether Home Assistant is registered, its address as scheme, host and port, and the age of the last contact. |
 | `GET` | `/ui/maintenance` | Availability of SSH, reboot and removal on this station. |
 | `GET`, `POST` | `/ui/maintenance/ssh` | Read SSH status or request `{"enabled":true}` or `{"enabled":false}`. A write checks the resulting process state. |
 | `POST` | `/ui/maintenance/reboot` | Schedule a reboot with `{"confirm":"reboot"}`; leaves SSH unchanged. |
@@ -1915,6 +1916,23 @@ requests to Home Assistant require an active display bridge.
 Home Assistant proxy endpoints use the display bridge and shared secret
 configured through the API listener. Local metadata, preferences and core GUI
 hooks do not require that registration. No route exposes configured token values.
+
+`GET /ui/status` is answered by the agent alone, so it also works while Home
+Assistant cannot be reached. It requires a loopback client and returns
+
+```json
+{"ok":true,"version":"2.9.2","firmware":"1.7.19","registered":true,"home_assistant":"http://192.0.2.10:8123","last_contact_age":42}
+```
+
+`home_assistant` is cut from the registered callback URL and carries scheme,
+host and port only. Path, query and fragment are never returned, because the
+path holds the webhook id; a URL with user information or any character
+outside letters, digits and `.-:[]` in its host part gives an empty string, and
+so does a missing registration. `registered` is false until Home Assistant has
+registered since the agent started. `last_contact_age` is the number of seconds
+since the agent last exchanged a request with Home Assistant in this run, in
+either direction, or `null` if it has not yet. No token, secret or webhook id
+is part of the answer.
 
 Station maintenance works without HA. It requires the local maintenance and
 per-action permissions, no browser Origin, the `X-C300X-UI: settings-v1`

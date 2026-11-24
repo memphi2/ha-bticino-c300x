@@ -328,7 +328,7 @@ PATCH_OUTPUT_SHA256 = {
     "MainApp.qml": "3860c9addd37ba6be61fb6eea7fa1a08d93a782ffc94c1e989341cf8ef4d53ce",
     "Settings.qml": "403b650e32e2353ba542b4960ea7d0d211d62897dbca9e953c7253e491156447",
     "Components/Settings/GeneralsChoice.qml": "fe4241e1c5d99abb9175f36ec6a9e35ef48033af0c07ab0c46b25309f615e240",
-    "C300XSettings.qml": "408bbdd867586f93e7e32a45a71fc45b69280c0c00ff2783b28e18eb523c0faf",
+    "C300XSettings.qml": "b6d12841cd78ac5a8d081f6e37df8b8e9da475c0e72af135fc4f8a87d3324861",
     "js/c300x_maintenance.js": "7baebcd3b0b52b92c934eb9b2cfaf27b198bf0064e16db6571a04aa927557c56",
     "HomePage.qml": "706a0267a0171e1e7b667b74e44bee90cca4af60609bbba80e66dcc8db2257ad",
     "MemoPage.qml": "f7fe6279108429389bc607e6c92df065d75dbbce2d9cdfc6ec1280f30f893e0f",
@@ -352,8 +352,8 @@ PATCH_OUTPUT_SHA256 = {
     "js/c300x_energy.js": "2c870b4e39fb41718421394f4afa35df8116e9ae247031a688f831506a823af2",
     "js/c300x_energy_consumers.js": "f4128432b1990bebb79eae88daafe54481e953ad621fcf758e685ad57f0b4377",
     "js/c300x_ringer.js": "268fed06c44704de8fbf04ec458cac7425b9fbc78f9a68514112ca751603cb71",
-    "js/c300x_ha.js": "5f9958d2d2eb02bbfb3f38e5d2d51d355c9de08c53388b0404c3df1e65d998e1",
-    "js/c300x_i18n.js": "7035ddd0fa7c14f127625371c079de74e567f41f3c05e18a32f23238463a3284",
+    "js/c300x_ha.js": "5e01a4bb350537a851cfcd9368550e42d6e35f4ac48caaeb2b8e229cd8d6f753",
+    "js/c300x_i18n.js": "2b54896a7be7359fa69b6fdcd9e8aa260fadf9c02cb4ddd560417a6ff0f8e0a6",
     "js/c300x_memos.js": "2e922d5617dfafda1c231581ef1eff46f83f4897a11a7350926641135c46040d",
 }
 
@@ -2191,10 +2191,12 @@ def test_only_idempotent_reads_share_a_display_round_trip() -> None:
     ]
     assert 'forwardRequest(path, callback, errorCallback, "", scope)' in plain
 
-    # Exactly the two /ui/state producers opt in: Api.status for the alarm and
-    # dashboard pages, homeButtons for the patched home page.
-    assert dashboard_js.count("getJsonShared(") == 3
-    assert dashboard_js.count('getJsonShared("/ui/state"') == 2
+    # Exactly the /ui/state producers opt in: Api.status for the alarm and
+    # dashboard pages, homeButtons for the patched home page and bridgeDetails
+    # for the Integration tab, which also reads the agent's own /ui/status.
+    assert dashboard_js.count("getJsonShared(") == 5
+    assert dashboard_js.count('getJsonShared("/ui/state"') == 3
+    assert dashboard_js.count('getJsonShared("/ui/status"') == 1
     for command in ("/ui/alarm/command", "/ui/action"):
         assert f'getJsonShared("{command}' not in dashboard_js
 

@@ -18,6 +18,11 @@ Station:
   station cannot reach Home Assistant; a tap opens **Settings > Integration**,
   which names the reason. The page then keeps asking every five minutes, so
   the **Alarm** and **Home Assistant** buttons come back by themselves.
+- The **Integration** tab starts with a status block: whether Home Assistant
+  is reachable (with the reason if not), the address the station calls it at,
+  the last contact, and the versions of integration, agent and firmware. Most
+  of it also shows while Home Assistant cannot be reached. The tab is laid out
+  like the station's own settings tabs, in a centred column.
 - **Reboot station** and **Remove agent** on the **Integration** tab now ask
   in the station's own confirmation window with **Yes** and **No**, and say
   what happens, instead of showing a second button further down the tab.

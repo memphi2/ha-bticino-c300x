@@ -548,6 +548,20 @@ function homeButtons(callback, owner) {
     }, owner)
 }
 
+function stationStatus(callback, owner) {
+    if (owner) useBaseUrl(owner.uiBaseUrl)
+    getJsonShared("/ui/status", callback, function() { callback(null) }, owner)
+}
+
+function bridgeDetails(callback, owner) {
+    if (owner) useBaseUrl(owner.uiBaseUrl)
+    getJsonShared("/ui/state", function(data) {
+        callback(data || {}, "")
+    }, function(error) {
+        callback(null, error === "API error: 404" ? "bridge_not_registered" : "bridge_unreachable")
+    }, owner)
+}
+
 function dashboardNextPage(statusItem, pageItem) {
     if (pageItem.pageCount <= 1) {
         return

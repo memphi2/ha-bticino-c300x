@@ -49,6 +49,7 @@
 #include "signal_wakeup.h"
 #include "time_util.h"
 #include "ui_homeassistant.h"
+#include "ui_status.h"
 #include "ui_events.h"
 #include "touch_tone.h"
 #include "setting_state.h"
@@ -9203,6 +9204,23 @@ static int handle_ui_request(
 
     if (strcmp(request->method, "GET") == 0 && strcmp(request->path, "/health") == 0) {
         send_json(client_fd, 200, "OK", "{\"ok\":true,\"bridge\":\"native-c\",\"version\":\"" C300X_NATIVE_AGENT_VERSION "\"}\n");
+        return 1;
+    }
+
+    if (strcmp(request->path, "/ui/status") == 0) {
+        char body[512];
+        char firmware[64];
+
+        resolve_device_firmware(config, firmware, sizeof(firmware));
+        if (!client_is_loopback(client_fd)) {
+            send_loopback_required(client_fd);
+        } else if (c300x_ui_status_json(C300X_NATIVE_AGENT_VERSION, firmware, display_bridge_webhook_url(config, runtime),
+                runtime->home_assistant_connected_this_run, (long)runtime->home_assistant_last_seen_at,
+                (long)time(NULL), body, sizeof(body))) {
+            send_json(client_fd, 200, "OK", body);
+        } else {
+            send_response_too_large(client_fd);
+        }
         return 1;
     }
 

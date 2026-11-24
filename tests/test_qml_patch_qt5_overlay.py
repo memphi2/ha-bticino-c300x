@@ -119,6 +119,8 @@ class Device:
             "C300X_QML_NO_REMOUNT": "1",
             "C300X_QML_RELOAD_GUI": "0",
             "C300X_QML_BOOT_ID": str(self.boot_id),
+            # The restart run directory of this test, never the host's /tmp one.
+            "C300X_QML_GUI_RUN_DIR": str(self.root / "gui-restart"),
             **env,
         }
 

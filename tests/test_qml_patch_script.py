@@ -1896,6 +1896,7 @@ def _run_qml_patch_raw(
     }
     if env_overrides:
         env.update(env_overrides)
+    env["PATH"] = _without_host_display_tools(tmp_path, env.get("PATH", os.environ["PATH"]))
     return subprocess.run(
         [str(SCRIPT), action, *(extra_args or [])],
         check=False,
@@ -1903,6 +1904,24 @@ def _run_qml_patch_raw(
         env=env,
         text=True,
     )
+
+
+def _without_host_display_tools(tmp_path: Path, path: str) -> str:
+    """Never let a restart reach host processes named BtClass (other tests, worktrees).
+
+    Stand-ins find no display program and stop nothing; a test's own tools
+    placed ahead of the host PATH still come first.
+    """
+
+    tools = tmp_path / "no-host-display-tools"
+    if not tools.is_dir():
+        tools.mkdir()
+        for name in ("pidof", "killall"):
+            (tools / name).write_text("#!/bin/sh\nexit 1\n")
+            (tools / name).chmod(0o755)
+    host = os.environ["PATH"]
+    own = path[: -len(host)] if path.endswith(host) else path + os.pathsep
+    return own + str(tools) + os.pathsep + host
 
 
 def _write_original_gui(gui_dir: Path) -> None:
@@ -2431,3 +2450,24 @@ def test_a_leftover_that_cannot_be_rolled_back_is_reported_and_blocks_writes(
     assert "An unfinished GUI write is still in place" in write.stderr
     assert (leftover / "MainApp.qml").read_bytes() == _before["MainApp.qml"]
     assert _gui_files(gui)["MainApp.qml"] == during["MainApp.qml"]
+
+
+def test_a_reload_in_these_tests_leaves_host_display_programs_alone(tmp_path: Path) -> None:
+    """A process named BtClass outside the test (another test, another worktree) survives."""
+
+    program = tmp_path / "BtClass"
+    program.write_text("#!/bin/sh\nwhile :; do sleep 0.2; done\n")
+    program.chmod(0o755)
+    other = subprocess.Popen([str(program)], start_new_session=True)
+    try:
+        gui_dir = tmp_path / "gui"
+        gui_dir.mkdir()
+        _write_original_gui(gui_dir)
+        _run_qml_patch_raw(tmp_path, gui_dir, tmp_path / "backups", "reload", env_overrides={
+            "C300X_QML_RELOAD_GUI": "1", "C300X_QML_GUI_RELOAD_DELAY_SECONDS": "0",
+            "C300X_QML_GUI_WRAPPER": str(tmp_path / "missing-wrapper"),
+        })
+        assert other.poll() is None
+    finally:
+        other.kill()
+        other.wait()

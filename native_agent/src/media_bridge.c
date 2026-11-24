@@ -2149,6 +2149,7 @@ static void close_ring_media_fds_locked(media_bridge_t *bridge) {
 static void ring_call_cleanup(media_bridge_t *bridge) {
     bool was_active;
     bool was_unanswered;
+    bool closed_owed;
 
     pthread_mutex_lock(&bridge->mutex);
     was_active = (
@@ -2173,11 +2174,15 @@ static void ring_call_cleanup(media_bridge_t *bridge) {
     reset_backchannel_talkback_locked(bridge);
     pthread_cond_broadcast(&bridge->ready_cond);
     pthread_mutex_unlock(&bridge->mutex);
+    /* Claim the ring's own close while its media still counts as active: a
+     * display that answers the ring marks external media during the drain
+     * below, and that mark belongs to the display call, not to this ring. */
+    closed_owed = was_active && c300x_video_consume_media_closed_event(bridge->video);
     c300x_video_bridge_media_stopped(bridge->video);
     if (was_unanswered) {
         shutdown_rtsp_clients_after_drain(bridge);
     }
-    if (was_active && c300x_video_consume_media_closed_event(bridge->video)) {
+    if (closed_owed) {
         c300x_video_dispatch_event(bridge->video, "doorbell.media.closed", "{}", 0);
     }
 }

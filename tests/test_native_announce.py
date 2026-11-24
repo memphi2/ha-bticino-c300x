@@ -103,16 +103,19 @@ class Lab:
         self.process = self.start()
         wait_for_health(self.port)
 
-    def call(self, action: str = "", payload: dict | None = None, *, status: int = 200) -> dict:
+    def request(self, action: str = "", payload: dict | None = None) -> tuple[int, dict]:
         conn = HTTPConnection("127.0.0.1", self.port, timeout=10)
         try:
             conn.request("GET" if payload is None else "POST", PATH + action,
                          body=None if payload is None else json.dumps(payload), headers=HEADERS)
             result = conn.getresponse()
-            body = json.loads(result.read())
+            return result.status, json.loads(result.read())
         finally:
             conn.close()
-        assert result.status == status, body
+
+    def call(self, action: str = "", payload: dict | None = None, *, status: int = 200) -> dict:
+        code, body = self.request(action, payload)
+        assert code == status, body
         return body
 
     def upload(self, sound: bytes, *, piece: int = 4500) -> None:
@@ -401,15 +404,29 @@ def test_the_frames_of_a_rings_call_keep_the_speaker_the_devices(lab: Lab) -> No
     send_udp_event(lab.udp_port, RING)
     # The answering machine starts after the ring, a light is switched: only
     # the first belongs to the call and holds the speaker longer.
-    time.sleep(RING_HOLD - 2)
+    time.sleep(RING_HOLD - 3)
+    answering = time.monotonic()
     send_udp_event(lab.udp_port, "*8*80#6#2*11##")
-    time.sleep(1.5)
+    time.sleep(2.5)
+    light = time.monotonic()
     send_udp_event(lab.udp_port, "*8*20*20##")
-    time.sleep(2)
-    assert lab.call("/actions/play", {"volume": 50}, status=409)["error"] == "announcement_device_busy"
 
-    time.sleep(2.2)
-    lab.call("/actions/play", {"volume": 50})
+    # Ask until the agent takes the sound and bound that moment by the frames'
+    # own times, so a slow runner shifts the moment but not the verdict.
+    while True:
+        status, body = lab.request("/actions/play", {"volume": 50})
+        taken = time.monotonic()
+        if status != 409:
+            break
+        assert body["error"] == "announcement_device_busy"
+        assert taken < light + RING_HOLD + 2, "the speaker never became free"
+        time.sleep(0.05)
+    assert status == 200, body
+    # The hold the answering machine started again, not the ring's own, which
+    # ended 2 s earlier (1 ms for the agent's whole-millisecond clock) ...
+    assert taken > answering + RING_HOLD - 0.01
+    # ... and not one the light would have started.
+    assert taken < light + RING_HOLD - 0.01
     assert lab.result() == "played"
 
 

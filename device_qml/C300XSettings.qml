@@ -69,15 +69,15 @@ Item {
     }
 
     function statusKey(row) {
-        return row === 0 ? "Home Assistant" : row === 1 ? label("status_server") : row === 2 ? label("status_contact") : ""
+        return row === 0 ? "Home Assistant" : row === 2 ? label("status_contact") : row === 3 ? "Integration" : row === 4 ? "Agent" : ""
     }
     function statusValue(row) {
         if (row === 0) return label(reachable ? "status_ok" : problem ? "status_down" : "status_checking")
             + (reachable && instanceName ? " (" + instanceName + ")" : "")
         if (row === 1) return address || "-"
         if (row === 2) return contact || "-"
-        return "Integration " + (reachable && integrationVersion ? integrationVersion : "-")
-            + " \u00b7 Agent " + (agentVersion || "-") + " \u00b7 Firmware " + (firmwareVersion || "-")
+        if (row === 3) return reachable && integrationVersion ? integrationVersion : "-"
+        return (agentVersion || "-") + " \u00b7 Firmware " + (firmwareVersion || "-")
     }
     function rowText(row) {
         if (row === 0) return label("section_display")
@@ -168,10 +168,10 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             width: 400
             Repeater {
-                model: 4
+                model: 5
                 Item {
                     width: content.width
-                    height: 24
+                    height: Math.max(23, statusValue.paintedHeight + 2)
                     UbuntuLightText {
                         anchors.verticalCenter: parent.verticalCenter
                         color: "#c7d0d9"
@@ -179,13 +179,16 @@ Item {
                         text: panel.statusKey(index)
                     }
                     UbuntuLightText {
+                        id: statusValue
                         objectName: "statusValue" + index
                         anchors.left: parent.left
-                        anchors.leftMargin: index < 3 ? 140 : 0
+                        anchors.leftMargin: index === 1 ? 0 : 140
                         anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
                         color: index > 0 ? "white" : panel.reachable ? "#58d68d" : panel.problem ? "#f1c40f" : "white"
                         font.pixelSize: 18
+                        wrapMode: index === 1 ? Text.WrapAnywhere : Text.NoWrap
+                        maximumLineCount: 2
                         elide: Text.ElideRight
                         text: panel.statusValue(index)
                     }
@@ -205,7 +208,7 @@ Item {
                 Item {
                     width: content.width
                     property bool head: index === 0 || index === 4
-                    height: head ? 26 : 37
+                    height: head ? 24 : 34
                     Rectangle {
                         visible: head
                         anchors.bottom: parent.bottom

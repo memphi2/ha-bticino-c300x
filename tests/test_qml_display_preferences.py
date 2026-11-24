@@ -465,7 +465,7 @@ for (const [age, text] of [[null, 'nie seit Start'], [undefined, 'nie seit Start
 assert.equal(tab('en').panel.contactText(600), '10 min ago');
 assert.equal(tab('it').panel.contactText(7200), '2 h fa');
 assert.equal(tab('fr').panel.contactText(null), 'jamais depuis le démarrage');
-for (const key of ['status_ok', 'status_down', 'status_checking', 'status_server', 'status_contact', 'contact_never',
+for (const key of ['status_ok', 'status_down', 'status_checking', 'status_contact', 'contact_never',
         'contact_now', 'contact_min', 'contact_hours', 'contact_days', 'section_display', 'section_station',
         'bridge_unreachable', 'bridge_not_registered']) {
     for (const language of ['de', 'en', 'it', 'fr']) assert.notEqual(texts.text(language, key), key, language + ' ' + key);
@@ -716,8 +716,26 @@ def test_integration_tab_rows_are_not_rebuilt_when_a_value_changes():
     """
     source = (ROOT / "device_qml/C300XSettings.qml").read_text(encoding="utf-8")
     models = re.findall(r"\n +model: ([^\n]+)", source)
-    assert models == ["4", "6", '["reboot", "remove"]']
+    assert models == ["5", "6", '["reboot", "remove"]']
     assert "panel." not in "".join(models)
     for name in ("statusKey", "statusValue", "rowText", "rowOn", "rowEnabled"):
         assert f"    function {name}(row) {{" in source and f"panel.{name}(index)" in source
     assert not re.search(r"modelData\.[a-z]\b", source)
+
+
+def test_integration_tab_status_lines_fit_long_values():
+    """Measured in the station font at 18 px: the value column is 260 px wide.
+
+    "https://ha.example.duckdns.org:8123" is 298 px and the three versions in
+    one line were 435 px with "2.10.0b1" in a 400 px column, so both were cut.
+    The address has the full width and may wrap once; the versions are two rows.
+    """
+    source = (ROOT / "device_qml/C300XSettings.qml").read_text(encoding="utf-8")
+    assert "                model: 5\n" in source
+    assert "anchors.leftMargin: index === 1 ? 0 : 140" in source
+    assert "wrapMode: index === 1 ? Text.WrapAnywhere : Text.NoWrap" in source
+    assert "height: Math.max(23, statusValue.paintedHeight + 2)" in source
+    assert 'row === 3 ? "Integration" : row === 4 ? "Agent"' in source
+    assert '(agentVersion || "-") + " \\u00b7 Firmware " + (firmwareVersion || "-")' in source
+    assert '"Integration " +' not in source
+    assert "status_server" not in (ROOT / "device_qml/js/c300x_i18n.js").read_text(encoding="utf-8")

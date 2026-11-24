@@ -353,7 +353,7 @@ PATCH_OUTPUT_SHA256 = {
     "js/c300x_energy_consumers.js": "f4128432b1990bebb79eae88daafe54481e953ad621fcf758e685ad57f0b4377",
     "js/c300x_ringer.js": "268fed06c44704de8fbf04ec458cac7425b9fbc78f9a68514112ca751603cb71",
     "js/c300x_ha.js": "0688a40a1d6e01d5061c06c33f7831eeb1e04f9d65e26aba8364291cabf330a3",
-    "js/c300x_i18n.js": "dec6b33e87e2e016a02f55cf2add5bb675fec9393c04285a6e62857d3420d71b",
+    "js/c300x_i18n.js": "c8caf1d1553e11a6872570e96db4c7c08e4f74b401fbdc91b875049185f7ebab",
     "js/c300x_memos.js": "2e922d5617dfafda1c231581ef1eff46f83f4897a11a7350926641135c46040d",
 }
 
@@ -2020,7 +2020,7 @@ def _assert_media_user_label_gui_patch(gui_dir: Path) -> None:
     assert "original" not in call_block_popup
     assert "Anrufe an Home Assistant weitergeleitet" in call_block_popup
     assert "Chiamate inoltrate a Home Assistant" in call_block_popup
-    assert "Appels renvoyes vers Home Assistant" in call_block_popup
+    assert "Appels renvoyés vers Home Assistant" in call_block_popup
     assert "Calls forwarded to Home Assistant" in call_block_popup
     assert "Anrufe an Home Assistant" in call_block_popup
     assert "Inoltra chiamate a Home Assistant" in call_block_popup

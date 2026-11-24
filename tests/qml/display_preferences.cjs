@@ -306,7 +306,7 @@ for (const data of [{ok: true}, {ok: true, id: "../bad", enabled: true, expires:
     const texts = vm.createContext({});
     vm.runInContext(fs.readFileSync(path.join(jsRoot, "c300x_i18n.js"), "utf8").replace(/^\.pragma library\s*/, ""), texts);
     assert.deepEqual(["de", "en", "it", "fr"].map(language => texts.text(language, "ha_feedback_colors")),
-        ["Statusmeldungen", "Status messages", "Messaggi di stato", "Messages d'etat"]);
+        ["Statusmeldungen", "Status messages", "Messaggi di stato", "Messages d'état"]);
 }
 {
     const qml = fs.readFileSync(path.join(root, "device_qml/Alarm.qml"), "utf8");

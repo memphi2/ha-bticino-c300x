@@ -464,7 +464,7 @@ for (const [age, text] of [[null, 'nie seit Start'], [undefined, 'nie seit Start
 }
 assert.equal(tab('en').panel.contactText(600), '10 min ago');
 assert.equal(tab('it').panel.contactText(7200), '2 h fa');
-assert.equal(tab('fr').panel.contactText(null), 'jamais depuis le demarrage');
+assert.equal(tab('fr').panel.contactText(null), 'jamais depuis le démarrage');
 for (const key of ['status_ok', 'status_down', 'status_checking', 'status_server', 'status_contact', 'contact_never',
         'contact_now', 'contact_min', 'contact_hours', 'contact_days', 'section_display', 'section_station',
         'bridge_unreachable', 'bridge_not_registered']) {

@@ -28,6 +28,9 @@ Station:
   (favourites bar or arrows). The value is stored in Home Assistant and shows
   the same in the integration's options; changing it on either side does not
   reload the integration.
+- The texts of the station pages are spelled properly in German, Italian and
+  French, with umlauts and accents ("PIN benötigt", "Umidità", "Arrêt")
+  instead of stand-ins such as "benoetigt".
 - **Reboot station** and **Remove agent** on the **Integration** tab now ask
   in the station's own confirmation window with **Yes** and **No**, and say
   what happens, instead of showing a second button further down the tab.

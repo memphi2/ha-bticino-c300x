@@ -1401,7 +1401,7 @@ patch_call_block_popup() {
     require_clean_call_block_popup "$source_popup"
     awk '
         /message: qsTr\("Calls forwarded to the smartphones in the home"\)/ {
-            sub(/message: qsTr\("Calls forwarded to the smartphones in the home"\) \+ trsl.empty/, "message: (trsl.language === \"de\" ? \"Anrufe an Home Assistant weitergeleitet\" : (trsl.language === \"it\" ? \"Chiamate inoltrate a Home Assistant\" : (trsl.language === \"fr\" ? \"Appels renvoyes vers Home Assistant\" : \"Calls forwarded to Home Assistant\"))) + trsl.empty")
+            sub(/message: qsTr\("Calls forwarded to the smartphones in the home"\) \+ trsl.empty/, "message: (trsl.language === \"de\" ? \"Anrufe an Home Assistant weitergeleitet\" : (trsl.language === \"it\" ? \"Chiamate inoltrate a Home Assistant\" : (trsl.language === \"fr\" ? \"Appels renvoyés vers Home Assistant\" : \"Calls forwarded to Home Assistant\"))) + trsl.empty")
             print
             message_patched=1
             next

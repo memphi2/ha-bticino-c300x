@@ -99,16 +99,17 @@ class Factory(QQmlNetworkAccessManagerFactory):
         return Agent(self.runtime, parent)
 
 
-def build_skin(work, firmware_skin):
-    """Scratch copy of the vendor skin with the real hooks and generated adapter."""
+def build_skin(work, firmware_skin, patched=True):
+    """Scratch copy of the vendor skin, by default with the real hooks and generated adapter."""
     sys.path.insert(0, str(ROOT / "scripts"))
     import c100x_qml_builder
-    skin = work / "skin"
+    skin = work / ("skin" if patched else "skin-stock")
     shutil.copytree(firmware_skin, skin)
     for path in skin.rglob("*"):
         path.chmod(0o755 if path.is_dir() else 0o644)
-    c100x_qml_builder.build(skin / RELEASE)
-    for mode, name in (("main", "main.qml"), ("menu", "MainPage.qml")):
+    if patched:
+        c100x_qml_builder.build(skin / RELEASE)
+    for mode, name in (("main", "main.qml"), ("menu", "MainPage.qml")) if patched else ():
         result = subprocess.run(
             ["awk", "-v", f"mode={mode}", "-v", f"hooks={skin / RELEASE / 'hooks'}", "-v", f"release={RELEASE}",
              "-f", str(ROOT / "native_agent/scripts/c100x_hooks.awk"), str(firmware_skin / name)],
@@ -151,12 +152,12 @@ class Probe:
 
 
 class Runtime:
-    def __init__(self, work, firmware_skin, routes=None, setup=""):
+    def __init__(self, work, firmware_skin, routes=None, setup="", patched=True):
         self.routes = dict(routes or {})
         self.requests = []
         self.warnings = []
         self.app = QGuiApplication.instance() or QGuiApplication([])
-        self.skin = build_skin(Path(work), Path(firmware_skin))
+        self.skin = build_skin(Path(work), Path(firmware_skin), patched)
         self.engine = QQmlApplicationEngine()
         self.factory = Factory(self)
         self.engine.setNetworkAccessManagerFactory(self.factory)

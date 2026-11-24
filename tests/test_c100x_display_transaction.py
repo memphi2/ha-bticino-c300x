@@ -127,6 +127,39 @@ def test_original_hook_recipe_can_be_upgraded_or_restored_after_chrome_fix(tree,
 
 
 @pytest.mark.parametrize("action", ["apply", "restore"])
+def test_sub_menu_hook_recipe_can_be_upgraded_or_restored(tree, action):
+    source = tree[0] / "source"
+    current = {name: (source / "hooks" / name).read_bytes() for name in ("main.inc", "menu.inc")}
+    legacy = {"main.inc": (ROOT / "tests/fixtures/c100x_main_hook_fullscreen.inc").read_bytes(),
+              "menu.inc": (ROOT / "tests/fixtures/c100x_menu_hook_v1.inc").read_bytes()}
+    assert hashlib.sha256(legacy["menu.inc"]).hexdigest() == (
+        "eb832ca9fa5f70d8904033a06303e9be5139a70c07822aad0b088635a437e8be")
+    for name, content in legacy.items():
+        (source / "hooks" / name).write_bytes(content)
+    rehash_source(source)
+    run(tree, "apply")
+    assert b"c100xMenuItem" in (tree[1] / "MainPage.qml").read_bytes()
+    for name, content in current.items():
+        (source / "hooks" / name).write_bytes(content)
+    rehash_source(source)
+    run(tree, action)
+    if action == "apply":
+        menu = (tree[1] / "MainPage.qml").read_bytes()
+        assert b"c100xMenuItem" not in menu and b"ListModel { id: c100xMenu }" in menu
+        run(tree, "restore")
+    assert_original(tree)
+
+
+def test_unknown_menu_hook_recipe_is_refused(tree):
+    source = tree[0] / "source"
+    hook = source / "hooks/menu.inc"
+    hook.write_bytes(hook.read_bytes() + b"    property bool unreviewed: true\n")
+    rehash_source(source)
+    run(tree, "apply", False)
+    assert_original(tree)
+
+
+@pytest.mark.parametrize("action", ["apply", "restore"])
 def test_upgrade_or_restore_after_source_generation_changes(tree, action):
     run(tree, "apply")
     before = (tree[1] / "main.qml").read_bytes()

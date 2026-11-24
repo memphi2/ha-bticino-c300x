@@ -17,7 +17,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def run_scenario(name, tmp_path, firmware=True):
+def run_scenario(name, tmp_path, firmware=True, arguments=()):
     if importlib.util.find_spec("PyQt5") is None:
         pytest.skip("Optional host PyQt5 absent; not a firmware-runtime test")
     from test_native_routing_firmware_restore import FIRMWARE_ROOT, original
@@ -25,7 +25,7 @@ def run_scenario(name, tmp_path, firmware=True):
         original("c100x-1.5.8")
     skin = FIRMWARE_ROOT / "rootfs-c100x-1.5.8/home/bticino/bin/gui/skins/default"
     result = subprocess.run(
-        [sys.executable, str(ROOT / "tests/fixtures/c100x_stock_scenarios.py"), name, str(tmp_path), str(skin)],
+        [sys.executable, str(ROOT / "tests/fixtures/c100x_stock_scenarios.py"), name, str(tmp_path), str(skin), *arguments],
         env={**os.environ, "QT_QPA_PLATFORM": "offscreen", "QT_QUICK_BACKEND": "software",
              "QML_DISABLE_DISK_CACHE": "1", "LANG": "en_US.UTF-8", "LC_ALL": "en_US.UTF-8"},
         capture_output=True, text=True, timeout=180)
@@ -51,3 +51,23 @@ def test_action_survives_a_click_that_unloads_it(tmp_path):
 @pytest.mark.parametrize("scenario", ["settings_status_item", "settings_without_bridge"])
 def test_status_messages_item_in_the_vendor_settings_carousel(tmp_path, scenario):
     run_scenario(scenario, tmp_path)
+
+
+@pytest.mark.parametrize("flags", ["0000", "0111", "1001", "1110"])
+def test_carousel_entries_keep_the_vendor_index_rules(tmp_path, flags):
+    # Netatmo camera, auto-open allowed, dashboard available, Alarmo configured. Each start state
+    # walks through all 16 combinations at runtime, beside the unpatched vendor page doing the same.
+    run_scenario("menu_combinations", tmp_path, arguments=tuple(flags))
+
+
+@pytest.mark.parametrize("scenario", ["menu_entries_open_their_pages", "menu_entries_retry_without_polling"])
+def test_carousel_entries(tmp_path, scenario):
+    run_scenario(scenario, tmp_path)
+
+
+def test_identity_helper_knows_the_shipped_hooks():
+    import hashlib
+    identity = (ROOT / "native_agent/scripts/c100x_display_identity.sh").read_text()
+    for name, variable in (("main.inc", "MAIN_HOOK_SHA"), ("menu.inc", "MENU_HOOK_SHA")):
+        digest = hashlib.sha256((ROOT / "device_qml/c100x/hooks" / name).read_bytes()).hexdigest()
+        assert f"\n{variable}={digest}\n" in identity

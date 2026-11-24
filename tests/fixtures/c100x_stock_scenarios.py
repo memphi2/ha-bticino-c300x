@@ -103,6 +103,148 @@ def settings_without_bridge(work, skin):
     assert not runtime.adapter_warnings(), runtime.adapter_warnings()
 
 
+RINGTONE, AUTO_OPEN, NETATMO = "images/Ringtone.svg", "images/Professional studio.svg", "images/security-netatmo.svg"
+TAIL = ["images/settings.svg", "images/Info.svg", "images/Exit.svg"]
+ORDER = ("(function() { var out = []; for (var i = 0; i < listView.model.count; i++) "
+         "out.push(listView.model.get(i).sourceImg.replace(/^.*C100X/, 'C100X')); return out.join('|') })()")
+STOCK = ("(function() { var out = []; for (var i = 0; i < listModel.count; i++) "
+         "out.push(listModel.get(i).sourceImg); return out.join('|') })()")
+
+
+def state_route(state):
+    def route(method, url, body):
+        state["reads"] += 1
+        if state.get("fail", 0) > 0:
+            state["fail"] -= 1
+            return 503, {"ok": False}
+        return {"ok": True, "alarm_configured": state["alarm"], "dashboard_available": state["home"]}
+    return route
+
+
+def shown_order(stock, home, alarm):
+    shown = []
+    for item in stock:
+        shown.append(item)
+        if item == RINGTONE:
+            shown += (["C100XHome.svg"] if home else []) + (["C100XAlarm.svg"] if alarm else [])
+    return shown
+
+
+def check_menu(runtime, reference, home, alarm, where):
+    """The vendor's own list equals the unpatched station's; the carousel shows it with our entries."""
+    stock = runtime.stack(STOCK).split("|")
+    if reference is not None:
+        assert stock == reference.stack(STOCK).split("|"), (where, stock, reference.stack(STOCK))
+        assert runtime.stack("listModel.autoOpenMenuPresent()") == reference.stack("listModel.autoOpenMenuPresent()")
+        assert runtime.stack("listModel.netatmoPresent()") == reference.stack("listModel.netatmoPresent()"), where
+    shown = shown_order(stock, home, alarm)
+    assert runtime.stack(ORDER).split("|") == shown, (where, runtime.stack(ORDER), shown)
+    count, index = runtime.stack("count"), runtime.stack("currentIndex")
+    assert count == len(shown) == runtime.js("pageIndicator.count"), where
+    assert 0 <= index < count and index == runtime.js("pageIndicator.currentIndex"), (where, index)
+    assert runtime.stack("listView.currentItem !== null && listView.currentItem.item !== null"), where
+
+
+def menu_combinations(work, skin, netatmo, auto_open, home, alarm):
+    """Every start state, then runtime toggles from it, beside the unpatched vendor page doing the same."""
+    netatmo, auto_open, home, alarm = (flag == "1" for flag in (netatmo, auto_open, home, alarm))
+    state = {"reads": 0, "home": home, "alarm": alarm}
+    setup = f"netatmoCount = {int(netatmo)}; configuration.isAutoOpenAllowed = {str(auto_open).lower()}"
+    runtime = Runtime(work, skin, {"/ui/state": state_route(state)}, setup=setup)
+    reference = Runtime(work, skin, setup=setup, patched=False)
+    assert reference.stack(ORDER) == reference.stack(STOCK), "reference is not the vendor page"
+    check_menu(runtime, reference, home, alarm, "start")
+    both = (runtime, reference)
+
+    def toggle_auto_open():
+        nonlocal auto_open
+        auto_open = not auto_open
+        for target in both:
+            target.js(f"global.configuration.isAutoOpenAllowed = {str(auto_open).lower()}")
+
+    def toggle_netatmo():
+        nonlocal netatmo
+        netatmo = not netatmo
+        for target in both:
+            target.js(f"global.netatmoCount = {int(netatmo)}; global.mNetatmoCamera = {{}}")
+
+    def toggle_home():
+        nonlocal home
+        home = state["home"] = not home
+        runtime.js("c100xHost.refreshEntries()")
+
+    def toggle_alarm():
+        nonlocal alarm
+        alarm = state["alarm"] = not alarm
+        runtime.js("c100xHost.refreshEntries()")
+
+    # A Gray code over the four flags: from this start, every one of the 16 combinations is reached at runtime.
+    toggles = (toggle_auto_open, toggle_home, toggle_netatmo, toggle_alarm)
+    seen = {(netatmo, auto_open, home, alarm)}
+    for number in range(1, 17):
+        step = toggles[min(3, (number & -number).bit_length() - 1)]
+        # Stand on every position in turn, so an item also appears and vanishes under the selection.
+        runtime.keys("D", settle=450)
+        step()
+        runtime.wait(150)
+        check_menu(runtime, reference, home, alarm, f"{number}:{step.__name__}")
+        seen.add((netatmo, auto_open, home, alarm))
+    assert len(seen) == 16, seen
+    assert not runtime.adapter_warnings(), runtime.adapter_warnings()
+
+
+def menu_entries_open_their_pages(work, skin):
+    """Return on an entry opens its page directly; there is no sub-menu in between."""
+    state = {"reads": 0, "home": True, "alarm": True}
+    runtime = Runtime(work, skin, {"/ui/state": state_route(state)})
+    check_menu(runtime, None, True, True, "start")
+    for downs, page, label in ((1, "HomeAssistant.qml", "Home Assistant"), (2, "Alarm.qml", "Alarmo")):
+        runtime.keys(f"{downs}D")
+        assert runtime.stack("listView.currentItem.item.children[1].text") == label
+        runtime.keys("R", settle=2200)
+        assert runtime.js("mainStackView.depth") == 2
+        assert runtime.js("mainStackView.currentItem.item.pageName") == page
+        assert runtime.js("!!mainStackView.currentItem.item.pageItem"), page + " not loaded"
+        runtime.js("mainStackView.currentItem.item.pageItem.back()")
+        runtime.wait(2200)
+        assert runtime.js("mainStackView.depth") == 1, "back did not return to the vendor carousel"
+        runtime.keys(f"{downs}U")
+    assert not [entry for entry in runtime.adapter_warnings() if "C100XMenu" in entry]
+
+
+def menu_entries_retry_without_polling(work, skin):
+    """A failed read keeps the entries hidden and is retried; a good read is not repeated."""
+    state = {"reads": 0, "home": True, "alarm": True, "fail": 2}
+    runtime = Runtime(work, skin, {"/ui/state": state_route(state)})
+    check_menu(runtime, None, False, False, "failed read")
+    assert state["reads"] == 1
+    runtime.wait(1300)
+    assert state["reads"] == 2, "no retry after one second"
+    check_menu(runtime, None, False, False, "second failed read")
+    runtime.wait(2300)
+    check_menu(runtime, None, True, True, "retry")
+    reads = state["reads"]
+    runtime.wait(4500)
+    assert state["reads"] == reads == 3, "polling in the working state"
+    # Waking the display reads once more: a new Alarmo setup shows up without a restart.
+    state["alarm"] = False
+    runtime.js("global.screenState.state = 1")
+    runtime.wait(100)
+    assert state["reads"] == reads
+    runtime.js("global.screenState.state = 2")
+    runtime.wait(200)
+    assert state["reads"] == reads + 1
+    check_menu(runtime, None, True, False, "wake")
+    # Six failed retries (63 s) end the attempt; shortened here by exhausting the counter.
+    state["fail"] = 99
+    runtime.js("c100xHost.refreshEntries(); c100xHost.entryRetries = 6")
+    runtime.wait(300)
+    runtime.js("c100xHost.readEntries()")
+    runtime.wait(300)
+    check_menu(runtime, None, False, False, "unreachable")
+    assert not runtime.adapter_warnings(), runtime.adapter_warnings()
+
+
 if __name__ == "__main__":
-    globals()[sys.argv[1]](Path(sys.argv[2]), Path(sys.argv[3]))
+    globals()[sys.argv[1]](Path(sys.argv[2]), Path(sys.argv[3]), *sys.argv[4:])
     sys.stdout.write(sys.argv[1] + ": passed\n")

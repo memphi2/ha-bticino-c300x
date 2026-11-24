@@ -83,6 +83,11 @@ QtObject {
         signal callAnswered()
         signal callEnded()
     }
+    property int netatmoCount: 0
+    function stubCount(filters) {
+        var first = filters && filters.length ? filters[0] : filters
+        return first && first.objectId === 3 ? netatmoCount : 0
+    }
     function stubObject(filters) {
         var first = filters && filters.length ? filters[0] : filters
         var id = first ? first.objectId : -1

@@ -35,6 +35,8 @@ Item {
         require(!vendor.audioState.isRingtoneMute && !bridge.muted, "unmute did not read back")
         bridge.setTouchTone(false)
         require(!vendor.beepEnabled && !bridge.touchToneEnabled, "key tone did not read back")
+        require(screen.pageName === "" && !screen.pageItem, "screen opened a page without an entry")
+        bridge.entryPage = "HomeAssistant.qml"
         screen.openPage("HomeAssistant.qml")
         require(screen.pageItem && screen.pageItem.pageActive, "dashboard loader did not start runtime")
         screen.openPage("Alarm.qml")
@@ -46,7 +48,7 @@ Item {
         bridge.setTouchTone(true)
         require(vendor.audioState.calls === 2 && !vendor.beepEnabled, "call guard changed vendor state")
         events.callInProgress = false
-        require(screen.pageName === "C100XMenu.qml", "preempted page resumed")
+        require(screen.pageName === "HomeAssistant.qml", "preempted page did not return to its entry")
         screen.openPage("Alarm.qml")
         require(screen.pageItem.pinCode === "", "PIN survived preemption")
         vendor.networkInfo.isSoftAp = true
@@ -55,11 +57,12 @@ Item {
         vendor.commissioningStatus = 2
         require(bridge.blocked && !screen.pageItem, "commissioning must preempt")
         vendor.commissioningStatus = 3
+        screen.openPage("Alarm.qml")
         events.callActive = true
         require(bridge.blocked, "active call must block")
         events.callActive = false
         screen.openPage("C100XSettings.qml")
-        require(screen.pageName === "C100XMenu.qml", "loader accepted the removed settings page")
+        require(screen.pageName === "HomeAssistant.qml", "loader accepted the removed settings page")
         var old = screen.pageName
         screen.openPage("../../main.qml")
         require(screen.pageName === old, "loader accepted foreign source")

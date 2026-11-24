@@ -55,7 +55,7 @@ Item {
         if (current === homeItem && pageStack.depth === 1)
             return typeof current.syncC100xMenu === "function" && current.c100xAvailable === true && !homeRegulationActive
         if (current.c100xFullScreen !== true || !current.item || !current.item.visible || !current.item.pageItem) return false
-        return current.item.pageItem.visible && (current.item.pageName === "C100XMenu.qml" || current.item.pageName === "HomeAssistant.qml")
+        return current.item.pageItem.visible && current.item.pageName === "HomeAssistant.qml"
     }
     Connections {
         target: bridge.homeItem
@@ -75,6 +75,48 @@ Item {
     }
     onFeedbackEnabledChanged: feedbackToggle.on = feedbackEnabled
     onBusyChanged: if (!busy) feedbackToggle.on = feedbackEnabled
+    property string entryPage: ""
+    property bool homeAvailable: false
+    property bool alarmAvailable: false
+    property int entryRead: 0
+    property int entryRetries: 0
+    readonly property bool entriesWanted: running && !stopped && vendorReady
+    readonly property bool homeCurrent: !!homeItem && pageStack.currentItem === homeItem
+    function readEntries() {
+        entryRetry.stop()
+        var read = ++entryRead
+        if (!entriesWanted) {
+            homeAvailable = false
+            alarmAvailable = false
+            return
+        }
+        Api.homeButtons(function(alarm, dashboard, valid) {
+            if (read !== bridge.entryRead || !bridge.entriesWanted) return
+            if (valid) {
+                bridge.entryRetries = 0
+                bridge.alarmAvailable = alarm
+                bridge.homeAvailable = dashboard
+            } else if (bridge.entryRetries < 6) {
+                entryRetry.interval = 1000 * Math.pow(2, bridge.entryRetries++)
+                entryRetry.restart()
+            } else {
+                bridge.alarmAvailable = false
+                bridge.homeAvailable = false
+            }
+        }, bridge)
+    }
+    function refreshEntries() {
+        entryRetries = 0
+        readEntries()
+    }
+    onEntriesWantedChanged: refreshEntries()
+    onHomeCurrentChanged: if (homeCurrent) refreshEntries()
+    Connections {
+        target: bridge.vendorReady && bridge.vendor.screenState ? bridge.vendor.screenState : null
+        ignoreUnknownSignals: true
+        onStateChanged: if (bridge.vendor.screenState.state === bridge.normalState) bridge.refreshEntries()
+    }
+    Timer { id: entryRetry; onTriggered: bridge.readEntries() }
     function load() { Api.loadDisplayPreferences(bridge) }
     function setFeedbackEnabled(value) { Api.saveDisplayPreferences(bridge, value) }
     function setTouchTone(value) {
@@ -132,5 +174,6 @@ Item {
         if (presence) presence.stop()
         Api.stopTouchTone(bridge)
         Api.cancelDisplayPreferences(bridge)
+        entryRead++
     }
 }

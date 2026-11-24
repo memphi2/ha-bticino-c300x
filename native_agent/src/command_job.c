@@ -196,7 +196,8 @@ void c300x_command_job_tick(struct c300x_command_job *job)
     }
     int alive = reaped == 0 || (reaped < 0 && wait_error != ECHILD);
     long long now = c300x_monotonic_ms();
-    if (!job->complete && (job->failed || (job->deadline_ms > 0 && now >= job->deadline_ms))) {
+    /* A child reaped in this tick has ended by itself, even on the deadline tick. */
+    if (!job->complete && (job->failed || (alive && job->deadline_ms > 0 && now >= job->deadline_ms))) {
         job->timed_out = !job->failed;
         job->failed = 1;
         job->complete = 1;

@@ -31,9 +31,38 @@ void c300x_http_send_json(int fd, int status, const char *reason, const char *bo
 
 void close_agent_socket(int fd) { (void)fd; }
 
+static int writes;
 static void record_write(void *context, const char *kind, const char *reason)
 {
     (void)context; (void)kind; (void)reason;
+    writes++;
+}
+
+static int zombie(pid_t pid)
+{
+    char path[64], stat[256];
+    snprintf(path, sizeof(path), "/proc/%d/stat", (int)pid);
+    FILE *file = fopen(path, "r");
+    size_t size = file != NULL ? fread(stat, 1, sizeof(stat) - 1, file) : 0;
+    if (file != NULL) {
+        fclose(file);
+    }
+    stat[size] = '\0';
+    char *state = strrchr(stat, ')');
+    return state != NULL && state[1] == ' ' && state[2] == 'Z';
+}
+
+static int lines(const char *path)
+{
+    FILE *file = fopen(path, "r");
+    int count = 0, c;
+    while (file != NULL && (c = fgetc(file)) != EOF) {
+        count += c == '\n';
+    }
+    if (file != NULL) {
+        fclose(file);
+    }
+    return count;
 }
 
 static void run_for(struct c300x_http_maintenance *owner, int real_ms, int (*done)(void))
@@ -84,7 +113,45 @@ int main(int argc, char **argv)
     run_for(&owner, 5000, started);
     assert(started() && responses == 0);
 
-    if (strcmp(mode, "shutdown") == 0) {
+    if (strcmp(mode, "deadline-exit") == 0) {
+        /* Ended by itself, but reaped only on the deadline tick: its answer. */
+        FILE *finish = fopen("finish", "w");
+        assert(finish != NULL);
+        fclose(finish);
+        for (int waited = 0; !zombie(child); waited++) {
+            assert(waited < 500);
+            usleep(10000);
+        }
+        offset_ms += 30001;
+        run_for(&owner, 1000, answered);
+        assert(responses == 1 && response_status == 200 && writes == 1);
+        assert(strstr(response_body, "\"changed_files\":1") != NULL);
+    } else if (strcmp(mode, "exit131") == 0) {
+        /* A failed write before its deadline is no timeout. */
+        FILE *finish = fopen("finish", "w");
+        assert(finish != NULL);
+        fclose(finish);
+        run_for(&owner, 5000, answered);
+        assert(responses == 1 && response_status == 502);
+        assert(strstr(response_body, "\"state\":\"script_failed\"") != NULL);
+    } else if (strcmp(mode, "overflow") == 0) {
+        /* Too much output fails the write; it still gets its rollback. */
+        FILE *finish = fopen("finish", "w");
+        assert(finish != NULL);
+        fclose(finish);
+        run_for(&owner, 5000, answered);
+        assert(responses == 1 && response_status == 502 && access("rolled", F_OK) == 0);
+        assert(strstr(response_body, "\"state\":\"script_failed\"") != NULL);
+        assert(kill(child, 0) == -1 && errno == ESRCH);
+    } else if (strcmp(mode, "shutdown-grace") == 0) {
+        /* Shutdown while the deadline's grace period runs: no second SIGTERM. */
+        offset_ms += 30001;
+        run_for(&owner, 100, NULL);
+        assert(responses == 0 && kill(child, 0) == 0);
+        c300x_http_maintenance_close(&owner);
+        assert(access("rolled", F_OK) == 0 && lines("terms") == 1);
+        assert(kill(child, 0) == -1 && errno == ESRCH);
+    } else if (strcmp(mode, "shutdown") == 0) {
         /* Shutdown during a write: the rollback trap runs to its end. */
         c300x_http_maintenance_close(&owner);
         assert(access("rolled", F_OK) == 0);
@@ -108,7 +175,7 @@ int main(int argc, char **argv)
         assert(responses == 1 && response_status == 504);
         assert(strstr(response_body, "\"error\":\"qml_patch_timeout\"") != NULL);
         if (strcmp(mode, "rollback") == 0) {
-            assert(access("rolled", F_OK) == 0);
+            assert(access("rolled", F_OK) == 0 && lines("terms") == 1);
             assert(strstr(response_body, "\"rolled_back\":true") != NULL);
         } else {
             assert(strstr(response_body, "\"rolled_back\":false") != NULL);

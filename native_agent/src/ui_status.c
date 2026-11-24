@@ -41,6 +41,7 @@ int c300x_ui_status_json(
     const char *firmware,
     const char *webhook_url,
     int connected,
+    int disabled,
     long last_seen_at,
     long now,
     char *out,
@@ -61,10 +62,11 @@ int c300x_ui_status_json(
     written = snprintf(
         out,
         out_len,
-        "{\"ok\":true,\"version\":%s,\"firmware\":%s,\"registered\":%s,\"home_assistant\":\"%s\",\"last_contact_age\":%s}\n",
+        "{\"ok\":true,\"version\":%s,\"firmware\":%s,\"registered\":%s,\"disabled\":%s,\"home_assistant\":\"%s\",\"last_contact_age\":%s}\n",
         c300x_json_string(version, version_json, sizeof(version_json)),
         c300x_json_string(firmware, firmware_json, sizeof(firmware_json)),
         registered ? "true" : "false",
+        disabled ? "true" : "false",
         origin,
         age
     );

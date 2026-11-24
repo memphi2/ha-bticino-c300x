@@ -15,6 +15,7 @@ int c300x_ui_status_json(
     const char *firmware,
     const char *webhook_url,
     int connected,
+    int disabled,
     long last_seen_at,
     long now,
     char *out,

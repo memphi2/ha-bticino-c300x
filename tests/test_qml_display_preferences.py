@@ -392,7 +392,7 @@ function tab(language) {
     const calls = {status: [], details: [], setting: []};
     const preferences = {bridgeProblem: ''};
     const panel = vm.createContext({c300xDisplayPreferences: preferences, visible: true, pending: '', saving: false,
-        answered: false, problem: '', address: '', contact: '', agentVersion: '', firmwareVersion: '', integrationVersion: '',
+        answered: false, problem: '', bridgeOff: false, address: '', contact: '', agentVersion: '', firmwareVersion: '', integrationVersion: '',
         instanceName: '', keepOpen: false, tabNavigation: false, status: '', Math,
         label(key) { return texts.text(language || 'de', key); },
         Bridge: {
@@ -470,17 +470,34 @@ for (const [age, text] of [[null, 'nie seit Start'], [undefined, 'nie seit Start
         [864000, 'vor 10 Tagen']]) {
     assert.equal(panel.contactText(age), text, String(age));
 }
+// The agent answers 404 for "never registered" and for "switched off"; its local status tells them apart.
+{
+    const {panel, calls} = tab('en');
+    panel.readStatus();
+    calls.status[0].callback({ok: true, registered: false, disabled: true, home_assistant: '', last_contact_age: 30});
+    calls.details[0].callback(null, 'bridge_not_registered');
+    assert.equal(texts.text('en', panel.reasonKey()), 'The station pages are switched off in Home Assistant.');
+    calls.status[1].callback({ok: true, registered: false, disabled: false, home_assistant: '', last_contact_age: null});
+    assert.equal(panel.reasonKey(), 'bridge_not_registered');
+    panel.bridgeOff = true; panel.problem = 'bridge_unreachable';
+    assert.equal(panel.reasonKey(), 'bridge_unreachable');
+    assert.ok(qml.includes('text: panel.problem ? panel.label(panel.reasonKey()) : ""'));
+    assert.deepEqual(['de', 'it', 'fr'].map(language => texts.text(language, 'bridge_disabled')), [
+        'Die Stationsseiten sind in Home Assistant ausgeschaltet.',
+        'Le pagine della stazione sono disattivate in Home Assistant.',
+        'Les pages de la station sont désactivées dans Home Assistant.']);
+}
 assert.equal(tab('en').panel.contactText(600), '10 min ago');
 assert.equal(tab('it').panel.contactText(7200), '2 h fa');
 assert.equal(tab('fr').panel.contactText(null), 'jamais depuis le démarrage');
 for (const key of ['status_ok', 'status_down', 'status_checking', 'status_contact', 'contact_never',
         'contact_now', 'contact_min', 'contact_hours', 'contact_days', 'section_display', 'section_station',
-        'bridge_unreachable', 'bridge_not_registered']) {
+        'bridge_unreachable', 'bridge_not_registered', 'bridge_disabled']) {
     for (const language of ['de', 'en', 'it', 'fr']) assert.notEqual(texts.text(language, key), key, language + ' ' + key);
 }
 assert.match(texts.text('en', 'bridge_unreachable'), /http, or https with a trusted certificate/);
 // One block: state, reason, and no smaller than the vendor's own settings text (18 px).
-assert.match(qml, /text: panel\.problem \? panel\.label\(panel\.problem\) : ""/);
+assert.match(qml, /text: panel\.problem \? panel\.label\(panel\.reasonKey\(\)\) : ""/);
 assert.match(qml, /onVisibleChanged: if \(visible\) readStatus\(\); else hidden\(\)/);
 const sizes = [...qml.matchAll(/font\.pixelSize: (\d+)/g)].map(match => Number(match[1]));
 assert.ok(sizes.length >= 5 && Math.min(...sizes) >= 18, String(sizes));

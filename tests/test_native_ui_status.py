@@ -20,15 +20,15 @@ int main(int argc, char **argv)
     }
     if (argc == 3) {
         char small[40];
-        printf("%d", c300x_ui_status_json("2.9.2", "1.7.19", argv[1], 1, 100, 160, small, sizeof(small)));
+        printf("%d", c300x_ui_status_json("2.9.2", "1.7.19", argv[1], 1, 0, 100, 160, small, sizeof(small)));
         return 0;
     }
     if (argc == 5) {
-        if (!c300x_ui_status_json("2.9.2", argv[4], argv[1], 1, 100, 160, out, sizeof(out))) return 1;
+        if (!c300x_ui_status_json("2.9.2", argv[4], argv[1], 1, 0, 100, 160, out, sizeof(out))) return 1;
         fputs(out, stdout);
         return 0;
     }
-    if (!c300x_ui_status_json("2.9.2", "1.7.19", argv[1], argv[2][0] == '1', 100, argv[3][0] == 'b' ? 40 : 160, out, sizeof(out))) return 1;
+    if (!c300x_ui_status_json("2.9.2", "1.7.19", argv[1], argv[2][0] == '1', argv[2][0] == 'd', 100, argv[3][0] == 'b' ? 40 : 160, out, sizeof(out))) return 1;
     fputs(out, stdout);
     return 0;
 }
@@ -81,15 +81,18 @@ def test_status_body(probe):
 
     url = "https://ha.example.org:8123/api/webhook/abc?x=1"
     assert json.loads(probe(url, "1", "a")) == {
-        "ok": True, "version": "2.9.2", "firmware": "1.7.19", "registered": True,
+        "ok": True, "version": "2.9.2", "firmware": "1.7.19", "registered": True, "disabled": False,
         "home_assistant": "https://ha.example.org:8123", "last_contact_age": 60,
     }
     # A clock that stepped back never shows a negative age.
     assert json.loads(probe(url, "1", "b"))["last_contact_age"] == 0
     assert json.loads(probe(url, "0", "a"))["last_contact_age"] is None
     assert json.loads(probe("", "0", "a")) == {
-        "ok": True, "version": "2.9.2", "firmware": "1.7.19", "registered": False, "home_assistant": "", "last_contact_age": None,
+        "ok": True, "version": "2.9.2", "firmware": "1.7.19", "registered": False, "disabled": False,
+        "home_assistant": "", "last_contact_age": None,
     }
+    # Switched off by Home Assistant is told apart from "never registered".
+    assert json.loads(probe("", "d", "a"))["disabled"] is True
     # An address that is not shown still counts as registered.
     assert json.loads(probe("http://u:p@h/x", "1", "a"))["registered"] is True
     assert probe(url, "small") == "0"

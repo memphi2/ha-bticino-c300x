@@ -17,6 +17,7 @@ Item {
     property string pending: ""
     property double expiresAt: 0
     property string problem: ""
+    property bool bridgeOff: false
     property bool answered: false
     property bool reachable: answered && problem === ""
     property string address: ""
@@ -101,6 +102,9 @@ Item {
         if (age < 172800) return label("contact_hours").replace("%1", Math.round(age / 3600))
         return label("contact_days").replace("%1", Math.floor(age / 86400))
     }
+    function reasonKey() {
+        return problem === "bridge_not_registered" && bridgeOff ? "bridge_disabled" : problem
+    }
     function applyDisplay(data) {
         keepOpen = data.preventReturnToHomepage === true
         tabNavigation = data.navigation === "tabs"
@@ -109,6 +113,7 @@ Item {
         Bridge.stationStatus(function(data) {
             panel.address = data && /^https?:\/\/[^\/?#@\s]+$/.test(data.home_assistant) ? data.home_assistant : ""
             panel.contact = data ? panel.contactText(data.last_contact_age) : ""
+            panel.bridgeOff = !!data && data.disabled === true
             panel.agentVersion = data && data.version ? data.version : ""
             panel.firmwareVersion = data && data.firmware ? data.firmware : ""
         }, panel)
@@ -218,7 +223,7 @@ Item {
                         color: "#f1c40f"
                         font.pixelSize: 18
                         wrapMode: Text.WordWrap
-                        text: panel.problem ? panel.label(panel.problem) : ""
+                        text: panel.problem ? panel.label(panel.reasonKey()) : ""
                     }
                 }
             }

@@ -528,6 +528,9 @@ problem lasts:
 - **Home Assistant has not registered since the agent started.** The agent is
   running, but Home Assistant has not connected to it yet, for example
   shortly after a station restart or while the integration is not loaded.
+- **The station pages are switched off in Home Assistant.** The integration
+  option **Home Assistant pages on the display** is off, so Home Assistant has
+  told the agent not to ask it.
 - **Home Assistant does not answer.** The station cannot reach Home Assistant
   at the address the integration gave it. Check the address of Home Assistant
   for the C300X in the integration's connection settings: it must be

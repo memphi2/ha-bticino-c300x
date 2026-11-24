@@ -1902,7 +1902,7 @@ requests to Home Assistant require an active display bridge.
 | `GET` | `/ui/ringer/next` | Core GUI ringer command/acknowledgment channel. |
 | `GET` | `/ui/alerts/next` | One sleeping GUI alert delivery connection; no acknowledgement or queue. |
 | `GET`, `POST` | `/ui/preferences` | Local display feedback preference, independent of HA registration. |
-| `GET` | `/ui/status` | Local facts for the station's Integration tab: agent and firmware version, whether Home Assistant is registered, its address as scheme, host and port, and the age of the last contact. |
+| `GET` | `/ui/status` | Local facts for the station's Integration tab: agent and firmware version, whether Home Assistant is registered or has switched the display bridge off, its address as scheme, host and port, and the age of the last contact. |
 | `GET` | `/ui/maintenance` | Availability of SSH, reboot and removal on this station. |
 | `GET`, `POST` | `/ui/maintenance/ssh` | Read SSH status or request `{"enabled":true}` or `{"enabled":false}`. A write checks the resulting process state. |
 | `POST` | `/ui/maintenance/reboot` | Schedule a reboot with `{"confirm":"reboot"}`; leaves SSH unchanged. |
@@ -1923,15 +1923,20 @@ hooks do not require that registration. No route exposes configured token values
 Assistant cannot be reached. It requires a loopback client and returns
 
 ```json
-{"ok":true,"version":"2.9.2","firmware":"1.7.19","registered":true,"home_assistant":"http://192.0.2.10:8123","last_contact_age":42}
+{"ok":true,"version":"2.9.2","firmware":"1.7.19","registered":true,"disabled":false,"home_assistant":"http://192.0.2.10:8123","last_contact_age":42}
 ```
 
 `home_assistant` is cut from the registered callback URL and carries scheme,
 host and port only. Path, query and fragment are never returned, because the
 path holds the webhook id; a URL with user information or any character
 outside letters, digits and `.-:[]` in its host part gives an empty string, and
-so does a missing registration. `registered` is false until Home Assistant has
-registered since the agent started. `last_contact_age` is the number of seconds
+so does a missing registration. A host name with `_` and an IPv6 address with
+a zone id (`%eth0`) are such cases: the station shows `-` for them, the
+connection itself is not affected. `registered` is false until Home Assistant
+has registered since the agent started. `disabled` is true while Home
+Assistant has switched the display bridge off (`POST /api/v1/display-bridge`
+with `"enabled":false`); the bridge requests of the station are answered with
+HTTP 404 in both cases, and this flag tells them apart. `last_contact_age` is the number of seconds
 since the last contact with Home Assistant in this run, or `null` if there was
 none yet. Four things count as a contact: Home Assistant registering its event
 subscription, Home Assistant posting a display event

@@ -325,6 +325,7 @@ def test_local_status_shows_the_home_assistant_origin_and_last_contact(lab):
         "ok": True,
         "version": (ROOT / "native_agent/VERSION").read_text().strip(),
         "registered": True,
+        "disabled": False,
         # Scheme, host and port only: the path carries the webhook id.
         "home_assistant": f"http://127.0.0.1:{lab.callback}",
         "last_contact_age": None,
@@ -343,6 +344,7 @@ def test_local_status_shows_the_home_assistant_origin_and_last_contact(lab):
     assert request(lab.api, "/api/v1/display-bridge", {"enabled": False})[0] == 200
     status, body = request(lab.ui, "/ui/status")
     assert status == 200 and body["registered"] is False and body["home_assistant"] == ""
+    assert body["disabled"] is True, "switched off by Home Assistant, not merely never registered"
 
 
 def test_display_setting_is_forwarded_as_its_own_type(lab):

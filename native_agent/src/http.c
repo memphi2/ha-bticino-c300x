@@ -9217,7 +9217,8 @@ static int handle_ui_request(
         if (!client_is_loopback(client_fd)) {
             send_loopback_required(client_fd);
         } else if (c300x_ui_status_json(C300X_NATIVE_AGENT_VERSION, firmware, display_bridge_webhook_url(config, runtime),
-                runtime->home_assistant_connected_this_run, (long)runtime->home_assistant_last_seen_monotonic,
+                runtime->home_assistant_connected_this_run, runtime->display_bridge_disabled,
+                (long)runtime->home_assistant_last_seen_monotonic,
                 (long)c300x_monotonic_seconds(), body, sizeof(body))) {
             send_json(client_fd, 200, "OK", body);
         } else {

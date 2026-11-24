@@ -1845,7 +1845,8 @@ def test_capture_doorbell_call_service_translates_status_failures(monkeypatch) -
         handler = hass.services.handlers[(DOMAIN, SERVICE_CAPTURE_DOORBELL_CALL)]
         try:
             await handler(types.SimpleNamespace(data={}))
-        except SERVICE_VALIDATION_ERROR as err:
+        except HomeAssistantError as err:
+            assert not isinstance(err, SERVICE_VALIDATION_ERROR)
             assert _translation_key(err) == "agent_command_failed"
         else:
             raise AssertionError("status failure was not translated")
@@ -2291,7 +2292,8 @@ def test_capture_doorbell_call_service_does_not_hang_up_unconfirmed_call(
         handler = hass.services.handlers[(DOMAIN, SERVICE_CAPTURE_DOORBELL_CALL)]
         try:
             await handler(types.SimpleNamespace(data={}))
-        except SERVICE_VALIDATION_ERROR as err:
+        except HomeAssistantError as err:
+            assert not isinstance(err, SERVICE_VALIDATION_ERROR)
             assert _translation_key(err) == "agent_command_failed"
         else:
             raise AssertionError("answer wait failure was not translated")
@@ -2421,7 +2423,8 @@ def test_capture_doorbell_call_translates_hangup_failure_after_successful_captur
         handler = hass.services.handlers[(DOMAIN, SERVICE_CAPTURE_DOORBELL_CALL)]
         try:
             await handler(types.SimpleNamespace(data={}))
-        except SERVICE_VALIDATION_ERROR as err:
+        except HomeAssistantError as err:
+            assert not isinstance(err, SERVICE_VALIDATION_ERROR)
             assert _translation_key(err) == "agent_command_failed"
         else:
             raise AssertionError("hangup failure was not translated")

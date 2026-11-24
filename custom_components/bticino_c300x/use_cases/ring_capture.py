@@ -16,7 +16,7 @@ from ..camera_media.capture_lifecycle import RingCaptureCallGuard
 from ..camera_media.session_lifecycle import media_owner_stopping, media_stop_scope
 from ..doorstation_audio import async_ensure_doorstation_audio_gain
 from ..entry_locks import entry_lock
-from ..exceptions import service_validation_error
+from ..exceptions import home_assistant_error, service_validation_error
 from ..ring_capture import (
     async_capture_doorbell_ring_call,
     ensure_on_demand_capture_runtime,
@@ -167,7 +167,7 @@ class RingCaptureUseCase:
                                     exc_info=err,
                                 )
                             else:
-                                raise service_validation_error("agent_command_failed") from err
+                                raise home_assistant_error("agent_command_failed") from err
                 finally:
                     admission.close()
                     if call_guard is not None:
@@ -242,7 +242,7 @@ class RingCaptureUseCase:
         try:
             status = await self._entry.runtime_data.api.async_doorbell_video_status()
         except Exception as err:
-            raise service_validation_error("agent_command_failed") from err
+            raise home_assistant_error("agent_command_failed") from err
         try:
             if capture_mode == "on_demand":
                 raise_if_on_demand_capture_blocked(self._entry, status)
@@ -274,11 +274,11 @@ class RingCaptureUseCase:
                 if _ring_call_still_active(status):
                     saw_active_ring = True
                 elif saw_active_ring:
-                    raise service_validation_error("agent_command_failed")
+                    raise home_assistant_error("agent_command_failed")
 
             remaining = deadline - loop.time()
             if remaining <= 0:
-                raise service_validation_error("agent_command_failed") from last_error
+                raise home_assistant_error("agent_command_failed") from last_error
             await asyncio.sleep(
                 min(_RING_CAPTURE_ANSWER_READY_INTERVAL_SECONDS, remaining)
             )

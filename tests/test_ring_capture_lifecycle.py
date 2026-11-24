@@ -477,3 +477,45 @@ def test_journal_does_not_claim_user_supplied_output_paths(capture, monkeypatch)
     monkeypatch.setattr(ring_capture, "get_journal", lambda *args: journal)
     assert asyncio.run(use_case.capture(output_path="/media/c300x/user.mp4", include_audio=False)) == recording.return_value
     journal.attach_clip.assert_not_awaited()
+
+
+@pytest.mark.parametrize("failure", ["status_read", "ring_ended", "answer_timeout", "hangup"])
+def test_agent_failures_are_not_reported_as_invalid_input(capture, monkeypatch, failure):
+    """An unreachable agent or a call the device dropped is a device failure:
+    HomeAssistantError, never ServiceValidationError (invalid service input)."""
+
+    use_case, entry, _, recording, status = capture
+    api = entry.runtime_data.api
+    if failure == "status_read":
+        api.async_doorbell_video_status.side_effect = RuntimeError("agent offline")
+    elif failure == "hangup":
+        api.async_hangup_doorbell_call.side_effect = RuntimeError("agent offline")
+    else:
+        monkeypatch.setattr(ring_capture, "_RING_CAPTURE_ANSWER_READY_TIMEOUT_SECONDS", 0.05)
+        answered = False
+
+        async def answer():
+            nonlocal answered
+            answered = True  # the media never becomes ready
+
+        reads_after_answer = 0
+
+        async def read():
+            nonlocal reads_after_answer
+            if answered:
+                reads_after_answer += 1
+                if failure == "ring_ended" and reads_after_answer > 1:
+                    status["bridge"]["ring_call_active"] = False
+            return status
+
+        api.async_answer_doorbell_call.side_effect = answer
+        api.async_doorbell_video_status.side_effect = read
+
+    with pytest.raises(HomeAssistantError) as err:
+        asyncio.run(use_case.capture())
+
+    assert not isinstance(err.value, ServiceValidationError)
+    assert err.value.translation_key == "agent_command_failed"
+    if failure == "hangup":
+        recording.assert_awaited_once()
+        api.async_hangup_doorbell_call.assert_awaited_once()

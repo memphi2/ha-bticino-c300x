@@ -923,7 +923,13 @@ display does: the agent writes `message.txt` into `memos.recordsDir`, sends
 request `*#8**100#3##`, whose answer the station also sends to the display,
 and for `read: true` marks the memo read with `*#8**#101#3#<n>*1##`.
 A save the station refuses (it is recording, for example) answers
-`502 memo_create_refused`. Further `502` errors of this route:
+`502 memo_create_refused`. The station only saves a memo while it is idle
+and refuses with the same plain NACK during a call. When the agent itself
+sees a call or stream at that moment (its own stream or Ring Call, a Home
+Call, or a call on the station's display), the refusal answers
+`409 station_busy` instead: nothing was saved, and the request can be
+repeated after the call. The agent never refuses on its own; it always asks
+the station first. Further `502` errors of this route:
 
 | `error` | Meaning |
 | --- | --- |

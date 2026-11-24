@@ -24,6 +24,7 @@ from .api_errors import (
     C300XAgentUpdateError,
     C300XDeviceNotRegisteredError,
     C300XDisplayBridgeNotRegisteredError,
+    C300XStationBusyError,
 )
 from .const import (
     HEADER_MAINTENANCE_TOKEN,
@@ -242,6 +243,8 @@ class _C300XApiCore:
                 )
             if _agent_error_field(text, "detail") == "device_domain_missing":
                 raise C300XDeviceNotRegisteredError(_http_error_text(status, text))
+            if status == 409 and _agent_error_field(text, "error") == "station_busy":
+                raise C300XStationBusyError(_http_error_text(status, text))
             raise C300XAgentApiConnectionError(_http_error_text(status, text))
 
     def _maintenance_headers(self) -> dict[str, str]:

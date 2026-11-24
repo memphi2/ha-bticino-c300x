@@ -13,6 +13,7 @@
 #include "http_camera_quality.h"
 #include "http_announce.h"
 #include "camera_quality.h"
+#include "camera_update_guard.h"
 #include "display_callback.h"
 #include "event_payload.h"
 #include "file_io.h"
@@ -7107,6 +7108,12 @@ static void handle_text_memo_create(
     memo.text = text;
     result = c300x_memo_vendor_create_text(config, &memo, error, sizeof(error));
     if (result == C300X_MEMO_VENDOR_REFUSED) {
+        /* The station saves no memo during a call. Its refusal names no
+         * reason, so the agent's own view of calls and streams does. */
+        if (c300x_camera_update_media_busy(runtime->video)) {
+            send_json(client_fd, 409, "Conflict", "{\"ok\":false,\"error\":\"station_busy\"}\n");
+            return;
+        }
         send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"memo_create_refused\"}\n");
         return;
     }

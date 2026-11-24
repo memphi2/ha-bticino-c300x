@@ -251,3 +251,53 @@ test("changing an explicitly configured camera also replaces its old entry owner
   change({ ...form.data, entity: "camera.b" });
   assert.equal(events.at(-1).detail.config.entry_id, "entry-b");
 });
+
+// A shadow root that, like the browser, builds a new ha-form for every innerHTML.
+function createRebuildingEditor(module, config = {}) {
+  const forms = [];
+  const editor = new module.C300XDoorbellCallCardEditor();
+  editor.attachShadow = () => (editor.shadowRoot = {
+    set innerHTML(_html) {
+      const listeners = new Map();
+      forms.push({ listeners, addEventListener: (name, handler) => listeners.set(name, handler) });
+    },
+    querySelector: () => forms.at(-1),
+  });
+  editor.dispatchEvent = (event) => {
+    // hui-element-editor answers every config-changed with setConfig.
+    if (event.type === "config-changed") editor.setConfig(event.detail.config);
+  };
+  editor.hass = { language: "en", states: {} };
+  editor.setConfig(config);
+  const change = (value) => forms.at(-1).listeners.get("value-changed")({ detail: { value } });
+  return { editor, forms, change };
+}
+
+test("editing keeps the one ha-form and changes its schema in place", async () => {
+  installCustomElementStubs();
+  const module = await importEditorModule();
+  const { editor, forms, change } = createRebuildingEditor(module);
+  const form = forms[0];
+  for (const name of ["F", "Fr", "Fro", "Front"]) {
+    change({ ...form.data, name });
+  }
+  change({ ...form.data, show_door_unlock: false });
+  assert.equal(forms.length, 1, "ha-form was built again");
+  assert.equal(form.data.name, "Front");
+  assert.equal(form.data.show_door_unlock, false);
+  assert.ok(form.schema.some((field) => field.name === "ringback_tone"));
+
+  change({ ...form.data, mode: "doorbell_call" });
+  assert.equal(forms.length, 1);
+  assert.equal(form.schema.some((field) => field.name === "ringback_tone"), false);
+
+  const english = form.schema[0].selector.select.options[0].label;
+  editor.hass = { language: "de", states: {} };
+  assert.equal(forms.length, 1);
+  assert.notEqual(form.schema[0].selector.select.options[0].label, english);
+  const hass = { language: "de", states: {} };
+  const schema = form.schema;
+  editor.hass = hass;
+  assert.equal(form.hass, hass);
+  assert.equal(form.schema, schema, "an unchanged language rebuilt the schema");
+});

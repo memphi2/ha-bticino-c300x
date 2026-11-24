@@ -1,6 +1,7 @@
 #include "mdns.h"
 #include "device_detect.h"
 #include "string_util.h"
+#include "time_util.h"
 
 #include <arpa/inet.h>
 #include <ctype.h>
@@ -56,6 +57,7 @@ static void mdns_send_response(
 static int mdns_build_response(
     const struct c300x_config *config,
     const char *instance_id,
+    const char *device_id,
     unsigned char *buffer,
     size_t buffer_len,
     uint32_t ttl
@@ -132,6 +134,18 @@ void c300x_mdns_init(struct c300x_mdns *mdns)
     mdns->announced = 0;
     mdns->wanted = 0;
     mdns->instance_id[0] = '\0';
+    mdns->device_id[0] = '\0';
+    mdns->last_response_ms = 0;
+}
+
+/* Looked up once per socket instead of a /sys scan per datagram; a socket
+ * reopens when the interface address changes. */
+static const char *mdns_device_id(struct c300x_mdns *mdns)
+{
+    if (mdns->device_id[0] == '\0') {
+        c300x_mdns_device_id(mdns->device_id, sizeof(mdns->device_id));
+    }
+    return mdns->device_id;
 }
 
 void c300x_mdns_close(struct c300x_mdns *mdns)
@@ -141,6 +155,7 @@ void c300x_mdns_close(struct c300x_mdns *mdns)
         mdns->fd = -1;
     }
     mdns->announced = 0;
+    mdns->device_id[0] = '\0';
 }
 
 void c300x_mdns_open_if_needed(
@@ -220,13 +235,12 @@ static int mdns_read_name(const unsigned char *packet, size_t size, size_t *offs
 }
 
 static int mdns_relevant_query(const unsigned char *packet, size_t size,
-                               const struct c300x_config *config)
+                               const struct c300x_config *config, const char *device_id)
 {
     if (size < 12 || packet[2] != 0 || packet[3] != 0) return 0;
     unsigned int questions = ((unsigned int)packet[4] << 8) | packet[5];
     if (questions == 0 || questions > 32) return 0;
-    char device_id[64], label[64], instance[160], host[80];
-    c300x_mdns_device_id(device_id, sizeof(device_id));
+    char label[64], instance[160], host[80];
     mdns_instance_name(config, device_id, label, sizeof(label));
     snprintf(instance, sizeof(instance), "%s.%s", label, mdns_service());
     snprintf(host, sizeof(host), "%s.local", device_id);
@@ -264,9 +278,14 @@ void c300x_mdns_handle_query(
             break;
         }
         if ((size_t)read_size <= sizeof(buffer) &&
-            mdns_relevant_query(buffer, (size_t)read_size, config)) respond = 1;
+            mdns_relevant_query(buffer, (size_t)read_size, config, mdns_device_id(mdns))) respond = 1;
     }
-    if (respond) mdns_send_response(mdns, config, 120);
+    /* One answer carries every record; RFC 6762 allows one per second. A
+     * flood of queries must not turn into a flood of multicast answers. */
+    long long now_ms = c300x_monotonic_ms();
+    if (respond && (mdns->last_response_ms == 0 || now_ms - mdns->last_response_ms >= 1000)) {
+        mdns_send_response(mdns, config, 120);
+    }
 }
 
 void c300x_mdns_announce_if_due(
@@ -352,11 +371,12 @@ static void mdns_send_response(
 {
     unsigned char buffer[1024];
     struct sockaddr_in target;
-    int length = mdns_build_response(config, mdns->instance_id, buffer, sizeof(buffer), ttl);
+    int length = mdns_build_response(config, mdns->instance_id, mdns_device_id(mdns), buffer, sizeof(buffer), ttl);
 
     if (mdns->fd < 0 || length <= 0) {
         return;
     }
+    mdns->last_response_ms = c300x_monotonic_ms();
     memset(&target, 0, sizeof(target));
     target.sin_family = AF_INET;
     target.sin_port = htons(C300X_MDNS_PORT);
@@ -376,6 +396,7 @@ static void mdns_send_response(
 static int mdns_build_response(
     const struct c300x_config *config,
     const char *instance_id,
+    const char *device_id,
     unsigned char *buffer,
     size_t buffer_len,
     uint32_t ttl
@@ -383,7 +404,6 @@ static int mdns_build_response(
 {
     char instance_label[64];
     char instance_name[160];
-    char device_id[64];
     char host_name[80];
     char txt_id[80];
     char txt_name[80];
@@ -396,7 +416,6 @@ static int mdns_build_response(
     size_t offset = 0;
     size_t rdata_len = 0;
 
-    c300x_mdns_device_id(device_id, sizeof(device_id));
     /* A cached DNS-SD service needs a changed record to signal a restart. */
     if (snprintf(txt_instance, sizeof(txt_instance), "instance=%s", instance_id)
         >= (int)sizeof(txt_instance)) {

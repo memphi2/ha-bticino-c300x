@@ -504,13 +504,14 @@ def _route_diagnostics(host: str, port: int) -> dict[str, Any]:
         return result
     result["resolved"] = bool(candidates)
     for family, socktype, proto, _canonname, sockaddr in candidates:
-        with socket.socket(family, socktype, proto) as sock:
-            try:
+        # Inside the try: a host without IPv6 cannot even create the socket.
+        try:
+            with socket.socket(family, socktype, proto) as sock:
                 sock.connect(sockaddr)
                 source = str(sock.getsockname()[0]).split("%", 1)[0]
                 target = str(sockaddr[0]).split("%", 1)[0]
-            except OSError:
-                continue
+        except OSError:
+            continue
         source_ip = _ip_address(source)
         target_ip = _ip_address(target)
         result["selected_source_type"] = callback_address_type(source_ip)

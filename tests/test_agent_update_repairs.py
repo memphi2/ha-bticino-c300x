@@ -888,8 +888,10 @@ def test_update_does_not_prepare_without_reliable_patch_capture(monkeypatch, fai
 
     assert result["errors"] == {"base": "update_failed"}
     update.assert_not_awaited()
-    assert read.await_count == (13 if failure == "busy" else 1)
-    assert clock[0] == (12 if failure == "busy" else 0)
+    # One-second pauses for the whole busy wait, then a last try.
+    wait = agent_update.MAINTENANCE_BUSY_WAIT_SECONDS
+    assert read.await_count == (int(wait) + 1 if failure == "busy" else 1)
+    assert clock[0] == (wait if failure == "busy" else 0)
 
 
 @pytest.mark.parametrize("optional", ["unsupported", "unavailable", "core_only"])

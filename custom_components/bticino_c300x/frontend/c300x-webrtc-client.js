@@ -1,11 +1,14 @@
-import { C300XMediaAttachment } from "./c300x-media-attach.js?v=0ec1ebcd886b1321";
+import { C300XMediaAttachment } from "./c300x-media-attach.js?v=5605ceb6a5094cb7";
 
 const C300X_WEBRTC_DISCONNECTED_GRACE_MS = 10000;
 const C300X_WEBRTC_DEBUG_STATUS_COMMAND = "bticino_c300x/debug/status";
-const C300X_WEBRTC_DEBUG_MODULE = "./c300x-webrtc-debug.js?v=0ec1ebcd886b1321";
+const C300X_WEBRTC_DEBUG_MODULE = "./c300x-webrtc-debug.js?v=5605ceb6a5094cb7";
 
 export class C300XWebrtcClient {
-  constructor({ getHass, getEntityId, isHomeCallMode, onClosed, onTrack, getCardGainDb, getPlayback, onGainChanged }) {
+  constructor({
+    getHass, getEntityId, isHomeCallMode, onClosed, onTrack, getCardGainDb, getPlayback, onGainChanged,
+    onPlaybackBlocked,
+  }) {
     this._getHass = getHass;
     this._getEntityId = getEntityId;
     this._isHomeCallMode = isHomeCallMode;
@@ -14,6 +17,7 @@ export class C300XWebrtcClient {
     this._getCardGainDb = getCardGainDb || null;
     this._getPlayback = getPlayback || null;
     this._onGainChanged = onGainChanged || null;
+    this._onPlaybackBlocked = onPlaybackBlocked || null;
     this._mediaAttachment = null;
     this._pc = null;
     this._remoteStream = null;
@@ -63,6 +67,14 @@ export class C300XWebrtcClient {
     return this._mediaAttachment?.retarget(mediaElement);
   }
 
+  get playbackBlocked() {
+    return !!this._mediaAttachment?.playbackBlocked;
+  }
+
+  resumePlayback() {
+    return this._mediaAttachment?.resumePlayback();
+  }
+
   async start(options = {}) {
     const {
       microphoneStream = null,
@@ -93,6 +105,7 @@ export class C300XWebrtcClient {
       getGainDb: this._getCardGainDb,
       getPlayback: this._getPlayback,
       onGainChanged: this._onGainChanged,
+      onPlaybackBlocked: this._onPlaybackBlocked,
     });
     this._mediaAttachment = mediaAttachment;
     if (!attachOnFirstTrack) {

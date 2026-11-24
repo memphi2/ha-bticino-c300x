@@ -200,21 +200,21 @@ def test_remove_agent_script_restores_before_deleting_agent_files() -> None:
     assert 'exec "$TMP_SELF" --run-from-tmp' in text
     assert "restore_qml" in text
     assert "Failed to restore Display patch; keeping agent files and backups in place" in text
-    assert "restore_file_or_remove_block \"$IPTABLES6\"" in text
-    assert "restore_file_or_remove_block \"$IPTABLES\"" in text
+    assert "restore_firewall \"$IPTABLES6\"" in text
+    assert "restore_firewall \"$IPTABLES\"" in text
     assert text.index("restore_qml") < text.index('rm -rf "$AGENT_DIR" "$BACKUP_ROOT"')
-    assert text.index("restore_file_or_remove_block \"$IPTABLES6\"") < text.index(
+    assert text.index("restore_firewall \"$IPTABLES6\"") < text.index(
         'rm -rf "$AGENT_DIR" "$BACKUP_ROOT"'
     )
-    assert text.index("restore_file_or_remove_block \"$IPTABLES\"") < text.index(
+    assert text.index("restore_firewall \"$IPTABLES\"") < text.index(
         'rm -rf "$AGENT_DIR" "$BACKUP_ROOT"'
     )
     sequence = text.split("\nstart_ssh\n", maxsplit=1)[1]
     assert sequence.index("if ! stop_agent; then") < sequence.index("\nrestore_qml\n")
-    assert sequence.index("restore_file_or_remove_block \"$IPTABLES6\"") < sequence.index(
+    assert sequence.index("restore_firewall \"$IPTABLES6\"") < sequence.index(
         "remove_startup"
     )
-    assert sequence.index("restore_file_or_remove_block \"$IPTABLES\"") < sequence.index(
+    assert sequence.index("restore_firewall \"$IPTABLES\"") < sequence.index(
         "remove_startup"
     )
     assert sequence.index("stop_agent") < sequence.index("restore_media_patches")

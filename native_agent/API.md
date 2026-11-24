@@ -42,10 +42,14 @@ The agent has two HTTP listeners:
   `listen.allowLan`.
 - UI listener: loopback display bridge listener on `127.0.0.1`, port
   `listen.uiPort` (reported as `ui_listen_host`/`ui_port`). It is intended for
-  QML pages running on the device. Keep the installer's `8090`: most display
-  pages call `127.0.0.1:8090` directly. Only these calls follow a changed port:
-  `/ui/maintenance` (station Settings tab), `/ui/ringer/next` (ringer and
-  picture controls), `/ui/preferences` and `/ui/media-closed`.
+  QML pages running on the device. Every display call follows `listen.uiPort`:
+  the Display patch writes the port into the patched `MainApp.qml` and
+  `EventManager.qml`, and all other pages take it from there. After a port
+  change, restart the agent and reapply the Display patch; until then the patch
+  is reported as partially patched. The C100X display adapter is the
+  exception: it uses the default UI port only, so its activation is refused
+  while `listen.uiPort` is changed (see
+  [C100X display activation](#c100x-display-activation)).
 
 Public UI listener endpoints are documented separately under
 [Loopback UI API](#loopback-ui-api).
@@ -65,6 +69,13 @@ scheme. Do not log or expose the header value.
 `GET /api/v1/health` and `POST /api/v1/identity/proof` are always
 unauthenticated; the proof route never returns the token. `GET /` and
 `GET /setup` are served only while `api.noAuth=true`.
+
+Every API listener route except `GET /` and `GET /setup` refuses, with 403
+`cross_site_request`, a request whose `Origin` header is not this host, and a
+non-GET request whose `Content-Type` is `text/plain`,
+`application/x-www-form-urlencoded` or `multipart/form-data`: what a web page
+of another site can send without a CORS preflight. Clients send JSON and no
+`Origin`, as Home Assistant does.
 
 ### Maintenance Token
 
@@ -123,7 +134,7 @@ Common status codes:
 | `501 Not Implemented` | Unknown endpoint. |
 | `502 Bad Gateway` | Home Assistant callback/display bridge is unavailable, or an OpenWebNet command failed or was not sent (`openwebnet_busy`, `client_gone`). |
 | `503 Service Unavailable` | Resource busy or inactive (transfer slots, system metrics, snapshot source, ringer GUI, display command), or a media action was not run (`media_busy`, `client_gone`). |
-| `504 Gateway Timeout` | The GUI did not acknowledge a ringer command within five seconds. |
+| `504 Gateway Timeout` | The GUI did not acknowledge a ringer command within five seconds, or a QML write passed its deadline (`qml_patch_timeout`). |
 
 Requests that send OpenWebNet commands and the media actions (activate, stop,
 answer, hangup, home call start and stop) run one at a time each, in the order
@@ -483,7 +494,8 @@ Request fields:
 Validation:
 
 - `callback_url` is required.
-- `events` must contain at least one event.
+- `events` must contain at least one event and at most 32; more are refused
+  with `too_many_events`, never cut.
 - Unsupported callback URLs are rejected with `unsupported_callback_url`.
 - HTTP and HTTPS are accepted. HTTPS requires `capabilities.https_callbacks`;
   otherwise registration returns `https_unavailable`. TLS verifies the server's
@@ -917,18 +929,28 @@ Authentication: normal API token.
 
 Side effects: none.
 
-Returns local text and voice memo metadata.
+Returns local text and voice memo metadata. `deleted` lists the ids (same
+format as `memos[].id`) of the last 32 memos deleted through the agent, oldest
+first, until a memo with that id exists again; the display drops a memo it
+still shows only once its id is listed there. `/ui/memos` returns the same.
 
 ### `POST /api/v1/memos/text/actions/create`
 
 Authentication: normal API token.
 
-Side effects: creates one local text memo.
+Side effects: has the station save one local text memo, the way its own
+display does: the agent writes `message.txt` into `memos.recordsDir`, sends
+`*8*87#4*##`, and `bt_answering_machine` numbers the memo, writes its
+`msg_info.ini` and moves the file in. The agent then sends the display's list
+request `*#8**100#3##`, whose answer the station also sends to the display,
+and for `read: true` marks the memo read with `*#8**#101#3#<n>*1##`.
+A save the station refuses (it is recording, for example) answers
+`502 memo_create_refused`.
 
 Request fields:
 
 ```json
-{"text": "memo text", "read": false}
+{"text_b64": "bWVtbyB0ZXh0", "read": false}
 ```
 
 ### `GET /api/v1/memos/voice/{id}/audio`
@@ -944,6 +966,10 @@ The id is percent-decoded and bounded by `C300X_MAX_VOICEMAIL_ID_LEN`.
 Authentication: normal API token.
 
 Side effects: deletes selected local memos.
+
+The station deletes only memos it has listed since it started; it refuses
+any other one, which answers `502 memo_delete_refused` at once. The video
+message delete answers `502 video_message_delete_refused` the same way.
 
 Request fields:
 
@@ -1231,6 +1257,14 @@ files. Applying the binary patch requires a complete known firmware hash, not
 only matching instruction ranges. These checks do not authorize replacing
 third-party routing files with stock configuration.
 
+When the media user cannot be set up after the routing binary was patched by
+this request, the routing is restored before the error is returned. Ensure and
+restore answer `"root_writable": true` when the routing write succeeded but `/`
+could not be made read-only again (the replaced binary is still running); a
+reboot makes it read-only. The agent remembers that root as its own, also
+across an agent restart, and its next device write or agent update tries the
+read-only remount again.
+
 ### `POST /api/v1/maintenance/device-user/actions/restore-homeassistant-setup`
 
 Authentication: maintenance.
@@ -1328,7 +1362,45 @@ SSH requests are not deferred. Retrying a busy request must wait for completion.
 QML status and standalone GUI reload retain a 10-second script deadline; QML
 writes retain 30 seconds for a failed start, rollback and restart of the previous
 GUI. Their failed execution, timeout and overflowing 4096-byte output retain
-the existing `502` responses. Device-user status alone also has a 10-second
+the existing `502` responses, with one exception: a QML write (apply,
+apply-core, restore-core, restore) past its 30 seconds gets `SIGTERM` for its
+process group first, not `SIGKILL`. A QML write whose output overflows gets the
+same `SIGTERM` and grace period, and is then answered `502` with
+`state: script_failed`. A write that ended by itself is answered with its own
+result even when the agent reaps it only on the deadline tick. The script's trap then restores the GUI
+files it changed, remounts `/` read-only and restarts the previous GUI. The agent
+gives it 15 seconds for that, the trap's worst case on the device (two 2-second
+GUI restart waits, the remount and the file moves) with margin, and sends
+`SIGKILL` only after them. The request stays open until the script has really
+ended and is then answered with `504`:
+
+```json
+{"ok": false, "available": true, "error": "qml_patch_timeout", "rolled_back": true}
+```
+
+`rolled_back` is `true` only when the script exited with status 130: it
+stopped on the signal with every GUI file it changed back in place and `/`
+read-only again, or before it changed any. The script exits 131 when the
+signal came after a QML write had committed, during the display library step
+of apply, restore and restore-all, or when its rollback was incomplete: it
+first remounts `/` read-only and restarts a GUI that is down or still runs the
+replaced library. `false` means such a 131, a failed rollback, or a script
+that had to be killed; `GET /api/v1/maintenance/qml-patch` then says
+what the device has and reports a transaction the write left behind; the next
+write finishes it (see QML Patch).
+Graceful agent shutdown during a QML write sends that `SIGTERM` once, as the
+first step of its clean-up, and waits up to the same 15 seconds before
+`SIGKILL` at the end of it; that request is closed without an answer. The init
+script's own stop sends `SIGKILL` to the agent after 3 seconds; the script, in
+a process group of its own, has its signal by then and still finishes its
+rollback. A write cut off even so is finished at the next agent start.
+
+At start the agent runs `qml_patch.sh recover` once when QML maintenance is
+enabled and the script exists: a job without a client, with the QML write
+deadline and grace period. It finishes a transaction that a power loss, a
+crash or a killed write left behind (see QML Patch) and returns at once when
+there is none. Meanwhile other maintenance requests get `409
+maintenance_busy`, like during any other job. Device-user status alone also has a 10-second
 deadline and a 4096-byte bounded-prefix capture; script failure retains HTTP 200
 with unavailable/unknown label status. SSH start and stop have a 60-second
 deadline and SSH status a 15-second one; at the deadline the process group is
@@ -1350,8 +1422,9 @@ JSON `ok:true`; restore retains its exit-status-only interpretation. Native
 codec file mutation also remains synchronous; only its reboot tail uses jobs.
 Shutdown cancels an active asynchronous job without invoking its completion
 or advancing another phase, but cannot reach that cleanup during a synchronous
-label transaction. Existing QML-write job cancellation is unchanged, not newly
-certified as transaction-safe by the label-write fix.
+label transaction. A QML write job gets `SIGTERM` and its grace period at its
+deadline and at shutdown (see above); one that is killed even so, or loses
+power, leaves a transaction that the next write or agent start finishes.
 
 See [HTTP maintenance ownership](../docs/dev/architecture.md#http-maintenance-boundary) and the
 [remaining blocking work](../docs/dev/architecture.md#remaining-blocking-work).
@@ -1523,7 +1596,7 @@ Errors:
 | `400` | `update_bundle_hash_mismatch` | `bundle_hash` differs from the hash in the staged manifest. |
 | `400` | `update_model_incompatible` | The staged manifest does not fit this station: a C100X-only package on another model, or a package on a C100X that does not declare itself C100X-compatible. |
 | `403` | `maintenance_unauthorized` | Maintenance is disabled, or the maintenance token is missing or wrong. |
-| `409` | `update_root_already_writable` | `/` was already writable before the update; the agent refuses to install and leaves the mount as it is. |
+| `409` | `update_root_already_writable` | `/` was already writable before the update (by someone else, or left so by the agent and still busy); the agent refuses to install and leaves the mount as it is. |
 | `500` | `update_root_readonly_failed` | The update could not make `/` read-only again after writing to it. |
 | `500` | `update_apply_failed` | Validation or installation failed. |
 | `500` | `out_of_memory` | The agent could not allocate the memory for the update. |
@@ -1602,7 +1675,10 @@ Reads the persistent IPv4 firewall patch state.
 
 The IPv4 firewall endpoints manage one explicit block in
 `/etc/network/if-pre-up.d/iptables`. They do not accept arbitrary iptables rules
-or shell commands.
+or shell commands. The script keeps the vendor's mode and is synced to disk
+with its backup; when iptables refuses the new rules at once, apply answers
+`runtime_apply_failed` and puts the previous script back (IPv4 and IPv6
+alike).
 
 ### IPv6 Firewall
 
@@ -1632,8 +1708,58 @@ inserting rules.
 
 Reads both optional Display patch state and required core media-hook state.
 `home_buttons` names the home page button layout installed on the device:
-`"stock"` (like the original), `"side_by_side"` (the fixed pair), or `null`
+`"stock"` (the stock layout), `"side_by_side"` (the fixed pair), or `null`
 when the home page carries neither layout.
+
+Every QML write keeps the GUI files it may change in a transaction directory
+`.c300x-qml-transaction.<pid>` inside the GUI directory. The directory gets a
+format marker `.c300x-v2` first, then the copies, then a file list that names
+the files it found and the ones it would add, written only once all copies are
+on flash and before any GUI file changes. A write cut off for good (power loss,
+crash, `SIGKILL`) leaves that directory behind.
+
+Status only reads: it reports a leftover and never changes the device. The
+recovery runs before every write and once at agent start (the `recover`
+action, see the maintenance job deadlines above). It skips
+everything while a transaction of a running write exists and otherwise
+finishes each leftover whose process is gone, in an order that a later run
+can repeat from any point where it was cut off:
+
+1. Roll back. With the file list: files back in place, files the write added
+   removed. With the marker and no list: nothing to do, no GUI file had
+   changed. Without the marker (a write of agent 2.9.0 or older, which kept
+   no list): only copies proven complete are moved back, i.e. byte-equal to
+   the stock backup of that file, to the agent's own source of a generated
+   file, or to the file in place. If any copy cannot be proven, the directory
+   stays, the GUI is left as it is and the leftover is reported `stuck` for
+   good; remove the directory by hand once the display works.
+2. Restart the GUI, only when step 1 changed a file. A marker file in the
+   directory keeps that fact for a run that is cut off before the restart.
+3. Remove the directory: marker files first, the copies, the format marker
+   last, so that a cut-off removal still leaves a directory the next run
+   finishes.
+4. Remount `/` read-only. Every remount read-write leaves a mark naming the
+   process in `$TMPDIR` (default `/tmp`, RAM on the device); the next run
+   remounts read-only when that process is gone, and a reboot clears it.
+
+The answers carry one more field when a leftover exists:
+
+- `"transaction": "pending"` (status): a leftover waits for the next write or
+  agent start.
+- `"transaction": "recovered"` (write, recovery): this run finished a leftover.
+- `"transaction": "stuck"`: a leftover could not be finished; its directory
+  stays. A leftover with the format marker is tried again at the next
+  recovery; one without it is not.
+
+Without a leftover the field is absent. While a leftover with the format
+marker is stuck, or a transaction of another running write exists, a write
+exits with status 1 before it prints anything (stderr: `An unfinished GUI
+write is still in place`); the agent answers `502` with
+`{"ok": false, "available": false, "state": "script_failed"}`, and the
+device-user actions answer `500` with `media_user_label_setup_failed` or
+`media_user_label_restore_failed`. A stuck leftover without the marker does
+not block writes: every write builds its files from the stock backups and the
+agent's sources, never from the files in place.
 
 `POST /api/v1/maintenance/qml-patch/actions/apply-core`
 
@@ -1669,7 +1795,7 @@ Assistant and energy pages (`Alarm.qml`, `HomeAssistant.qml`,
 `C300XEnergy.qml`) and the local QML JavaScript bridge.
 
 `dynamic_homepage` chooses the home page button layout: `true` installs the
-Alarm and Home Assistant buttons like the original buttons (shown only when
+Alarm and Home Assistant buttons among the station's own buttons (shown only when
 needed), `false` the fixed pair side by side. Without the field the layout
 on the device is kept; a device without the Display patch gets the `true`
 layout.
@@ -1687,6 +1813,14 @@ Patch helpers render the desired tree into a temporary staging directory,
 compare target files byte-for-byte, back up original device files under
 `/home/bticino/cfg/extra/c300x-device-file-backups/original`, remount the root
 filesystem writable only for final copy/write work, then remount read-only.
+The agent's own device writes (routing, audio codec, camera, firewall, touch
+patch) leave `/` as they found it: on a root that is already writable they
+write without remounting and keep it writable, which is success.
+`root_writable` / `remount_ro_failed` only report a root the agent made
+writable and could not make read-only again; an agent removal stops for a
+reboot only then. Such a root stays the agent's own (a mark in `/run` keeps
+it across an agent restart): the next write retries the read-only remount,
+and a retry that is still busy is not a failure.
 
 ### Camera Resolution
 
@@ -1816,7 +1950,7 @@ requests to Home Assistant require an active display bridge.
 | `GET` | `/ui/answering-machine/messages` | Video-message metadata for QML pages. |
 | `GET` | `/ui/events/status` | Long-poll state for QML event bridge. |
 | `GET` | `/ui/events/next` | Long-poll next QML event. |
-| `GET` | `/ui/media-closed` | Reports device media-close event. |
+| `GET` | `/ui/media-closed` | Display call-end hook: only wakes the display pages; does not publish `doorbell.media.closed` (the hook also fires when HA answers a ring). |
 | `GET` | `/ui/ringer/next` | Core GUI ringer command/acknowledgment channel. |
 | `GET` | `/ui/alerts/next` | One sleeping GUI alert delivery connection; no acknowledgement or queue. |
 | `GET`, `POST` | `/ui/preferences` | Local display feedback preference, independent of HA registration. |

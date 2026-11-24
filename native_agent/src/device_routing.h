@@ -13,6 +13,7 @@ struct c300x_device_routing_status {
     int supported;
     int patched;
     int backup_present;
+    int root_writable; /* Written, but / could not go back read-only. */
     char state[C300X_DEVICE_ROUTING_STATE_LEN];
     char file_sha256[C300X_DEVICE_ROUTING_HASH_LEN];
     char backup_sha256[C300X_DEVICE_ROUTING_HASH_LEN];

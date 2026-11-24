@@ -30,7 +30,8 @@ from .api_errors import (
 )
 
 _MAINTENANCE_JOB_TIMEOUT = 15.0
-_QML_WRITE_JOB_TIMEOUT = 35.0
+# 30 s native deadline, 15 s for the script's rollback after SIGTERM, margin.
+_QML_WRITE_JOB_TIMEOUT = 50.0
 _UPDATE_REQUEST_TIMEOUT = 20.0
 
 
@@ -520,7 +521,8 @@ class _ApiMaintenanceMixin(_C300XApiCore):
         """Return the wait for a request the agent answers after running a script.
 
         Allow response overhead beyond the native job deadline: 10 s normally,
-        or 30 s for QML writes including rollback and a GUI restart attempt.
+        or 30 s for QML writes plus the 15 s the agent then gives the script
+        for its rollback before it answers ``qml_patch_timeout``.
         Update requests also write to the device's flash and get longer.
         """
 

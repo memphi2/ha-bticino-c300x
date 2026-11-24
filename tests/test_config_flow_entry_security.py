@@ -12,6 +12,9 @@ from custom_components.bticino_c300x.config_flow import (
     BticinoC300XConfigFlow,
     BticinoC300XOptionsFlow,
 )
+from custom_components.bticino_c300x.config_flow_entry_update import (
+    LISTENER_IGNORED_DATA_KEYS,
+)
 from custom_components.bticino_c300x.config_flow_features import (
     current_connection_options,
 )
@@ -187,9 +190,14 @@ def test_credential_recovery_reloads_exactly_once(monkeypatch, route, listeners,
     flow = bound_flow(entry, hass, "options" if route == "options" else "reconfigure")
     update = hass.config_entries.async_update_entry.side_effect
 
+    def settings():
+        return {k: v for k, v in entry.data.items() if k not in LISTENER_IGNORED_DATA_KEYS}, dict(entry.options)
+
     def with_listener(*args, **kwargs):
+        # Like the real listener: a change of only the marker keys reloads nothing.
+        before = settings()
         did_change = update(*args, **kwargs)
-        if listeners and did_change:
+        if listeners and settings() != before:
             hass.config_entries.async_schedule_reload(entry.entry_id)
             # An eager HA update listener can start unloading before returning.
             entry.update_listeners.clear()

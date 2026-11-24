@@ -130,7 +130,7 @@
           "actions_json": "Actions the display and its notifications may run, written as JSON: one entry per action with domain and service, optionally target and data. Leave empty if you use none.",
           "dashboard_prevent_return": "On: the Home Assistant and Alarm pages stay open when the screen goes to standby. Off: the display then returns to its home page.",
           "dashboard_navigation": "How the display changes pages. The favourites bar shows the first four pages as buttons along the bottom edge. With more than four pages, the fourth button is More and opens the list of the other pages. The order follows the page positions.",
-          "dashboard_dynamic_homepage": "Where the Alarm and Home Assistant buttons sit on the home page of the C300X. Like the original: each button appears only while it has something to open and takes its place among the original buttons, also below them when the row is full. Fixed side by side: both keep two fixed places next to each other; a button with nothing to open leaves its place empty. A change applies the Display patch again and restarts the display once."
+          "dashboard_dynamic_homepage": "Where the Alarm and Home Assistant buttons sit on the home page of the C300X. Stock: each button appears only while it has something to open and takes its place among the original buttons, also below them when the row is full. Fixed side by side: both keep two fixed places next to each other; a button with nothing to open leaves its place empty. A change applies the Display patch again and restarts the display once."
         }
       },
       "user_dashboard_entity_display": {
@@ -243,7 +243,7 @@
           "actions_json": "Actions the display and its notifications may run, written as JSON: one entry per action with domain and service, optionally target and data. Leave empty if you use none.",
           "dashboard_prevent_return": "On: the Home Assistant and Alarm pages stay open when the screen goes to standby. Off: the display then returns to its home page.",
           "dashboard_navigation": "How the display changes pages. The favourites bar shows the first four pages as buttons along the bottom edge. With more than four pages, the fourth button is More and opens the list of the other pages. The order follows the page positions.",
-          "dashboard_dynamic_homepage": "Where the Alarm and Home Assistant buttons sit on the home page of the C300X. Like the original: each button appears only while it has something to open and takes its place among the original buttons, also below them when the row is full. Fixed side by side: both keep two fixed places next to each other; a button with nothing to open leaves its place empty. A change applies the Display patch again and restarts the display once."
+          "dashboard_dynamic_homepage": "Where the Alarm and Home Assistant buttons sit on the home page of the C300X. Stock: each button appears only while it has something to open and takes its place among the original buttons, also below them when the row is full. Fixed side by side: both keep two fixed places next to each other; a button with nothing to open leaves its place empty. A change applies the Display patch again and restarts the display once."
         }
       },
       "reconfigure_dashboard_entity_display": {
@@ -789,7 +789,7 @@
       },
       "speech": {
         "title": "Speech",
-        "description": "Spoken notifications (Notify action with mode speech or both) use this engine and language. With a local engine such as Piper, nothing leaves your network. Without a choice, Home Assistant uses its default engine, which is the cloud one where Home Assistant Cloud is set up. tts_engine and language in a notification come before these settings.",
+        "description": "Spoken notifications (Notify action with tts: true, or the legacy mode speech or both) use this engine and language. With a local engine such as Piper, nothing leaves your network. Without a choice, Home Assistant uses its default engine, which is the cloud one where Home Assistant Cloud is set up. tts_engine and language in a notification come before these settings.",
         "data": {
           "tts_engine": "Text-to-speech engine",
           "tts_language": "Language"
@@ -848,7 +848,7 @@
           "actions_json": "Actions the display and its notifications may run, written as JSON: one entry per action with domain and service, optionally target and data. Leave empty if you use none.",
           "dashboard_prevent_return": "On: the Home Assistant and Alarm pages stay open when the screen goes to standby. Off: the display then returns to its home page.",
           "dashboard_navigation": "How the display changes pages. The favourites bar shows the first four pages as buttons along the bottom edge. With more than four pages, the fourth button is More and opens the list of the other pages. The order follows the page positions.",
-          "dashboard_dynamic_homepage": "Where the Alarm and Home Assistant buttons sit on the home page of the C300X. Like the original: each button appears only while it has something to open and takes its place among the original buttons, also below them when the row is full. Fixed side by side: both keep two fixed places next to each other; a button with nothing to open leaves its place empty. A change applies the Display patch again and restarts the display once."
+          "dashboard_dynamic_homepage": "Where the Alarm and Home Assistant buttons sit on the home page of the C300X. Stock: each button appears only while it has something to open and takes its place among the original buttons, also below them when the row is full. Fixed side by side: both keep two fixed places next to each other; a button with nothing to open leaves its place empty. A change applies the Display patch again and restarts the display once."
         }
       },
       "dashboard_entity_display": {
@@ -1432,6 +1432,18 @@
     "gui_function_patch_required": {
       "message": "This action requires the C300X Display patch. Enable and apply the Display patch in the integration options first."
     },
+    "display_disabled": {
+      "message": "Display notifications need the Home Assistant pages on the C300X display. Turn them on in the integration options first."
+    },
+    "unknown_notification_action": {
+      "message": "A notification button uses an action ID that is not configured in the C300X actions."
+    },
+    "display_notification_queue_full": {
+      "message": "The C300X display already holds the maximum number of notifications with the same or a higher priority. Dismiss one or wait until one expires."
+    },
+    "display_notifications_unloaded": {
+      "message": "The C300X display notifications are being reloaded. Try again in a moment."
+    },
     "doorbell_video_not_available": {
       "message": "Doorbell video is not enabled or is not supported by the installed C300X device agent."
     },
@@ -1473,6 +1485,9 @@
     },
     "unknown_entry": {
       "message": "The selected BTicino C300X entry does not exist."
+    },
+    "entry_not_loaded": {
+      "message": "The BTicino C300X entry is not loaded. Enable it or wait until it has started."
     },
     "voice_memo_not_available": {
       "message": "No C300X voice memo is available."
@@ -1570,6 +1585,10 @@
           "core_patch_unsupported": "The installed C300X device agent does not support applying the core media hook."
         }
       }
+    },
+    "device_qml_transaction_stuck": {
+      "title": "C300X display write left unfinished",
+      "description": "A Display patch write on {entry_title} was interrupted (power loss, crash or a forced stop) and the device agent could not finish it automatically. The display files were left as they are; nothing is lost: the files from before that write are kept on the device in a hidden folder `.c300x-qml-transaction.*` inside /home/bticino/bin/gui/skins/default.\n\nWhat to do: check the C300X display. If it works, apply the Display patch again from the integration (switch it off and on), which rebuilds every display file from the stock backups. If the warning stays, reboot the C300X so the agent tries again at start. A leftover from agent 2.9.0 or older is never restored automatically: once the display works, remove that folder over SSH (see Advanced maintenance, Recovery, in the documentation)."
     },
     "device_user_required": {
       "title": "C300X media user setup required",
@@ -1749,7 +1768,7 @@
     },
     "dashboard_dynamic_homepage": {
       "options": {
-        "stock": "Like the original (when needed, also stacked)",
+        "stock": "Stock (when needed, also stacked)",
         "side_by_side": "Fixed side by side"
       }
     },

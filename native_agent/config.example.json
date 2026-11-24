@@ -117,6 +117,7 @@
     "enabled": true,
     "textRoot": "/home/bticino/cfg/extra/47/memos_text",
     "voiceRoot": "/home/bticino/cfg/extra/47/memos_voice",
+    "recordsDir": "/var/tmp/records",
     "watch": true,
     "maxMemos": 64
   },

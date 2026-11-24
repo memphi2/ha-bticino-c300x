@@ -1,7 +1,12 @@
 #include <assert.h>
-#include "../src/mqtt_bridge.c"
-
+#include <fcntl.h>
+#include <time.h>
 static long long clock_ms = 1000;
+/* A wall clock far from the monotonic one, as after an NTP step. */
+#define time(t) ((time_t)(1700000000 + clock_ms / 1000))
+#include "../src/mqtt_bridge.c"
+#undef time
+
 static unsigned char wire[30000];
 static size_t wire_size, allowance = 30000;
 static int blocked, fail_send, send_calls;
@@ -66,7 +71,7 @@ static void setup(struct c300x_mqtt *mqtt, int *peer)
     mqtt->fd = pair[0];
     mqtt->connect_started_at = 100;
     *peer = pair[1];
-    assert(set_nonblocking(mqtt->fd));
+    assert(fcntl(mqtt->fd, F_SETFL, fcntl(mqtt->fd, F_GETFL) | O_NONBLOCK) == 0);
     blocked = fail_send = 0;
     allowance = sizeof(wire);
     wire_size = 0;
@@ -77,6 +82,67 @@ static void ack(struct c300x_mqtt *mqtt, const struct c300x_config *config, int 
     const unsigned char connack[] = {0x20, 2, 0, 0};
     assert(write(peer, connack, sizeof(connack)) == sizeof(connack));
     c300x_mqtt_handle_poll(mqtt, config, POLLIN, 200);
+}
+
+/* A retained command larger than the receive buffer is dropped while the
+ * session stays up; the next command still arrives. */
+static void oversized_retained_command(struct c300x_config *config)
+{
+    struct c300x_mqtt mqtt;
+    int peer;
+    static unsigned char big[3 + 2 + 1 + 9000];
+    size_t body = 2 + 1 + 9000;
+    setup(&mqtt, &peer);
+    mqtt.phase = MQTT_CONNACK;
+    ack(&mqtt, config, peer);
+    assert(mqtt.phase == MQTT_READY);
+    big[0] = 0x31;
+    big[1] = (unsigned char)(0x80 | (body & 0x7f));
+    big[2] = (unsigned char)(body >> 7);
+    big[3] = 0;
+    big[4] = 1;
+    big[5] = 't';
+    memset(big + 6, 'x', 9000);
+    const unsigned char next[] = {0x30, 7, 0, 1, 't', 'a', 'f', 't', 'r'};
+    char received[16] = "";
+    for (size_t sent = 0; sent < sizeof(big); sent += 1000) {
+        size_t chunk = sizeof(big) - sent < 1000 ? sizeof(big) - sent : 1000;
+        assert(write(peer, big + sent, chunk) == (ssize_t)chunk);
+        c300x_mqtt_handle_poll(&mqtt, config, POLLIN, 300);
+        assert(mqtt.fd >= 0);
+    }
+    assert(write(peer, next, sizeof(next)) == sizeof(next));
+    c300x_mqtt_handle_poll(&mqtt, config, POLLIN, 300);
+    assert(mqtt.fd >= 0 && mqtt.rx_skip == 0);
+    assert(c300x_mqtt_take_command(&mqtt, received, sizeof(received)));
+    assert(strcmp(received, "aftr") == 0);
+    c300x_mqtt_close(&mqtt);
+    close(peer);
+}
+
+/* A broker that stops answering (no PINGRESP) is dropped after 1.5
+ * keepalives without receiving anything. */
+static void silent_broker(struct c300x_config *config)
+{
+    struct c300x_mqtt mqtt;
+    int peer;
+    const unsigned char pingresp[] = {0xD0, 0};
+    setup(&mqtt, &peer);
+    mqtt.phase = MQTT_CONNACK;
+    ack(&mqtt, config, peer);
+    assert(mqtt.phase == MQTT_READY);
+    clock_ms += 44000;
+    c300x_mqtt_tick(&mqtt, config, 100);
+    assert(mqtt.fd >= 0 && c300x_mqtt_poll_timeout_ms(&mqtt, 100) == 1000);
+    assert(write(peer, pingresp, sizeof(pingresp)) == sizeof(pingresp));
+    c300x_mqtt_handle_poll(&mqtt, config, POLLIN, 100);
+    clock_ms += 44000;
+    c300x_mqtt_tick(&mqtt, config, 100);
+    assert(mqtt.fd >= 0);
+    clock_ms += 1000;
+    c300x_mqtt_tick(&mqtt, config, 100);
+    assert(mqtt.fd == -1 && !mqtt.connected);
+    close(peer);
 }
 
 int main(void)
@@ -140,7 +206,8 @@ int main(void)
     assert(len == 13 && payload[0] == 0 && payload[1] == 1 && payload[12] == 0);
     offset = publication(offset, "available", "online", 1);
     char date[32];
-    mqtt_format_start_date(100, date, sizeof(date));
+    /* The wall time of the attempt at monotonic second 100. */
+    mqtt_format_start_date(1700000000 + 99, date, sizeof(date));
     offset = publication(offset, "started", date, 1);
     assert(offset == wire_size);
     assert(c300x_mqtt_poll_timeout_ms(&mqtt, 100) == 30000);
@@ -286,6 +353,8 @@ int main(void)
     c300x_mqtt_init(&mqtt);
     assert(c300x_mqtt_poll_timeout_ms(&mqtt, 200) == -1);
     c300x_mqtt_close(&mqtt);
+    oversized_retained_command(config);
+    silent_broker(config);
     free(config);
     return 0;
 }

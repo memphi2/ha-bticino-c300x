@@ -10,6 +10,10 @@ import { checkMatchingPictureLayout } from "./matching_picture_layout.mjs";
 import { checkMediaAvailability } from "./media_availability.mjs";
 import { checkPendingMicrophone } from "./pending_microphone.mjs";
 import { checkRingEndStart } from "./ring_end_start.mjs";
+import { checkAnsweredRing } from "./answered_ring.mjs";
+import { checkEditorFocus } from "./editor_focus.mjs";
+import { checkReadinessKeyboard } from "./readiness_keyboard.mjs";
+import { checkBlockedSound } from "./blocked_sound.mjs";
 import { checkPictureControls } from "./picture_controls.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -57,6 +61,10 @@ try {
   await checkC100xControls(page, artifacts);
   await checkPendingMicrophone(page);
   await checkRingEndStart(page);
+  await checkAnsweredRing(page);
+  await checkEditorFocus(page);
+  await checkReadinessKeyboard(page);
+  await checkBlockedSound(origin);
   await checkPictureControls(page);
   await checkMatchingPictureLayout(page, artifacts);
   await checkSnapshotLayout(page, artifacts);

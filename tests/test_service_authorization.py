@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import Context, HomeAssistant
 from homeassistant.exceptions import Unauthorized, UnknownUser
 from homeassistant.helpers.service import async_register_admin_service
@@ -31,6 +32,7 @@ def setup_hass(tmp_path, monkeypatch, *, allowed=(), admin=False):
         entry_id="test",
         data={"maintenance_token": "test"},
         options={},
+        state=ConfigEntryState.LOADED,
         runtime_data=SimpleNamespace(
             api=api,
             capabilities={
@@ -38,7 +40,9 @@ def setup_hass(tmp_path, monkeypatch, *, allowed=(), admin=False):
             },
         ),
     )
-    hass.config_entries = SimpleNamespace(async_entries=lambda _domain: [entry])
+    hass.config_entries = SimpleNamespace(
+        async_entries=lambda _domain: [entry], async_loaded_entries=lambda _domain: [entry],
+    )
     registry = SimpleNamespace(
         async_get_entity_id=lambda domain, _platform, unique: f"{domain}.{unique}",
         async_get=lambda _entity_id: SimpleNamespace(disabled_by=None),

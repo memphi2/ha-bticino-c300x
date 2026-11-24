@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping
 from contextlib import suppress
 from typing import Any
 
+from .api_errors import C300XAgentApiError
 from .config_audio import audio_gain_db_or_default
 from .const import CONF_DOORSTATION_AUDIO_GAIN_DB, DEFAULT_DOORSTATION_AUDIO_GAIN_DB
 from .entry_config import entry_config_value
@@ -13,6 +15,7 @@ from .use_cases.common import ensure_current_runtime
 from .value_parsing import optional_mapping
 
 _GAIN_EPSILON_DB = 0.05
+_LOGGER = logging.getLogger(__name__)
 
 
 def doorstation_audio_gain_db(entry: Any) -> float:
@@ -48,7 +51,12 @@ async def async_ensure_doorstation_audio_gain(
     *,
     status: Mapping[str, Any] | None = None,
 ) -> None:
-    """Synchronize the native agent runtime gain only when the value is needed."""
+    """Synchronize the native agent runtime gain only when the value is needed.
+
+    Best effort: a failed gain write must not block answering or starting the
+    stream. The command that follows reaches the same agent and reports an
+    unreachable agent or a rejected key itself, including the reauth flow.
+    """
 
     runtime = entry.runtime_data
     ensure_current_runtime(entry, runtime)
@@ -67,4 +75,7 @@ async def async_ensure_doorstation_audio_gain(
     if current is None and abs(desired) < _GAIN_EPSILON_DB:
         return
 
-    await runtime.api.async_set_doorstation_audio_gain_db(desired)
+    try:
+        await runtime.api.async_set_doorstation_audio_gain_db(desired)
+    except C300XAgentApiError as err:
+        _LOGGER.warning("Setting the C300X doorstation audio gain failed: %s", err)

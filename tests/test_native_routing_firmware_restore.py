@@ -30,7 +30,7 @@ def routing_binary(tmp_path_factory):
         "-D_DEFAULT_SOURCE", "-D_POSIX_C_SOURCE=200809L",
         str(ROOT / "native_agent/test/device_routing_firmware_test.c"),
         *[str(ROOT / "native_agent/src" / name) for name in
-          ("device_patch_io.c", "sha256.c", "string_util.c")],
+          ("device_patch_io.c", "root_mount.c", "sha256.c", "string_util.c")],
         "-o", str(binary),
     ], check=True, capture_output=True, text=True)
     return binary
@@ -90,7 +90,7 @@ def test_restore_ignores_predictable_temp_symlink(routing_binary, tmp_path):
 @pytest.mark.parametrize("fault", [
     "corrupt_backup", "patched_backup", "truncated_backup", "foreign_backup",
     "corrupt_target", "unknown_target", "missing_target", "missing_backup",
-    "target_symlink", "backup_symlink", "rename", "read_only_remount",
+    "target_symlink", "backup_symlink", "rename",
 ])
 def test_invalid_restore_retains_recovery_material(routing_binary, tmp_path, firmware, fault):
     target, backup = prepare(tmp_path, firmware)
@@ -123,17 +123,29 @@ def test_invalid_restore_retains_recovery_material(routing_binary, tmp_path, fir
         path.symlink_to(sentinel)
     elif fault == "rename":
         env["TEST_RENAME_FAIL"] = "1"
-    else:
-        env["C300X_DEVICE_PATCH_NO_REMOUNT"] = "ro_busy"
     before = target.read_bytes() if target.exists() else None
     saved = backup.read_bytes() if backup.exists() else None
     result = routing_run(routing_binary, target, backup, "restore", **env)
     assert result.returncode != 0, result.stdout
     assert (backup.read_bytes() if backup.exists() else None) == saved
-    # A failed read-only remount is reported after the verified atomic commit.
-    assert (target.read_bytes() if target.exists() else None) == (
-        saved if fault == "read_only_remount" else before
-    )
+    assert (target.read_bytes() if target.exists() else None) == before
     if fault.endswith("symlink"):
         assert path.is_symlink() and sentinel.read_bytes() == (before if path == target else saved)
+    assert not list(target.parent.glob("*.restore.*"))
+
+
+@pytest.mark.parametrize("firmware", FIRMWARES)
+def test_restore_on_a_busy_root_is_done(routing_binary, tmp_path, firmware):
+    """The replaced binary stays open in the daemon and blocks remount,ro.
+
+    The restore is on disk then; it must answer success and say that /
+    stays writable until the next boot, not fail after the fact.
+    """
+    target, backup = prepare(tmp_path, firmware)
+    assert routing_run(routing_binary, target, backup, "apply").returncode == 0
+    result = routing_run(routing_binary, target, backup, "restore",
+                         C300X_DEVICE_PATCH_NO_REMOUNT="ro_busy")
+    assert result.returncode == 0, result.stdout
+    assert "state=stock" in result.stdout and "root_writable=1" in result.stdout
+    assert target.read_bytes() == backup.read_bytes()
     assert not list(target.parent.glob("*.restore.*"))

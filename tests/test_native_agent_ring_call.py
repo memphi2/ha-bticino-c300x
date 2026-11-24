@@ -813,7 +813,7 @@ def test_native_agent_ring_lifecycle_status_and_stop_paths_are_explicit() -> Non
         video.index("int c300x_video_activate") : video.index("void c300x_video_stop")
     ]
     assert activate_video_body.index("c300x_media_ring_call_active(video)") < (
-        activate_video_body.index("external_media_active_locked(video)")
+        activate_video_body.index("refuse_ondemand_start_locked(video)")
     )
     assert "c300x_media_session_note_explicit_activate(video);" in activate_video_body
     assert activate_video_body.index("c300x_media_session_note_explicit_activate(video);") < (

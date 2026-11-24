@@ -132,7 +132,7 @@ Item {
             } else reconnect.restart()
         }
         try {
-            request.open("GET", "http://127.0.0.1:8090/ui/alerts/next" + (protectedRequest ? "?protected=1" : ""), true)
+            request.open("GET", Api.baseUrl() + "/ui/alerts/next" + (protectedRequest ? "?protected=1" : ""), true)
             request.setRequestHeader("X-C300X-GUI", "alerts-v1")
             request.send()
         } catch (error) {

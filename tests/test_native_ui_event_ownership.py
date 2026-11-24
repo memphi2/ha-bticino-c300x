@@ -16,7 +16,7 @@ def ui_event_binary(request, tmp_path_factory):
          "-D_DEFAULT_SOURCE", "-D_POSIX_C_SOURCE=200809L",
          "-ffunction-sections", "-fdata-sections", "-Wl,--gc-sections", *flags,
          str(native / "test/ui_event_ownership_test.c"),
-         *(str(native / f"src/{name}.c") for name in ["ui_events", "http_util", "json_util"]),
+         *(str(native / f"src/{name}.c") for name in ["ui_events", "http_util", "json_util", "time_util"]),
          "-o", str(binary)],
         capture_output=True, text=True, timeout=30,
     )

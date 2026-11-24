@@ -1,4 +1,4 @@
-"""The GUI's on-demand startup transition must not close the HA stream."""
+"""The GUI call-end hook never ends HA media (stream startup, answered ring)."""
 
 import subprocess
 from pathlib import Path

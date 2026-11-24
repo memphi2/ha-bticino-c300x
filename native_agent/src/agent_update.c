@@ -231,6 +231,78 @@ static int update_remove_obsolete_display_source(
     return 1;
 }
 
+/* All files of the installed bundle in place and matching it: its update
+ * was committed. The init script is rendered on install, so not compared. */
+static int update_installed_set_verified(const struct c300x_config *config, const char *installed_manifest)
+{
+    char target[C300X_MAX_PATH_LEN], sha256[65];
+    for (size_t index = 0; index + 1 < C300X_AGENT_UPDATE_FILE_COUNT; index++) {
+        const struct c300x_agent_update_file *file = &C300X_AGENT_UPDATE_FILES[index];
+        if (!agent_update_target_path(config, file->path, target, sizeof(target))) {
+            return 0;
+        }
+        if (strcmp(target, C300X_AGENT_INIT_SCRIPT) == 0) {
+            continue;
+        }
+        if (!agent_update_manifest_sha_for_path(installed_manifest, file->path, sha256, sizeof(sha256))) {
+            if (file->optional && access(target, F_OK) != 0 && errno == ENOENT) {
+                continue;
+            }
+            return 0;
+        }
+        if (!sha256_hex_matches(target, sha256)) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+/* <file>.update-backup links left by an earlier update block every later
+ * one, and an SSH reinstall does not remove them. Updates never overlap, so
+ * nothing else owns them. When the installed bundle verifies, that update
+ * was committed and only its cleanup failed: drop them. Otherwise it died
+ * midway (power cut, kill): finish its rollback, back to the files from
+ * before it, as it would have done itself. The new update starts from there. */
+static int update_recover_interrupted(const struct c300x_config *config, const char *installed_manifest,
+                                      struct agent_update_change_summary *summary)
+{
+    struct update_transaction *stale = calloc(1, sizeof(*stale));
+    char base[C300X_MAX_PATH_LEN], target[C300X_MAX_PATH_LEN];
+    C300X_UPDATE_STAT_STRUCT info;
+    int ok = stale != NULL && agent_base_dir(config, base, sizeof(base));
+    for (size_t index = 0; ok && index < C300X_AGENT_UPDATE_FILE_COUNT + 2; index++) {
+        struct update_backup *file = &stale->files[stale->count];
+        if (index < C300X_AGENT_UPDATE_FILE_COUNT) {
+            ok = agent_update_target_path(config, C300X_AGENT_UPDATE_FILES[index].path, target, sizeof(target));
+        } else if (index == C300X_AGENT_UPDATE_FILE_COUNT) {
+            ok = snprintf(target, sizeof(target), "%s", C300X_AGENT_INIT_LINK) < (int)sizeof(target);
+        } else {
+            ok = c300x_join_path(target, sizeof(target), base, "qml/C300XEnergyDistribution.qml");
+        }
+        if (!ok || snprintf(file->target, sizeof(file->target), "%s", target) >= (int)sizeof(file->target)
+            || snprintf(file->backup, sizeof(file->backup), "%s.update-backup", target) >= (int)sizeof(file->backup)) {
+            ok = 0;
+        } else if (update_lstat(file->backup, &info) != 0) {
+            ok = errno == ENOENT;
+        } else {
+            ok = S_ISREG(info.st_mode) || S_ISLNK(info.st_mode);
+            file->existed = 1;
+            stale->root_touched |= strcmp(target, C300X_AGENT_INIT_SCRIPT) == 0
+                || strcmp(target, C300X_AGENT_INIT_LINK) == 0;
+            stale->count++;
+        }
+    }
+    if (ok && stale->count > 0) {
+        stale->summary = summary;
+        int committed = installed_manifest != NULL && update_installed_set_verified(config, installed_manifest);
+        fprintf(stderr, "Agent update: %s %zu recovery files of an earlier update\n",
+                committed ? "removing" : "restoring", stale->count);
+        ok = update_finish_transaction(stale, !committed);
+    }
+    free(stale);
+    return ok;
+}
+
 static int update_prepare_transaction(const struct c300x_config *config, struct update_transaction *transaction)
 {
     char target[C300X_MAX_PATH_LEN], stage[C300X_MAX_PATH_LEN];
@@ -409,7 +481,8 @@ int apply_agent_update_files(
         return 0;
     }
     /* Never install an earlier file from an incomplete or corrupt staged bundle. */
-    if (!agent_update_model_compatible(manifest) || !validate_agent_update_files(config, manifest)) {
+    if (!agent_update_model_compatible(manifest) || !validate_agent_update_files(config, manifest)
+        || !update_recover_interrupted(config, installed_manifest, summary)) {
         return 0;
     }
     transaction = calloc(1, sizeof(*transaction));

@@ -151,19 +151,17 @@ static int fail_activation(const struct c300x_config *config, struct agent_updat
     return 0;
 }
 
-static void assert_retry_preserves_backup(const struct c300x_config *config, const char *manifest, const char *path)
+/* The installed bundle verifies after the failed finalization: the next
+ * update drops the leftover recovery file instead of refusing forever. */
+static void assert_retry_drops_backup(const struct c300x_config *config, const char *manifest, const char *path)
 {
     struct agent_update_change_summary summary;
-    struct stat before, after;
-    char digest[65];
-    assert(lstat(path, &before) == 0);
-    assert(c300x_sha256_file_hex(path, digest, sizeof(digest)));
+    assert(access(path, F_OK) == 0);
     fail_rw_at = fail_ro_at = 0;
-    assert(!apply_agent_update_files(config, manifest, manifest, &summary, NULL));
-    assert(summary.changed_files == 0);
+    assert(apply_agent_update_files(config, manifest, manifest, &summary, NULL));
     assert(summary.error == AGENT_UPDATE_ERROR_NONE);
-    assert(lstat(path, &after) == 0 && before.st_ino == after.st_ino);
-    assert(before.st_mode == after.st_mode && sha256_hex_matches(path, digest));
+    assert(access(path, F_OK) != 0 && errno == ENOENT);
+    assert_committed(config, manifest);
 }
 
 static void test_remount(const struct c300x_config *config, const char *manifest, const char *scenario)
@@ -188,7 +186,7 @@ static void test_remount(const struct c300x_config *config, const char *manifest
         assert_committed(config, manifest);
         root_writable_model = 0; /* External recovery before retry. */
         fail_cleanup = 0;
-        assert_retry_preserves_backup(config, manifest, backup);
+        assert_retry_drops_backup(config, manifest, backup);
         return;
     }
     if (!strcmp(scenario, "remount-link-rw") || !strcmp(scenario, "remount-link-ro")) {
@@ -258,7 +256,7 @@ static void test_remount(const struct c300x_config *config, const char *manifest
     } else if (!strcmp(scenario, "remount-finalize-rw") || fail_rollback_rw) {
         assert(summary.changed_files > 0 && !root_writable_model);
         if (!fail_rollback_rw) assert_committed(config, manifest);
-        assert_retry_preserves_backup(config, manifest, backup);
+        assert_retry_drops_backup(config, manifest, backup);
         return;
     } else {
         assert_previous(config);
@@ -320,19 +318,9 @@ int main(int argc, char **argv)
     assert(!root_writable_model);
     assert_committed(&config, manifest);
     if (fail_cleanup) {
-        char digest[65];
-        struct stat before, after;
         assert(cleanup_failures == 1);
-        assert(lstat(denied_backup, &before) == 0);
-        assert(c300x_sha256_file_hex(denied_backup, digest, sizeof(digest)));
         fail_cleanup = 0;
-        /* Removing the fault is not authorization to discard old recovery data. */
-        assert(!apply_agent_update_files(&config, manifest, manifest, &summary, NULL));
-        assert(summary.changed_files == 0);
-        assert(lstat(denied_backup, &after) == 0 && before.st_ino == after.st_ino);
-        assert((before.st_mode & 0777) == (after.st_mode & 0777));
-        assert(sha256_hex_matches(denied_backup, digest));
-        assert_committed(&config, manifest);
+        assert_retry_drops_backup(&config, manifest, denied_backup);
     } else {
         assert(apply_agent_update_files(&config, manifest, manifest, &summary, NULL));
         assert(summary.changed_files == 0);

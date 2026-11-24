@@ -7,6 +7,7 @@
 #include "string_util.h"
 
 #include <errno.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -208,6 +209,30 @@ static void drop_stale_temp(void)
     }
 }
 
+/* A job stopped between the rw and the ro remount would leave / writable
+ * with nobody told. Stop signals wait until / is read-only again; one that
+ * came in then fails the run, and stays blocked until the result is out. */
+static void hold_stop_signals(sigset_t *previous)
+{
+    sigset_t stop;
+    sigemptyset(&stop);
+    sigaddset(&stop, SIGTERM);
+    sigaddset(&stop, SIGINT);
+    sigaddset(&stop, SIGHUP);
+    sigprocmask(SIG_BLOCK, &stop, previous);
+}
+
+static int release_stop_signals(const sigset_t *previous)
+{
+    sigset_t pending;
+    if (sigpending(&pending) == 0 && (sigismember(&pending, SIGTERM) == 1
+        || sigismember(&pending, SIGINT) == 1 || sigismember(&pending, SIGHUP) == 1)) {
+        return 1;
+    }
+    sigprocmask(SIG_SETMASK, previous, NULL);
+    return 0;
+}
+
 int c300x_display_touch_apply(
     struct c300x_display_touch_status *status,
     char *error,
@@ -223,6 +248,7 @@ int c300x_display_touch_apply(
     gid_t gid;
     int written;
     int root_writable;
+    sigset_t previous;
 
     drop_stale_temp();
     if (!c300x_display_touch_read_status(status)) {
@@ -258,8 +284,10 @@ int c300x_display_touch_apply(
         set_error(error, error_len, "touch_ranges_mismatch");
         return 0;
     }
+    hold_stop_signals(&previous);
     if (!c300x_patch_remount_root("rw")) {
         free(data);
+        (void)release_stop_signals(&previous);
         set_error(error, error_len, "remount_rw_failed");
         return 0;
     }
@@ -271,6 +299,10 @@ int c300x_display_touch_apply(
     (void)c300x_display_touch_read_status(status);
     status->changed = written;
     status->root_writable = root_writable;
+    if (release_stop_signals(&previous)) {
+        set_error(error, error_len, "touch_interrupted");
+        return 0;
+    }
     if (!written) {
         set_error(error, error_len, "touch_write_failed");
         return 0;
@@ -298,6 +330,7 @@ int c300x_display_touch_restore(
     gid_t gid;
     int written;
     int root_writable;
+    sigset_t previous;
 
     drop_stale_temp();
     if (!c300x_display_touch_read_status(status)) {
@@ -325,8 +358,10 @@ int c300x_display_touch_restore(
         set_error(error, error_len, "touch_backup_invalid");
         return 0;
     }
+    hold_stop_signals(&previous);
     if (!c300x_patch_remount_root("rw")) {
         free(data);
+        (void)release_stop_signals(&previous);
         set_error(error, error_len, "remount_rw_failed");
         return 0;
     }
@@ -338,6 +373,10 @@ int c300x_display_touch_restore(
     (void)c300x_display_touch_read_status(status);
     status->changed = written;
     status->root_writable = root_writable;
+    if (release_stop_signals(&previous)) {
+        set_error(error, error_len, "touch_interrupted");
+        return 0;
+    }
     if (!written) {
         set_error(error, error_len, "touch_restore_failed");
         return 0;

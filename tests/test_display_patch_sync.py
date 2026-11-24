@@ -282,3 +282,48 @@ def test_an_entry_from_before_the_setting_keeps_its_display_on_an_unrelated_save
     assert current_feature_options(entry)[CONF_DEVICE_UI_ENABLED] is True
     entry.runtime_data.qml_patch_status = {"patched": False}
     assert current_feature_options(entry)[CONF_DEVICE_UI_ENABLED] is False
+
+
+_QML_TIMEOUT = '{"ok":false,"available":true,"error":"qml_patch_timeout","rolled_back":true}'
+
+
+def test_a_write_past_the_agent_deadline_stays_to_do(monkeypatch):
+    """The agent's answer to a write it had to stop: the mark stays, the
+    status is read again since the stopped write may have changed the
+    device, and the next start tries again."""
+
+    from test_api import _QueuedSession
+
+    session = _QueuedSession([
+        (200, '{"ok": true, "state": "original", "patched": false}'),
+        (504, _QML_TIMEOUT),
+        (200, '{"ok": true, "state": "original", "patched": false, "transaction": "pending"}'),
+    ])
+    entry = _entry(True, data={CONF_DISPLAY_SETTING_PENDING: True})
+    entry.runtime_data.api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080", "agent-token", maintenance_token="maintenance-token",
+    )
+    monkeypatch.setattr(display_patch_sync, "async_dispatcher_send", lambda *_args: None)
+    hass = SimpleNamespace(config_entries=SimpleNamespace(async_update_entry=Mock()))
+    asyncio.run(display_patch_sync.async_settle_display_setting(hass, entry))  # type: ignore[arg-type]
+    assert len(session.requests) == 3
+    assert session.requests[1]["args"][1].endswith("/qml-patch/actions/apply")
+    assert session.requests[2]["args"][1].endswith("/qml-patch")
+    assert entry.data == {CONF_DISPLAY_SETTING_PENDING: True}
+    hass.config_entries.async_update_entry.assert_not_called()
+    assert entry.runtime_data.qml_patch_status["state"] == "original"
+    assert entry.runtime_data.qml_patch_status["transaction"] == "pending"
+
+
+def test_the_agent_timeout_answer_names_itself():
+    from test_api import _FakeSession
+
+    from custom_components.bticino_c300x.api import C300XAgentApiConnectionError
+
+    api = C300XAgentApi(
+        _FakeSession(_QML_TIMEOUT, response_status=504),  # type: ignore[arg-type]
+        "http://agent.local:8080", "agent-token", maintenance_token="maintenance-token",
+    )
+    with pytest.raises(C300XAgentApiConnectionError, match="qml_patch_timeout"):
+        asyncio.run(api.async_apply_qml_patch(dynamic_homepage=True))

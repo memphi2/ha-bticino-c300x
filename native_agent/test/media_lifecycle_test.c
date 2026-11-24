@@ -171,6 +171,10 @@ static void admission_test(void) {
     }
     while (atomic_load(&allocations) < RTSP_CONNECTION_LIMIT * 3) usleep(1000);
     assert(atomic_load(&rtsp_creates) == RTSP_CONNECTION_LIMIT);
+    /* Authenticated connections never give way to a new one. */
+    pthread_mutex_lock(&g_bridge.mutex);
+    for (int i = 0; i < RTSP_CONNECTION_LIMIT; i++) g_bridge.rtsp_connection_since[i] = 0;
+    pthread_mutex_unlock(&g_bridge.mutex);
     for (int i = 0; i < 100; i++) {
         int pair[2];
         assert(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0);

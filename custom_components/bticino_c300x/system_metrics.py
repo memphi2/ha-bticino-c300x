@@ -161,7 +161,11 @@ def apply_system_metrics(
 
         state.cancel_expiry = async_call_later(hass, max(0, expires_at - now), expire)
         if restarted:
+            from .qml_status_watch import async_schedule_qml_status_refresh
+
             async_dispatcher_send(hass, SIGNAL_AGENT_INFO_CHANGED, entry.entry_id)
+            # The new agent may have finished or found a cut-off display write.
+            async_schedule_qml_status_refresh(hass, entry, restarted=True)
         if notify:
             async_dispatcher_send(hass, SIGNAL_SYSTEM_METRICS_CHANGED, entry.entry_id)
     return True

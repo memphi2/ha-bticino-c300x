@@ -4,6 +4,12 @@
 #include "command_job.h"
 #include "http_auth.h"
 
+/* A QML write may take this long; past it, it gets SIGTERM and the grace
+ * period for its rollback trap: files back, remount read-only, restart of the
+ * previous GUI (two 2 s waits); about 8 s on the device at worst. */
+#define C300X_QML_WRITE_TIMEOUT_MS 30000
+#define C300X_QML_WRITE_TERM_GRACE_MS 15000
+
 struct c300x_http_maintenance;
 typedef void (*c300x_maintenance_write_fn)(void *, const char *, const char *);
 /* Return zero only when a subsequent job was started for the same request. */

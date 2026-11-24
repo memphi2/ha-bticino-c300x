@@ -25,6 +25,10 @@ from .agent_diagnostics import publish_agent_media_facts
 from .agent_restart import note_status_reconciled, reconcile_due
 from .camera_media import webrtc_debug as _webrtc_debug
 from .camera_media.background_tasks import CameraBackgroundTasks
+from .camera_media.closed_window import (
+    closed_window_bridge_status,
+    external_media_outlives_close,
+)
 from .camera_media.ha_compat import (
     CameraEntityFeature,
     WebRTCError,
@@ -934,6 +938,9 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
             self._async_close_webrtc_session,
             drain=self._async_wait_for_provider_rtsp_clients_to_drain,
         )
+        # The cached counts may be from a start the agent gave up since.
+        await self._async_refresh_video_status_or_none()
+        self._async_write_ha_state_if_ready()
 
     async def async_prepare_home_call_stop(self) -> None:
         """Close HA-owned Home Call media before an explicit agent stop."""
@@ -1502,6 +1509,9 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
             return
         if event_type in VIDEO_WINDOW_CLOSED_EVENTS:
             self._clear_video_window()
+            if external_media_outlives_close(event.data):
+                self._apply_event_media_facts(event.data)
+                self._refresh_derived_media_state()
             self._close_webrtc_sessions_from_event("doorbell", "doorbell_media_closed")
             self._record_media_timeline(
                 "agent_event",
@@ -1621,26 +1631,7 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
         self._external_media_active = False
         self._external_owner = None
         self._last_video_block_reason = None
-        self._bridge_status = {
-            **self._bridge_status,
-            "media_owner": "idle",
-            "media_active": False,
-            # Transient start/stop flags belong to the window that just closed,
-            # like the home-call path already clears them. Leaving them behind
-            # in this cumulative view republishes them as live state.
-            "media_starting": False,
-            "stop_in_progress": False,
-            "external_media_active": False,
-            "ring_call_active": False,
-            "ring_media_active": False,
-            "ring_audio_active": False,
-            "ring_answer_requested": False,
-            "ring_answered": False,
-            "ring_hangup_requested": False,
-            "unanswered_ring_call": False,
-            "call_active": False,
-            "clients": 0,
-        }
+        self._bridge_status = closed_window_bridge_status(self._bridge_status)
         self._refresh_derived_media_state()
 
     def _async_write_ha_state_if_ready(self) -> None:

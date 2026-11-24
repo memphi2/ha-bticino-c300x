@@ -15,13 +15,18 @@ var eventRefreshInFlight = false
 var eventGeneration = 0
 var notificationGeneration = 0
 
+function useBaseUrl(url) {
+    if (typeof url === "string" && /^http:\/\/127\.0\.0\.1:[0-9]{1,5}$/.test(url)) BASE_URL = url
+}
+
 function syncMemoModel(pageItem, textMemoType, callback) {
+    useBaseUrl(pageItem.uiBaseUrl)
     syncMemoObjectModel(pageItem.model, textMemoType, callback)
 }
 
 function syncMemoObjectModel(model, textMemoType, callback) {
     getJson("/ui/memos", function(data) {
-        syncObjectModel(model, data && data.memos, textMemoType)
+        syncObjectModel(model, data, textMemoType)
         if (callback) {
             callback(true, data)
         }
@@ -33,6 +38,7 @@ function syncMemoObjectModel(model, textMemoType, callback) {
 }
 
 function syncHomeNotifications(pageItem, callback) {
+    if (pageItem) useBaseUrl(pageItem.uiBaseUrl)
     prepareEventRetry(pageItem)
     var generation = ++notificationGeneration
     var watchGeneration = eventGeneration
@@ -47,20 +53,22 @@ function syncHomeNotifications(pageItem, callback) {
         }
     }
 
+    function current() {
+        return pageItem && generation === notificationGeneration && watchGeneration === eventGeneration
+    }
+
     getJson("/ui/answering-machine/messages", function(data) {
-        if (pageItem && generation === notificationGeneration && watchGeneration === eventGeneration) {
-            pageItem.externalUnreadMessages = unreadCountFromData(data)
-        }
+        if (current()) pageItem.externalUnreadMessages = unreadCountFromData(data)
         done(true)
     }, function() {
+        if (current()) pageItem.externalUnreadMessages = -1
         done(false)
     })
     getJson("/ui/memos", function(data) {
-        if (pageItem && generation === notificationGeneration && watchGeneration === eventGeneration) {
-            pageItem.externalUnreadMemos = unreadCountFromData(data)
-        }
+        if (current()) pageItem.externalUnreadMemos = unreadCountFromData(data)
         done(true)
     }, function() {
+        if (current()) pageItem.externalUnreadMemos = -1
         done(false)
     })
 }
@@ -119,6 +127,10 @@ function retryEventWatch() {
 
 function eventWatchFailed() {
     eventConnected = false
+    if (eventOwner && eventOwner.externalUnreadMemos !== undefined) {
+        eventOwner.externalUnreadMessages = -1
+        eventOwner.externalUnreadMemos = -1
+    }
     eventRecovering = true
     scheduleEventRetry()
 }
@@ -144,24 +156,38 @@ function refreshAfterReconnect() {
 }
 
 function unreadCountFromData(data) {
-    if (data && data.unread !== undefined) {
-        return Number(data.unread)
+    if (!data || data.ok === false || data.available === false || typeof data.unread !== "number") {
+        return -1
     }
-    return 0
+    return data.unread
 }
 
-function syncObjectModel(model, memos, textMemoType) {
-    var known = memoSet(memos)
-    if (!model || !model.binder) {
+function syncObjectModel(model, data, textMemoType) {
+    if (!model || !model.binder || !data || data.ok !== true || data.available !== true) {
         return
     }
+    var deleted = idSet(data.deleted)
+    var known = memoSet(data.memos)
     for (var index = model.count - 1; index >= 0; index--) {
         var itemObject = model.binder.getObject(index)
         var key = memoObjectKey(itemObject, textMemoType)
-        if (key !== "" && known[key] !== true) {
+        if (key !== "" && deleted[key] === true && known[key] !== true) {
             model.remove(itemObject)
         }
     }
+}
+
+function idSet(items) {
+    var ids = {}
+    if (!items || items.length === undefined) {
+        return ids
+    }
+    for (var index = 0; index < items.length; index++) {
+        if (typeof items[index] === "string") {
+            ids[items[index]] = true
+        }
+    }
+    return ids
 }
 
 function memoSet(items) {

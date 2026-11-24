@@ -5,8 +5,8 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant, ServiceCall
-from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.dispatcher import (
     async_dispatcher_connect,
@@ -49,6 +49,7 @@ from .const import (
 from .display_notifications import (
     DISMISS_SCHEMA,
     SHOW_SCHEMA,
+    display_notification_service_error,
     notifications_for_entry,
     show_notification,
 )
@@ -196,12 +197,18 @@ class _EntryRuntimeProxy:
 
 def _entry_for_call(hass: HomeAssistant, call: ServiceCall) -> Any:
     entry_id = call.data.get(_ATTR_ENTRY_ID)
-    entries = hass.config_entries.async_entries(DOMAIN)
     if entry_id:
-        for entry in entries:
+        for entry in hass.config_entries.async_entries(DOMAIN):
             if entry.entry_id == entry_id:
+                if entry.state is not ConfigEntryState.LOADED:
+                    raise service_validation_error("entry_not_loaded")
                 return _entry_with_runtime_data(hass, entry)
         raise service_validation_error("unknown_entry")
+    # Ignored, disabled and failed entries cannot serve a call, so they never
+    # make the entry ambiguous.
+    entries = hass.config_entries.async_loaded_entries(DOMAIN)
+    if not entries:
+        raise service_validation_error("entry_not_loaded")
     if len(entries) != 1:
         raise service_validation_error("entry_id_required")
     return _entry_with_runtime_data(hass, entries[0])
@@ -245,14 +252,14 @@ class _C300XServiceHandlers:
         try:
             show_notification(self._hass, entry, dict(call.data))
         except ValueError as err:
-            raise ServiceValidationError(str(err)) from err
+            raise display_notification_service_error(err) from err
 
     async def async_dismiss_display_notification(self, call: ServiceCall) -> None:
         entry = _entry_for_call(self._hass, call)
         try:
             notifications_for_entry(self._hass, entry).dismiss(call.data["notification_id"])
         except ValueError as err:
-            raise ServiceValidationError(str(err)) from err
+            raise display_notification_service_error(err) from err
 
     async def async_run_action(self, call: ServiceCall) -> None:
         """Run one allowlisted Home Assistant action."""

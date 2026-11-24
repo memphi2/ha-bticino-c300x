@@ -81,7 +81,7 @@ def commit_probe(tmp_path_factory: pytest.TempPathFactory) -> Path:
     source, output = folder / "probe.c", folder / "probe"
     source.write_text(HARNESS)
     files = ("camera_quality", "camera_running", "camera_update", "camera_update_lock", "camera_files",
-             "camera_settings", "camera_crop", "camera_sizes", "device_file", "device_file_sync")
+             "camera_settings", "camera_crop", "camera_sizes", "device_file", "device_file_sync", "root_mount")
     result = subprocess.run([
         "gcc", "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror", "-pedantic",
         "-D_DEFAULT_SOURCE", "-I", str(ROOT / "native_agent/src"), str(source),

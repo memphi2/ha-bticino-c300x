@@ -56,6 +56,7 @@ DEVICE_AGENT_SELF_TEST_FAILED_ISSUE = "device_agent_self_test_failed"
 DEVICE_AGENT_UI_EVENT_WATCHDOG_ISSUE = "device_agent_ui_event_watchdog"
 UNSUPPORTED_CALLBACK_URL_ISSUE = "unsupported_callback_url"
 DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE = "device_core_qml_hook_required"
+DEVICE_QML_TRANSACTION_STUCK_ISSUE = "device_qml_transaction_stuck"
 DEVICE_USER_REQUIRED_ISSUE = "device_user_required"
 MEDIA_SETUP_REPAIR_REQUIRED_ISSUE = "media_setup_repair_required"
 MEDIA_WATCHDOG_TIMEOUT_ISSUE = "media_watchdog_timeout"
@@ -71,6 +72,7 @@ ALL_REPAIR_ISSUES = frozenset(
         DEVICE_AGENT_UI_EVENT_WATCHDOG_ISSUE,
         UNSUPPORTED_CALLBACK_URL_ISSUE,
         DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE,
+        DEVICE_QML_TRANSACTION_STUCK_ISSUE,
         DEVICE_USER_REQUIRED_ISSUE,
         MEDIA_SETUP_REPAIR_REQUIRED_ISSUE,
         MEDIA_WATCHDOG_TIMEOUT_ISSUE,
@@ -103,6 +105,7 @@ def async_sync_entry_repair_issues(
     _sync_device_agent_ui_event_watchdog_issue(hass, entry)
     _sync_unsupported_callback_url_issue(hass, entry)
     _sync_device_core_qml_hook_issue(hass, entry)
+    _sync_device_qml_transaction_issue(hass, entry)
     _sync_device_user_issue(hass, entry)
     _sync_media_setup_repair_issue(hass, entry)
 
@@ -455,6 +458,27 @@ def _sync_device_core_qml_hook_issue(hass: HomeAssistant, entry: BticinoC300XCon
         severity=ir.IssueSeverity.WARNING,
         is_fixable=True,
         placeholders={"core_state": core_state},
+    )
+
+
+def _sync_device_qml_transaction_issue(
+    hass: HomeAssistant, entry: BticinoC300XConfigEntry
+) -> None:
+    """Raise the issue while the device reports a display write it could not finish.
+
+    The last known status decides, also while the agent is unreachable: the
+    leftover stays on the device until someone deals with it.
+    """
+
+    status = getattr(getattr(entry, "runtime_data", None), "qml_patch_status", None)
+    if not isinstance(status, dict) or status.get("transaction") != "stuck":
+        async_delete_repair_issue(hass, entry.entry_id, DEVICE_QML_TRANSACTION_STUCK_ISSUE)
+        return
+    _create_issue(
+        hass,
+        entry,
+        DEVICE_QML_TRANSACTION_STUCK_ISSUE,
+        severity=ir.IssueSeverity.WARNING,
     )
 
 

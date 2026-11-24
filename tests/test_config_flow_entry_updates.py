@@ -11,6 +11,10 @@ from custom_components.bticino_c300x import config_flow, config_flow_auth
 from custom_components.bticino_c300x.camera_media.ha_compat import (
     HA_SUPPORTS_NATIVE_CAMERA_TWO_WAY_AUDIO,
 )
+from custom_components.bticino_c300x.config_flow_entry_update import (
+    LISTENER_IGNORED_DATA_KEYS,
+    async_update_reconfigured_entry,
+)
 from custom_components.bticino_c300x.config_flow_features import (
     current_connection_options,
 )
@@ -19,6 +23,8 @@ from custom_components.bticino_c300x.const import (
     CONF_AGENT_HOST,
     CONF_AGENT_PORT,
     CONF_AGENT_TOKEN,
+    CONF_DEVICE_UI_ENABLED,
+    CONF_DISPLAY_SETTING_PENDING,
     CONF_MAINTENANCE_TOKEN,
     CONF_NATIVE_TWO_WAY_AUDIO,
     CONF_ROTATE_SHARED_SECRET,
@@ -111,9 +117,14 @@ def test_recovery_reload_is_listener_aware_and_atomic(monkeypatch, route, listen
     flow = flow_for(entry, hass, route)
     update = hass.config_entries.async_update_entry.side_effect
 
+    def settings():
+        return {k: v for k, v in entry.data.items() if k not in LISTENER_IGNORED_DATA_KEYS}, dict(entry.options)
+
     def with_listener(*args, **kwargs):
+        # Like the real listener: a change of only the marker keys reloads nothing.
+        before = settings()
         did_change = update(*args, **kwargs)
-        if listeners and did_change:
+        if listeners and settings() != before:
             hass.config_entries.async_schedule_reload(entry.entry_id)
             entry.update_listeners.clear()
         return did_change
@@ -196,3 +207,57 @@ def test_unchanged_supported_media_form_remains_a_noop():
         hass.config_entries.async_schedule_reload.assert_not_called()
 
     asyncio.run(exercise())
+
+
+def _listener_entry_hass():
+    from custom_components.bticino_c300x.runtime_manager import _entry_update_listener
+
+    entry = SimpleNamespace(
+        entry_id="e1", runtime_data=None, update_listeners=[], options={},
+        data={CONF_AGENT_HOST: "192.0.2.2", CONF_AGENT_PORT: 8080, CONF_DEVICE_UI_ENABLED: True},
+    )
+    hass = SimpleNamespace(config_entries=SimpleNamespace(async_reload=AsyncMock(), async_schedule_reload=Mock()))
+    listener = _entry_update_listener(entry)
+    entry.update_listeners.append(listener)
+    calls = []
+
+    def update_and_abort(target, *, data_updates, options):
+        old = (dict(target.data), dict(target.options))
+        target.data, target.options = {**target.data, **data_updates}, dict(options)
+        if (target.data, target.options) != old:
+            calls.append(listener(hass, target))
+        return {"type": "abort", "reason": "reconfigure_successful"}
+
+    return entry, hass, SimpleNamespace(hass=hass, async_update_and_abort=update_and_abort), calls
+
+
+@pytest.mark.parametrize("host", ["192.0.2.2", "192.0.2.3"])
+def test_reconfigure_reloads_once_also_when_only_the_display_mark_changed(host):
+    entry, hass, flow, calls = _listener_entry_hass()
+
+    async def run():
+        async_update_reconfigured_entry(
+            flow, entry,
+            {CONF_AGENT_HOST: host, CONF_AGENT_PORT: 8080, CONF_DEVICE_UI_ENABLED: True,
+             CONF_DISPLAY_SETTING_PENDING: True},
+            frozenset({CONF_AGENT_HOST, CONF_AGENT_PORT}), force_reload=True,
+        )
+        await asyncio.gather(*calls)
+
+    asyncio.run(run())
+    assert entry.data[CONF_DISPLAY_SETTING_PENDING] is True
+    reloads = hass.config_entries.async_reload.await_count + hass.config_entries.async_schedule_reload.call_count
+    assert reloads == 1
+
+
+@pytest.mark.parametrize("key", sorted(LISTENER_IGNORED_DATA_KEYS))
+def test_marker_keys_match_the_keys_the_update_listener_ignores(key):
+    entry, hass, flow, calls = _listener_entry_hass()
+
+    async def run():
+        flow.async_update_and_abort(entry, data_updates={key: "changed"}, options={})
+        await asyncio.gather(*calls)
+
+    asyncio.run(run())
+    assert len(calls) == 1
+    hass.config_entries.async_reload.assert_not_awaited()

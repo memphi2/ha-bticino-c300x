@@ -96,7 +96,7 @@ def transaction_probe(tmp_path_factory: pytest.TempPathFactory) -> Path:
     source = folder / "probe.c"
     source.write_text(HARNESS)
     output = folder / "probe"
-    files = ("camera_update", "camera_files", "camera_settings", "camera_crop", "device_file", "device_file_sync")
+    files = ("camera_update", "camera_files", "camera_settings", "camera_crop", "device_file", "device_file_sync", "root_mount")
     subprocess.run([
         "gcc", "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror", "-pedantic",
         "-D_DEFAULT_SOURCE", "-D_POSIX_C_SOURCE=200809L", "-I", str(ROOT / "native_agent/src"),

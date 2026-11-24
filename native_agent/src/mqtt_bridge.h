@@ -2,6 +2,7 @@
 #define C300X_MQTT_BRIDGE_H
 
 #include "c300x_agent.h"
+#include "mqtt_connect.h"
 #include "mqtt_output.h"
 
 #include <stddef.h>
@@ -9,6 +10,8 @@
 
 struct c300x_mqtt {
     int fd;
+    struct c300x_mqtt_connect *connecting; /* fd is -1 while this runs */
+    long long connect_deadline_ms;
     int connected;
     int subscribed;
     time_t next_connect_at;
@@ -21,8 +24,10 @@ struct c300x_mqtt {
     size_t connack_used;
     long long connack_deadline_ms;
     size_t ping_remaining; /* Remaining bytes through the queued PINGREQ. */
+    long long last_rx_ms, rx_limit_ms; /* silent past the limit: gone */
     unsigned char rx_buffer[4096];
     size_t rx_len;
+    size_t rx_skip; /* Bytes left of a packet larger than rx_buffer. */
     char pending_command[C300X_MAX_FRAME_LEN];
     int has_pending_command;
 };

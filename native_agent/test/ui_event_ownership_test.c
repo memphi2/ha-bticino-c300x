@@ -6,6 +6,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include "../src/http_util.h"
+#include "../src/time_util.h"
 #include "../src/ui_events.h"
 
 static void respond(int fd, int status, const char *reason, const char *body, void *context)
@@ -28,6 +29,10 @@ int main(int argc, char **argv)
         c300x_ui_events_store_waiter(&events, old[i][0], 0, respond, NULL, &overflowed);
         assert(!overflowed);
     }
+    /* Waiter deadlines follow the loop's monotonic clock, not the wall
+     * clock that NTP steps after boot. */
+    int wait_ms = c300x_ui_events_timeout_ms(&events, c300x_monotonic_seconds());
+    assert(wait_ms > (C300X_UI_EVENT_WAIT_SECONDS - 2) * 1000 && wait_ms <= C300X_UI_EVENT_WAIT_SECONDS * 1000);
     /* This HTTP connection already exists when the main loop polls. */
     assert(socketpair(AF_UNIX, SOCK_STREAM, 0, replacement) == 0);
     int count = c300x_ui_events_pollfds(&events, fds, slots, C300X_UI_EVENT_MAX_WAITERS);

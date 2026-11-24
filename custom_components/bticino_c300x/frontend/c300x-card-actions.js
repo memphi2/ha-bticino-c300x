@@ -75,6 +75,7 @@ export class C300XCardActions {
           await this.answerDoorbellCall();
           if (!isCurrent()) return;
           lifecycle.doorbellAnswered = true;
+          card._rememberAnsweredRing?.();
           if (lifecycle.ringPreviewActive && card._webrtc.pc) {
             await card._startAnsweredDoorbellStream();
           } else {
@@ -190,6 +191,8 @@ export class C300XCardActions {
   async hangupDoorstation() {
     const card = this._card;
     const hadDoorbellRingCallSession = this.hasDoorbellRingCallSession();
+    // Asked to hang up: no new connection for this call, even if this fails.
+    if (hadDoorbellRingCallSession) card._lifecycle.answeredRingHangup = true;
     await this._withHangupGuard(async (isCurrent) => {
       let ok = true;
       try {
@@ -228,7 +231,8 @@ export class C300XCardActions {
   }
 
   hasDoorbellRingCallSession() {
-    return this._card._lifecycle.doorbellAnswered;
+    const card = this._card;
+    return card._lifecycle.doorbellAnswered || !!card._answeredRingHere?.();
   }
 
   async stopHomeCall() {

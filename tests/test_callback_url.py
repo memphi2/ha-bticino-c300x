@@ -3,6 +3,7 @@ from __future__ import annotations
 # ruff: noqa: E402,I001
 
 import asyncio
+import socket
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -477,3 +478,40 @@ def test_normalize_callback_base_url_keeps_ordinary_names_and_addresses() -> Non
     )
     assert normalize_callback_base_url("http://ha_core:8123") == "http://ha_core:8123"
     assert normalize_callback_base_url("http://192.0.2.10:8123") == "http://192.0.2.10:8123"
+
+
+def _getaddrinfo_v4_and_v6(_host, port, **_kwargs):
+    return [
+        (socket.AF_INET6, socket.SOCK_DGRAM, 17, "", ("2001:db8::10", port, 0, 0)),
+        (socket.AF_INET, socket.SOCK_DGRAM, 17, "", ("192.0.2.10", port)),
+    ]
+
+
+class _NoIpv6Socket:
+    """A host without IPv6 support refuses to create an AF_INET6 socket."""
+
+    def __init__(self, family, *_args):
+        if family == socket.AF_INET6:
+            raise OSError(97, "Address family not supported by protocol")
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+    def settimeout(self, _timeout):
+        pass
+
+    def connect(self, _sockaddr):
+        pass
+
+    def getsockname(self):
+        return ("192.0.2.2", 5555)
+
+
+def test_source_ip_selection_skips_an_address_family_the_host_lacks(monkeypatch) -> None:
+    monkeypatch.setattr(callback_url_module.socket, "getaddrinfo", _getaddrinfo_v4_and_v6)
+    monkeypatch.setattr(callback_url_module.socket, "socket", _NoIpv6Socket)
+
+    assert _select_non_link_local_source_ip("c300x.example", 8080) == "192.0.2.2"

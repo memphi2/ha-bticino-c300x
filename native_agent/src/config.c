@@ -241,6 +241,7 @@ void c300x_default_config(struct c300x_config *config)
         sizeof(config->memos_voice_root),
         "/home/bticino/cfg/extra/47/memos_voice"
     );
+    safe_copy(config->memos_records_dir, sizeof(config->memos_records_dir), "/var/tmp/records");
     config->memos_watch = 1;
     config->memos_max = 64;
 }
@@ -1381,6 +1382,13 @@ int c300x_load_config(
             return 0;
         }
     }
+    if (nested_member(document, document_end, "memos", "recordsDir", &value)) {
+        if (!string_value(value, document_end, config->memos_records_dir, sizeof(config->memos_records_dir))) {
+            set_error(error, error_len, "memos.recordsDir must be a string");
+            free(document);
+            return 0;
+        }
+    }
     if (nested_member(document, document_end, "memos", "watch", &value)) {
         if (!bool_value(value, document_end, &config->memos_watch)) {
             set_error(error, error_len, "memos.watch must be a boolean");
@@ -2008,6 +2016,7 @@ int c300x_config_persisted_equal(
         && C300X_EQ_INT(memos_enabled)
         && C300X_EQ_STR(memos_text_root)
         && C300X_EQ_STR(memos_voice_root)
+        && C300X_EQ_STR(memos_records_dir)
         && C300X_EQ_INT(memos_watch)
         && C300X_EQ_INT(memos_max);
 #undef C300X_EQ_INT
@@ -2291,6 +2300,7 @@ static int save_config_internal(
     fprintf(file, "    \"enabled\": %s,\n", config->memos_enabled ? "true" : "false");
     write_json_string_field(file, "textRoot", config->memos_text_root, ",");
     write_json_string_field(file, "voiceRoot", config->memos_voice_root, ",");
+    write_json_string_field(file, "recordsDir", config->memos_records_dir, ",");
     fprintf(file, "    \"watch\": %s,\n", config->memos_watch ? "true" : "false");
     fprintf(file, "    \"maxMemos\": %d\n  },\n", config->memos_max);
     fprintf(file, "  \"systemMetrics\": {\"enabled\": %s,\"watch\": %s,\"sampleIntervalSeconds\": %d,\"heartbeatSeconds\": %d,\"changePercent\": %d},\n", config->system_metrics_enabled ? "true" : "false", config->system_metrics_watch ? "true" : "false", config->system_metrics_sample_interval_seconds, config->system_metrics_heartbeat_seconds, config->system_metrics_change_percent);

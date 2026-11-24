@@ -15,6 +15,7 @@ def test_coalesced_mqtt_commands(tmp_path, sanitize):
         ["cc", "-std=c11", "-D_DEFAULT_SOURCE", "-Wall", "-Wextra", "-Werror",
          "-ffunction-sections", "-fdata-sections", "-Wl,--gc-sections", *flags,
          str(native / "test/mqtt_commands_test.c"), str(native / "src/string_util.c"),
+         str(native / "src/mqtt_packet.c"),
          "-o", str(executable)], check=True, capture_output=True, text=True,
     )
     subprocess.run([str(executable)], check=True, timeout=5)

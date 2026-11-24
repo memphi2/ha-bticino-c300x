@@ -321,15 +321,6 @@ static void set_status_error(struct c300x_device_routing_status *status, const c
     }
 }
 
-static int remount_root_ro_or_error(char *error, size_t error_len)
-{
-    if (c300x_patch_remount_root("ro")) {
-        return 1;
-    }
-    set_error(error, error_len, "remount_ro_failed");
-    return 0;
-}
-
 static int variant_ranges_match(
     const struct routing_variant *variant,
     const unsigned char *data,
@@ -590,20 +581,23 @@ int c300x_device_routing_apply(
         set_error(error, error_len, "routing_target_replace_failed");
         return 0;
     }
-    (void)fsync(fd);
-    if (fclose(fp) != 0 || rename(target_tmp_path, target_path) != 0) {
+    /* fclose would close fd: flush and sync before it, then check both. */
+    int synced = fflush(fp) == 0 && fsync(fd) == 0;
+    if (fclose(fp) != 0 || !synced || rename(target_tmp_path, target_path) != 0) {
         unlink(target_tmp_path);
         (void)c300x_patch_remount_root("ro");
         set_error(error, error_len, "routing_target_replace_failed");
         return 0;
     }
-    if (!remount_root_ro_or_error(error, error_len)) {
-        return 0;
-    }
+    /* The binary is replaced. The running daemon keeps the old inode open,
+     * which makes the kernel refuse a read-only remount until it exits; the
+     * boot after this mounts read-only again. Report it, do not fail. */
+    int root_writable = !c300x_patch_remount_root("ro");
     if (!c300x_device_routing_read_status(status) || !status->patched) {
         set_error(error, error_len, "patched_ranges_mismatch");
         return 0;
     }
+    status->root_writable = root_writable;
     return 1;
 }
 
@@ -659,14 +653,14 @@ int c300x_device_routing_restore(
         (void)unlink(stage_path);
         (void)rmdir(stage_dir);
     }
-    if (!remount_root_ro_or_error(error, error_len)) {
-        return 0;
-    }
+    /* As in apply: a replaced binary still open blocks the remount. */
+    int root_writable = !c300x_patch_remount_root("ro");
     if (!restored || !c300x_device_routing_read_status(status)
         || variant_for_stock_sha(status->file_sha256) == NULL) {
         set_error(error, error_len, "routing_restore_failed");
         return 0;
     }
+    status->root_writable = root_writable;
     return 1;
 }
 
@@ -708,5 +702,14 @@ int c300x_device_routing_remove_patches(char *error, size_t error_len)
         set_error(error, error_len, "routing_backup_missing");
         return 0;
     }
-    return c300x_device_routing_restore(&status, error, error_len);
+    if (!c300x_device_routing_restore(&status, error, error_len)) {
+        return 0;
+    }
+    /* Removal must not delete the agent while / is still writable: the
+     * removal script asks for a reboot on this error. */
+    if (status.root_writable) {
+        set_error(error, error_len, "remount_ro_failed");
+        return 0;
+    }
+    return 1;
 }

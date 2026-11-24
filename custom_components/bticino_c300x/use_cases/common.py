@@ -22,7 +22,7 @@ from ..capabilities import (
 from ..const import CONF_MAINTENANCE_TOKEN, SIGNAL_CONNECTION_STATE_CHANGED
 from ..entity import entry_video_enabled
 from ..entry_config import entry_config_value
-from ..exceptions import service_validation_error
+from ..exceptions import home_assistant_error, service_validation_error
 from ..qml_patch import async_refresh_qml_patch_status
 from ..runtime_auth import (
     async_classify_runtime_auth_error,
@@ -34,16 +34,20 @@ MEDIA_PLAYER_DOMAIN = "media_player"
 MEDIA_PLAYER_PLAY_MEDIA_SERVICE = "play_media"
 
 
-async def raise_agent_command_failed(awaitable: Awaitable[Any], *, entry: Any) -> None:
-    """Run an agent command and translate failures into HA service errors."""
+async def raise_agent_command_failed[T](awaitable: Awaitable[T], *, entry: Any) -> T:
+    """Run an agent command, return its result, translate failures into HA errors.
+
+    An unreachable agent, a rejected key or a failed command is a device-side
+    failure: HomeAssistantError, not ServiceValidationError (invalid input).
+    """
 
     runtime = getattr(entry, "runtime_data", None)
     try:
-        await awaitable
+        return await awaitable
     except C300XAgentApiAuthError as err:
         ensure_current_runtime(entry, runtime)
         if runtime is None:
-            raise service_validation_error("agent_command_failed") from err
+            raise home_assistant_error("agent_command_failed") from err
         failure = await async_classify_runtime_auth_error(runtime.api, err)
         ensure_current_runtime(entry, runtime)
         if isinstance(failure, C300XAgentApiAuthError) and failure.maintenance:
@@ -57,9 +61,9 @@ async def raise_agent_command_failed(awaitable: Awaitable[Any], *, entry: Any) -
                 unregister()
             async_request_reauth(hass, entry, runtime.connection_state, failure)
             async_dispatcher_send(hass, SIGNAL_CONNECTION_STATE_CHANGED, entry.entry_id)
-        raise service_validation_error("agent_command_failed") from failure
+        raise home_assistant_error("agent_command_failed") from failure
     except Exception as err:
-        raise service_validation_error("agent_command_failed") from err
+        raise home_assistant_error("agent_command_failed") from err
 
 
 def ensure_current_runtime(entry: Any, runtime: Any) -> None:
@@ -143,7 +147,7 @@ async def async_ensure_gui_function_patch(entry: Any) -> None:
     try:
         await async_refresh_qml_patch_status(entry)
     except Exception as err:
-        raise service_validation_error("agent_command_failed") from err
+        raise home_assistant_error("agent_command_failed") from err
     if not entry_gui_function_patch_active(entry):
         raise service_validation_error("gui_function_patch_required")
 
@@ -166,7 +170,7 @@ async def latest_item_id_for_entry(
     try:
         payload = await refresh()
     except Exception as err:
-        raise service_validation_error("agent_command_failed") from err
+        raise home_assistant_error("agent_command_failed") from err
     item_id = latest(payload)
     if item_id is None:
         raise service_validation_error(unavailable_error)

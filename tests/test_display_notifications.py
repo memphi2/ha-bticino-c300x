@@ -122,6 +122,26 @@ def test_unread_events_follow_store_without_listeners_or_read_feedback():
     asyncio.run(run())
 
 
+def test_only_led_notices_count_as_unread_and_replacement_updates_it():
+    loop, changes = Loop(), []
+    store = DisplayNotifications(loop, lambda: changes.append(1))
+    store.show(data("quiet"), led=False)
+    assert not store.has_unread() and changes == [1]
+    assert set(store.payload()[0]) == {
+        "id", "revision", "title", "message", "icon", "priority", "actions",
+    }
+    store.show(data("quiet"), led=True)
+    assert store.has_unread()
+    store.show(data("quiet"), led=False)
+    assert not store.has_unread()
+    # Without the keyword a notice counts, as every notice did before.
+    store.show(data("lit", expires_in=5))
+    assert store.has_unread()
+    loop.now += 5
+    assert not store.has_unread()
+    store.close()
+
+
 def test_reload_snapshot_follows_inflight_notification():
     async def run():
         started, release = asyncio.Event(), asyncio.Event()
@@ -306,19 +326,45 @@ def test_registered_service_handlers_show_dismiss_and_reject_unknown_actions(
             SimpleNamespace(data={"notification_id": "notice"})
         )
         assert notification_payload(entry) == []
-        with pytest.raises(ServiceValidationError, match="unknown_notification_action"):
+        with pytest.raises(ServiceValidationError) as err:
             await handlers.async_show_display_notification(
                 SimpleNamespace(
                     data=data(actions=[{"action_id": "missing", "label": "X"}])
                 )
             )
+        assert err.value.translation_key == "unknown_notification_action"
+        for index in range(MAX_NOTIFICATIONS):
+            await handlers.async_show_display_notification(
+                SimpleNamespace(data=data(str(index), priority="urgent"))
+            )
+        with pytest.raises(ServiceValidationError) as err:
+            await handlers.async_show_display_notification(SimpleNamespace(data=data()))
+        assert err.value.translation_key == "display_notification_queue_full"
+        entry.runtime_data.display_notifications.close()
+        with pytest.raises(ServiceValidationError) as err:
+            await handlers.async_show_display_notification(SimpleNamespace(data=data()))
+        assert err.value.translation_key == "display_notifications_unloaded"
         entry.options["device_ui_enabled"] = False
-        with pytest.raises(ServiceValidationError, match="display_disabled"):
+        with pytest.raises(ServiceValidationError) as err:
             await handlers.async_dismiss_display_notification(
                 SimpleNamespace(data={"notification_id": "notice"})
             )
+        assert err.value.translation_key == "display_disabled"
 
     asyncio.run(run())
+
+
+def test_notify_display_alert_reports_a_refusal_as_a_translated_error(context):
+    from homeassistant.exceptions import ServiceValidationError
+
+    from custom_components.bticino_c300x.display_alerts import async_send_display_alert
+
+    hass, entry, _ = context
+    entry.runtime_data.capabilities = {"display_alerts": True, "memo_led": True}
+    notifications_for_entry(hass, entry).close()
+    with pytest.raises(ServiceValidationError) as err:
+        asyncio.run(async_send_display_alert(hass, entry, "Door open"))
+    assert err.value.translation_key == "display_notifications_unloaded"
 
 
 def test_concurrent_action_is_single_flight(context):

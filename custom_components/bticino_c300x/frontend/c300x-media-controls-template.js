@@ -27,6 +27,8 @@ export const MEDIA_CONTROLS_TEMPLATE = `
     .toolbar { position: absolute; bottom: 8px; inset-inline: 8px; display: flex; align-items: center; gap: 2px;
       padding: 0 6px; pointer-events: auto; background: transparent; }
     .toolbar[data-dated] { bottom: calc(var(--c300x-stamp-size) * 1.5 + 8px); }
+    /* Under the open picture panel; hidden this way its controls leave the focus order too. */
+    :host([picture-open]) .toolbar { visibility: hidden; }
     .timeline { order: 1; flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; padding: 0 4px; }
     .buttons { display: contents; }
     .play { order: 0; } .spacer, .mute, .volume { order: 2; }

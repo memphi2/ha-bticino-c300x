@@ -101,6 +101,7 @@ def probe(tmp_path_factory):
         "device_file",
         "device_file_sync",
         "device_patch_io",
+        "root_mount",
         "media_geometry_patch",
         "sha256",
         "string_util",

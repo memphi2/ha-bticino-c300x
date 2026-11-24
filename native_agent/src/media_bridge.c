@@ -23,6 +23,7 @@
 
 #include <arpa/inet.h>
 #include <errno.h>
+#include <limits.h>
 #include <netinet/in.h>
 #include <dlfcn.h>
 #include <pthread.h>
@@ -149,6 +150,8 @@ typedef struct {
     int rtsp_client_threads;
     /* All sockets, including clients awaiting authentication or closing after TEARDOWN. */
     int rtsp_connection_fds[RTSP_CONNECTION_LIMIT]; /* fd + 1; zero means unused. */
+    /* Accept time while unauthenticated, 0 once authenticated, -1 once evicted. */
+    long long rtsp_connection_since[RTSP_CONNECTION_LIMIT];
     bool running;
     bool startup_done;
     bool startup_ok;
@@ -1378,6 +1381,14 @@ static void fill_random_bytes(unsigned char *out, size_t len) {
     }
 }
 
+/* Call-ID, tags and branches must not be guessable from the clock and pid:
+ * whoever knows them can end or take over the dialog. */
+static long random_sip_id(void) {
+    unsigned long value = 0;
+    fill_random_bytes((unsigned char *)&value, sizeof(value));
+    return (long)(value & (unsigned long)LONG_MAX);
+}
+
 static bool format_uuid_bytes(const unsigned char *bytes, char *out, size_t out_len) {
     if (bytes == NULL || out == NULL || out_len < MEDIA_INSTANCE_UUID_LEN) {
         return false;
@@ -1672,7 +1683,7 @@ static bool send_ring_registration(
     char request[2048];
     char response[SIP_BUFFER_SIZE];
     char instance_uuid[MEDIA_INSTANCE_UUID_LEN];
-    long unique_id = (long)time(NULL) ^ (long)getpid() ^ (long)cseq;
+    long unique_id = random_sip_id();
     if (!bridge_instance_uuid(bridge, bridge->ring_instance_uuid, "ring", instance_uuid, sizeof(instance_uuid))) {
         return false;
     }
@@ -2025,23 +2036,24 @@ static bool ring_call_active_locked(const media_bridge_t *bridge) {
 
 static bool request_ring_answer_if_active(media_bridge_t *bridge) {
     bool active;
-    struct timespec deadline;
+    long long deadline = c300x_monotonic_ms() + 2000;
 
     pthread_mutex_lock(&bridge->mutex);
     active = ring_call_active_locked(bridge);
     if (active && !bridge->ring_answered) {
         bridge->ring_answer_requested = true;
         pthread_cond_broadcast(&bridge->ready_cond);
-        clock_gettime(CLOCK_REALTIME, &deadline);
-        deadline.tv_sec += 2;
+        /* Polled on the monotonic clock: ready_cond waits on the wall clock,
+         * and a clock step must neither stretch nor skip this wait. */
         while (
             bridge->ring_call_active
             && !bridge->ring_call_stop
             && !bridge->ring_answered
+            && c300x_monotonic_ms() < deadline
         ) {
-            if (pthread_cond_timedwait(&bridge->ready_cond, &bridge->mutex, &deadline) == ETIMEDOUT) {
-                break;
-            }
+            pthread_mutex_unlock(&bridge->mutex);
+            usleep(10000);
+            pthread_mutex_lock(&bridge->mutex);
         }
     }
     pthread_mutex_unlock(&bridge->mutex);
@@ -2138,6 +2150,7 @@ static void close_ring_media_fds_locked(media_bridge_t *bridge) {
 static void ring_call_cleanup(media_bridge_t *bridge) {
     bool was_active;
     bool was_unanswered;
+    bool closed_owed;
 
     pthread_mutex_lock(&bridge->mutex);
     was_active = (
@@ -2160,12 +2173,17 @@ static void ring_call_cleanup(media_bridge_t *bridge) {
     bridge->ring_last_talkback_ms = 0;
     bridge->ring_srtp_state = NULL;
     reset_backchannel_talkback_locked(bridge);
+    pthread_cond_broadcast(&bridge->ready_cond);
     pthread_mutex_unlock(&bridge->mutex);
+    /* Claim the ring's own close while its media still counts as active: a
+     * display that answers the ring marks external media during the drain
+     * below, and that mark belongs to the display call, not to this ring. */
+    closed_owed = was_active && c300x_video_consume_media_closed_event(bridge->video);
     c300x_video_bridge_media_stopped(bridge->video);
     if (was_unanswered) {
         shutdown_rtsp_clients_after_drain(bridge);
     }
-    if (was_active && c300x_video_consume_media_closed_event(bridge->video)) {
+    if (closed_owed) {
         c300x_video_dispatch_event(bridge->video, "doorbell.media.closed", "{}", 0);
     }
 }
@@ -2408,7 +2426,7 @@ static void handle_ring_invite(
         goto cleanup;
     }
 
-    snprintf(to_tag, sizeof(to_tag), "ha-ring%ld", (long)time(NULL));
+    snprintf(to_tag, sizeof(to_tag), "ha-ring%ld", random_sip_id());
     c300x_media_sip_header_value(invite, "Contact:", remote_contact, sizeof(remote_contact));
     c300x_media_sip_uri_from_header(remote_contact, remote_contact_uri, sizeof(remote_contact_uri));
     if (remote_contact_uri[0] == '\0') {
@@ -3633,7 +3651,7 @@ static bool send_sip_setup(media_bridge_t *bridge, unsigned long generation) {
         return false;
     }
 
-    long unique_id = (long)time(NULL) ^ (long)getpid();
+    long unique_id = random_sip_id();
     char call_id[128];
     char from_tag[64];
     snprintf(call_id, sizeof(call_id), "haapp%ld", unique_id);
@@ -4171,7 +4189,7 @@ static bool send_home_call_register(
     char request[2048];
     char response[SIP_BUFFER_SIZE];
     char instance_uuid[MEDIA_INSTANCE_UUID_LEN];
-    long unique_id = (long)time(NULL) ^ (long)getpid() ^ (long)cseq;
+    long unique_id = random_sip_id();
     if (!bridge_instance_uuid(bridge, bridge->home_call_instance_uuid, "home_call", instance_uuid, sizeof(instance_uuid))) {
         return false;
     }
@@ -4415,7 +4433,7 @@ static void *home_call_thread_func(void *arg) {
         goto cleanup;
     }
 
-    long unique_id = (long)time(NULL) ^ (long)getpid();
+    long unique_id = random_sip_id();
     snprintf(call_id, sizeof(call_id), "hahomecall%ld", unique_id);
     snprintf(from_tag, sizeof(from_tag), "hahomecall%ld", unique_id);
     snprintf(invite_branch, sizeof(invite_branch), "z9hG4bKhomecallinv%ld", unique_id);
@@ -4963,6 +4981,11 @@ static bool media_start_cancelled(media_bridge_t *bridge, unsigned long generati
 
 static bool start_media_session(media_bridge_t *bridge) {
     pthread_mutex_lock(&media_lifecycle_mutex);
+    /* No SIP while the station is known busy: it answers 486 to each try. */
+    if (c300x_video_refuse_ondemand_start(bridge->video)) {
+        pthread_mutex_unlock(&media_lifecycle_mutex);
+        return false;
+    }
     pthread_mutex_lock(&bridge->mutex);
     if (
         bridge->stop_in_progress
@@ -4997,6 +5020,9 @@ static bool start_media_session(media_bridge_t *bridge) {
         snprintf(sip_error, sizeof(sip_error), "ondemand_sip_setup_failed:%s",
                  bridge->ondemand_sip_fail);
         c300x_video_bridge_set_error(bridge->video, sip_error);
+        if (strcmp(bridge->ondemand_sip_fail, "answer_486") == 0) {
+            c300x_video_bridge_station_busy(bridge->video);
+        }
         goto failed;
     }
     if (media_start_cancelled(bridge, generation)) goto failed;
@@ -5501,6 +5527,16 @@ void c300x_media_bridge_set_doorstation_audio_gain_tenths(
     pthread_mutex_unlock(&g_bridge.mutex);
 }
 
+static void mark_rtsp_connection_authenticated(media_bridge_t *bridge, int fd) {
+    pthread_mutex_lock(&bridge->mutex);
+    for (int index = 0; index < RTSP_CONNECTION_LIMIT; index++) {
+        if (bridge->rtsp_connection_fds[index] == fd + 1 && bridge->rtsp_connection_since[index] > 0) {
+            bridge->rtsp_connection_since[index] = 0;
+        }
+    }
+    pthread_mutex_unlock(&bridge->mutex);
+}
+
 static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
     (void)peer;
     struct c300x_rtsp_writer *writer = c300x_rtsp_writer_create();
@@ -5589,6 +5625,9 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
                 break;
             }
             continue;
+        }
+        if (!ever_authenticated) {
+            mark_rtsp_connection_authenticated(&g_bridge, fd);
         }
         ever_authenticated = true;
         if (slot_index < 0 && !teardown_seen) {
@@ -5893,6 +5932,11 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
                     send_rtsp_response(writer, fd, 503, cseq, NULL, NULL);
                     break;
                 }
+                if (c300x_video_refuse_ondemand_start(g_bridge.video)) {
+                    rtsp_note_play_failure(&g_bridge, "ondemand_start_refused");
+                    send_rtsp_response(writer, fd, 503, cseq, NULL, NULL);
+                    break;
+                }
                 if (!start_media_session(&g_bridge)) {
                     rtsp_note_play_failure(&g_bridge, "media_start_failed");
                     send_rtsp_response(writer, fd, 500, cseq, NULL, NULL);
@@ -5997,14 +6041,43 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
     c300x_rtsp_writer_release(writer);
 }
 
+/* Shut down the oldest connection that never authenticated, so a few idle
+ * connections cannot keep Home Assistant out. Its thread frees the slot. */
+static bool evict_oldest_unauthenticated_locked(media_bridge_t *bridge) {
+    int oldest = -1;
+    bool pending = false;
+    for (int index = 0; index < RTSP_CONNECTION_LIMIT; index++) {
+        long long since = bridge->rtsp_connection_since[index];
+        pending = pending || since < 0;
+        if (bridge->rtsp_connection_fds[index] > 0 && since > 0
+            && (oldest < 0 || since < bridge->rtsp_connection_since[oldest])) {
+            oldest = index;
+        }
+    }
+    if (oldest >= 0) {
+        shutdown(bridge->rtsp_connection_fds[oldest] - 1, SHUT_RDWR);
+        bridge->rtsp_connection_since[oldest] = -1;
+    }
+    return oldest >= 0 || pending;
+}
+
 static int reserve_rtsp_client(media_bridge_t *bridge, int fd) {
     int index = -1;
+    long long deadline = c300x_monotonic_ms() + 1000;
     pthread_mutex_lock(&bridge->mutex);
-    if (bridge->running) {
+    while (bridge->running) {
         index = c300x_rtsp_connection_add(bridge->rtsp_connection_fds, fd);
         if (index >= 0) {
+            bridge->rtsp_connection_since[index] = c300x_monotonic_ms() | 1;
             bridge->rtsp_client_threads++;
+            break;
         }
+        if (!evict_oldest_unauthenticated_locked(bridge) || c300x_monotonic_ms() >= deadline) {
+            break;
+        }
+        pthread_mutex_unlock(&bridge->mutex);
+        usleep(10000);
+        pthread_mutex_lock(&bridge->mutex);
     }
     pthread_mutex_unlock(&bridge->mutex);
     return index;
@@ -6015,6 +6088,7 @@ static void release_rtsp_client(media_bridge_t *bridge, int fd, int index) {
     /* Keep shutdown from acting on a closed and potentially reused descriptor. */
     close(fd);
     bridge->rtsp_connection_fds[index] = 0;
+    bridge->rtsp_connection_since[index] = 0;
     bridge->rtsp_client_threads--;
     pthread_cond_broadcast(&bridge->ready_cond);
     pthread_mutex_unlock(&bridge->mutex);
@@ -6112,15 +6186,27 @@ static void *rtsp_server_thread(void *arg) {
     pthread_cond_broadcast(&bridge->ready_cond);
     pthread_mutex_unlock(&bridge->mutex);
 
-    while (bridge->running) {
+    for (;;) {
         struct sockaddr_storage peer;
         socklen_t peer_len = sizeof(peer);
         int client_fd = accept(server_fd, (struct sockaddr *)&peer, &peer_len);
-        if (client_fd < 0) {
-            if (errno == EINTR) {
-                continue;
+        int accept_errno = errno;
+        pthread_mutex_lock(&bridge->mutex);
+        bool running = bridge->running;
+        pthread_mutex_unlock(&bridge->mutex);
+        if (!running) {
+            if (client_fd >= 0) {
+                close(client_fd);
             }
             break;
+        }
+        if (client_fd < 0) {
+            /* Only stop ends the listener; start would not rebuild it while
+             * running stays set. Back off on resource errors instead. */
+            if (accept_errno != EINTR && accept_errno != ECONNABORTED) {
+                usleep(100000);
+            }
+            continue;
         }
         start_rtsp_client(bridge, client_fd, &peer);
     }

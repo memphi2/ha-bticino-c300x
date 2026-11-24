@@ -1054,7 +1054,7 @@ def test_doorstation_hangup_stops_backend_before_closing_local_webrtc() -> None:
     )
     assert "await this.stopDoorbellVideo(target);" in hangup_body
     assert hangup_body.index("await this.stopDoorbellVideo(target);") < hangup_body.rindex("return ok;")
-    assert "return this._card._lifecycle.doorbellAnswered;" in ring_session_body
+    assert "return card._lifecycle.doorbellAnswered || !!card._answeredRingHere?.();" in ring_session_body
     assert "this._lifecycle.ringPreviewActive" not in ring_session_body
     assert 'mediaState === "ring_active"' in state_source
     assert 'mediaState === "ring_hanging_up"' in state_source
@@ -1077,7 +1077,7 @@ def test_bundled_card_blocks_passive_ring_preview_hangup() -> None:
     )
     assert 'return doorbellAnswered ? "hang_up" : "busy";' in state_source
     assert 'return !doorbellAnswered && ringPreviewActive ? "busy" : "hang_up";' in state_source
-    assert "return this._card._lifecycle.doorbellAnswered;" in actions_source
+    assert "return card._lifecycle.doorbellAnswered || !!card._answeredRingHere?.();" in actions_source
     assert "return this._lifecycle.doorbellAnswered;" not in source
 
 

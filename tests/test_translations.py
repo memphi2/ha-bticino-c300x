@@ -852,3 +852,18 @@ def test_every_flow_error_message_belongs_to_an_error_the_flows_report() -> None
         if key not in reported
     )
     assert unused == []
+
+
+def test_the_home_page_buttons_name_the_vendor_layout_stock() -> None:
+    names = {"en": "Stock", "de": "Werkseinstellung", "it": "Di fabbrica", "fr": "D'usine"}
+    old = ("Like the original", "Wie das Original", "Come l'originale", "Comme l'original")
+    for language, name in names.items():
+        data = _load_json(TRANSLATIONS / f"{language}.json")
+        option = data["selector"]["dashboard_dynamic_homepage"]["options"]["stock"]
+        assert option.startswith(f"{name} ("), (language, option)
+        for flow, step in (("config", "user_dashboard"), ("config", "reconfigure_dashboard"), ("options", "dashboard")):
+            help_text = data[flow]["step"][step]["data_description"]["dashboard_dynamic_homepage"]
+            assert re.search(re.escape(name) + r"\s?:", help_text), (language, step)
+            assert not any(text in help_text for text in old), (language, step)
+    strings = _load_json(INTEGRATION / "strings.json")
+    assert strings["selector"]["dashboard_dynamic_homepage"]["options"]["stock"].startswith("Stock (")

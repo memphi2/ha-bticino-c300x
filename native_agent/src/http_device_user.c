@@ -3,11 +3,11 @@
 #include "command_transaction.h"
 #include "device_routing.h"
 #include "device_user.h"
+#include "device_user_label.h"
 #include "http_util.h"
 #include "json_util.h"
 #include "string_util.h"
 
-#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -23,44 +23,6 @@ struct device_user_request {
     struct c300x_device_routing_status routing;
     char output[C300X_DEVICE_USER_STATUS_BODY_LEN];
 };
-
-static const char *trim_ascii(char *value)
-{
-    char *start = value, *end;
-    while (*start != '\0' && isspace((unsigned char)*start)) {
-        start++;
-    }
-    end = start + strlen(start);
-    while (end > start && isspace((unsigned char)end[-1])) {
-        end--;
-    }
-    *end = '\0';
-    return start;
-}
-
-static int qt5_label_state_ok(const char *body, int applying)
-{
-    char overlay[32] = "";
-    int running = 0, patched = 0;
-    c300x_json_string_field(body, "qt5_overlay", overlay, sizeof(overlay));
-    if (overlay[0] == '\0') return 1; /* Legacy Qt4 status contract. */
-    if (!c300x_json_bool_field(body, "gui_running", &running) || !running
-        || !c300x_json_bool_field(body, "media_user_label_patched", &patched)
-        || patched != applying) return 0;
-    /* Removing a label must not reactivate an unrelated quarantined overlay. */
-    return strcmp(overlay, "active") == 0
-        || (!applying && (strcmp(overlay, "off") == 0 || strcmp(overlay, "failed") == 0));
-}
-
-static int label_result_ok(char *output, int applying)
-{
-    const char *body = trim_ascii(output);
-    int ok = 0;
-    /* Preserve legacy restore scripts which only report their exit status. */
-    if (body[0] != '{') return !applying;
-    return c300x_json_object_valid(body) && c300x_json_bool_field(body, "ok", &ok) && ok
-        && qt5_label_state_ok(body, applying);
-}
 
 static void device_user_status_body(
     const struct c300x_device_routing_status *routing,
@@ -82,7 +44,7 @@ static void device_user_status_body(
     char qml_state_json[C300X_JSON_QUOTED_LEN(sizeof(qml_state))];
 
     if (qml_ok) {
-        char *start = (char *)trim_ascii(qml_output);
+        char *start = (char *)c300x_label_trim(qml_output);
         if (start[0] == '{') {
             qml_available = 1;
             c300x_json_string_field(start, "media_user_label_state", qml_state, sizeof(qml_state));
@@ -92,7 +54,7 @@ static void device_user_status_body(
             if (!c300x_json_bool_field(start, "media_user_label_patched", &qml_patched)) {
                 qml_patched = 0;
             }
-            if (qml_patched && !qt5_label_state_ok(start, 1)) {
+            if (qml_patched && !c300x_label_qt5_state_ok(start, 1)) {
                 qml_patched = 0;
                 c300x_copy_string(qml_state, sizeof(qml_state), "activation_unconfirmed");
             }
@@ -241,7 +203,7 @@ static int ensure_user(struct c300x_http_maintenance *owner, int fd,
             send_error(fd, "media_user_label_setup_failed", NULL);
             return 0;
         }
-        if (!label_result_ok(state->output, 1)) {
+        if (!c300x_label_result_ok(state->output, 1)) {
             send_error(fd, "media_user_label_setup_failed", NULL);
             return 0;
         }
@@ -298,7 +260,7 @@ int c300x_http_device_user_route(struct c300x_http_maintenance *owner, int clien
          * major version. A successful shell exit may still report rollback. */
         if (c300x_command_transaction_capture(config->maintenance_qml_patch_script,
                 "media-user-label-restore", state->output, sizeof(state->output))
-            && label_result_ok(state->output, 0)) {
+            && c300x_label_result_ok(state->output, 0)) {
             pending = restore_routing(owner, client_fd, state);
         } else {
             pending = 0;

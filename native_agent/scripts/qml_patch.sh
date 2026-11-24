@@ -40,6 +40,7 @@ if [ -e "${C300X_QML_QT5_MARKER:-/usr/lib/libQt5Core.so.5}" ]; then
     QT5_BOOT_ID="${C300X_QML_BOOT_ID:-/proc/sys/kernel/random/boot_id}"
     QT5_START_SECONDS="${C300X_QML_QT5_START_SECONDS:-10}"
     QT5_ALIVE_FILE="${C300X_QML_GUI_ALIVE_FILE:-/var/tmp/bticino/bt_wd/BtClass_qws}"
+    QT5_UNSUPPORTED="$QT5_ROOT/unsupported"
     GUI_DIR="${C300X_QML_GUI_DIR:-$QT5_ROOT/skins/default}"
     BACKUP_DIR="${C300X_QML_BACKUP_DIR:-$QT5_BACKUP_ROOT/original/qt5/skins/default}"
 fi
@@ -99,6 +100,9 @@ json_status() {
             patched=null
         fi
         qt5_fields=",\"qt5_overlay\":\"$qt5_overlay\""
+        if [ -s "$QT5_UNSUPPORTED" ]; then
+            qt5_fields="$qt5_fields,\"qt5_unsupported\":\"$(tr -cd 'a-z0-9_' < "$QT5_UNSUPPORTED" | head -c 48)\""
+        fi
     fi
     home_buttons="$(installed_home_buttons)"
     if [ -n "$changed_files" ]; then
@@ -1390,6 +1394,7 @@ qt5_import() {
         if ! head -n 1 "$GUI_DIR/$rel.tmp" | grep -qx 'import QtQuick 1.1'; then
             rm -f "$GUI_DIR/$rel.tmp"
             printf 'Unsupported Qt 5 display file: %s\n' "$rel" >&2
+            qt5_unsupported display_file_unsupported
             return 1
         fi
         mv "$GUI_DIR/$rel.tmp" "$GUI_DIR/$rel"
@@ -1409,6 +1414,10 @@ qt5_prepare() {
         *)
             rm -rf "$QT5_ROOT/vendor.new"
             printf 'Cannot read the display files of this firmware: %s\n' "$qt5_result" >&2
+            case "$qt5_result" in
+                *'"display_program_unknown"'*) qt5_unsupported display_program_unknown ;;
+                *'"display_resource_missing"'*) qt5_unsupported display_resource_missing ;;
+            esac
             return 1
             ;;
     esac
@@ -1422,6 +1431,31 @@ qt5_prepare() {
     mv "$QT5_ROOT/vendor.new" "$QT5_ROOT/vendor"
     mkdir -p "$GUI_DIR"
     qt5_import "$QT5_ROOT/vendor"
+}
+
+qt5_unsupported() {
+    mkdir -p "$QT5_ROOT"
+    printf '%s\n' "$1" > "$QT5_UNSUPPORTED"
+}
+
+qt5_wrapper_supported() {
+    if [ -f "$GUI_WRAPPER" ] && ! grep -q 'c300x-qrc-overlay' "$GUI_WRAPPER" \
+        && ! qt5_original_wrapper_valid "$GUI_WRAPPER"; then
+        printf 'Unsupported display start script: %s\n' "$GUI_WRAPPER" >&2
+        qt5_unsupported display_wrapper_unknown
+        return 1
+    fi
+}
+
+qt5_prepare_or_report() {
+    [ "$QT5_DISPLAY" = "1" ] || return 0
+    rm -f "$QT5_UNSUPPORTED"
+    if sh "$0" qt5-prepare >&2; then
+        return 0
+    fi
+    [ -s "$QT5_UNSUPPORTED" ] || return 1
+    json_status | sed 's/^{"ok":true/{"ok":false,"error":"display_unsupported"/'
+    exit 0
 }
 
 qt5_boot_id() {
@@ -2190,18 +2224,18 @@ case "$ACTION" in
         json_status
         ;;
     apply)
-        qt5_prepare
+        qt5_prepare_or_report
         apply_patch_files
         touch_patch apply
         json_write_status
         ;;
     core-apply)
-        qt5_prepare
+        qt5_prepare_or_report
         apply_core_patch_files
         json_write_status
         ;;
     media-user-label-apply)
-        qt5_prepare
+        qt5_prepare_or_report
         apply_media_user_label_files
         json_write_status
         ;;
@@ -2240,6 +2274,10 @@ case "$ACTION" in
     qt5-import)
         qt5_import "${2:?}"
         json_status
+        ;;
+    qt5-prepare)
+        qt5_prepare
+        qt5_wrapper_supported
         ;;
     *)
         printf '{"ok":false,"available":false,"state":"invalid_action"}\n'

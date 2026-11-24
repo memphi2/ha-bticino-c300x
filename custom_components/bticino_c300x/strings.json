@@ -1524,6 +1524,10 @@
       "title": "C300X display event watcher was protected",
       "description": "{entry_title} detected too many simultaneous C300X display event watchers. The device agent rejected the extra watcher to prevent a local display polling loop that can overload the C300X. Active watchers: {waiters}/{capacity}. Rejected watchers: {overflows}. Reload the C300X display GUI from the integration if the display dashboard or memo view no longer updates, then refresh diagnostics."
     },
+    "device_display_unsupported": {
+      "title": "C300X display pages are not available on this station",
+      "description": "{entry_title}: the device agent does not know the display program or the display start script of this station ({reason}). It left the display as shipped and runs without the display pages: the station shows no Home Assistant pages or buttons, and the Display patch stays off. The other features of the agent work as they did before the integration offered display pages for firmware 3.0.x. Applying the Display patch again checks the station once more."
+    },
     "device_core_qml_hook_required": {
       "title": "C300X core media hook is missing",
       "fix_flow": {
@@ -1539,7 +1543,8 @@
         },
         "abort": {
           "entry_not_loaded": "The BTicino C300X entry is not loaded.",
-          "core_patch_unsupported": "The installed C300X device agent does not support applying the core media hook."
+          "core_patch_unsupported": "The installed C300X device agent does not support applying the core media hook.",
+          "display_unsupported": "The device agent does not know the display of this station; it runs without the display pages, and there is no core media hook to apply."
         }
       }
     },
@@ -1731,7 +1736,8 @@
         "original": "not applied (original files)",
         "unknown": "unknown",
         "unavailable": "not available",
-        "display_failed": "applied, but the display started as shipped"
+        "display_failed": "applied, but the display started as shipped",
+        "display_unsupported": "not available for the display of this station"
       }
     }
   },

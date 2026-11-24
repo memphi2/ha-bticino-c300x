@@ -64,6 +64,7 @@ from .device_installer import (
     async_install_device_agent,
 )
 from .device_user import homeassistant_account_label
+from .display_activation import display_unsupported
 from .entry_config import entry_config_value
 from .error_text import compact_error_text
 from .factory_login import LOGIN_REFUSED, ssh_login
@@ -414,6 +415,8 @@ class DeviceCoreQmlHookRepairFlow(RepairsFlow):
                 ),
             )
         except C300XAgentApiError:
+            if display_unsupported(getattr(entry.runtime_data, "qml_patch_status", None)):
+                return self.async_abort(reason="display_unsupported")
             return self.async_show_form(
                 step_id="confirm",
                 data_schema=vol.Schema({}),

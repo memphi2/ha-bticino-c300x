@@ -82,6 +82,8 @@ def test_missing_original_is_not_replaced_with_a_patched_wrapper(device):
     assert device.ok("status")["qt5_overlay"] == "incomplete"
     assert device.run("apply").returncode != 0
     assert snapshot(device) == before
+    # A damaged installation of a known display is not an unknown display.
+    assert "qt5_unsupported" not in device.ok("status")
 
 
 @pytest.mark.parametrize("name", ["rcc", "library", "wrapper"])

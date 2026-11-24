@@ -2498,10 +2498,14 @@ def test_normalize_qml_patch_status_derives_state() -> None:
         "core_backup_available": None,
         "gui_running": None,
         "qt5_overlay": None,
+        "qt5_unsupported": None,
         "home_buttons": None,
         "raw": {"patched": True},
     }
     assert normalize_qml_patch_status({"patched": True, "qt5_overlay": "failed"})["qt5_overlay"] == "failed"
+    assert normalize_qml_patch_status(
+        {"ok": False, "qt5_overlay": "off", "qt5_unsupported": "display_program_unknown"}
+    )["qt5_unsupported"] == "display_program_unknown"
     assert normalize_qml_patch_status({"state": "original"})["patched"] is False
     assert normalize_qml_patch_status({"state": "applied"})["patched"] is True
     assert normalize_qml_patch_status({"state": "restored"})["patched"] is False

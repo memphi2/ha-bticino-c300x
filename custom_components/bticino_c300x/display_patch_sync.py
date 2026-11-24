@@ -26,7 +26,7 @@ from .const import (
     HOME_BUTTONS_LAYOUTS,
     SIGNAL_QML_PATCH_CHANGED,
 )
-from .display_activation import display_activation_confirmed
+from .display_activation import display_activation_confirmed, display_unsupported
 from .entry_types import BticinoC300XConfigEntry
 from .error_text import compact_error_text
 from .qml_patch import (
@@ -47,8 +47,9 @@ def _differs(status: dict[str, Any], wanted: bool, home_buttons: str) -> bool | 
     taken at its patched state: asking it again would never end.
     """
 
-    if status.get("qt5_overlay") == "failed":
-        # Repeated setup/settings saves must not retry a quarantined overlay.
+    if status.get("qt5_overlay") == "failed" or display_unsupported(status):
+        # Repeated setup/settings saves must not retry a quarantined overlay,
+        # nor a display the agent does not know.
         return None
     patched = status.get("patched")
     if isinstance(patched, bool):

@@ -27,7 +27,7 @@ from .const import (
     DOMAIN,
 )
 from .device_activations import desired_activation_items
-from .display_activation import display_activation_confirmed
+from .display_activation import display_activation_confirmed, display_unsupported
 from .factory_login import LOGIN_REFUSED
 
 if TYPE_CHECKING:
@@ -224,7 +224,8 @@ def _install_device_agent_sync(
 
         actions = ("core-apply", "apply") if request.apply_gui_patch else ("core-apply",)
         for action in actions:
-            _apply_qml_patch_sync(client, request.remote_dir, action)
+            if not _apply_qml_patch_sync(client, request.remote_dir, action):
+                break
         # Capabilities reads this file on every request. Publish it only after
         # activation succeeds so an interrupted install still needs repair.
         if manifest is not None and client.put_file(
@@ -922,8 +923,12 @@ def _apply_qt5_low_res_video_default(
     return (json.dumps(config, indent=2, sort_keys=True) + "\n").encode("utf-8")
 
 
-def _apply_qml_patch_sync(client: _DeviceSshClient, remote_dir: str, action: str) -> None:
-    """Require the patcher's reported outcome, not just a successful shell exit."""
+def _apply_qml_patch_sync(client: _DeviceSshClient, remote_dir: str, action: str) -> bool:
+    """Require the patcher's reported outcome, not just a successful shell exit.
+
+    False: the station's display is one the agent does not know, so it stays
+    as shipped and the agent runs without the display pages.
+    """
 
     output = client.run(
         f"C300X_QML_SOURCE_DIR={_quote(f'{remote_dir}/qml')} "
@@ -933,6 +938,13 @@ def _apply_qml_patch_sync(client: _DeviceSshClient, remote_dir: str, action: str
         result = json.loads(output)
     except (TypeError, ValueError) as err:
         raise C300XDeviceInstallError("device_install_verify_failed") from err
+    reason = display_unsupported(result)
+    if reason is not None and result.get("error") == "display_unsupported":
+        _LOGGER.warning(
+            "C300X: the display of this station is not supported (%s); "
+            "the agent is installed without the display pages", reason,
+        )
+        return False
     if (
         not isinstance(result, dict)
         or result.get("ok") is not True
@@ -942,6 +954,7 @@ def _apply_qml_patch_sync(client: _DeviceSshClient, remote_dir: str, action: str
         or not display_activation_confirmed(result)
     ):
         raise C300XDeviceInstallError("device_install_verify_failed")
+    return True
 
 
 def _apply_firewall_patch_sync(

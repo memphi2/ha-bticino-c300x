@@ -36,4 +36,5 @@ def test_inactive_core_overlay_keeps_repair_issue(monkeypatch: pytest.MonkeyPatc
     ))
     repair_issues._sync_device_core_qml_hook_issue(SimpleNamespace(), entry)
     create.assert_called_once()
-    delete.assert_not_called()
+    # Only the notice for an unknown display is taken away.
+    assert [call.args[1:] for call in delete.call_args_list] == [("test", "device_display_unsupported")]

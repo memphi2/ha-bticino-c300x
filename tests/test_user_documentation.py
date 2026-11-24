@@ -477,3 +477,10 @@ def test_display_docs_name_the_home_page_button_layouts_as_the_form_does():
     row = next(line for line in reference.splitlines() if line.startswith("| Display > Display and Display patch |"))
     assert label in row
     assert "Changing the home page buttons applies it again and restarts the display once" in row
+
+
+def test_the_display_docs_name_the_notice_for_an_unknown_display():
+    strings = json.loads((ROOT / "custom_components/bticino_c300x/strings.json").read_text())
+    title = strings["issues"]["device_display_unsupported"]["title"]
+    qt5 = section("display.md", "Enable the Display Pages").split("### Display Patch on Firmware 3.0.6\n", 1)[1]
+    assert f"**{title}**" in qt5

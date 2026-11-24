@@ -15,7 +15,11 @@ from .const import (
     HOME_BUTTONS_SIDE_BY_SIDE,
     HOME_BUTTONS_STOCK,
 )
-from .display_activation import display_activation_confirmed, require_display_activation
+from .display_activation import (
+    display_activation_confirmed,
+    display_unsupported,
+    require_display_activation,
+)
 from .entry_config import entry_config_value
 from .entry_locks import entry_lock
 from .entry_types import BticinoC300XConfigEntry
@@ -107,8 +111,11 @@ async def async_restore_qml_patches_after_update(
     api = entry.runtime_data.api
     busy_retry = async_retry_update_maintenance_busy
     async with _qml_patch_lock(entry):
-        core_status = await busy_retry(api.async_apply_qml_core_patch)
+        core_status: dict[str, Any] = await busy_retry(api.async_apply_qml_core_patch)
         _store_qml_patch_status(entry, core_status)
+        if display_unsupported(core_status):
+            # Nothing to bring back: the agent runs without the display pages.
+            return core_status
         require_display_activation(core_status)
         if core_status.get("qt5_overlay") is not None and core_status.get("core_patched") is not True:
             raise C300XAgentApiError("Qt 5 display core patch is not confirmed")

@@ -211,15 +211,33 @@ def test_another_firmware_build_starts_from_its_own_files(device: Device) -> Non
     assert (device.qt5_root / "vendor/MainApp.qml").read_text().endswith("// another build\n")
 
 
-def test_an_unknown_program_changes_nothing(device: Device, tmp_path: Path) -> None:
+@pytest.mark.parametrize("action", ["apply", "core-apply", "media-user-label-apply"])
+def test_an_unknown_program_changes_nothing_and_is_reported(device: Device, tmp_path: Path, action: str) -> None:
+    """The display pages stay off; the step answers instead of failing the install or update."""
+
     device.program = tmp_path / "BtClass-unknown"
     device.program.write_bytes(b"\x7fELF other")
-    result = device.run("apply")
-    assert result.returncode != 0
-    assert "display_program_unknown" in result.stderr
+    result = device.run(action)
+    assert result.returncode == 0, result.stderr
+    reply = json.loads(result.stdout)
+    assert reply["ok"] is False and reply["error"] == "display_unsupported"
+    assert reply["qt5_unsupported"] == "display_program_unknown"
+    assert reply["qt5_overlay"] == "off" and reply["core_patched"] is False
     assert not device.rcc.exists()
     assert device.wrapper.read_text() == WRAPPER
     assert not device.gui.exists()
+    assert device.ok("status")["qt5_unsupported"] == "display_program_unknown"
+    device.program = device.programs["first"]
+    assert device.ok(action)["qt5_overlay"] == "active"
+    assert "qt5_unsupported" not in device.ok("status")
+
+
+def test_a_transient_read_error_still_fails_the_step(device: Device, tmp_path: Path) -> None:
+    device.program = tmp_path / "missing-BtClass"
+    result = device.run("apply")
+    assert result.returncode != 0
+    assert "display_program_unreadable" in result.stderr
+    assert "qt5_unsupported" not in device.ok("status")
 
 
 def test_a_failed_pack_rolls_the_change_back(device: Device) -> None:
@@ -239,8 +257,10 @@ def test_an_unknown_start_script_is_left_alone(device: Device) -> None:
     other = WRAPPER.replace("./bin/gui/BtClass &", "exec ./bin/gui/BtClass")
     device.wrapper.write_text(other)
     result = device.run("apply")
-    assert result.returncode != 0
+    assert result.returncode == 0, result.stderr
     assert "Unsupported display start script" in result.stderr
+    reply = json.loads(result.stdout)
+    assert reply["error"] == "display_unsupported" and reply["qt5_unsupported"] == "display_wrapper_unknown"
     assert device.wrapper.read_text() == other
     assert not device.rcc.exists()
     assert not (device.gui / "Alarm.qml").exists()

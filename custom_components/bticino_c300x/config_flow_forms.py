@@ -132,6 +132,7 @@ DISPLAY_PATCH_STATUS_TEXTS: dict[str, str] = {
     "unknown": "unknown",
     "unavailable": "not available",
     "display_failed": "applied, but the display started as shipped",
+    "display_unsupported": "not available for the display of this station",
 }
 
 

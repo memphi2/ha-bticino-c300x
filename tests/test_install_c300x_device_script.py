@@ -188,6 +188,16 @@ def test_verified_qml_result_precedes_manifest_publication(tmp_path):
     assert "Installed" in result.stdout
 
 
+def test_an_unknown_qt5_display_still_installs_the_agent(tmp_path):
+    payload = json.dumps({"ok": False, "error": "display_unsupported", "qt5_unsupported": "display_program_unknown",
+                          "patched": False, "core_patched": False, "gui_running": True, "qt5_overlay": "off"})
+    result, _calls = _run_install(tmp_path, apply_qml=True, qml_result=payload)
+    assert result.returncode == 0, result.stderr
+    assert "display_program_unknown" in result.stderr
+    assert (tmp_path / "remote-bundle.json").read_text() == "new manifest\n"
+    assert "Installed" in result.stdout
+
+
 @pytest.mark.parametrize("success", [False, True])
 def test_qml_only_install_also_validates_result(tmp_path, success):
     result, calls = _run_install(

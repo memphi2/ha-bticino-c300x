@@ -121,6 +121,12 @@ touch fix for lost taps is not part of it; it changes a Qt 4 library that
   again, it stays as shipped. When the agent restarts the display after a
   change, it waits until the old display has ended and tries the pages twice
   before it starts as shipped.
+- **On a display the agent does not know:** the pages are only built for the
+  display program and start script of the firmware 3.0.6 the integration was
+  made for. On any other build the agent leaves the display as shipped and
+  runs without the pages; installation and agent updates still complete.
+  Repairs shows **C300X display pages are not available on this station**
+  with the reason, and the Display patch stays off.
 - **Interrupted changes:** failed activation or restore rolls back the display
   resources, startup wrapper, preload library and quarantine state together.
   If rollback cannot finish, recovery files are retained and the overlay stays

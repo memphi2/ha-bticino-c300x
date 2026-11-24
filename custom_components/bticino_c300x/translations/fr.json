@@ -1524,6 +1524,10 @@
       "title": "Le watcher d'événements display C300X a été protégé",
       "description": "{entry_title} a détecté trop de watchers d'événements display C300X simultanés. L'agent a refusé le watcher supplémentaire pour éviter une boucle de polling locale qui peut surcharger le C300X. Watchers actifs : {waiters}/{capacity}. Watchers refusés : {overflows}. Rechargez la GUI display C300X depuis l'intégration si le dashboard ou les mémos de l'écran ne se mettent plus a jour, puis actualisez les diagnostics."
     },
+    "device_display_unsupported": {
+      "title": "Les pages d'écran C300X ne sont pas disponibles sur ce poste",
+      "description": "{entry_title} : l'agent de l'appareil ne connaît pas le programme d'affichage ou le script de démarrage de l'écran de ce poste ({reason}). Il a laissé l'écran dans son état d'origine et fonctionne sans les pages d'écran : le poste n'affiche ni pages ni boutons Home Assistant, et le patch d'affichage reste désactivé. Les autres fonctions de l'agent fonctionnent comme avant les pages d'écran pour le firmware 3.0.x. Appliquer à nouveau le patch d'affichage vérifie le poste une nouvelle fois."
+    },
     "device_core_qml_hook_required": {
       "title": "Hook média core C300X manquant",
       "fix_flow": {
@@ -1539,7 +1543,8 @@
         },
         "abort": {
           "entry_not_loaded": "L'entrée BTicino C300X n'est pas chargée.",
-          "core_patch_unsupported": "L'agent appareil C300X installé ne prend pas en charge l'application du hook média core."
+          "core_patch_unsupported": "L'agent appareil C300X installé ne prend pas en charge l'application du hook média core.",
+          "display_unsupported": "L'agent de l'appareil ne connaît pas l'écran de ce poste ; il fonctionne sans les pages d'écran et il n'y a pas de hook média core à appliquer."
         }
       }
     },
@@ -1731,7 +1736,8 @@
         "original": "non appliqué (fichiers d'origine)",
         "unknown": "inconnu",
         "unavailable": "indisponible",
-        "display_failed": "appliqué, mais l'écran a démarré dans son état d'origine"
+        "display_failed": "appliqué, mais l'écran a démarré dans son état d'origine",
+        "display_unsupported": "non disponible pour l'écran de ce poste"
       }
     }
   },

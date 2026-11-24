@@ -38,7 +38,7 @@ from .const import (
     SIGNAL_SETTING_STATE,
 )
 from .device_user import homeassistant_account_label
-from .display_activation import display_activation_confirmed
+from .display_activation import display_activation_confirmed, display_unsupported
 from .entity import (
     C300XEntity,
     entry_config_value,
@@ -181,10 +181,11 @@ class C300XHomeAssistantMediaUserSetupSwitch(C300XEntity, SwitchEntity):
             and self._status.get("device_routing_applied") is True
             and (
                 self._status.get("media_user_label_applied") is True
-                # The label is written into the Display patch files. An agent
-                # that offers no Display patch (Qt 5 display, firmware 3.0.x)
-                # has none, and the media user is complete without it.
+                # The label is written into the Display patch files. Without
+                # a Display patch (an agent that offers none, or a display the
+                # agent does not know) the media user is complete without it.
                 or not entry_maintenance_action_is_advertised(self._entry, "qml_core_patch")
+                or display_unsupported(_qml_patch_status(self._entry)) is not None
             )
         )
 
@@ -517,6 +518,7 @@ class C300XGuiFunctionPatchSwitch(C300XEntity, SwitchEntity):
             "core_backup_available": status.get("core_backup_available"),
             "gui_running": status.get("gui_running"),
             **({"qt5_overlay": status["qt5_overlay"]} if status.get("qt5_overlay") is not None else {}),
+            **({"qt5_unsupported": status["qt5_unsupported"]} if display_unsupported(status) else {}),
         }
 
     @property

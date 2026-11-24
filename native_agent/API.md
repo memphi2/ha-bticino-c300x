@@ -1565,6 +1565,14 @@ Reads both optional Display patch state and required core media-hook state.
 `"stock"` (like the original), `"side_by_side"` (the fixed pair), or `null`
 when the home page carries neither layout.
 
+On firmware 3.0.x, `qt5_unsupported` names why the station's display program or
+start script is not one the agent knows (`display_program_unknown`,
+`display_resource_missing`, `display_file_unsupported`,
+`display_wrapper_unknown`). The apply actions then change nothing and answer
+`200` with `"ok":false,"error":"display_unsupported"` and the status fields; the
+agent runs without the display pages. The field stays until an apply finds a
+known display again.
+
 `POST /api/v1/maintenance/qml-patch/actions/apply-core`
 
 ```json

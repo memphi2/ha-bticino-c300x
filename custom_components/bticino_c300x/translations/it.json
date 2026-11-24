@@ -1524,6 +1524,10 @@
       "title": "Watcher eventi display C300X protetto",
       "description": "{entry_title} ha rilevato troppi watcher eventi display C300X simultanei. Il device agent ha rifiutato il watcher aggiuntivo per evitare un ciclo di polling locale che può sovraccaricare il C300X. Watcher attivi: {waiters}/{capacity}. Watcher rifiutati: {overflows}. Ricarica la GUI display C300X dall'integrazione se dashboard o memo sul display non si aggiornano più, poi aggiorna la diagnostica."
     },
+    "device_display_unsupported": {
+      "title": "Le pagine del display C300X non sono disponibili su questa postazione",
+      "description": "{entry_title}: l'agente del dispositivo non conosce il programma del display o lo script di avvio del display di questa postazione ({reason}). Ha lasciato il display nello stato originale e funziona senza le pagine del display: la postazione non mostra pagine o pulsanti di Home Assistant e la patch del display resta disattivata. Le altre funzioni dell'agente funzionano come prima delle pagine del display per il firmware 3.0.x. Applicare di nuovo la patch del display controlla la postazione ancora una volta."
+    },
     "device_core_qml_hook_required": {
       "title": "Hook media core C300X mancante",
       "fix_flow": {
@@ -1539,7 +1543,8 @@
         },
         "abort": {
           "entry_not_loaded": "La voce BTicino C300X non è caricata.",
-          "core_patch_unsupported": "Il device agent C300X installato non supporta l'applicazione dell'hook media core."
+          "core_patch_unsupported": "Il device agent C300X installato non supporta l'applicazione dell'hook media core.",
+          "display_unsupported": "L'agente del dispositivo non conosce il display di questa postazione; funziona senza le pagine del display e non c'è alcun hook media core da applicare."
         }
       }
     },
@@ -1731,7 +1736,8 @@
         "original": "non applicato (file originali)",
         "unknown": "sconosciuto",
         "unavailable": "non disponibile",
-        "display_failed": "applicato, ma il display è partito nello stato originale"
+        "display_failed": "applicato, ma il display è partito nello stato originale",
+        "display_unsupported": "non disponibile per il display di questa postazione"
       }
     }
   },

@@ -220,6 +220,11 @@ try:
     result = json.load(sys.stdin)
 except (ValueError, UnicodeError):
     result = None
+if isinstance(result, dict) and result.get("error") == "display_unsupported" \
+        and isinstance(result.get("qt5_unsupported"), str) and result["qt5_unsupported"]:
+    # An unknown Qt 5 display stays as shipped; the agent runs without the pages.
+    print("Display pages not available on this station: " + result["qt5_unsupported"], file=sys.stderr)
+    sys.exit(0)
 if not isinstance(result, dict) or not all(
     result.get(key) is True for key in ("ok", "patched", "core_patched", "gui_running")
 ) or result.get("qt5_overlay") not in (None, "active"):

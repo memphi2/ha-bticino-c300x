@@ -1524,6 +1524,10 @@
       "title": "C300X Display-Ereignis-Watcher wurde geschützt",
       "description": "{entry_title} hat zu viele gleichzeitige C300X Display-Ereignis-Watcher erkannt. Der Device Agent hat den zusätzlichen Watcher abgelehnt, damit keine lokale Display-Polling-Schleife den C300X überlastet. Aktive Watcher: {waiters}/{capacity}. Abgelehnte Watcher: {overflows}. Lade die C300X Display-GUI über die Integration neu, wenn Dashboard oder Memos am Display nicht mehr aktualisiert werden, und aktualisiere danach die Diagnose."
     },
+    "device_display_unsupported": {
+      "title": "C300X-Displayseiten sind auf dieser Station nicht verfügbar",
+      "description": "{entry_title}: Der Geräte-Agent kennt das Displayprogramm oder das Display-Startskript dieser Station nicht ({reason}). Er hat das Display im Originalzustand gelassen und läuft ohne die Displayseiten: Die Station zeigt keine Home-Assistant-Seiten oder -Tasten, und der Display-Patch bleibt aus. Die übrigen Funktionen des Agenten arbeiten wie vor den Displayseiten für Firmware 3.0.x. Ein erneutes Anwenden des Display-Patches prüft die Station noch einmal."
+    },
     "device_core_qml_hook_required": {
       "title": "C300X Core-Media-Hook fehlt",
       "fix_flow": {
@@ -1539,7 +1543,8 @@
         },
         "abort": {
           "entry_not_loaded": "Der BTicino-C300X-Eintrag ist nicht geladen.",
-          "core_patch_unsupported": "Der installierte C300X Device-Agent unterstützt das Anwenden des Core-Media-Hooks nicht."
+          "core_patch_unsupported": "Der installierte C300X Device-Agent unterstützt das Anwenden des Core-Media-Hooks nicht.",
+          "display_unsupported": "Der Geräte-Agent kennt das Display dieser Station nicht; er läuft ohne die Displayseiten, und es gibt keinen Core-Media-Hook anzuwenden."
         }
       }
     },
@@ -1731,7 +1736,8 @@
         "original": "nicht angewendet (Originaldateien)",
         "unknown": "unbekannt",
         "unavailable": "nicht abrufbar",
-        "display_failed": "angewendet, aber das Display startete im Originalzustand"
+        "display_failed": "angewendet, aber das Display startete im Originalzustand",
+        "display_unsupported": "für das Display dieser Station nicht verfügbar"
       }
     }
   },

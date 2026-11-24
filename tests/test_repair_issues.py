@@ -57,6 +57,7 @@ from custom_components.bticino_c300x.repair_issues import (  # noqa: E402
     DEVICE_AGENT_UI_EVENT_WATCHDOG_ISSUE,
     DEVICE_AGENT_UPDATE_REQUIRED_ISSUE,
     DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE,
+    DEVICE_DISPLAY_UNSUPPORTED_ISSUE,
     DEVICE_USER_REQUIRED_ISSUE,
     FRONTEND_CARD_SETUP_HINT_ISSUE,
     INVALID_ACTION_MAP_ISSUE,
@@ -1105,6 +1106,30 @@ def test_missing_core_qml_hook_creates_fixable_repair_issue() -> None:
     assert issue["is_fixable"] is True
     assert issue["translation_key"] == DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE
     assert issue["translation_placeholders"]["core_state"] == "original"
+
+
+def test_an_unknown_qt5_display_shows_a_notice_instead_of_the_core_hook_repair() -> None:
+    runtime = FakeRuntimeData(
+        capabilities={"maintenance": {"supported": True, "qml_core_patch": True}},
+        qml_patch_status={
+            "available": True, "patched": False, "state": "original",
+            "core_patched": False, "core_state": "original", "gui_running": True,
+            "qt5_overlay": "off", "qt5_unsupported": "display_program_unknown",
+        },
+    )
+    entry = FakeEntry(data={CONF_VIDEO_ENABLED: True}, runtime_data=runtime)
+
+    async_sync_entry_repair_issues(FakeHass(), entry)
+
+    core_issue = repair_issue_id(DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE, entry.entry_id)
+    notice = repair_issue_id(DEVICE_DISPLAY_UNSUPPORTED_ISSUE, entry.entry_id)
+    assert core_issue not in CREATED_ISSUES and core_issue in DELETED_ISSUES
+    assert CREATED_ISSUES[notice]["is_fixable"] is False
+    assert CREATED_ISSUES[notice]["translation_placeholders"]["reason"] == "display_program_unknown"
+
+    runtime.qml_patch_status = {**runtime.qml_patch_status, "qt5_unsupported": None}
+    async_sync_entry_repair_issues(FakeHass(), entry)
+    assert notice in DELETED_ISSUES
 
 
 def test_missing_core_qml_hook_without_supported_action_clears_repair_issue() -> None:

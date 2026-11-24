@@ -91,7 +91,8 @@ HTTP handler in the isolated fixture; device writes are substitutes.
 | GUI versus agent restart | **F/H** bt_daemon starts the wrapper once and never again; `qml_patch.sh` stops the old display completely before it starts exactly one new wrapper | Display release timing on eglfs/Vivante: **D** |
 | Self-update | **H** changed QML and runtime-only preload reconciliation, optional pages on/off, pending follow-up retained on failure | Complete update/reconnect on firmware: **D** |
 | Downgrade | **F/H** stable 2.8.2 payload refused without verified full removal; actual 3.0.6 restore-all then accepts it; Qt4 originals accepted | Guard requires this running updater; old agents and SSH/manual replacement bypass it; stock GUI restart: **D** |
-| Python/shell installers | **H** require successful core/full status, GUI presence and Qt5 activation; Python publishes bundle identity after activation | Neither installer proves every page rendered |
+| Python/shell installers | **H** require successful core/full status, GUI presence and Qt5 activation; Python publishes bundle identity after activation; an unknown display (below) ends only the display steps | Neither installer proves every page rendered |
+| Unknown display | **H** an unknown program or start script leaves everything as shipped and reports `display_unsupported`; install, update and media user go on without the display pages (see Unknown Display) | A later vendor firmware build on a device: **D** |
 | HA options/switch/sync | **H** quarantine/incomplete status is not success; optional-page setting is distinct from core hooks; no quarantine auto-retry | State freshness after spontaneous device failure: **D** |
 | HA services/buttons/Repairs | **H** shared GUI action gates and core Repair honor Qt5 activation; notification storage is distinct from popup delivery | End-to-end physical action results: **D** |
 | Native bridge | **Static/H** loopback UI listener, GUI headers for alert/ringer endpoints, bounded forwarding and cancellation; delivered QML targets port 8090 | Nondefault generic-agent UI ports are not adapted by delivered QML; use installer defaults |
@@ -213,6 +214,44 @@ earlier boot is ignored and counts as absent; full removal deletes it.
 | `apply`, `core-apply`, `media-user-label-apply` (installer, update follow-up, core Repair, Display patch switch, label setup) | Drop a mark (this boot or older) and restart the display once with the overlay, even when no file changed. |
 | Partial restore | Keeps a mark of this boot, drops an older one. |
 | Display setting saves | Do not retry a quarantined overlay (`display_patch_sync`). |
+
+### Unknown Display
+
+The hash pins stay the safety gate: the overlay is only built for a display
+program whose resource tables are known (pinned SHA-256 or the verified table
+search) and only installed over the pinned original start script. When
+`apply`, `core-apply` or `media-user-label-apply` meet anything else, the
+script changes nothing and answers with exit 0:
+
+```json
+{"ok":false,"error":"display_unsupported","qt5_unsupported":"display_program_unknown","qt5_overlay":"off",...}
+```
+
+Reasons: `display_program_unknown`, `display_resource_missing` (the program
+lacks a file the patch edits), `display_file_unsupported` (an edited file is
+not in the expected form) and `display_wrapper_unknown`. The reason is kept in
+`display-qt5/unsupported`; `status` reports it as `qt5_unsupported` until an
+apply finds a known display again. Read and write errors (for example
+`display_program_unreadable`) are not a reason: those steps still fail as
+before. The check runs in a separate `qml_patch.sh qt5-prepare` process, so
+`set -e` still guards every step of the extraction.
+
+What follows from it:
+
+- The SSH installer stops the display steps and still installs the agent
+  (bundle identity published, warning in the HA log).
+- The agent update follow-up counts as done; nothing stays pending.
+- The agent's media-user setup completes without the label (the label lives in
+  the display files); the HA media user switch counts it as complete.
+- HA shows the non-fixable notice `device_display_unsupported` instead of the
+  core hook Repair; the core Repair flow, if open, aborts with the reason.
+  The Display patch switch shows off and names the reason in its attributes;
+  turning it on fails with the reason. Settings saves do not ask again.
+- Display-dependent features stay off as before: they already require a
+  confirmed active overlay.
+
+Firmware 1.7.19 and 2.0.2 are not affected: the check only runs on the Qt 5
+display.
 
 ### Startup Guard Boundary
 

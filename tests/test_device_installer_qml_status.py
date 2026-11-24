@@ -108,3 +108,29 @@ def test_verified_qt5_activation_succeeds(client: FakeClient) -> None:
     for action in client.responses:
         client.responses[action] = json.dumps({**json.loads(_success(action)), "qt5_overlay": "active"})
     assert _install() == ()
+
+
+def _unsupported(reason: str = "display_program_unknown") -> str:
+    return json.dumps({"ok": False, "error": "display_unsupported", "qt5_unsupported": reason,
+                       "core_patched": False, "gui_running": True, "patched": False,
+                       "qt5_overlay": "off"})
+
+
+@pytest.mark.parametrize("apply_gui_patch", [False, True])
+def test_an_unknown_qt5_display_installs_the_agent_without_the_display_pages(
+    client: FakeClient, apply_gui_patch: bool
+) -> None:
+    client.responses["core-apply"] = _unsupported()
+    assert _install(apply_gui_patch=apply_gui_patch) == ()
+    assert client.closed
+    assert client.actions == ["core-apply"]
+
+
+@pytest.mark.parametrize("response", [
+    json.dumps({**json.loads(_unsupported()), "error": "reload_failed"}),
+    json.dumps({**json.loads(_unsupported()), "qt5_unsupported": ""}),
+])
+def test_only_a_reported_unknown_display_skips_the_display_steps(client: FakeClient, response: str) -> None:
+    client.responses["core-apply"] = response
+    with pytest.raises(installer.C300XDeviceInstallError, match="device_install_verify_failed"):
+        _install()

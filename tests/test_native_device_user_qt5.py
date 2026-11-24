@@ -43,6 +43,28 @@ def test_label_outcome_is_confirmed(route_binary, tmp_path, operation, state):
         assert result["body"]["media_user_label_applied"] is False
 
 
+def test_a_display_the_agent_does_not_know_does_not_block_the_media_user(route_binary, programs, tmp_path):
+    """The real script on an unknown display program: the user is set up without a label."""
+
+    device = Device(tmp_path, programs)
+    device.program = tmp_path / "BtClass-unknown"
+    device.program.write_bytes(b"\x7fELF other")
+    env = {
+        "C300X_QML_QT5_MARKER": str(tmp_path / "libQt5Core.so.5"),
+        "C300X_QML_QT5_ROOT": str(device.qt5_root), "C300X_QML_GUI_DIR": str(device.gui),
+        "C300X_QML_BACKUP_DIR": str(device.backup), "C300X_QML_SOURCE_DIR": str(NATIVE.parent / "device_qml"),
+        "C300X_QML_QT5_RCC": str(device.rcc), "C300X_QML_QT5_OVERLAY_LIB": str(device.lib),
+        "C300X_QML_QT5_WRAPPER_BACKUP": str(device.wrapper_backup), "C300X_QML_GUI_WRAPPER": str(device.wrapper),
+        "C300X_QML_AGENT_BIN": str(programs["agent"]), "C300X_QT5_GUI_BINARY": str(device.program),
+        "C300X_QML_NO_REMOUNT": "1", "C300X_QML_RELOAD_GUI": "0",
+        "C300X_QML_BOOT_ID": str(device.boot_id),
+    }
+    result = route(route_binary, NATIVE / "scripts/qml_patch.sh", "ensure", env)
+    assert result["status"] == 200, result
+    assert result["body"]["media_user_label_applied"] is False
+    assert not device.rcc.exists()
+
+
 @pytest.mark.parametrize("state", ["failed", "incomplete", "off"])
 def test_status_does_not_advertise_quarantined_label(route_binary, tmp_path, state):
     script = tmp_path / "status"

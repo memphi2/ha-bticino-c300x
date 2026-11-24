@@ -1311,8 +1311,12 @@ ended and is then answered with `504`:
 
 `rolled_back` is `true` only when the script exited with status 130: it
 stopped on the signal with every GUI file it changed back in place and `/`
-read-only again, or before it changed any. `false` means the rollback failed or
-the script had to be killed; `GET /api/v1/maintenance/qml-patch` then says
+read-only again, or before it changed any. The script exits 131 when the
+signal came after a QML write had committed, during the display library step
+of apply, restore and restore-all, or when its rollback was incomplete: it
+first remounts `/` read-only and restarts a GUI that is down or still runs the
+replaced library. `false` means such a 131, a failed rollback, or a script
+that had to be killed; `GET /api/v1/maintenance/qml-patch` then says
 what the device has and reports a transaction the write left behind; the next
 write finishes it (see QML Patch).
 Graceful agent shutdown during a QML write also sends `SIGTERM` once and waits

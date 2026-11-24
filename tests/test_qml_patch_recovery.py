@@ -176,3 +176,36 @@ def test_a_recovery_killed_at_any_step_is_finished_by_the_next_one(
     finished = _run(tmp_path, gui, backup, "recover", env)
     assert "transaction" not in json.loads(finished.stdout)
     assert _calls(tmp_path, "mount") == [] and _calls(tmp_path, "killall") == []
+
+
+@pytest.mark.parametrize("write_first", [False, True])
+def test_a_terminated_display_library_step_exits_131_and_finishes_root_and_gui(
+    tmp_path: Path, write_first: bool,
+) -> None:
+    """SIGTERM while the agent swaps the display library, after the QML step:
+    with nothing left to write there (the old 130 trap) and after a committed
+    write (no trap at all). Exit 130 would claim a complete rollback."""
+
+    gui, backup = tmp_path / "gui", tmp_path / "backup"
+    gui.mkdir()
+    _write_original_gui(gui)
+    if not write_first:
+        _run_qml_patch_raw(tmp_path, gui, backup, "apply").check_returncode()
+    agent = tmp_path / "agent" / "c300x-agent-native"
+    agent.parent.mkdir()
+    agent.write_text(f'#!/bin/sh\n: > "{tmp_path}/held"\nwhile :; do sleep 0.02; done\n')
+    agent.chmod(0o700)
+    env = _commands(tmp_path)
+    # The GUI runs until the library step; then it is down.
+    (tmp_path / "recovery-commands" / "pidof").write_text(f'#!/bin/sh\n[ ! -e "{tmp_path}/held" ]\n')
+    proc = tmp_path / "proc"
+    proc.mkdir()
+    (proc / "mounts").write_text("/dev/mmcblk2p6 / ext4 rw,relatime 0 0\n")
+    env.update({"C300X_QML_AGENT_BIN": str(agent), "C300X_QML_PROC_DIR": str(proc)})
+    result = qml._terminate_when_held(tmp_path, gui, backup, "apply", env)
+    assert result.returncode == 131, result.stderr
+    assert result.stdout == ""
+    # The write's own GUI restart, then the one after the library step.
+    assert _calls(tmp_path, "killall") == ["killall BtClass"] * (2 if write_first else 1)
+    assert _calls(tmp_path, "mount")[-1] == "mount -o remount,ro /"
+    assert json.loads(_run_qml_patch_raw(tmp_path, gui, backup, "status").stdout)["patched"] is True

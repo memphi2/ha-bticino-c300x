@@ -330,6 +330,20 @@ touch_patch() {
     fi
 }
 
+abort_touch_phase() {
+    trap - HUP INT TERM
+    if [ "$RELOAD_GUI" = "1" ] && { touch_display_stale || ! pidof BtClass >/dev/null 2>&1; }; then
+        reload_gui || true
+    fi
+    touch_root_read_only || true
+    exit 131
+}
+
+run_touch_phase() {
+    trap abort_touch_phase HUP INT TERM
+    touch_patch "$1"
+}
+
 reload_gui() {
     if [ "$RELOAD_GUI" != "1" ]; then
         return 0
@@ -1923,7 +1937,7 @@ case "$ACTION" in
         ;;
     apply)
         apply_patch_files
-        touch_patch apply
+        run_touch_phase apply
         json_write_status
         ;;
     core-apply)
@@ -1939,7 +1953,7 @@ case "$ACTION" in
         if [ "$changed_count" -gt 0 ]; then
             run_write_action restore_patch_files
         fi
-        touch_patch restore
+        run_touch_phase restore
         json_write_status
         ;;
     core-restore)
@@ -1961,7 +1975,7 @@ case "$ACTION" in
         if [ "$changed_count" -gt 0 ]; then
             run_write_action restore_all_patch_files
         fi
-        touch_patch restore
+        run_touch_phase restore
         json_write_status
         ;;
     reload)

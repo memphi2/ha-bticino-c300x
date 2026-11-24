@@ -44,6 +44,18 @@ def _c100x(setup: Mapping[str, Any]) -> bool:
     return setup.get("model") == "C100X" or setup.get("display_kind") == "qt5_ondisk"
 
 
+def setup_is_c100x(setup: Any) -> bool:
+    """Return whether agent setup data names a C100X."""
+
+    return isinstance(setup, Mapping) and _c100x(setup)
+
+
+def entry_is_c100x(entry: Any) -> bool:
+    """Return whether the loaded entry's agent reported a C100X."""
+
+    return setup_is_c100x(getattr(getattr(entry, "runtime_data", None), "agent_info", None))
+
+
 def entry_display_supported(entry: Any) -> bool:
     """Honor current facts first, then the last confirmed fact across restarts."""
 

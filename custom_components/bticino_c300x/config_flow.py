@@ -224,6 +224,8 @@ from .display_support import (
     DISPLAY_SUPPORTED,
     device_display_support,
     entry_display_supported,
+    entry_is_c100x,
+    setup_is_c100x,
 )
 from .entry_types import BticinoC300XConfigEntry
 from .factory_login import login_model, ssh_login, uses_factory_login
@@ -879,6 +881,7 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
                     )
                 ),
                 default_dashboard_navigation=(user_input or {}).get(CONF_DASHBOARD_NAVIGATION),
+                home_buttons=not setup_is_c100x(self._setup_agent_info),
             ),
             errors=errors,
             description_placeholders={
@@ -1360,6 +1363,7 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
                 default_dashboard_navigation=(user_input or {}).get(
                     CONF_DASHBOARD_NAVIGATION, feature_defaults.get(CONF_DASHBOARD_NAVIGATION),
                 ),
+                home_buttons=not entry_is_c100x(entry),
             ),
             errors=errors,
             description_placeholders=await _async_qml_patch_description_placeholders(
@@ -1824,6 +1828,7 @@ class BticinoC300XOptionsFlow(
                 default_dashboard_navigation=(user_input or {}).get(
                     CONF_DASHBOARD_NAVIGATION, feature_defaults.get(CONF_DASHBOARD_NAVIGATION),
                 ),
+                home_buttons=not entry_is_c100x(self._config_entry),
             ),
             errors=errors,
             description_placeholders=await _async_qml_patch_description_placeholders(

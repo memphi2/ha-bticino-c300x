@@ -210,3 +210,24 @@ def test_first_confirmation_switches_the_device_ui_setting_on():
     unknown = {**CONFIRMED, "c100x_display": {"supported": True, "status_known": False}}
     remember_display_support(hass, device, {**INFO, "capabilities": unknown})
     assert len(updates) == 2
+
+
+@pytest.mark.parametrize("model,offered", [("C100X", False), ("C300X", True)])
+def test_home_button_layout_is_offered_only_where_the_display_patch_uses_it(model, offered):
+    from test_display_settings import _OptionsAreas
+    from test_executor import run
+
+    device = entry()
+    device.runtime_data.agent_info = {"model": model, "capabilities": CONFIRMED}
+    device.runtime_data.capabilities = CONFIRMED
+    device.runtime_data.qml_patch_status = {}
+    device.options = MappingProxyType({**device.options, "dashboard_dynamic_homepage": False})
+    areas = _OptionsAreas(device)
+    form = run(areas._flow().async_step_dashboard())
+    assert form["type"] == "form"
+    fields = {str(key) for key in form["data_schema"].schema}
+    assert ("dashboard_dynamic_homepage" in fields) is offered
+    assert "dashboard_navigation" in fields
+    # Saving the C100X form keeps the hidden C300X value as it was.
+    assert run(areas._flow().async_step_dashboard({CONF_DEVICE_UI_ENABLED: True}))["type"] == "menu"
+    assert device.options["dashboard_dynamic_homepage"] is False

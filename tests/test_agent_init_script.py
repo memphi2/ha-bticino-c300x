@@ -55,8 +55,18 @@ def test_init_propagates_failures(tmp_path, action, start_rc, stop_rc, expected,
 # The station's busybox 1.24 start-stop-daemon ignores --retry: --stop sends one
 # TERM and returns at once. The script itself must wait for the old agent to
 # exit, and only ever signal a PID that is still the agent binary.
-DEVICE_ROOTFS = Path(os.environ.get(
-    "C300X_QT4_ROOTFS", "/home/olli/Programming/Git/c300x-fwpatch/work/rootfs-1.7.19"))
+
+
+def _device_rootfs() -> Path | None:
+    """The 1.7.19 system image of the local Qt 4 setup (scripts/setup_qt4_runtime.py)."""
+    if os.environ.get("C300X_QT4_ROOTFS"):
+        return Path(os.environ["C300X_QT4_ROOTFS"])
+    from scripts.setup_qt4_runtime import runtime_paths
+
+    paths = runtime_paths()
+    return Path(paths[1]) if paths else None
+
+
 STUB_AGENT = r"""
 #include <arpa/inet.h>
 #include <signal.h>
@@ -95,15 +105,16 @@ def _device_init(tmp_path: Path, source: str | None = None):
     import shutil
     import socket
 
-    qemu, busybox = shutil.which("qemu-arm"), DEVICE_ROOTFS / "bin/busybox.nosuid"
-    compiler = shutil.which("cc")
-    if not qemu or not busybox.is_file() or not compiler:
-        pytest.skip("needs qemu-arm, cc and the station's busybox (C300X_QT4_ROOTFS)")
+    rootfs = _device_rootfs()
+    qemu, compiler = shutil.which("qemu-arm"), shutil.which("cc")
+    busybox = rootfs / "bin/busybox.nosuid" if rootfs else None
+    if not qemu or not compiler or busybox is None or not busybox.is_file():
+        pytest.skip("needs qemu-arm, cc and the station's busybox (scripts/setup_qt4_runtime.py)")
     commands = tmp_path / "commands"
     commands.mkdir()
     for applet in ("sh", "start-stop-daemon", "readlink", "cat", "usleep", "rm"):
         wrapper = commands / applet
-        wrapper.write_text(f'#!/bin/sh\nexec {qemu} -L {DEVICE_ROOTFS} {busybox} {applet} "$@"\n')
+        wrapper.write_text(f'#!/bin/sh\nexec {qemu} -L {rootfs} {busybox} {applet} "$@"\n')
         wrapper.chmod(0o700)
     (tmp_path / "c300x-agent-native.c").write_text(STUB_AGENT)
     subprocess.run([compiler, "-O", "-o", str(tmp_path / "c300x-agent-native"),

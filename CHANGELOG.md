@@ -31,11 +31,12 @@ Station:
   hidden when their first reads after a start fail. The page retries for about
   a minute and reads again when it is shown or the display bridge registers.
   Needs the Display patch from the agent update.
-- New Display option **Home page buttons**. **Like the original**, the default,
-  shows the Alarm and Home Assistant buttons only when they have something to
-  open, as buttons among the station's own, which wrap like them. **Fixed side
-  by side** keeps the pair used since 2.3.0; entries that stored it keep it.
-  Based on a fix by Dave in PR #126. Needs the agent update.
+- New Display option **Home page buttons**. **Like the original** shows the
+  Alarm and Home Assistant buttons only when they have something to open, as
+  buttons among the station's own, which wrap like them. After the agent update
+  the home page uses this layout; choose **Fixed side by side** to keep the
+  pair used since 2.3.0. Based on a fix by Dave in PR #126. Needs the agent
+  update.
 
 Camera and card:
 

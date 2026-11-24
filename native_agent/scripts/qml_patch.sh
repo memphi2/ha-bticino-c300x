@@ -10,6 +10,7 @@ RELOAD_GUI="${C300X_QML_RELOAD_GUI:-1}"
 GUI_ROOT="${C300X_QML_GUI_ROOT:-/home/bticino}"
 GUI_WRAPPER="${C300X_QML_GUI_WRAPPER:-/home/bticino/bin/BtClass_qws}"
 GUI_RELOAD_DELAY_SECONDS="${C300X_QML_GUI_RELOAD_DELAY_SECONDS:-2}"
+GUI_STOP_SECONDS="${C300X_QML_GUI_STOP_SECONDS:-10}"
 PROC_DIR="${C300X_QML_PROC_DIR:-/proc}"
 AGENT_BIN="${C300X_QML_AGENT_BIN:-${C300X_AGENT_DIR:-/home/bticino/cfg/extra/c300x-native-agent}/c300x-agent-native}"
 # 1: stock layout, 0: side by side, unset: keep the layout on the device.
@@ -36,6 +37,9 @@ if [ -e "${C300X_QML_QT5_MARKER:-/usr/lib/libQt5Core.so.5}" ]; then
     QT5_OVERLAY_LIB="${C300X_QML_QT5_OVERLAY_LIB:-$QT5_AGENT_DIR/c300x-qrc-overlay.so}"
     QT5_WRAPPER_BACKUP="${C300X_QML_QT5_WRAPPER_BACKUP:-$QT5_BACKUP_ROOT/original/bin/BtClass_qws}"
     QT5_LOG="${C300X_QML_QT5_LOG:-/tmp/c300x-display-qt5.log}"
+    QT5_BOOT_ID="${C300X_QML_BOOT_ID:-/proc/sys/kernel/random/boot_id}"
+    QT5_START_SECONDS="${C300X_QML_QT5_START_SECONDS:-10}"
+    QT5_ALIVE_FILE="${C300X_QML_GUI_ALIVE_FILE:-/var/tmp/bticino/bt_wd/BtClass_qws}"
     GUI_DIR="${C300X_QML_GUI_DIR:-$QT5_ROOT/skins/default}"
     BACKUP_DIR="${C300X_QML_BACKUP_DIR:-$QT5_BACKUP_ROOT/original/qt5/skins/default}"
 fi
@@ -351,34 +355,98 @@ touch_patch() {
     fi
 }
 
+gui_pids_alive() {
+    for gui_pid in $1; do
+        if kill -0 "$gui_pid" 2>/dev/null; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+gui_wait_gone() {
+    gui_waited=0
+    while gui_pids_alive "$1"; do
+        if [ "$gui_waited" -ge "$2" ]; then
+            return 1
+        fi
+        sleep 1
+        gui_waited=$((gui_waited + 1))
+    done
+}
+
+stop_gui() {
+    if ! command -v killall >/dev/null 2>&1; then
+        return 0
+    fi
+    gui_old=
+    if command -v pidof >/dev/null 2>&1; then
+        gui_old="$(pidof BtClass 2>/dev/null || true)"
+    fi
+    killall BtClass_qws >/dev/null 2>&1 || true
+    killall BtClass >/dev/null 2>&1 || true
+    if gui_wait_gone "$gui_old" "$GUI_STOP_SECONDS"; then
+        return 0
+    fi
+    for gui_pid in $gui_old; do
+        kill -KILL "$gui_pid" >/dev/null 2>&1 || true
+    done
+    gui_wait_gone "$gui_old" 3
+}
+
+start_gui() {
+    if [ ! -f "$GUI_WRAPPER" ]; then
+        return 0
+    fi
+    gui_session=
+    if command -v setsid >/dev/null 2>&1; then
+        gui_session=setsid
+    fi
+    gui_shell=/bin/sh
+    if [ -x "$GUI_WRAPPER" ]; then
+        gui_shell=
+    fi
+    if [ "$QT5_DISPLAY" = "1" ]; then
+        : > "$QT5_LOG.start" 2>/dev/null || true
+    fi
+    (
+        cd "$GUI_ROOT"
+        C300X_GUI_RELOAD=1 $gui_session $gui_shell "$GUI_WRAPPER" >/tmp/BtClass_qws.agent.log 2>&1 &
+    )
+}
+
+qt5_watch_start() {
+    if [ "$QT5_DISPLAY" != "1" ] || [ "$(qt5_overlay_state)" != "active" ]; then
+        return 0
+    fi
+    qt5_watched=0
+    while [ "$qt5_watched" -lt "$QT5_START_SECONDS" ]; do
+        if qt5_failed_now || [ "$QT5_ALIVE_FILE" -nt "$QT5_LOG.start" ]; then
+            return 0
+        fi
+        sleep 1
+        qt5_watched=$((qt5_watched + 1))
+    done
+}
+
 reload_gui() {
     if [ "$RELOAD_GUI" != "1" ]; then
         return 0
     fi
-    if command -v killall >/dev/null 2>&1; then
-        killall BtClass >/dev/null 2>&1 || true
+    if ! stop_gui; then
+        printf 'The display program did not stop; no second one is started\n' >&2
+        return 1
     fi
     sleep "$GUI_RELOAD_DELAY_SECONDS"
     if command -v pidof >/dev/null 2>&1 && pidof BtClass >/dev/null 2>&1; then
         return 0
     fi
-    if [ -f "$GUI_WRAPPER" ]; then
-        # A session of its own: the agent kills this script's process group
-        # when a job passes its time limit, and the GUI must outlive that.
-        gui_session=
-        if command -v setsid >/dev/null 2>&1; then
-            gui_session=setsid
-        fi
-        (
-            cd "$GUI_ROOT"
-            $gui_session /bin/sh "$GUI_WRAPPER" >/tmp/BtClass_qws.agent.log 2>&1 &
-        )
-    fi
+    start_gui
     sleep "$GUI_RELOAD_DELAY_SECONDS"
-    if ! command -v pidof >/dev/null 2>&1; then
+    if ! command -v pidof >/dev/null 2>&1 || ! pidof BtClass >/dev/null 2>&1; then
         return 1
     fi
-    # Process presence only: the firmware exposes no QML readiness handshake here.
+    qt5_watch_start
     pidof BtClass >/dev/null 2>&1
 }
 
@@ -1356,8 +1424,33 @@ qt5_prepare() {
     qt5_import "$QT5_ROOT/vendor"
 }
 
+qt5_boot_id() {
+    cat "$QT5_BOOT_ID" 2>/dev/null || true
+}
+
+qt5_failed_now() {
+    if [ ! -e "$QT5_RCC.failed" ]; then
+        return 1
+    fi
+    if [ ! -f "$QT5_RCC.failed" ]; then
+        return 0
+    fi
+    [ "$(cat "$QT5_RCC.failed" 2>/dev/null)" = "$(qt5_boot_id)" ]
+}
+
+qt5_mark_failed() {
+    qt5_boot_id > "$QT5_RCC.failed"
+}
+
+qt5_retry_action() {
+    case "$ACTION" in
+        apply|core-apply|media-user-label-apply) return 0 ;;
+    esac
+    return 1
+}
+
 qt5_overlay_state() {
-    if [ -e "$QT5_RCC.failed" ]; then
+    if qt5_failed_now; then
         printf 'failed\n'
     elif [ -s "$QT5_RCC" ] && [ -s "$QT5_OVERLAY_LIB" ] && [ -x "$GUI_WRAPPER" ] \
         && [ -s "$QT5_WRAPPER_BACKUP" ] && grep -q 'c300x-qrc-overlay' "$GUI_WRAPPER" 2>/dev/null; then
@@ -1373,21 +1466,25 @@ qt5_overlay_state() {
 
 # The vendor start script with the overlay ahead of the plain start. A display
 # that ends with an error within a minute of starting with the overlay marks it
-# failed and starts as shipped; only removing the entire overlay clears it.
+# failed for this boot and starts as shipped.
 # Its error output, where Qt reports QML errors, goes to a log of at most 64 KB.
 qt5_wrapper_text() {
-    awk -v lib="$QT5_OVERLAY_LIB" -v rcc="$QT5_RCC" -v errlog="$QT5_LOG" '
+    awk -v lib="$QT5_OVERLAY_LIB" -v rcc="$QT5_RCC" -v errlog="$QT5_LOG" -v bootid="$QT5_BOOT_ID" '
         $0 == "./bin/gui/BtClass &" && !done {
             print "# c300x-qrc-overlay: display pages of the Home Assistant integration"
-            print "if [ -f \047" lib "\047 ] && [ -f \047" rcc "\047 ] && [ ! -e \047" rcc ".failed\047 ]; then"
-            print "    c300x_start=$(date +%s)"
-            print "    rm -f \047" errlog ".rc\047"
-            print "    { { LD_PRELOAD=\047" lib "\047 C300X_QRC_OVERLAY=\047" rcc "\047 QML_DISABLE_DISK_CACHE=1 ./bin/gui/BtClass 2>&1 1>&3 3>&-; echo $? > \047" errlog ".rc\047; } | { head -c 65536 > \047" errlog "\047; cat > /dev/null; }; } 3>&1 &"
-            print "    wait $!"
-            print "    c300x_rc=$(cat \047" errlog ".rc\047 2>/dev/null || echo 0)"
-            print "    case $c300x_rc in 0|137|138|140|143) exit $c300x_rc ;; esac"
-            print "    [ $(($(date +%s) - c300x_start)) -lt 60 ] || exit $c300x_rc"
-            print "    : > \047" rcc ".failed\047"
+            print "c300x_boot=$(cat \047" bootid "\047 2>/dev/null)"
+            print "if [ -f \047" lib "\047 ] && [ -f \047" rcc "\047 ] && { [ ! -e \047" rcc ".failed\047 ] || [ \"$(cat \047" rcc ".failed\047 2>/dev/null)\" != \"$c300x_boot\" ]; }; then"
+            print "    for c300x_try in 1 ${C300X_GUI_RELOAD:+2}; do"
+            print "        [ $c300x_try = 1 ] || sleep 3"
+            print "        c300x_start=$(date +%s)"
+            print "        rm -f \047" errlog ".rc\047"
+            print "        { { LD_PRELOAD=\047" lib "\047 C300X_QRC_OVERLAY=\047" rcc "\047 QML_DISABLE_DISK_CACHE=1 C300X_QRC_FAILED_ID=\"$c300x_boot\" ./bin/gui/BtClass 2>&1 1>&3 3>&-; echo $? > \047" errlog ".rc\047; } | { head -c 65536 > \047" errlog "\047; cat > /dev/null; }; } 3>&1 &"
+            print "        wait $!"
+            print "        c300x_rc=$(cat \047" errlog ".rc\047 2>/dev/null || echo 0)"
+            print "        case $c300x_rc in 0|137|138|140|143) exit $c300x_rc ;; esac"
+            print "        [ $(($(date +%s) - c300x_start)) -lt 60 ] || exit $c300x_rc"
+            print "    done"
+            print "    printf \047%s\\n\047 \"$c300x_boot\" > \047" rcc ".failed\047"
             print "fi"
             done = 1
         }
@@ -1491,7 +1588,7 @@ qt5_restore_artifact() {
 
 qt5_transaction_restore() {
     # A restart during recovery must not load a mixture of old and new files.
-    : > "$QT5_RCC.failed" || recovery_ok=0
+    qt5_mark_failed || recovery_ok=0
     for qt5_artifact in rcc library original wrapper; do
         qt5_restore_artifact "$qt5_artifact" || recovery_ok=0
     done
@@ -1557,6 +1654,9 @@ qt5_check_activation() {
         qt5_require_regular
     done
     qt5_pack_resources "$STAGING_DIR/.qt5-rcc"
+    if qt5_retry_action && qt5_failed_now; then
+        QT5_ACTIVATION_CHANGED=1
+    fi
     if [ -z "$qt5_files" ]; then
         if [ "$(qt5_overlay_state)" != "off" ]; then
             QT5_ACTIVATION_CHANGED=1
@@ -1584,7 +1684,7 @@ qt5_check_activation() {
 qt5_publish() {
     [ "$QT5_DISPLAY" = "1" ] || return 0
     QT5_PUBLISHED=1
-    : > "$QT5_RCC.failed"
+    qt5_mark_failed
     qt5_files=
     # Full removal must also work when the disposable vendor cache or packer
     # is damaged. The stock resources remain embedded in the vendor program.
@@ -1600,7 +1700,8 @@ qt5_publish() {
     fi
     qt5_write_overlay "$QT5_OVERLAY_LIB"
     qt5_wrapper_install
-    if [ -f "$WRITE_TRANSACTION/.qt5/failed" ]; then
+    if ! qt5_retry_action && [ -f "$WRITE_TRANSACTION/.qt5/failed" ] \
+        && [ "$(cat "$WRITE_TRANSACTION/.qt5/failed")" = "$(qt5_boot_id)" ]; then
         cp -p "$WRITE_TRANSACTION/.qt5/failed" "$QT5_RCC.failed"
     else
         rm -f "$QT5_RCC.failed"
@@ -2125,7 +2226,8 @@ case "$ACTION" in
         ;;
     restore-all)
         changed_count="$(restore_all_changed_count)"
-        if [ "$changed_count" -gt 0 ] || { [ "$QT5_DISPLAY" = "1" ] && [ "$(qt5_overlay_state)" != "off" ]; }; then
+        if [ "$changed_count" -gt 0 ] || { [ "$QT5_DISPLAY" = "1" ] \
+            && { [ "$(qt5_overlay_state)" != "off" ] || [ -e "$QT5_RCC.failed" ]; }; }; then
             run_write_action restore_all_patch_files
         fi
         touch_patch restore

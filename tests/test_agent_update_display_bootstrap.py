@@ -66,6 +66,7 @@ class TemporaryDisplayApi(FakePatchApi):
         # Intercept every actual script reload, not merely the API's explicit reload.
         (commands / "killall").write_text(
             '#!/bin/sh\nset -eu\n'
+            '[ "$1" = BtClass ] || exit 0\n'
             'if grep -q "C300XOptionalPages {" "$C300X_QML_GUI_DIR/HomeAssistant.qml"; then\n'
             '  for name in C300XChecks.qml C300XSituations.qml C300XOptionalPages.qml; do\n'
             '    if ! cmp -s "$C300X_QML_GUI_DIR/$name" "$C300X_QML_SOURCE_DIR/$name"; then\n'

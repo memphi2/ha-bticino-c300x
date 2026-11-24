@@ -87,8 +87,8 @@ HTTP handler in the isolated fixture; device writes are substitutes.
 | Unchanged apply | **H** deterministic RCC, current embedded preload, wrapper comparison; missing/stale artifacts repaired | A running PID is not a QML-ready handshake |
 | Optional/core/label removal | **F/H** real core, label, full apply, optional restore and restore-all sequence; complete removal restores wrapper and removes overlay | Confirm native stock screen after removal: **D** |
 | Early startup failure | **F/H** original wrapper under original ARM Bash 5.1.16 and host Bash; stock controls and bounded-log fixtures | Only errors within 60 seconds qualify; exits 0,137,138,140,143, later exits and hangs are not a general watchdog recovery mechanism |
-| Quarantine recovery | **H** updates and partial restore retain `.failed`; full removal precedes explicit retry | Diagnose actual Qt error and persistent marker before retry: **D** |
-| GUI versus agent restart | **H/static** agent restart does not reload mapped QML; maintenance reload goes through `qml_patch.sh reload`; post-update applies/reconciles and reloads separately | Vendor supervision and duplicate-start races on real firmware: **D** |
+| Quarantine recovery | **H** the mark holds for the boot that wrote it; partial restore and plain reloads keep it; each apply retries once (see GUI Restart And Quarantine) | Diagnose actual Qt error before retry: **D** |
+| GUI versus agent restart | **F/H** bt_daemon starts the wrapper once and never again; `qml_patch.sh` stops the old display completely before it starts exactly one new wrapper | Display release timing on eglfs/Vivante: **D** |
 | Self-update | **H** changed QML and runtime-only preload reconciliation, optional pages on/off, pending follow-up retained on failure | Complete update/reconnect on firmware: **D** |
 | Downgrade | **F/H** stable 2.8.2 payload refused without verified full removal; actual 3.0.6 restore-all then accepts it; Qt4 originals accepted | Guard requires this running updater; old agents and SSH/manual replacement bypass it; stock GUI restart: **D** |
 | Python/shell installers | **H** require successful core/full status, GUI presence and Qt5 activation; Python publishes bundle identity after activation | Neither installer proves every page rendered |
@@ -145,6 +145,74 @@ native-wake replies, synchronous preemption before beep, protected pages, clock
 rollback and pre-existing screen ownership. It reports `ALERT_LIFECYCLE_OK`.
 This closes the pure-JS engine gap, not the substituted audio/screen IO or
 vendor-signal delivery gap. Node tests still cover the QML transport boundary.
+
+### GUI Restart And Quarantine
+
+Redesigned after Dave's report in PR #126: a live apply left a sticky
+`display-qt5.rcc.failed`, the core Repair stayed at `qt5_failed`, the agent
+update stayed at `qml_patch_pending` and the media-user label could not be set.
+
+Firmware facts (**F**, `bin/bt_daemon` of 3.0.6 disassembled; 1.7.19 has the
+same `<gui>` entry and wrapper shape):
+
+- The `apps_control` child of bt_daemon starts every configured process once
+  with `call_nowait`, the `<gui>` entry `bin/BtClass_qws` included, and keeps
+  the PID. There is no SIGCHLD handler and no restart of a single process. A
+  PID is cleared and the process started again only by a working-mode switch
+  or by the fault checker's `/var/tmp/flags/RESTART_SIGNAL_FLAG`, which stops
+  and starts all processes.
+- Supervision is a software watchdog. Every `wdt_timeout` seconds (at least
+  32) bt_daemon checks `/var/tmp/bticino/bt_wd/<name>` of each running
+  process, deletes it, and reboots the station if it is missing. `BtClass`
+  writes `/var/tmp/bticino/bt_wd/BtClass_qws`, so a display that stays down for
+  a whole period reboots the station.
+- The wrapper's SIGTERM trap stops `BtClass` and exits; this is also how
+  bt_daemon stops it.
+
+So the earlier assumption that bt_daemon restarts the GUI was wrong: no second
+starter exists on the device. The race was between the old display program,
+still ending (eglfs/Vivante releases the framebuffer and GPU on exit), and the
+new one, started after a fixed two seconds. The old `reload_gui` also returned
+without starting anything when the old program was still alive after those two
+seconds.
+
+`reload_gui` now:
+
+1. Notes the PIDs of `BtClass`, stops the wrapper (`killall BtClass_qws`, its
+   own trap ends the program) and `BtClass`, and waits until those PIDs are
+   gone, at most `C300X_QML_GUI_STOP_SECONDS` (10). A program that does not end
+   gets SIGKILL and 3 more seconds. If it still runs, no second program is
+   started and the reload reports failure.
+2. Waits `C300X_QML_GUI_RELOAD_DELAY_SECONDS` (2) for the display to settle.
+3. Starts nothing if a `BtClass` runs by now (some other starter won).
+   Otherwise it starts the wrapper once, executed directly so that a later
+   reload can stop it by name, with `C300X_GUI_RELOAD=1`, in its own session.
+4. On Qt 5 with an active overlay it watches the start for up to
+   `C300X_QML_QT5_START_SECONDS` (10): it ends early when the wrapper marks the
+   overlay failed for this boot, or when `BtClass` has written its watchdog file
+   after the start. The status read after the reload then tells the truth in
+   most cases; there is still no QML readiness handshake.
+
+Back-to-back requests (installer `core-apply` then `apply`; update follow-up
+core, full and reload; Reload GUI) run one after the other in the agent's
+maintenance job and each waits for the previous display program to end, so two
+display programs never run at once. A reload job may now take up to 30 s
+(agent) and 35 s (HA request) instead of 10 s and 15 s.
+
+The quarantine mark holds the boot id from `/proc/sys/kernel/random/boot_id`
+(the wrapper and `qml_patch.sh` read it; the preload writes the id the wrapper
+passes in `C300X_QRC_FAILED_ID` when it rejects a resource file). A mark from an
+earlier boot is ignored and counts as absent; full removal deletes it.
+
+| Scenario | Behaviour |
+| --- | --- |
+| Boot, overlay crashes within 60 s | Wrapper writes the mark for this boot and starts the display as shipped. No retry in this boot, so no loop; the next boot tries the overlay once again. |
+| Our reload, first overlay start crashes | The wrapper (started with `C300X_GUI_RELOAD=1`) waits 3 s and tries the overlay once more. A crash that does not repeat is taken as the restart race and leaves no mark. Two crashes write the mark for this boot and start as shipped. |
+| Back-to-back apply | Each restart stops the previous display completely before it starts one wrapper; no competing starter. |
+| Plain reload (button, service, CPU watchdog) | Keeps a mark of this boot; the display starts as shipped. |
+| `apply`, `core-apply`, `media-user-label-apply` (installer, update follow-up, core Repair, Display patch switch, label setup) | Drop a mark (this boot or older) and restart the display once with the overlay, even when no file changed. |
+| Partial restore | Keeps a mark of this boot, drops an older one. |
+| Display setting saves | Do not retry a quarantined overlay (`display_patch_sync`). |
 
 ### Startup Guard Boundary
 
@@ -410,8 +478,9 @@ unchanged recovery artifacts on failed restoration, not merely a diagnostic.
 
 1. Cold boot 3.0.6 with full/core-only/off states; inspect GUI process and
    overlay status/log, daemon behavior, and stable stock fallback.
-2. Explicit controlled startup failure, retained quarantine through restart
-   and update, full removal and deliberate retry; test recovery access first.
+2. Explicit controlled startup failure: quarantine for this boot, no
+   quarantine after a reboot, retry by apply and by the core Repair; live
+   apply and back-to-back apply without a mark; test recovery access first.
 3. Update QML and runtime independently; verify the running GUI uses new
    resources, not only that agent version/status changed.
 4. Navigate every page, settings and native call screen; exercise language,

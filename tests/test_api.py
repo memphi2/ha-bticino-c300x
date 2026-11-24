@@ -1670,6 +1670,28 @@ def test_reload_gui_sends_maintenance_confirmation() -> None:
     assert request["kwargs"]["json"] == {"confirm": "reload_gui"}
 
 
+def test_reload_gui_waits_as_long_as_a_display_patch_write() -> None:
+    """A GUI restart first waits for the old display program to end."""
+
+    calls: list[dict[str, object]] = []
+    api = C300XAgentApi(
+        _FakeSession(),  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+        "maintenance-token",
+        timeout=5,
+    )
+
+    async def request_json(method: str, path: str, **request_kwargs: object) -> dict[str, object]:
+        calls.append(request_kwargs)
+        return {"ok": True}
+
+    api._request_json = request_json  # type: ignore[method-assign]
+    asyncio.run(api.async_reload_gui())
+    asyncio.run(api.async_apply_qml_core_patch())
+    assert calls[0]["request_timeout"] == calls[1]["request_timeout"] == 35.0
+
+
 def test_firewall_status_uses_maintenance_endpoint() -> None:
     session = _FakeSession('{"ok": true, "state": "patched", "api_port": 8091}')
     api = C300XAgentApi(
@@ -3888,7 +3910,6 @@ def test_ordinary_message_and_memo_ids_stay_valid(message_id):
 
 @pytest.mark.parametrize("call", [
     lambda api: api.async_qml_patch_status(),
-    lambda api: api.async_reload_gui(),
     lambda api: api.async_firewall_status(),
     lambda api: api.async_apply_firewall(),
     lambda api: api.async_restore_firewall(),
@@ -3900,9 +3921,10 @@ def test_ordinary_message_and_memo_ids_stay_valid(message_id):
 def test_script_backed_maintenance_requests_outlast_the_agent_script(
     call, configured, expected
 ) -> None:
-    # The agent answers these after running a script it gives 10 s. With the
-    # 5 s default the request gave up while the script was still running and
-    # an agent update reported a failure that a second try did not show.
+    # The agent answers these after running a script it gives 10 s (a GUI
+    # restart has the longer write timeout, see above). With the 5 s default
+    # the request gave up while the script was still running and an agent
+    # update reported a failure that a second try did not show.
     session = _FakeSession('{"ok": true, "patched": true, "state": "patched"}')
     api = C300XAgentApi(
         session,  # type: ignore[arg-type]

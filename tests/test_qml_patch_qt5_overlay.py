@@ -91,6 +91,8 @@ class Device:
         self.wrapper.write_text(WRAPPER)
         self.wrapper.chmod(0o755)
         self.rcc.parent.mkdir(parents=True)
+        self.boot_id = tmp_path / "boot_id"
+        self.boot_id.write_text("boot-1\n")
 
     def run(self, action: str, **env: str) -> subprocess.CompletedProcess[str]:
         environment = {
@@ -110,6 +112,7 @@ class Device:
             "C300X_QT5_GUI_BINARY": str(self.program),
             "C300X_QML_NO_REMOUNT": "1",
             "C300X_QML_RELOAD_GUI": "0",
+            "C300X_QML_BOOT_ID": str(self.boot_id),
             **env,
         }
         return subprocess.run([str(SCRIPT), action], capture_output=True, text=True, env=environment, check=False)
@@ -282,13 +285,56 @@ def test_a_display_that_ends_normally_is_not_restarted(device: Device, tmp_path:
     assert device.ok("status")["qt5_overlay"] == "active"
 
 
-def test_partial_changes_keep_quarantine_until_the_whole_overlay_is_removed(device: Device) -> None:
+def test_a_quarantine_holds_for_the_boot_that_wrote_it(device: Device, tmp_path: Path) -> None:
     device.ok("apply")
-    Path(f"{device.rcc}.failed").write_text("")
-    device.ok("restore")
-    assert device.ok("apply")["qt5_overlay"] == "failed"
-    assert device.ok("restore-all")["qt5_overlay"] == "off"
-    assert device.ok("apply")["qt5_overlay"] == "active"
+    assert _start_display(device, tmp_path, 134) == [str(device.lib), "plain"]
+    assert Path(f"{device.rcc}.failed").read_text() == "boot-1\n"
+    assert device.ok("status")["qt5_overlay"] == "failed"
+    assert device.ok("restore")["qt5_overlay"] == "failed"
+    assert _start_display(device, tmp_path, 0)[2:] == ["plain"]
+    device.boot_id.write_text("boot-2\n")
+    assert device.ok("status")["qt5_overlay"] == "active"
+    assert _start_display(device, tmp_path, 0)[3:] == [str(device.lib)]
+
+
+@pytest.mark.parametrize("action", ["apply", "core-apply", "media-user-label-apply"])
+def test_an_apply_retries_a_quarantined_overlay_once(device: Device, action: str) -> None:
+    device.ok("apply")
+    device.ok("media-user-label-apply")
+    Path(f"{device.rcc}.failed").write_text("boot-1\n")
+    assert device.ok("reload")["qt5_overlay"] == "failed"
+    assert device.ok(action)["qt5_overlay"] == "active"
+    assert not Path(f"{device.rcc}.failed").exists()
+
+
+def test_full_removal_also_takes_away_a_mark_of_an_earlier_boot(device: Device) -> None:
+    device.ok("apply")
+    device.ok("restore-all")
+    Path(f"{device.rcc}.failed").write_text("boot-0\n")
+    assert device.ok("status")["qt5_overlay"] == "off"
+    device.ok("restore-all")
+    assert not Path(f"{device.rcc}.failed").exists()
+
+
+def test_a_reload_start_tries_the_overlay_again_after_the_display_settled(device: Device, tmp_path: Path) -> None:
+    device.ok("apply")
+    attempts = tmp_path / "attempts"
+    program = tmp_path / "bin/gui/BtClass"
+    program.parent.mkdir(parents=True, exist_ok=True)
+    program.write_text(
+        f'#!/bin/sh\necho "${{LD_PRELOAD:-plain}}" >> "{attempts}"\n'
+        f'[ "$(wc -l < "{attempts}")" -ge 2 ] && exit 0\nexit 134\n'
+    )
+    program.chmod(0o755)
+    environment = {**os.environ, "C300X_GUI_RELOAD": "1"}
+    subprocess.run(["sh", str(device.wrapper)], cwd=tmp_path, env=environment, check=False, timeout=30)
+    assert attempts.read_text().splitlines() == [str(device.lib), str(device.lib)]
+    assert not Path(f"{device.rcc}.failed").exists()
+    attempts.unlink()
+    program.write_text(f'#!/bin/sh\necho "${{LD_PRELOAD:-plain}}" >> "{attempts}"\n[ -n "${{LD_PRELOAD:-}}" ] && exit 134\nexit 0\n')
+    subprocess.run(["sh", str(device.wrapper)], cwd=tmp_path, env=environment, check=False, timeout=30)
+    assert attempts.read_text().splitlines() == [str(device.lib), str(device.lib), "plain"]
+    assert device.ok("status")["qt5_overlay"] == "failed"
 
 
 def test_the_display_errors_are_kept_in_a_bounded_log(device: Device, tmp_path: Path) -> None:

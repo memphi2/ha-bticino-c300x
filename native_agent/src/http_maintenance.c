@@ -114,8 +114,9 @@ static void start_script(struct c300x_http_maintenance *owner, int client_fd,
             : "{\"ok\":false,\"available\":false,\"state\":\"script_missing\"}\n");
         return;
     }
-    /* QML writes may need both a failed start and a restored-GUI restart. */
-    int timeout_ms = !gui_reload && records_write ? 30000 : 10000;
+    /* QML writes may need both a failed start and a restored-GUI restart; a
+     * GUI restart waits for the old display program to end first. */
+    int timeout_ms = gui_reload || records_write ? 30000 : 10000;
     if (!c300x_command_job_start(&owner->job, program, action, dynamic_homepage, timeout_ms)) {
         c300x_http_send_json(client_fd, 502, "Bad Gateway", gui_reload
             ? "{\"ok\":false,\"error\":\"reload_failed\"}\n"

@@ -182,7 +182,15 @@ def test_disconnect_keeps_one_job_and_does_not_reuse_its_client_fd(lab):
     assert response(lab.request())["ok"]
 
 
-@pytest.mark.parametrize("path,payload", [(QML, None), (GUI, {"confirm": "reload_gui"})])
+def test_a_gui_restart_may_take_longer_than_a_status_read(lab):
+    """The restart waits for the old display program to end, then watches the start."""
+
+    lab.script('sleep 11\nprintf \'{"ok":true,"action":"reload_gui"}\'\n')
+    pending = lab.request(GUI, {"confirm": "reload_gui"})
+    assert response(pending)["action"] == "reload_gui"
+
+
+@pytest.mark.parametrize("path,payload", [(QML, None)])
 def test_timeout_with_closed_stdout_does_not_block_and_reaps_child(lab, path, payload):
     lab.script("exec 1>&-\nexec sleep 30\n")
     pending = lab.request(path, payload)

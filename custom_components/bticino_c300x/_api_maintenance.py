@@ -500,7 +500,7 @@ class _ApiMaintenanceMixin(_C300XApiCore):
             "/api/v1/maintenance/gui/actions/reload",
             json_data={"confirm": "reload_gui"},
             extra_headers=self._maintenance_headers(),
-            request_timeout=self._job_timeout(),
+            request_timeout=self._job_timeout(_QML_WRITE_JOB_TIMEOUT),
         )
         return _ok_response(data)
 

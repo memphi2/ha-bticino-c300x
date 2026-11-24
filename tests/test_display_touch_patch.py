@@ -260,7 +260,7 @@ def _fake_device(tmp_path: Path, maps: str, mounts: str) -> dict[str, str]:
     log = tmp_path / "tool-calls.log"
     for name, body in {
         "pidof": "echo 4242",
-        "killall": f"echo killall >> {log}",
+        "killall": f"echo killall $* >> {log}",
         "mount": f"echo mount $* >> {log}",
     }.items():
         (tools / name).write_text(f"#!/bin/sh\n{body}\n")
@@ -292,7 +292,8 @@ def test_a_run_that_was_cut_off_is_completed_by_the_next_one(tmp_path: Path) -> 
     status = json.loads(_script(tmp_path, gui_dir, "apply", agent, **env).stdout)
     assert status["ok"] is True
     calls = (tmp_path / "tool-calls.log").read_text().splitlines()
-    assert calls == ["killall", "mount -o remount,ro /"]
+    # The start script is stopped with the display program: one restart.
+    assert calls == ["killall BtClass_qws", "killall BtClass", "mount -o remount,ro /"]
 
 
 def test_a_display_on_the_current_library_is_not_restarted(tmp_path: Path) -> None:

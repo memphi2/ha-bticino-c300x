@@ -73,6 +73,15 @@ def test_a_damaged_file_is_not_registered(
     assert rcc_failed(tmp_path / "bad.rcc").exists()
 
 
+def test_a_rejected_file_is_marked_for_the_boot_the_start_script_names(
+    built: tuple[Path, Path, Path], tmp_path: Path
+) -> None:
+    path = _rcc(tmp_path / "bad.rcc", magic=b"qrex")
+    rcc_failed(path).write_text("earlier-boot\n")
+    assert _run(built, path, C300X_QRC_FAILED_ID="this-boot")["calls"] == 0
+    assert rcc_failed(path).read_text() == "this-boot\n"
+
+
 def rcc_failed(path: Path) -> Path:
     return path.with_name(path.name + ".failed")
 

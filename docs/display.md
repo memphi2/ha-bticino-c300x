@@ -115,10 +115,12 @@ touch fix for lost taps is not part of it; it changes a Qt 4 library that
 - **When the display fails with the pages:** if the display ends with an error
   within a minute of a start with the pages, it is started again as shipped,
   and the Display patch status reads **applied, but the display started as
-  shipped**. Updates and switching the optional pages off and on do not clear
-  this quarantine. After investigating the error, an explicit full removal
-  (`qml_patch.sh restore-all`) followed by an apply can retry it. Full removal
-  also removes the core hooks; use the installer or Repair to apply them again.
+  shipped**. This holds until the station restarts; the next start tries the
+  pages again. Applying the Display patch, the core hook Repair or an agent
+  update also tries them once more without a restart; if the display fails
+  again, it stays as shipped. When the agent restarts the display after a
+  change, it waits until the old display has ended and tries the pages twice
+  before it starts as shipped.
 - **Interrupted changes:** failed activation or restore rolls back the display
   resources, startup wrapper, preload library and quarantine state together.
   If rollback cannot finish, recovery files are retained and the overlay stays

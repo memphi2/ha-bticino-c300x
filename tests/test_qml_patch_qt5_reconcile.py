@@ -36,11 +36,11 @@ def test_unchanged_qml_repairs_missing_or_stale_activation(device, action, drift
     assert snapshot(device) == expected
 
 
-@pytest.mark.parametrize("quarantined", [False, True])
-def test_noop_keeps_artifact_identity_and_does_not_reload(device, quarantined, monkeypatch):
+@pytest.mark.parametrize("earlier_boot", [False, True])
+def test_noop_keeps_artifact_identity_and_does_not_reload(device, earlier_boot, monkeypatch):
     device.ok("apply")
-    if quarantined:
-        artifacts(device)["failed"].write_bytes(b"original quarantine")
+    if earlier_boot:
+        artifacts(device)["failed"].write_bytes(b"boot-0\n")
     before = snapshot(device)
     identity = {name: (p.stat().st_ino, p.stat().st_mtime_ns)
                 for name, p in artifacts(device).items() if p.exists()}
@@ -52,19 +52,19 @@ def test_noop_keeps_artifact_identity_and_does_not_reload(device, quarantined, m
     monkeypatch.setattr(overlay, "SCRIPT", script)
     result = device.ok("apply")
     assert result["changed_files"] == 0
-    assert result["qt5_overlay"] == ("failed" if quarantined else "active")
+    assert result["qt5_overlay"] == "active"
     assert snapshot(device) == before
     assert {name: (p.stat().st_ino, p.stat().st_mtime_ns)
             for name, p in artifacts(device).items() if p.exists()} == identity
 
 
-def test_artifact_repair_never_releases_quarantine(device):
+def test_artifact_repair_also_retries_a_quarantined_overlay(device):
     device.ok("apply")
-    artifacts(device)["failed"].write_bytes(b"failed activation\n")
+    artifacts(device)["failed"].write_bytes(b"boot-1\n")
     device.lib.write_bytes(b"old embedded library")
-    assert device.ok("core-apply")["qt5_overlay"] == "failed"
+    assert device.ok("core-apply")["qt5_overlay"] == "active"
     assert device.lib.read_bytes() == (device.programs["agent"].parent / "c300x-qrc-overlay.so").read_bytes()
-    assert artifacts(device)["failed"].read_bytes() == b"failed activation\n"
+    assert not artifacts(device)["failed"].exists()
 
 
 def test_candidate_failure_keeps_active_artifacts(device):

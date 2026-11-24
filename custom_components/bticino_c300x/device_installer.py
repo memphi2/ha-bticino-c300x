@@ -48,7 +48,9 @@ REMOTE_FIREWALL_BACKUP = (
     "/etc/network/if-pre-up.d/iptables"
 )
 _SSH_CONNECT_TIMEOUT = 12.0
-_SSH_COMMAND_TIMEOUT = 30.0
+# A Display patch step restarts the GUI, which first waits for the old display
+# program to end and on Qt 5 watches the new start.
+_SSH_COMMAND_TIMEOUT = 60.0
 _REQUIRED_ASYNCSSH_VERSION = "2.24.1"
 INSTALLER_REQUIREMENTS = (f"asyncssh=={_REQUIRED_ASYNCSSH_VERSION}",)
 # The display files the agent directory holds; qml_patch.sh installs them.

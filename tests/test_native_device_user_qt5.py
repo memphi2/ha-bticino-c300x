@@ -68,7 +68,8 @@ def test_real_qt5_label_restore_is_not_skipped(route_binary, programs, tmp_path,
     assert device.ok("media-user-label-apply")["media_user_label_patched"] is True
     failed = device.rcc.with_name(device.rcc.name + ".failed")
     if quarantined:
-        failed.write_text("keep quarantine\n")
+        # A quarantine of this boot; a mark of an earlier boot would not count.
+        failed.write_text("boot-1\n")
     # Isolated process-presence stand-in; no GUI or device is started.
     pidof = tmp_path / "bin/pidof"
     pidof.write_text("#!/bin/sh\necho 123\n")
@@ -82,6 +83,7 @@ def test_real_qt5_label_restore_is_not_skipped(route_binary, programs, tmp_path,
         "C300X_QML_QT5_WRAPPER_BACKUP": str(device.wrapper_backup), "C300X_QML_GUI_WRAPPER": str(device.wrapper),
         "C300X_QML_AGENT_BIN": str(programs["agent"]), "C300X_QT5_GUI_BINARY": str(device.program),
         "C300X_QML_NO_REMOUNT": "1", "C300X_QML_RELOAD_GUI": "0",
+        "C300X_QML_BOOT_ID": str(device.boot_id),
     }
     result = route(route_binary, NATIVE / "scripts/qml_patch.sh", "restore", env)
     assert result["status"] == 200 and result["restored"] == 1, result

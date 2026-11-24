@@ -26,5 +26,6 @@ def require_display_activation(status: Mapping[str, Any], *, required: bool = Tr
     if not display_activation_confirmed(status, required=required):
         raise C300XAgentApiError(
             "Qt 5 display activation is not confirmed; inspect the display status and log. "
-            "A quarantined overlay requires full removal before an explicit retry."
+            "A quarantined overlay holds until the next boot; applying the Display "
+            "patch or the core Repair tries it once more."
         )

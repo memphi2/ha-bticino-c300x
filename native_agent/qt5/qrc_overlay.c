@@ -86,10 +86,21 @@ static int valid_overlay(const unsigned char *rcc, size_t size)
 static void reject_overlay(const char *path)
 {
     char failed[4096];
+    /* The start script names the boot; the mark holds only for that boot. */
+    const char *boot = getenv("C300X_QRC_FAILED_ID");
     int length = snprintf(failed, sizeof(failed), "%s.failed", path);
     if (length > 0 && (size_t)length < sizeof(failed)) {
-        int fd = open(failed, O_WRONLY | O_CREAT | O_CLOEXEC | O_NOFOLLOW, 0600);
-        if (fd >= 0) close(fd);
+        int fd = open(failed, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC | O_NOFOLLOW, 0600);
+        if (fd >= 0) {
+            size_t boot_len = boot != NULL ? strlen(boot) : 0;
+            if (boot_len > 0 && boot_len < 64) {
+                char line[65];
+                memcpy(line, boot, boot_len);
+                line[boot_len] = '\n';
+                (void)!write(fd, line, boot_len + 1);
+            }
+            close(fd);
+        }
     }
     fputs("c300x-qrc-overlay: invalid resource file; using stock resources\n", stderr);
 }

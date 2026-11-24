@@ -116,8 +116,12 @@ saved recordings and snapshots are never recoloured.
   setting and succeeds only after reading the exact value back; otherwise the
   old value is put back. On a TVP5150 board contrast reads back from the
   driver's own copy, so a contrast write the decoder missed goes unnoticed.
-  Tested on 1.7.19; 2.0.2 and 3.0.6 are checked offline only. Changes last
-  until the video ends; the station starts each video with its own values.
+  That copy reads 0 after a station start until the station itself writes
+  the contrast once; until then the sliders icon does not appear for
+  on-demand video, and the controls may only work during a Ring Call
+  (through the display). Every 3.0.6 station has a TVP5150. Tested on
+  1.7.19; 2.0.2 and 3.0.6 are checked offline only. Changes last until the
+  video ends; the station starts each video with its own values.
 
 Automations use `bticino_c300x.camera_picture` in an active session: omit
 `control` and `value` to read, or send both (for example `control: contrast`,

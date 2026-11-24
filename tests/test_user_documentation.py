@@ -484,3 +484,13 @@ def test_the_display_docs_name_the_notice_for_an_unknown_display():
     title = strings["issues"]["device_display_unsupported"]["title"]
     qt5 = section("display.md", "Enable the Display Pages").split("### Display Patch on Firmware 3.0.6\n", 1)[1]
     assert f"**{title}**" in qt5
+
+
+def test_picture_control_docs_say_tvp5150_may_need_the_ring_call_path():
+    guide = (DOCS / "user-guide.md").read_text(encoding="utf-8")
+    guide = guide.split("### Picture Controls\n", 1)[1].split("\n### ", 1)[0]
+    readme = next(line for line in (ROOT / "README.md").read_text(encoding="utf-8").splitlines()
+                  if line.startswith("| Picture controls |"))
+    for text in (guide.replace("\n  ", " "), readme):
+        assert "checked offline only" in text
+        assert "may only work during a Ring Call" in text

@@ -1558,6 +1558,10 @@
         }
       }
     },
+    "device_qml_transaction_stuck": {
+      "title": "C300X display write left unfinished",
+      "description": "A Display patch write on {entry_title} was interrupted (power loss, crash or a forced stop) and the device agent could not finish it automatically. The display files were left as they are; nothing is lost: the files from before that write are kept on the device in a hidden folder `.c300x-qml-transaction.*` inside /home/bticino/bin/gui/skins/default.\n\nWhat to do: check the C300X display. If it works, apply the Display patch again from the integration (switch it off and on), which rebuilds every display file from the stock backups. If the warning stays, reboot the C300X so the agent tries again at start. A leftover from agent 2.9.0 or older is never restored automatically: once the display works, remove that folder over SSH (see Advanced maintenance, Recovery, in the documentation)."
+    },
     "device_user_required": {
       "title": "C300X media user setup required",
       "fix_flow": {

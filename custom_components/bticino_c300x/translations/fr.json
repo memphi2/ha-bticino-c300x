@@ -1558,6 +1558,10 @@
         }
       }
     },
+    "device_qml_transaction_stuck": {
+      "title": "Écriture de l'écran C300X inachevée",
+      "description": "Une écriture du correctif d'écran sur {entry_title} a été interrompue (coupure de courant, plantage ou arrêt forcé) et l'agent de l'appareil n'a pas pu la terminer seul. Les fichiers de l'écran sont restés tels quels ; rien n'est perdu : les fichiers d'avant cette écriture sont conservés sur l'appareil dans un dossier caché `.c300x-qml-transaction.*` dans /home/bticino/bin/gui/skins/default.\n\nQue faire : vérifiez l'écran du C300X. S'il fonctionne, appliquez de nouveau le correctif d'écran depuis l'intégration (désactivez-le puis réactivez-le) : tous les fichiers de l'écran sont reconstruits à partir des sauvegardes d'origine. Si l'avertissement reste, redémarrez le C300X pour que l'agent réessaie au démarrage. Un reste de l'agent 2.9.0 ou plus ancien n'est jamais restauré automatiquement : une fois l'écran fonctionnel, supprimez ce dossier par SSH (voir Maintenance avancée, Récupération, dans la documentation)."
+    },
     "device_user_required": {
       "title": "Configuration utilisateur média C300X requise",
       "fix_flow": {

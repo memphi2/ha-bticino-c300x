@@ -313,6 +313,7 @@ def test_a_write_past_the_agent_deadline_stays_to_do(monkeypatch):
     assert entry.data == {CONF_DISPLAY_SETTING_PENDING: True}
     hass.config_entries.async_update_entry.assert_not_called()
     assert entry.runtime_data.qml_patch_status["state"] == "original"
+    assert entry.runtime_data.qml_patch_status["transaction"] == "pending"
 
 
 def test_the_agent_timeout_answer_names_itself():

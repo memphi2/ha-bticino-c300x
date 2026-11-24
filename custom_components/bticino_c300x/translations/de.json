@@ -1558,6 +1558,10 @@
         }
       }
     },
+    "device_qml_transaction_stuck": {
+      "title": "C300X-Displayschreibvorgang nicht abgeschlossen",
+      "description": "Ein Schreibvorgang des Display-Patches auf {entry_title} wurde unterbrochen (Stromausfall, Absturz oder erzwungener Stopp), und der Geräte-Agent konnte ihn nicht selbst abschließen. Die Displaydateien bleiben, wie sie sind; nichts geht verloren: Die Dateien von vor diesem Schreibvorgang liegen auf dem Gerät in einem versteckten Ordner `.c300x-qml-transaction.*` in /home/bticino/bin/gui/skins/default.\n\nVorgehen: Prüfe das C300X-Display. Funktioniert es, wende den Display-Patch in der Integration erneut an (aus- und wieder einschalten); dabei werden alle Displaydateien aus den Originalsicherungen neu erstellt. Bleibt die Warnung, starte das C300X neu, damit der Agent es beim Start erneut versucht. Ein Rest von Agent 2.9.0 oder älter wird nie automatisch zurückgespielt: Sobald das Display funktioniert, entferne diesen Ordner per SSH (siehe Erweiterte Wartung, Wiederherstellung, in der Dokumentation)."
+    },
     "device_user_required": {
       "title": "C300X Media-User-Setup erforderlich",
       "fix_flow": {

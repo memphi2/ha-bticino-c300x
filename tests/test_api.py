@@ -2526,8 +2526,13 @@ def test_normalize_qml_patch_status_derives_state() -> None:
         "core_backup_available": None,
         "gui_running": None,
         "home_buttons": None,
+        "transaction": None,
         "raw": {"patched": True},
     }
+    for transaction in ("pending", "recovered", "stuck"):
+        assert normalize_qml_patch_status({"transaction": transaction})["transaction"] == transaction
+    for malformed in ("other", 1, None, []):
+        assert normalize_qml_patch_status({"transaction": malformed})["transaction"] is None
     assert normalize_qml_patch_status({"state": "original"})["patched"] is False
     assert normalize_qml_patch_status({"state": "applied"})["patched"] is True
     assert normalize_qml_patch_status({"state": "restored"})["patched"] is False

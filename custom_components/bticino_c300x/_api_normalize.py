@@ -505,6 +505,7 @@ def normalize_qml_patch_status(data: Any) -> dict[str, Any]:
         else:
             state = "unknown"
     home_buttons = data.get("home_buttons")
+    transaction = data.get("transaction")
     return {
         "available": bool(data.get("available", True)),
         "patched": patched,
@@ -519,6 +520,13 @@ def normalize_qml_patch_status(data: Any) -> dict[str, Any]:
         "home_buttons": (
             home_buttons
             if isinstance(home_buttons, str) and home_buttons in HOME_BUTTONS_LAYOUTS
+            else None
+        ),
+        # A display write the device left behind: "pending" until the agent
+        # finishes it, "recovered" once it did, "stuck" when it could not.
+        "transaction": (
+            transaction
+            if isinstance(transaction, str) and transaction in {"pending", "recovered", "stuck"}
             else None
         ),
         "raw": data.get("raw", data),

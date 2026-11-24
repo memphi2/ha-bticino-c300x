@@ -298,5 +298,10 @@ def _notify_status_changed(status_changed: _StatusChanged | None) -> None:
 
 
 def _store_qml_patch_status(entry: BticinoC300XConfigEntry, status: dict[str, Any]) -> None:
+    if status.get("transaction") == "stuck" and _qml_patch_status(entry).get("transaction") != "stuck":
+        _LOGGER.warning(
+            "C300X Display patch: an interrupted display write could not be "
+            "finished on the device; see the Repairs issue"
+        )
     entry.runtime_data.qml_patch_status = status
     entry.runtime_data.qml_patch_status_updated_at = datetime.now(UTC)

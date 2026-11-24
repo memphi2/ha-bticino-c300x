@@ -98,9 +98,9 @@ Fixed:
   port change, restart the agent and reapply the Display patch; until then the
   patch is reported as partially patched.
 - With the fixed side-by-side Alarm and Home Assistant buttons, the station's
-  own buttons no longer slide off screen next to the Quick actions panel or on
-  stations that show only Memo and Settings, and a hidden Alarm button keeps
-  its place empty instead of letting Home Assistant move into it (#119). Needs
+  own buttons no longer slide off screen next to the Quick actions panel (#119)
+  or on stations that show only Memo and Settings, and a hidden Alarm button
+  keeps its place empty instead of letting Home Assistant move into it. Needs
   the agent update.
 
 Settings:

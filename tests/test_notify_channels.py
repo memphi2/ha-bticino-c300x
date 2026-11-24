@@ -63,12 +63,13 @@ def test_every_switch_combination_runs_exactly_its_channels(
     asyncio.run(run())
 
 
-def test_display_and_tts_accept_a_tone_but_the_speech_replaces_it(tmp_path, monkeypatch):
+@pytest.mark.parametrize("channels", [
+    {"display": True, "tts": True}, {"mode": "both"},
+], ids=["switches", "legacy both"])
+def test_display_and_tts_accept_a_tone_but_the_speech_replaces_it(tmp_path, monkeypatch, channels):
     async def run():
         async with speech_context(tmp_path, monkeypatch) as (hass, entry, spoken):
-            await send(hass, entry, data={
-                "display": True, "tts": True, "sound_duration": 5, "wake_duration": 20,
-            })
+            await send(hass, entry, data={**channels, "sound_duration": 5, "wake_duration": 20})
             alert = entry.runtime_data.api.async_send_display_alert.call_args.args[0]
             # The tone would hold the speaker the speech needs.
             assert (alert["sound_duration"], alert["wake_duration"]) == (0, 20)

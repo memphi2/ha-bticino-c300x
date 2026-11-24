@@ -126,9 +126,6 @@ def alert_options(data: dict[str, Any] | None) -> dict[str, Any]:
             "mode led does not wake, play sound "
             "or speak; omit positive durations and TTS settings"
         )
-    if mode == "both" and options.get("sound_duration"):
-        # The tone would hold the speaker the speech needs.
-        raise _invalid("mode both speaks instead of the tone; leave out sound_duration")
     options.update(
         mode=mode, display="display" in channels, tts="tts" in channels, led=led,
         led_required="led" in channels,

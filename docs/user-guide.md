@@ -469,7 +469,7 @@ switches. `mode` cannot be combined with any switch; HA refuses that.
 | --- | --- | --- |
 | `display` | `display` | The notice also lights the LED where supported, without requiring it. `tts_engine` and `language` are ignored instead of refused. |
 | `speech` | `tts` | Durations, `severity`, `expires_in` and `notification_id` are ignored instead of refused. |
-| `both` | `display`, `tts` | Lights the LED like `display`; a `sound_duration` above 0 is refused. |
+| `both` | `display`, `tts` | Lights the LED like `display`. |
 | `led` | `led` | None. |
 
 Set engine and language for the speech once under **Configure > Speech** (for

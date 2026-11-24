@@ -1,7 +1,7 @@
 import {
   C300X_TRANSLATIONS,
   c300xLocalize,
-} from "./c300x-translations.js?v=e9b1d0148a50d837";
+} from "./c300x-translations.js?v=5605ceb6a5094cb7";
 import {
   C300X_AUDIO_CODEC_OBJECT_ID,
   C300X_CAMERA_OBJECT_ID,
@@ -15,18 +15,18 @@ import {
   c300xObjectSuffix,
   c300xRelatedEntity,
   c300xResolveEntity,
-} from "./c300x-entity-resolver.js?v=e9b1d0148a50d837";
+} from "./c300x-entity-resolver.js?v=5605ceb6a5094cb7";
 import {
   C300X_CARD_EDITOR_TAG,
   c300xDoorbellCardStubConfig,
-} from "./c300x-card-editor.js?v=e9b1d0148a50d837";
-import { C300XCardActions } from "./c300x-card-actions.js?v=e9b1d0148a50d837";
+} from "./c300x-card-editor.js?v=5605ceb6a5094cb7";
+import { C300XCardActions } from "./c300x-card-actions.js?v=5605ceb6a5094cb7";
 import {
   C300XCardLifecycleState,
   c300xAnsweredRingKey,
-} from "./c300x-card-lifecycle.js?v=e9b1d0148a50d837";
-import { c300xRingLifecycleActive } from "./c300x-ring-preview-state.js?v=e9b1d0148a50d837";
-import { C300X_DOORBELL_CARD_TEMPLATE } from "./c300x-card-template.js?v=e9b1d0148a50d837";
+} from "./c300x-card-lifecycle.js?v=5605ceb6a5094cb7";
+import { c300xRingLifecycleActive } from "./c300x-ring-preview-state.js?v=5605ceb6a5094cb7";
+import { C300X_DOORBELL_CARD_TEMPLATE } from "./c300x-card-template.js?v=5605ceb6a5094cb7";
 import {
   c300xCardViewModel,
   c300xIsHomeCallActive,
@@ -34,13 +34,13 @@ import {
   c300xMediaReadinessHasRepair,
   c300xMediaReadinessLabelKey,
   c300xMediaState,
-} from "./c300x-state-model.js?v=e9b1d0148a50d837";
-import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=e9b1d0148a50d837";
-import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=e9b1d0148a50d837";
-import { C300XStreamSnapshots } from "./c300x-stream-snapshots.js?v=e9b1d0148a50d837";
-import { C300XCardMedia } from "./c300x-card-media.js?v=e9b1d0148a50d837";
-import { c300xFollowPictureSize } from "./c300x-picture-frame.js?v=e9b1d0148a50d837";
-import { mediaStamp } from "./c300x-media-translations.js?v=e9b1d0148a50d837";
+} from "./c300x-state-model.js?v=5605ceb6a5094cb7";
+import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=5605ceb6a5094cb7";
+import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=5605ceb6a5094cb7";
+import { C300XStreamSnapshots } from "./c300x-stream-snapshots.js?v=5605ceb6a5094cb7";
+import { C300XCardMedia } from "./c300x-card-media.js?v=5605ceb6a5094cb7";
+import { c300xFollowPictureSize } from "./c300x-picture-frame.js?v=5605ceb6a5094cb7";
+import { mediaStamp } from "./c300x-media-translations.js?v=5605ceb6a5094cb7";
 
 const C300X_NOTICE_TIMEOUT_MS = 2000;
 const C300X_RING_ANSWER_LAUNCH_PARAM = "c300x_ring_answer";
@@ -224,6 +224,7 @@ class C300XDoorbellCallCard extends HTMLElement {
       getCardGainDb: () => this._cardGainDb(),
       getPlayback: () => ({ volume: this._playbackVolume, muted: this._playbackMuted }),
       onGainChanged: () => this._scheduleUpdate(),
+      onPlaybackBlocked: () => this._scheduleUpdate(),
     });
   }
 
@@ -418,6 +419,8 @@ class C300XDoorbellCallCard extends HTMLElement {
       event.stopPropagation();
       this._toggleMicMuted();
     });
+    // Any tap in the card is the gesture a sound refused at autoplay needs.
+    root.addEventListener("click", () => this._resumeBlockedPlayback(), true);
     this._cardMedia = new C300XCardMedia(this);
     this._pictureFrame = c300xFollowPictureSize(this, this._videoEl, () => this._resolvedCameraEntityId());
     this._updateState();
@@ -447,6 +450,7 @@ class C300XDoorbellCallCard extends HTMLElement {
       hasRemoteAudio: !!this._webrtc?.remoteStream?.getAudioTracks?.().length,
       hasRemoteVideo: !!this._webrtc?.remoteStream?.getVideoTracks?.().length,
       scaledVolume: !!this._webrtc?.gainEngaged,
+      soundBlocked: this._soundBlocked(),
       isStreaming: attributes.is_streaming === true,
       lifecycle: {
         activeHomeCallSession: this._lifecycle.activeHomeCallSession,
@@ -623,13 +627,14 @@ class C300XDoorbellCallCard extends HTMLElement {
     this._updateHomeActionButton(homeView, autoMode, doorstationActive);
     this._updateMicButton();
     this._updateDeviceActionButtons();
+    const soundBlocked = this._soundBlocked();
     this._secondaryEl.textContent = this._error
       || this._notice
-      || this._labelOrRaw(view.secondaryKey);
+      || (soundBlocked ? this._label("tap_for_sound") : this._labelOrRaw(view.secondaryKey));
     // The footer stays one row, so a long message is cut; the tooltip has it all.
     this._secondaryEl.title = this._secondaryEl.textContent;
     this._secondaryEl.classList.toggle("error", !!this._error);
-    this._secondaryEl.classList.toggle("notice", !this._error && !!this._notice);
+    this._secondaryEl.classList.toggle("notice", !this._error && (!!this._notice || soundBlocked));
     this._mediaEl.style.display = view.showMedia ? "" : "none";
     this._emptyEl.style.display = this._webrtc.remoteStream || !view.showEmpty ? "none" : "";
     const showSnapshot = !homeCallMode && entity?.attributes?.stream_snapshots === true
@@ -1044,6 +1049,23 @@ class C300XDoorbellCallCard extends HTMLElement {
     for (const track of this._micStream?.getAudioTracks?.() || []) {
       track.enabled = !this._micMuted;
     }
+  }
+
+  _soundBlocked() {
+    // A stream without sound plays muted anyway and needs no tap.
+    return [this._webrtc, this._transitionWebrtc].some((client) => client?.playbackBlocked
+      && (client.remoteStream?.getAudioTracks?.() || []).length > 0);
+  }
+
+  _resumeBlockedPlayback() {
+    let resumed = false;
+    for (const client of [this._webrtc, this._transitionWebrtc]) {
+      if (client?.playbackBlocked) {
+        client.resumePlayback();
+        resumed = true;
+      }
+    }
+    if (resumed) this._scheduleUpdate();
   }
 
   _toggleMicMuted() {

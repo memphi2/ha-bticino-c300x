@@ -12,6 +12,7 @@ import { checkRingEndStart } from "./ring_end_start.mjs";
 import { checkAnsweredRing } from "./answered_ring.mjs";
 import { checkEditorFocus } from "./editor_focus.mjs";
 import { checkReadinessKeyboard } from "./readiness_keyboard.mjs";
+import { checkBlockedSound } from "./blocked_sound.mjs";
 import { checkPictureControls } from "./picture_controls.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -61,6 +62,7 @@ try {
   await checkAnsweredRing(page);
   await checkEditorFocus(page);
   await checkReadinessKeyboard(page);
+  await checkBlockedSound(origin);
   await checkPictureControls(page);
   await checkMatchingPictureLayout(page, artifacts);
   await checkSnapshotLayout(page, artifacts);

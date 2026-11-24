@@ -436,3 +436,67 @@ test("retarget mutes the new element synchronously (no double-audio window)", as
     audio.restore();
   }
 });
+
+function autoplayElement(refusals) {
+  return {
+    srcObject: null,
+    muted: false,
+    plays: [],
+    play() {
+      this.plays.push(this.muted);
+      const refusal = refusals.shift();
+      return refusal ? Promise.reject(refusal) : Promise.resolve();
+    },
+  };
+}
+
+const settle = () => new Promise((done) => setTimeout(done, 0));
+
+test("sound refused at autoplay plays muted until a gesture resumes it", async () => {
+  const element = autoplayElement([new DOMException("no gesture", "NotAllowedError")]);
+  const blocked = [];
+  const attachment = new C300XMediaAttachment(element, { getAudioTracks: () => [] }, {
+    onPlaybackBlocked: (value) => blocked.push(value),
+  });
+  attachment.play();
+  await settle();
+  assert.deepEqual(element.plays, [false, true], "no muted retry");
+  assert.equal(element.muted, true);
+  assert.equal(attachment.playbackBlocked, true);
+  assert.deepEqual(blocked, [true]);
+  attachment.refreshPlayback();
+  assert.equal(element.muted, true, "a volume refresh unmuted a refused element");
+
+  attachment.resumePlayback();
+  await settle();
+  assert.equal(element.muted, false);
+  assert.deepEqual(element.plays, [false, true, false]);
+  assert.equal(attachment.playbackBlocked, false);
+  assert.deepEqual(blocked, [true, false]);
+  attachment.resumePlayback();
+  assert.equal(element.plays.length, 3, "resume without a refusal played again");
+});
+
+test("other play failures do not ask for a tap", async () => {
+  const element = autoplayElement([new DOMException("aborted", "AbortError")]);
+  const attachment = new C300XMediaAttachment(element, { getAudioTracks: () => [] });
+  attachment.play();
+  await settle();
+  assert.equal(attachment.playbackBlocked, false);
+  assert.equal(element.muted, false);
+  assert.deepEqual(element.plays, [false]);
+});
+
+test("a refused stream stays muted on the element it is moved to", async () => {
+  const first = autoplayElement([new DOMException("no gesture", "NotAllowedError")]);
+  const second = autoplayElement([new DOMException("no gesture", "NotAllowedError")]);
+  const attachment = new C300XMediaAttachment(first, { getAudioTracks: () => [] });
+  attachment.play();
+  await settle();
+  attachment.retarget(second);
+  await settle();
+  assert.equal(first.muted, false);
+  assert.equal(second.muted, true);
+  assert.deepEqual(second.plays, [true, true]);
+  assert.equal(attachment.playbackBlocked, true);
+});

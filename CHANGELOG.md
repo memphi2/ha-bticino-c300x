@@ -97,9 +97,11 @@ Fixed:
   display pages still call port 8090, so keep the installer's default. After a
   port change, restart the agent and reapply the Display patch; until then the
   patch is reported as partially patched.
-- With the fixed side-by-side Alarm and Home Assistant buttons, Memo and
-  Settings no longer slide off screen on stations that show no other buttons.
-  Needs the agent update.
+- With the fixed side-by-side Alarm and Home Assistant buttons, the station's
+  own buttons no longer slide off screen next to the Quick actions panel or on
+  stations that show only Memo and Settings, and a hidden Alarm button keeps
+  its place empty instead of letting Home Assistant move into it (#119). Needs
+  the agent update.
 
 Settings:
 

@@ -1,8 +1,12 @@
 #include <assert.h>
 #include <fcntl.h>
-#include "../src/mqtt_bridge.c"
-
+#include <time.h>
 static long long clock_ms = 1000;
+/* A wall clock far from the monotonic one, as after an NTP step. */
+#define time(t) ((time_t)(1700000000 + clock_ms / 1000))
+#include "../src/mqtt_bridge.c"
+#undef time
+
 static unsigned char wire[30000];
 static size_t wire_size, allowance = 30000;
 static int blocked, fail_send, send_calls;
@@ -202,7 +206,8 @@ int main(void)
     assert(len == 13 && payload[0] == 0 && payload[1] == 1 && payload[12] == 0);
     offset = publication(offset, "available", "online", 1);
     char date[32];
-    mqtt_format_start_date(100, date, sizeof(date));
+    /* The wall time of the attempt at monotonic second 100. */
+    mqtt_format_start_date(1700000000 + 99, date, sizeof(date));
     offset = publication(offset, "started", date, 1);
     assert(offset == wire_size);
     assert(c300x_mqtt_poll_timeout_ms(&mqtt, 100) == 30000);

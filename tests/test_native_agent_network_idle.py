@@ -28,10 +28,10 @@ def test_agent_skips_callback_io_without_local_network() -> None:
     dispatch_body = _function_body(text, "int", "dispatch_event_internal")
     bridge_body = _function_body(text, "void", "forward_to_homeassistant")
 
-    assert dispatch_body.index("runtime_network_online(runtime, time(NULL))") < (
+    assert dispatch_body.index("runtime_network_online(runtime, c300x_monotonic_seconds())") < (
         dispatch_body.index("queue_callback")
     )
-    assert bridge_body.index("runtime_network_online(runtime, time(NULL))") < (
+    assert bridge_body.index("runtime_network_online(runtime, c300x_monotonic_seconds())") < (
         bridge_body.index("c300x_callback_queue_submit")
     )
 
@@ -61,7 +61,7 @@ def test_mdns_restart_changes_only_service_txt(tmp_path: Path) -> None:
     binary = tmp_path / "mdns-packet"
     subprocess.run(
         ["cc", "-std=c11", "-D_DEFAULT_SOURCE", "-I", str(src), "-x", "c", "-",
-         str(src / "string_util.c"), "-o", str(binary)],
+         str(src / "string_util.c"), str(src / "time_util.c"), "-o", str(binary)],
         input="""
 #include "mdns.c"
 int main(int argc, char **argv)
@@ -69,7 +69,7 @@ int main(int argc, char **argv)
     unsigned char packet[1024];
     const struct c300x_config config = {.api_port = 8091};
     if (argc != 2) return 1;
-    int length = mdns_build_response(&config, argv[1], packet, sizeof(packet), 120);
+    int length = mdns_build_response(&config, argv[1], "c300x-0123456789ab", packet, sizeof(packet), 120);
     return length > 0 && fwrite(packet, 1, (size_t)length, stdout) == (size_t)length ? 0 : 1;
 }
 """,
@@ -106,7 +106,10 @@ def test_mdns_advertises_home_assistant_zeroconf_shape() -> None:
     assert 'C300X_MDNS_ENUMERATION "_services._dns-sd._udp.local"' in text
     assert 'C300X_MDNS_SERVICE "_bticino-c300x-agent._tcp.local"' in text
     assert '"BTicino C300X"' in text
-    assert "c300x_mdns_device_id(device_id, sizeof(device_id))" in build_body
+    # The id is looked up once per responder and handed to the builder.
+    assert "c300x_mdns_device_id(mdns->device_id, sizeof(mdns->device_id))" in text
+    assert "mdns_device_id(mdns), buffer, sizeof(buffer), ttl)" in text
+    assert "const char *device_id," in build_body
     http_text = (ROOT / "native_agent" / "src" / "http.c").read_text(
         encoding="utf-8"
     )
@@ -148,6 +151,24 @@ def test_main_loop_passes_cached_network_state_to_mdns() -> None:
 
     assert "int network_online = runtime_network_online(runtime, now);" in loop_body
     assert "network_online,\n            now" in loop_body
+
+
+def test_main_loop_timers_use_the_monotonic_clock() -> None:
+    """NTP steps the wall clock after boot: MQTT, mDNS, UI waiter and network
+    recheck timers once stalled or fired early on such a step."""
+    text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
+    run_body = text.rsplit("int c300x_run", maxsplit=1)[1].split("\ncleanup:", maxsplit=1)[0]
+    loop = run_body.split("while (!shutdown_requested) {", maxsplit=1)[1]
+    assert "time_t now = c300x_monotonic_seconds();" in loop
+    after_poll = loop.split("int poll_result = poll(poll_fds", maxsplit=1)[1]
+    assert after_poll.lstrip().split("\n", 2)[1].strip() == "now = c300x_monotonic_seconds();"
+    for call in ("c300x_mqtt_handle_poll(", "c300x_ui_events_expire_waiters(",
+                 "c300x_mdns_announce_if_due(", "c300x_mqtt_tick("):
+        assert "time(NULL)" not in after_poll.split(call, maxsplit=1)[1].split(";", maxsplit=1)[0], call
+    ui_events = (ROOT / "native_agent" / "src" / "ui_events.c").read_text(encoding="utf-8")
+    assert "time(NULL)" not in ui_events
+    bridge = (ROOT / "native_agent" / "src" / "mqtt_bridge.c").read_text(encoding="utf-8")
+    assert bridge.count("time(NULL)") == 1  # only the retained start date
 
 
 def test_video_poll_timeout_preserves_existing_poll_deadlines() -> None:

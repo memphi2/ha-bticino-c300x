@@ -193,15 +193,17 @@ static void mqtt_output_completed(struct c300x_mqtt *mqtt, const struct c300x_co
         mqtt->phase = MQTT_CONNACK;
         mqtt->connack_deadline_ms = c300x_monotonic_ms() + MQTT_CONNECT_TIMEOUT_MS;
     } else if (mqtt->phase == MQTT_SUBSCRIBE_OUTPUT) {
-        time_t started = mqtt->connect_started_at;
+        /* Timers run on the monotonic clock; the retained date is the
+         * wall time of the attempt. */
+        time_t started = time(NULL) - (c300x_monotonic_seconds() - mqtt->connect_started_at);
         mqtt->phase = MQTT_READY;
         mqtt->connected = 1;
         mqtt->subscribed = 1;
-        (void)mqtt_publish(mqtt, config, config->mqtt_availability_topic, "online", 1, started);
+        (void)mqtt_publish(mqtt, config, config->mqtt_availability_topic, "online", 1, mqtt->connect_started_at);
         if (config->mqtt_status_topic[0] != '\0') {
             char payload[32];
             mqtt_format_start_date(started, payload, sizeof(payload));
-            (void)mqtt_publish(mqtt, config, config->mqtt_status_topic, payload, 1, started);
+            (void)mqtt_publish(mqtt, config, config->mqtt_status_topic, payload, 1, mqtt->connect_started_at);
         }
     }
 }
@@ -562,10 +564,10 @@ void c300x_mqtt_publish_event(
         return;
     }
     if (config->mqtt_json_event_topic[0] != '\0') {
-        (void)mqtt_publish(mqtt, config, config->mqtt_json_event_topic, event_json, 0, time(NULL));
+        (void)mqtt_publish(mqtt, config, config->mqtt_json_event_topic, event_json, 0, c300x_monotonic_seconds());
     }
     if (config->mqtt_event_topic[0] != '\0' && c300x_mqtt_json_raw_field(data_json, raw, sizeof(raw))) {
-        (void)mqtt_publish(mqtt, config, config->mqtt_event_topic, raw, 0, time(NULL));
+        (void)mqtt_publish(mqtt, config, config->mqtt_event_topic, raw, 0, c300x_monotonic_seconds());
     }
 }
 

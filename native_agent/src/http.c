@@ -718,7 +718,7 @@ static void forward_to_homeassistant(
     const char *body
 )
 {
-    if (!runtime_network_online(runtime, time(NULL))) {
+    if (!runtime_network_online(runtime, c300x_monotonic_seconds())) {
         send_homeassistant_unavailable(client_fd);
         return;
     }
@@ -4263,7 +4263,7 @@ static int dispatch_event_internal(
         return 0;
     }
     c300x_recent_events_record(&runtime->recent_events, event_json);
-    if (!runtime_network_online(runtime, time(NULL))) {
+    if (!runtime_network_online(runtime, c300x_monotonic_seconds())) {
         for (int index = 0; index < runtime->subscription_count; index++) {
             struct subscription *subscription = &runtime->subscriptions[index];
             if (!subscription_matches_event(subscription, event_type)) {
@@ -9839,7 +9839,7 @@ int c300x_run(struct c300x_config *config)
         int callback_poll_index;
         int display_poll_index;
         int shutdown_poll_index;
-        time_t now = time(NULL);
+        time_t now = c300x_monotonic_seconds();
         int network_online = runtime_network_online(runtime, now);
 
         for (index = 0; index < listener_count; index++) {
@@ -9987,6 +9987,7 @@ int c300x_run(struct c300x_config *config)
         runtime->last_poll_timeout_ms = poll_timeout_ms;
         runtime->last_poll_count = (int)poll_count;
         int poll_result = poll(poll_fds, poll_count, poll_timeout_ms);
+        now = c300x_monotonic_seconds();
         if (shutdown_requested) {
             result = 0;
             break;
@@ -10073,7 +10074,7 @@ int c300x_run(struct c300x_config *config)
         }
         if (mqtt_poll_index >= 0) {
             runtime_set_wake_reason(runtime, "mqtt");
-            c300x_mqtt_handle_poll(&runtime->mqtt, config, poll_fds[mqtt_poll_index].revents, time(NULL));
+            c300x_mqtt_handle_poll(&runtime->mqtt, config, poll_fds[mqtt_poll_index].revents, now);
             handle_mqtt_commands(config, runtime);
         }
         if (voicemail_poll_index >= 0) {
@@ -10123,12 +10124,12 @@ int c300x_run(struct c300x_config *config)
         }
         c300x_ui_events_expire_waiters(
             &runtime->ui_events,
-            time(NULL),
+            now,
             ui_event_send_json,
             NULL
         );
-        c300x_mdns_announce_if_due(&mdns, config, time(NULL));
-        c300x_mqtt_tick(&runtime->mqtt, config, time(NULL));
+        c300x_mdns_announce_if_due(&mdns, config, now);
+        c300x_mqtt_tick(&runtime->mqtt, config, now);
         handle_mqtt_commands(config, runtime);
         if (system_metrics_monitor_active(config)) {
             system_metrics_dispatch_if_due(config, runtime, time(NULL));

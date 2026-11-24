@@ -72,4 +72,6 @@ def test_owed_display_steps_raise_the_core_repair_issue_even_when_the_status_loo
     ))
     repair_issues._sync_device_core_qml_hook_issue(SimpleNamespace(), entry)
     create.assert_called_once()
-    assert create.call_args.kwargs["placeholders"] == {"core_state": "display_followup_pending"}
+    # Its own text: the Repair runs the display follow-up with a display restart.
+    assert create.call_args.kwargs["translation_key"] == "device_display_followup_pending"
+    assert create.call_args.kwargs["is_fixable"] is True

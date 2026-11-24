@@ -1563,6 +1563,27 @@
         }
       }
     },
+    "device_display_followup_pending": {
+      "title": "C300X-Displayseiten müssen nach dem Update noch angewendet werden",
+      "description": "{entry_title}: Das Agent-Update oder die Installation ist abgeschlossen, aber die anschließenden Display-Schritte waren auf dem Display der Station nicht erfolgreich. Die Displayseiten des neuen Agents sind noch nicht bestätigt; die Station zeigt möglicherweise noch die Seiten des früheren Agents oder das Original-Display. Öffne diese Reparatur, um die Display-Schritte erneut auszuführen.",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "C300X-Displayseiten erneut anwenden",
+            "description": "Home Assistant führt die Display-Schritte aus, die das Update offen gelassen hat: den Core-Media-Hook, die Displayseiten, wenn der Display-Patch eingeschaltet ist, und einen Neustart des Displays der Station. Das Display wird währenddessen dunkel und startet neu; das kann einige Minuten dauern."
+          }
+        },
+        "error": {
+          "core_patch_failed": "Die Display-Schritte waren nicht erfolgreich. Prüfe, ob die Station erreichbar ist und ihr Display läuft, und versuche es erneut.",
+          "core_patch_verify_failed": "Die Display-Schritte liefen, aber der Agent hat den Core-Media-Hook nicht bestätigt."
+        },
+        "abort": {
+          "entry_not_loaded": "Der BTicino-C300X-Eintrag ist nicht geladen.",
+          "core_patch_unsupported": "Der installierte C300X-Geräte-Agent unterstützt die Display-Schritte nicht.",
+          "display_unsupported": "Der Geräte-Agent kennt das Display dieser Station nicht; er läuft ohne die Displayseiten, und es gibt keine Display-Schritte auszuführen."
+        }
+      }
+    },
     "device_qml_transaction_stuck": {
       "title": "C300X-Displayschreibvorgang nicht abgeschlossen",
       "description": "Ein Schreibvorgang des Display-Patches auf {entry_title} wurde unterbrochen (Stromausfall, Absturz oder erzwungener Stopp), und der Geräte-Agent konnte ihn nicht selbst abschließen. Die Displaydateien bleiben, wie sie sind; nichts geht verloren: Die Dateien von vor diesem Schreibvorgang liegen auf dem Gerät in einem versteckten Ordner `.c300x-qml-transaction.*` in /home/bticino/bin/gui/skins/default.\n\nVorgehen: Prüfe das C300X-Display. Funktioniert es, wende den Display-Patch in der Integration erneut an (aus- und wieder einschalten); dabei werden alle Displaydateien aus den Originalsicherungen neu erstellt. Bleibt die Warnung, starte das C300X neu, damit der Agent es beim Start erneut versucht. Ein Rest von Agent 2.9.0 oder älter wird nie automatisch zurückgespielt: Sobald das Display funktioniert, entferne diesen Ordner per SSH (siehe Erweiterte Wartung, Wiederherstellung, in der Dokumentation)."

@@ -323,17 +323,18 @@ def test_fixable_core_qml_hook_repair_uses_ha_issue_fix_flow_schema() -> None:
         TRANSLATIONS / "fr.json",
     ):
         data = _load_json(path)
-        fix_flow = _path_value(
-            data,
-            "issues",
-            "device_core_qml_hook_required",
-            "fix_flow",
-        )
-        assert _path_value(fix_flow, "step", "confirm")["description"]
-        assert _path_value(fix_flow, "error")["core_patch_failed"]
-        assert _path_value(fix_flow, "error")["core_patch_verify_failed"]
-        assert _path_value(fix_flow, "abort")["entry_not_loaded"]
-        assert _path_value(fix_flow, "abort")["core_patch_unsupported"]
+        # The same flow, with its own text while an update owes display steps.
+        for key in ("device_core_qml_hook_required", "device_display_followup_pending"):
+            fix_flow = _path_value(data, "issues", key, "fix_flow")
+            assert _path_value(fix_flow, "step", "confirm")["description"]
+            assert _path_value(fix_flow, "error")["core_patch_failed"]
+            assert _path_value(fix_flow, "error")["core_patch_verify_failed"]
+            assert _path_value(fix_flow, "abort")["entry_not_loaded"]
+            assert _path_value(fix_flow, "abort")["core_patch_unsupported"]
+            assert _path_value(fix_flow, "abort")["display_unsupported"]
+        owed = _path_value(data, "issues", "device_display_followup_pending")
+        assert owed["title"] and "{entry_title}" in owed["description"]
+        assert "{qml_patch_status}" not in _path_value(owed, "fix_flow", "step", "confirm")["description"]
 
 
 def test_fixable_frontend_card_repair_uses_ha_issue_fix_flow_schema() -> None:

@@ -54,6 +54,8 @@ DEVICE_AGENT_SELF_TEST_FAILED_ISSUE = "device_agent_self_test_failed"
 DEVICE_AGENT_UI_EVENT_WATCHDOG_ISSUE = "device_agent_ui_event_watchdog"
 UNSUPPORTED_CALLBACK_URL_ISSUE = "unsupported_callback_url"
 DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE = "device_core_qml_hook_required"
+# The core hook issue while an update or install owes display steps.
+DEVICE_DISPLAY_FOLLOWUP_TRANSLATION = "device_display_followup_pending"
 DEVICE_DISPLAY_UNSUPPORTED_ISSUE = "device_display_unsupported"
 DEVICE_QML_TRANSACTION_STUCK_ISSUE = "device_qml_transaction_stuck"
 DEVICE_USER_REQUIRED_ISSUE = "device_user_required"
@@ -456,8 +458,17 @@ def _sync_device_core_qml_hook_issue(hass: HomeAssistant, entry: BticinoC300XCon
     )
     failed = bool(getattr(diagnostics, "last_error", None))
     if owed:
-        missing = True
-        core_state = "display_followup_pending"
+        # Its own text: the Repair runs the whole display follow-up, with a
+        # display restart, not only the core hook.
+        _create_issue(
+            hass,
+            entry,
+            DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE,
+            severity=ir.IssueSeverity.WARNING,
+            is_fixable=True,
+            translation_key=DEVICE_DISPLAY_FOLLOWUP_TRANSLATION,
+        )
+        return
     if not missing and not failed:
         async_delete_repair_issue(
             hass,

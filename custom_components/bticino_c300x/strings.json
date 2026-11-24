@@ -1563,6 +1563,27 @@
         }
       }
     },
+    "device_display_followup_pending": {
+      "title": "C300X display pages still have to be applied after the update",
+      "description": "{entry_title}: the agent update or installation is complete, but the display steps that follow it did not succeed on the station's display. The display pages of the new agent are not confirmed yet; the station may still show the pages of the earlier agent or the original display. Open this repair to run the display steps again.",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Apply the C300X display pages again",
+            "description": "Home Assistant runs the display steps the update left undone: the core media hook, the display pages when the Display patch is on, and a restart of the station's display. The display goes dark and restarts during the fix; this can take a few minutes."
+          }
+        },
+        "error": {
+          "core_patch_failed": "The display steps did not succeed. Check that the station is reachable and its display runs, then retry.",
+          "core_patch_verify_failed": "The display steps ran, but the agent did not confirm the core media hook."
+        },
+        "abort": {
+          "entry_not_loaded": "The BTicino C300X entry is not loaded.",
+          "core_patch_unsupported": "The installed C300X device agent does not support the display steps.",
+          "display_unsupported": "The device agent does not know the display of this station; it runs without the display pages, and there are no display steps to run."
+        }
+      }
+    },
     "device_qml_transaction_stuck": {
       "title": "C300X display write left unfinished",
       "description": "A Display patch write on {entry_title} was interrupted (power loss, crash or a forced stop) and the device agent could not finish it automatically. The display files were left as they are; nothing is lost: the files from before that write are kept on the device in a hidden folder `.c300x-qml-transaction.*` inside /home/bticino/bin/gui/skins/default.\n\nWhat to do: check the C300X display. If it works, apply the Display patch again from the integration (switch it off and on), which rebuilds every display file from the stock backups. If the warning stays, reboot the C300X so the agent tries again at start. A leftover from agent 2.9.0 or older is never restored automatically: once the display works, remove that folder over SSH (see Advanced maintenance, Recovery, in the documentation)."

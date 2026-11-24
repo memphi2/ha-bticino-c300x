@@ -47,20 +47,22 @@ function syncHomeNotifications(pageItem, callback) {
         }
     }
 
+    function current() {
+        return pageItem && generation === notificationGeneration && watchGeneration === eventGeneration
+    }
+
     getJson("/ui/answering-machine/messages", function(data) {
-        if (pageItem && generation === notificationGeneration && watchGeneration === eventGeneration) {
-            pageItem.externalUnreadMessages = unreadCountFromData(data)
-        }
+        if (current()) pageItem.externalUnreadMessages = unreadCountFromData(data)
         done(true)
     }, function() {
+        if (current()) pageItem.externalUnreadMessages = -1
         done(false)
     })
     getJson("/ui/memos", function(data) {
-        if (pageItem && generation === notificationGeneration && watchGeneration === eventGeneration) {
-            pageItem.externalUnreadMemos = unreadCountFromData(data)
-        }
+        if (current()) pageItem.externalUnreadMemos = unreadCountFromData(data)
         done(true)
     }, function() {
+        if (current()) pageItem.externalUnreadMemos = -1
         done(false)
     })
 }
@@ -119,6 +121,10 @@ function retryEventWatch() {
 
 function eventWatchFailed() {
     eventConnected = false
+    if (eventOwner && eventOwner.externalUnreadMemos !== undefined) {
+        eventOwner.externalUnreadMessages = -1
+        eventOwner.externalUnreadMemos = -1
+    }
     eventRecovering = true
     scheduleEventRetry()
 }
@@ -144,10 +150,10 @@ function refreshAfterReconnect() {
 }
 
 function unreadCountFromData(data) {
-    if (data && data.unread !== undefined) {
-        return Number(data.unread)
+    if (!data || data.ok === false || data.available === false || typeof data.unread !== "number") {
+        return -1
     }
-    return 0
+    return data.unread
 }
 
 function syncObjectModel(model, data, textMemoType) {

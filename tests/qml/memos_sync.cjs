@@ -81,3 +81,32 @@ assert.deepEqual(sync(200, {ok: true, available: true, memos: [],
     deleted: [{id: "text/memo_1"}, 2, null, "text/memo_9"]}), []);
 assert.deepEqual(sync(200, {ok: true, available: true, memos: [], deleted: "text/memo_1"}), []);
 console.log("Memo sync removes only agent-deleted memos passed");
+
+// Home badges: -1 hands the badge back to the stock count. A count the agent
+// cannot vouch for must never show as a false 0 or stay frozen.
+{
+    const r = runtime(), home = {externalUnreadMessages: -1, externalUnreadMemos: -1};
+    r.Api.syncHomeNotifications(home);
+    r.request("/ui/answering-machine/messages").finish(200, {ok: true, available: true, unread: 3});
+    r.request("/ui/memos").finish(200, {ok: true, available: false, unread: 0, memos: []});
+    assert.equal(home.externalUnreadMessages, 3);
+    assert.equal(home.externalUnreadMemos, -1, "memos switched off: stock count, not 0");
+    r.Api.syncHomeNotifications(home);
+    r.request("/ui/answering-machine/messages").finish(200, {ok: true, available: true, unread: 4});
+    r.request("/ui/memos").finish(200, {ok: true, available: true, unread: 2});
+    assert.deepEqual([home.externalUnreadMessages, home.externalUnreadMemos], [4, 2]);
+    r.Api.syncHomeNotifications(home);
+    r.request("/ui/answering-machine/messages").finish(503, "");
+    r.request("/ui/memos").finish(200, "not json");
+    assert.deepEqual([home.externalUnreadMessages, home.externalUnreadMemos], [-1, -1],
+        "a failed read does not keep the last agent count");
+    r.Api.syncHomeNotifications(home);
+    r.request("/ui/answering-machine/messages").finish(200, {ok: true, available: true, unread: 4});
+    r.request("/ui/memos").finish(200, {ok: true, available: true, unread: 2});
+    r.Api.startEventWatch(() => {});
+    r.request("/ui/events/next").finish(0, "");
+    assert.deepEqual([home.externalUnreadMessages, home.externalUnreadMemos], [-1, -1],
+        "agent down: the badge does not freeze on the last agent count");
+    r.Api.stopEventWatch();
+}
+console.log("Home badges fall back to the stock count passed");

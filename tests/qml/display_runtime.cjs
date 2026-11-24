@@ -442,8 +442,8 @@ function memoPage(r) {
     r.Api.syncHomeNotifications(p);
     oldMessages.finish(200, {unread: 99});
     oldMemos.finish(200, {unread: 99});
-    assert.equal(p.externalUnreadMessages, 1);
-    assert.equal(p.externalUnreadMemos, 2);
+    assert.equal(p.externalUnreadMessages, -1, "outage: stock count until a current read");
+    assert.equal(p.externalUnreadMemos, -1);
     assert.equal(r.Api.eventRecovering, true, "superseded results cannot finish recovery");
     r.request("/ui/answering-machine/messages").finish(200, {unread: 8});
     r.request("/ui/memos").finish(200, {unread: 9});
@@ -473,8 +473,8 @@ function memoPage(r) {
     r.Api.stopEventWatch();
     r.request("/ui/answering-machine/messages").finish(200, {unread: 99});
     r.request("/ui/memos").finish(200, {unread: 99});
-    assert.equal(p.externalUnreadMessages, 1);
-    assert.equal(p.externalUnreadMemos, 2);
+    assert.equal(p.externalUnreadMessages, -1);
+    assert.equal(p.externalUnreadMemos, -1);
     assert.equal(r.timers[0].running, false);
     assert.equal(r.Api.connections.length, 0);
 }

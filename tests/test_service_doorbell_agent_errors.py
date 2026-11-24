@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.bticino_c300x import services
@@ -40,7 +41,7 @@ def _setup(monkeypatch):
     entry = SimpleNamespace(
         entry_id="entry", runtime_data=runtime, data={},
         options={CONF_VIDEO_ENABLED: True, CONF_DOORSTATION_AUDIO_GAIN_DB: 6.0},
-        async_start_reauth=Mock(),
+        async_start_reauth=Mock(), state=ConfigEntryState.LOADED,
     )
     hass = SimpleNamespace(
         config_entries=SimpleNamespace(

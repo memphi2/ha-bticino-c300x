@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.exceptions import ServiceValidationError
 
 from custom_components.bticino_c300x import events, services
@@ -36,10 +37,12 @@ def setup(monkeypatch):
     )
     entry = SimpleNamespace(
         entry_id="entry", runtime_data=runtime, data={"maintenance_token": "saved"},
-        options={}, async_start_reauth=Mock(),
+        options={}, async_start_reauth=Mock(), state=ConfigEntryState.LOADED,
     )
     hass = SimpleNamespace(
-        config_entries=SimpleNamespace(async_entries=lambda _: [entry]),
+        config_entries=SimpleNamespace(
+            async_entries=lambda _: [entry], async_loaded_entries=lambda _: [entry],
+        ),
         bus=SimpleNamespace(async_fire=Mock()),
     )
     get_hass = Mock(return_value=hass)

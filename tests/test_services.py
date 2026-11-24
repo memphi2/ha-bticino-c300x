@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 import yaml
+from homeassistant.config_entries import ConfigEntryState
 
 pytestmark = pytest.mark.usefixtures("entity_ha_boundary")
 
@@ -88,6 +89,7 @@ class _FakeEntry:
     options: dict[str, Any] = field(
         default_factory=lambda: {CONF_DEVICE_UI_ENABLED: True}
     )
+    state: ConfigEntryState = ConfigEntryState.LOADED
 
 
 class _FakeConfigEntries:
@@ -96,6 +98,12 @@ class _FakeConfigEntries:
 
     def async_entries(self, domain: str) -> list[_FakeEntry]:
         return self.entries if domain == DOMAIN else []
+
+    def async_loaded_entries(self, domain: str) -> list[_FakeEntry]:
+        return [
+            entry for entry in self.async_entries(domain)
+            if getattr(entry, "state", ConfigEntryState.LOADED) is ConfigEntryState.LOADED
+        ]
 
 
 class _FakeServices:
@@ -709,6 +717,36 @@ def test_service_entry_lookup_accepts_explicit_entry_id() -> None:
 
         assert api_one.activation_calls == []
         assert api_two.activation_calls == ["scene_1"]
+
+    asyncio.run(_run())
+
+
+@pytest.mark.parametrize(
+    "state", [ConfigEntryState.NOT_LOADED, ConfigEntryState.SETUP_RETRY, ConfigEntryState.SETUP_ERROR]
+)
+def test_service_entry_lookup_ignores_entries_that_are_not_loaded(state: ConfigEntryState) -> None:
+    """Ignored, disabled or failed entries do not make the call ambiguous."""
+
+    async def _run() -> None:
+        api = _FakeApi()
+        loaded = _FakeEntry(_FakeRuntimeData(api=api), entry_id="loaded")
+        other = _FakeEntry(None, entry_id="other", state=state)  # type: ignore[arg-type]
+        hass = _FakeHass([other, loaded])
+        await async_setup_services(hass)  # type: ignore[arg-type]
+        handler = hass.services.handlers[(DOMAIN, SERVICE_RUN_DEVICE_ACTIVATION)]
+
+        await handler(types.SimpleNamespace(data={"activation_id": "scene_1"}))
+        assert api.activation_calls == ["scene_1"]
+
+        with pytest.raises(SERVICE_VALIDATION_ERROR) as err:
+            await handler(types.SimpleNamespace(data={"entry_id": "other", "activation_id": "scene_1"}))
+        assert err.value.translation_key == "entry_not_loaded"
+
+        hass.config_entries.entries.remove(loaded)
+        with pytest.raises(SERVICE_VALIDATION_ERROR) as err:
+            await handler(types.SimpleNamespace(data={"activation_id": "scene_1"}))
+        assert err.value.translation_key == "entry_not_loaded"
+        assert api.activation_calls == ["scene_1"]
 
     asyncio.run(_run())
 

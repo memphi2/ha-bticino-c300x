@@ -1460,6 +1460,9 @@
     "unknown_entry": {
       "message": "La voce BTicino C300X selezionata non esiste."
     },
+    "entry_not_loaded": {
+      "message": "La voce BTicino C300X non è caricata. Attivala o attendi che sia avviata."
+    },
     "voice_memo_not_available": {
       "message": "Non e disponibile alcun memo vocale C300X."
     },

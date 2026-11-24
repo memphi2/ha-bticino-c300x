@@ -1460,6 +1460,9 @@
     "unknown_entry": {
       "message": "L'entrée BTicino C300X sélectionnée n'existe pas."
     },
+    "entry_not_loaded": {
+      "message": "L'entrée BTicino C300X n'est pas chargée. Activez-la ou attendez qu'elle ait démarré."
+    },
     "voice_memo_not_available": {
       "message": "Aucun mémo vocal C300X n'est disponible."
     },

@@ -4,6 +4,7 @@ import asyncio
 from types import SimpleNamespace
 
 import pytest
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 
@@ -21,9 +22,12 @@ def setup_alarm_service(tmp_path):
         entry_id="test",
         data={CONF_ALARM_ENTITY_ID: "alarm_control_panel.home"},
         options={},
+        state=ConfigEntryState.LOADED,
         runtime_data=SimpleNamespace(),
     )
-    hass.config_entries = SimpleNamespace(async_entries=lambda _domain: [entry])
+    hass.config_entries = SimpleNamespace(
+        async_entries=lambda _domain: [entry], async_loaded_entries=lambda _domain: [entry],
+    )
     hass.states.async_set("alarm_control_panel.home", "armed_away")
     _register_base_services(hass, _C300XServiceHandlers(hass))
     return hass

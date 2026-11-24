@@ -20,7 +20,7 @@ def apply_identity_binary(tmp_path_factory):
         "-D_DEFAULT_SOURCE", "-D_POSIX_C_SOURCE=200809L",
         str(ROOT / "native_agent/test/device_routing_apply_identity_test.c"),
         *(str(ROOT / "native_agent/src" / name) for name in
-          ("device_patch_io.c", "sha256.c", "string_util.c")), "-o", str(binary),
+          ("device_patch_io.c", "root_mount.c", "sha256.c", "string_util.c")), "-o", str(binary),
     ], capture_output=True, text=True, timeout=60)
     assert result.returncode == 0, result.stderr
     return binary

@@ -55,6 +55,7 @@
 #include "video_audio_settings.h"
 #include "video_rtsp.h"
 #include "video_snapshot.h"
+#include "root_mount.h"
 #include <arpa/inet.h>
 #include <ctype.h>
 #include <dirent.h>
@@ -7330,16 +7331,14 @@ static int firewall_path_requires_remount(const char *path)
 static void firewall_remount_rw_if_needed(const char *path)
 {
     if (firewall_path_requires_remount(path)) {
-        int status = system("mount -o remount,rw / >/dev/null 2>&1");
-        (void)status;
+        (void)c300x_root_remount("rw");
     }
 }
 
 static void firewall_remount_ro_if_needed(const char *path)
 {
     if (firewall_path_requires_remount(path)) {
-        int status = system("mount -o remount,ro / >/dev/null 2>&1");
-        (void)status;
+        (void)c300x_root_remount("ro");
     }
 }
 

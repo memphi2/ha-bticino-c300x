@@ -19,6 +19,7 @@ def test_routing_restore_and_apply_check_the_backup(tmp_path: Path) -> None:
             "-D_DEFAULT_SOURCE", "-D_POSIX_C_SOURCE=200809L",
             str(NATIVE / "test/device_routing_backup_test.c"),
             str(NATIVE / "src/device_patch_io.c"),
+            str(NATIVE / "src/root_mount.c"),
             str(NATIVE / "src/sha256.c"),
             str(NATIVE / "src/string_util.c"),
             "-o", str(binary),

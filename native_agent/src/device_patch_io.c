@@ -7,6 +7,7 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include "device_patch_io.h"
+#include "root_mount.h"
 
 #include "c300x_agent.h"
 #include "sha256.h"
@@ -168,19 +169,13 @@ int c300x_patch_copy_file_exact(const char *source, const char *target, mode_t m
 
 int c300x_patch_remount_root(const char *mode)
 {
-    char command[64];
     const char *skip = getenv("C300X_DEVICE_PATCH_NO_REMOUNT");
-    int status;
 
     if (skip != NULL && skip[0] != '\0') {
         /* "ro_busy" stands for a root that cannot go read-only yet. */
         return strcmp(skip, "ro_busy") != 0 || strcmp(mode, "ro") != 0;
     }
-    if (snprintf(command, sizeof(command), "mount -o remount,%s / >/dev/null 2>&1", mode) >= (int)sizeof(command)) {
-        return 0;
-    }
-    status = system(command);
-    return status == 0;
+    return c300x_root_remount(mode);
 }
 
 int c300x_patch_read_file(const char *path, unsigned char **data, size_t *len)

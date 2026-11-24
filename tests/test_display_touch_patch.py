@@ -25,13 +25,13 @@ def _sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def _build(folder: Path, defines: dict[str, str]) -> Path:
+def _build(folder: Path, defines: dict[str, str], extra: tuple[str, ...] = ()) -> Path:
     binary = folder / "probe"
-    sources = [NATIVE / "src" / name for name in ("display_touch.c", "device_patch_io.c", "sha256.c", "string_util.c")]
+    sources = [NATIVE / "src" / name for name in ("display_touch.c", "device_patch_io.c", "root_mount.c", "sha256.c", "string_util.c")]
     subprocess.run(
         ["gcc", "-std=c11", "-O1", "-Wall", "-Wextra", "-Werror", "-D_DEFAULT_SOURCE",
          *[f"-D{key}={json.dumps(value)}" for key, value in defines.items()],
-         str(NATIVE / "test/display_touch_test.c"), *map(str, sources), "-o", str(binary)],
+         str(NATIVE / "test/display_touch_test.c"), *map(str, sources), *extra, "-o", str(binary)],
         check=True, capture_output=True, text=True,
     )
     return binary
@@ -317,6 +317,33 @@ def test_a_root_that_cannot_go_read_only_yet_still_reports_the_change(device: _D
     applied = json.loads(result.stdout)
     assert (applied["ok"], applied["changed"], applied["root_writable"]) == (True, True, True)
     assert device.target.read_bytes() == device.patched
+
+
+@pytest.mark.parametrize("action", ["apply", "restore"])
+def test_a_stop_between_the_remounts_waits_for_the_read_only_root(device: _Device, action: str) -> None:
+    if action == "restore":
+        device.run("apply")
+    device.binary = _build(device.target.parent.parent, {
+        "C300X_DISPLAY_TOUCH_TARGET_DIR": str(device.target.parent),
+        "C300X_DISPLAY_TOUCH_BACKUP_DIR": str(device.backup.parent),
+        "C300X_DISPLAY_TOUCH_STOCK_SHA256": _sha(device.stock),
+        "C300X_DISPLAY_TOUCH_PATCHED_SHA256": _sha(device.patched),
+        "C300X_DISPLAY_TOUCH_STOCK_RANGE_SHA256": _sha(device.stock[OFFSET:OFFSET + 8]),
+        "TEST_TERM_IN_WINDOW": "1",
+    }, ("-Wl,--wrap=statvfs,--wrap=system",))
+    # TERM arrives right after / went writable: once killed there, / stayed
+    # writable and nothing was reported.
+    result = subprocess.run(
+        [str(device.binary), action], capture_output=True, text=True,
+        env={k: v for k, v in os.environ.items() if k != "C300X_DEVICE_PATCH_NO_REMOUNT"},
+    )
+    assert result.returncode == 1, (result.returncode, result.stderr)
+    assert [line for line in result.stderr.splitlines() if "remount" in line] == [
+        "mount -o remount,rw / >/dev/null 2>&1", "mount -o remount,ro / >/dev/null 2>&1"]
+    stopped = json.loads(result.stdout)
+    assert (stopped["ok"], stopped["error"], stopped["changed"], stopped["root_writable"]) == (
+        False, "touch_interrupted", True, False)
+    assert device.target.read_bytes() == (device.patched if action == "apply" else device.stock)
 
 
 def test_a_restore_that_cannot_write_keeps_the_patched_library(device: _Device) -> None:

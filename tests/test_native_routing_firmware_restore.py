@@ -30,7 +30,7 @@ def routing_binary(tmp_path_factory):
         "-D_DEFAULT_SOURCE", "-D_POSIX_C_SOURCE=200809L",
         str(ROOT / "native_agent/test/device_routing_firmware_test.c"),
         *[str(ROOT / "native_agent/src" / name) for name in
-          ("device_patch_io.c", "sha256.c", "string_util.c")],
+          ("device_patch_io.c", "root_mount.c", "sha256.c", "string_util.c")],
         "-o", str(binary),
     ], check=True, capture_output=True, text=True)
     return binary

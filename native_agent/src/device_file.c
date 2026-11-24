@@ -5,6 +5,7 @@
 #endif
 
 #include "device_file.h"
+#include "root_mount.h"
 
 #include "c300x_agent.h"
 
@@ -41,15 +42,10 @@ static int no_remount(void) {
 }
 
 int c300x_device_file_remount(const char *mode) {
-    char command[64];
     if (no_remount()) {
         return 1;
     }
-    if (snprintf(command, sizeof(command), "mount -o remount,%s / >/dev/null 2>&1", mode)
-        >= (int)sizeof(command)) {
-        return 0;
-    }
-    return system(command) == 0;
+    return c300x_root_remount(mode);
 }
 
 int c300x_device_file_read(const char *path, char **data, size_t *len, mode_t *mode) {

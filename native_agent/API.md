@@ -1705,6 +1705,10 @@ Patch helpers render the desired tree into a temporary staging directory,
 compare target files byte-for-byte, back up original device files under
 `/home/bticino/cfg/extra/c300x-device-file-backups/original`, remount the root
 filesystem writable only for final copy/write work, then remount read-only.
+The agent's own device writes (routing, audio codec, camera, firewall, touch
+patch) leave `/` as they found it: on a root that is already writable they
+write without remounting, keep it writable and report that
+(`root_writable` / `remount_ro_failed`).
 
 ### Camera Resolution
 

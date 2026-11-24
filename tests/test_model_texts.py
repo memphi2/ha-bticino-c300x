@@ -7,6 +7,7 @@ were taken from the translations of 04a99ea6.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 from pathlib import Path
@@ -253,3 +254,65 @@ def test_exceptions_name_the_model_of_their_entry():
     assert text("de", "exceptions", "agent_command_failed", "message", model="C100X").count("C100X") == 1
     # The integration's own name stays.
     assert text("en", "exceptions", "entry_not_loaded", "message", model="C100X").startswith("The BTicino C300X entry")
+
+
+def test_the_c100x_reads_its_own_display_mechanism(monkeypatch):
+    """The C100X has no Display patch and no screen reload: its pages come with one reboot."""
+
+    from custom_components.bticino_c300x.config_flow_dashboard import dashboard_schema
+    from custom_components.bticino_c300x.exceptions import service_validation_error
+
+    for method in ("async_show_form", "async_show_menu"):
+        monkeypatch.setattr(config_entries.OptionsFlow, method, lambda self, **values: values)
+    for step in ("dashboard", "display", "init", "connection"):
+        c100x = BticinoC300XOptionsFlow(C100X_ENTRY).async_show_form(step_id=step)["step_id"]
+        assert c100x == (step if step == "connection" else f"{step}_c100x")
+        assert BticinoC300XOptionsFlow(C300X_ENTRY).async_show_menu(step_id=step, menu_options=[])["step_id"] == step
+    for step in ("user_dashboard", "reconfigure_dashboard"):
+        assert _setup_flow(monkeypatch, {"model": "C100X"}).async_show_form(step_id=step)["step_id"] == f"{step}_c100x"
+        assert _setup_flow(monkeypatch, {"model": "C300X"}).async_show_form(step_id=step)["step_id"] == step
+    # A submitted twin form lands in the step that showed it.
+    for flow, twin, step in (
+        (BticinoC300XConfigFlow(), "user_dashboard_c100x", "user_dashboard"),
+        (BticinoC300XConfigFlow(), "reconfigure_dashboard_c100x", "reconfigure_dashboard"),
+        (BticinoC300XOptionsFlow(C100X_ENTRY), "dashboard_c100x", "dashboard"),
+    ):
+        async def original(user_input, step=step):
+            return (step, user_input)
+
+        monkeypatch.setattr(flow, f"async_step_{step}", original)
+        assert asyncio.run(getattr(flow, f"async_step_{twin}")({"a": 1})) == (step, {"a": 1})
+
+    for entry, suffix in ((C100X_ENTRY, "_c100x"), (C300X_ENTRY, ""), (None, "")):
+        for key in ("display_disabled", "gui_function_patch_required"):
+            assert service_validation_error(key, entry=entry).translation_key == key + suffix
+        assert service_validation_error("ring_capture_busy", entry=entry).translation_key == "ring_capture_busy"
+
+    fields = {str(key) for key in dashboard_schema(home_buttons=False).schema}
+    reboot = {"base": "reboot", "en": "reboot", "de": "Neustart", "it": "riavvio", "fr": "redémarrage"}
+    button = {"base": "Activate display pages", "en": "Activate display pages", "de": "Displayseiten aktivieren",
+              "it": "Attiva pagine del display", "fr": "Activer les pages de l'écran"}
+    for lang in LANGUAGES:
+        data = _load(lang)
+        twins = (
+            data["config"]["step"]["user_dashboard_c100x"], data["config"]["step"]["reconfigure_dashboard_c100x"],
+            data["options"]["step"]["dashboard_c100x"],
+        )
+        for twin in twins:
+            assert set(twin["data"]) == set(twin["data_description"]) == fields, lang
+            for value in (twin["description"], twin["data_description"]["device_ui_enabled"]):
+                assert "C100X" in value and "C300X" not in value and "60" not in value, (lang, value)
+                assert reboot[lang] in value and button[lang] in value, (lang, value)
+            assert "{qml_patch_status}" not in twin["description"]
+        options = data["options"]["step"]
+        assert "C300X" not in json.dumps(options["display_c100x"]) + json.dumps(options["init_c100x"])
+        assert set(options["init_c100x"]["menu_options"]) == set(options["init"]["menu_options"])
+        assert set(options["display_c100x"]["menu_options"]) == set(options["display"]["menu_options"])
+        for key in ("display_disabled_c100x", "gui_function_patch_required_c100x"):
+            message = data["exceptions"][key]["message"]
+            assert "C100X" in message and button[lang] in message, (lang, key)
+    assert _load("en")["options"]["step"]["init_c100x"]["title"] == "C100X settings"
+    assert _load("de")["options"]["step"]["init_c100x"]["title"] == "C100X-Einstellungen"
+    assert _load("en")["options"]["step"]["display_c100x"]["menu_option_descriptions"]["dashboard"] == (
+        _load("en")["options"]["step"]["display"]["menu_option_descriptions"]["dashboard"]
+    )

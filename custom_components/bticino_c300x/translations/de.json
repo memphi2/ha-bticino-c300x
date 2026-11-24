@@ -133,6 +133,22 @@
           "dashboard_dynamic_homepage": "Wo die Knöpfe Alarm und Home Assistant auf der Startseite des C300X stehen. Werkseinstellung: Jeder Knopf erscheint nur, solange er etwas zu öffnen hat, und reiht sich zwischen die originalen Knöpfe ein, auch untereinander, wenn die Reihe voll ist. Fest nebeneinander: Beide behalten zwei feste Plätze nebeneinander; ein Knopf ohne Inhalt lässt seinen Platz leer. Eine Änderung wendet den Display-Patch erneut an und startet das Display einmal neu."
         }
       },
+      "user_dashboard_c100x": {
+        "title": "C100X-Display-Dashboard",
+        "description": "Konfiguriert das optionale C100X-Display-Dashboard.\n\n**Displayseiten aktivieren** auf der Geräteseite schaltet die Home-Assistant-Seiten auf dem C100X ein, **Originales Display wiederherstellen** schaltet sie aus. Beides wirkt mit einem Neustart des C100X, sobald er etwa zwei Minuten ungenutzt war. Einen Display-Patch und ein Neuladen der Anzeige gibt es nicht.\n\nSind die Seiten aktiv, richtet der nächste Schritt die Display-Seiten ein: das Wetter und die Entitäten jeder Seite.",
+        "data": {
+          "device_ui_enabled": "Home-Assistant-Seiten auf dem Display",
+          "actions_json": "Erlaubte Aktionen (für Fortgeschrittene)",
+          "dashboard_prevent_return": "Seite im Bildschirm-Standby offen lassen",
+          "dashboard_navigation": "Seitenwechsel"
+        },
+        "data_description": {
+          "device_ui_enabled": "An, solange die Home-Assistant-Seiten auf dem Display des C100X aktiv sind; sie kommen mit Displayseiten aktivieren. Aus: stellt das originale Display mit einem Neustart des C100X wieder her und verwirft die Einstellungen zu Wetter, Seiten, Kacheln und Aktionen. Die Alarmo-Einstellungen bleiben erhalten.",
+          "actions_json": "Aktionen, die das Display und seine Benachrichtigungen ausführen dürfen, als JSON: ein Eintrag je Aktion mit domain und service, optional target und data. Leer lassen, wenn du keine nutzt.",
+          "dashboard_prevent_return": "An: Die Home-Assistant- und die Alarm-Seite bleiben offen, wenn der Bildschirm in den Standby geht. Aus: Das Display kehrt dann zur Startseite zurück.",
+          "dashboard_navigation": "So wechselt das Display die Seiten. Die Favoritenleiste zeigt die ersten vier Seiten als Schaltflächen am unteren Rand. Bei mehr als vier Seiten heißt die vierte Schaltfläche „Mehr“ und öffnet die Liste der übrigen Seiten. Die Reihenfolge folgt den Seitenpositionen."
+        }
+      },
       "user_dashboard_entity_display": {
         "title": "Display-Kacheln",
         "description": "Jede Kachel hat einen eigenen Abschnitt, sortiert wie auf dem Display: erst die Seite, dann die Entität. Klappe einen Abschnitt auf, um seine Kachel zu ändern.\n\n- **Breite** und **Höhe**: halb oder voll. Automatisch nimmt die übliche Größe des Entitätstyps. Bei voller Höhe liegen die eigenen Tasten der Entität direkt auf der Kachel.\n- **Name**: tippe einen eigenen Namen ein. Bleibt das Feld leer, zeigt die Kachel den Namen aus Home Assistant.\n- **Zusatzzeile**: die zweite Zeile unter dem Namen.\n\nDie Alarmo-Schnellaktion steht auf keiner Seite; sie hat nur Name und Zusatzzeile."
@@ -244,6 +260,22 @@
           "dashboard_prevent_return": "An: Die Home-Assistant- und die Alarm-Seite bleiben offen, wenn der Bildschirm in den Standby geht. Aus: Das Display kehrt dann zur Startseite zurück.",
           "dashboard_navigation": "So wechselt das Display die Seiten. Die Favoritenleiste zeigt die ersten vier Seiten als Schaltflächen am unteren Rand. Bei mehr als vier Seiten heißt die vierte Schaltfläche „Mehr“ und öffnet die Liste der übrigen Seiten. Die Reihenfolge folgt den Seitenpositionen.",
           "dashboard_dynamic_homepage": "Wo die Knöpfe Alarm und Home Assistant auf der Startseite des C300X stehen. Werkseinstellung: Jeder Knopf erscheint nur, solange er etwas zu öffnen hat, und reiht sich zwischen die originalen Knöpfe ein, auch untereinander, wenn die Reihe voll ist. Fest nebeneinander: Beide behalten zwei feste Plätze nebeneinander; ein Knopf ohne Inhalt lässt seinen Platz leer. Eine Änderung wendet den Display-Patch erneut an und startet das Display einmal neu."
+        }
+      },
+      "reconfigure_dashboard_c100x": {
+        "title": "C100X-Display-Dashboard neu konfigurieren",
+        "description": "Konfiguriert das optionale C100X-Display-Dashboard.\n\n**Displayseiten aktivieren** auf der Geräteseite schaltet die Home-Assistant-Seiten auf dem C100X ein, **Originales Display wiederherstellen** schaltet sie aus. Beides wirkt mit einem Neustart des C100X, sobald er etwa zwei Minuten ungenutzt war. Einen Display-Patch und ein Neuladen der Anzeige gibt es nicht.\n\nSind die Seiten aktiv, richtet der nächste Schritt die Display-Seiten ein: das Wetter und die Entitäten jeder Seite.",
+        "data": {
+          "device_ui_enabled": "Home-Assistant-Seiten auf dem Display",
+          "actions_json": "Erlaubte Aktionen (für Fortgeschrittene)",
+          "dashboard_prevent_return": "Seite im Bildschirm-Standby offen lassen",
+          "dashboard_navigation": "Seitenwechsel"
+        },
+        "data_description": {
+          "device_ui_enabled": "An, solange die Home-Assistant-Seiten auf dem Display des C100X aktiv sind; sie kommen mit Displayseiten aktivieren. Aus: stellt das originale Display mit einem Neustart des C100X wieder her und verwirft die Einstellungen zu Wetter, Seiten, Kacheln und Aktionen. Die Alarmo-Einstellungen bleiben erhalten.",
+          "actions_json": "Aktionen, die das Display und seine Benachrichtigungen ausführen dürfen, als JSON: ein Eintrag je Aktion mit domain und service, optional target und data. Leer lassen, wenn du keine nutzt.",
+          "dashboard_prevent_return": "An: Die Home-Assistant- und die Alarm-Seite bleiben offen, wenn der Bildschirm in den Standby geht. Aus: Das Display kehrt dann zur Startseite zurück.",
+          "dashboard_navigation": "So wechselt das Display die Seiten. Die Favoritenleiste zeigt die ersten vier Seiten als Schaltflächen am unteren Rand. Bei mehr als vier Seiten heißt die vierte Schaltfläche „Mehr“ und öffnet die Liste der übrigen Seiten. Die Reihenfolge folgt den Seitenpositionen."
         }
       },
       "reconfigure_dashboard_entity_display": {
@@ -851,6 +883,22 @@
           "dashboard_dynamic_homepage": "Wo die Knöpfe Alarm und Home Assistant auf der Startseite des C300X stehen. Werkseinstellung: Jeder Knopf erscheint nur, solange er etwas zu öffnen hat, und reiht sich zwischen die originalen Knöpfe ein, auch untereinander, wenn die Reihe voll ist. Fest nebeneinander: Beide behalten zwei feste Plätze nebeneinander; ein Knopf ohne Inhalt lässt seinen Platz leer. Eine Änderung wendet den Display-Patch erneut an und startet das Display einmal neu."
         }
       },
+      "dashboard_c100x": {
+        "title": "Home-Assistant-Seiten auf dem Display",
+        "description": "Home-Assistant-Seiten auf dem Display des C100X.\n\n**Displayseiten aktivieren** auf der Geräteseite schaltet sie ein; **Originales Display wiederherstellen** oder dieser Schalter aus bringt das originale Display zurück. Beides wirkt mit einem Neustart des C100X, sobald er etwa zwei Minuten ungenutzt war. Einen Display-Patch und ein Neuladen der Anzeige gibt es nicht.\n\nSind die Seiten aktiv, bietet das Display-Menü zusätzlich **Display-Seiten** (Wetter und was wo angezeigt wird) und **Display-Kacheln**.",
+        "data": {
+          "device_ui_enabled": "Home-Assistant-Seiten auf dem Display",
+          "actions_json": "Erlaubte Aktionen (für Fortgeschrittene)",
+          "dashboard_prevent_return": "Seite im Bildschirm-Standby offen lassen",
+          "dashboard_navigation": "Seitenwechsel"
+        },
+        "data_description": {
+          "device_ui_enabled": "An, solange die Home-Assistant-Seiten auf dem Display des C100X aktiv sind; sie kommen mit Displayseiten aktivieren. Aus: stellt das originale Display mit einem Neustart des C100X wieder her und verwirft die Einstellungen zu Wetter, Seiten, Kacheln und Aktionen. Die Alarmo-Einstellungen bleiben erhalten.",
+          "actions_json": "Aktionen, die das Display und seine Benachrichtigungen ausführen dürfen, als JSON: ein Eintrag je Aktion mit domain und service, optional target und data. Leer lassen, wenn du keine nutzt.",
+          "dashboard_prevent_return": "An: Die Home-Assistant- und die Alarm-Seite bleiben offen, wenn der Bildschirm in den Standby geht. Aus: Das Display kehrt dann zur Startseite zurück.",
+          "dashboard_navigation": "So wechselt das Display die Seiten. Die Favoritenleiste zeigt die ersten vier Seiten als Schaltflächen am unteren Rand. Bei mehr als vier Seiten heißt die vierte Schaltfläche „Mehr“ und öffnet die Liste der übrigen Seiten. Die Reihenfolge folgt den Seitenpositionen."
+        }
+      },
       "dashboard_entity_display": {
         "title": "Display-Kacheln",
         "description": "Jede Kachel hat einen eigenen Abschnitt, sortiert wie auf dem Display: erst die Seite, dann die Entität. Klappe einen Abschnitt auf, um seine Kachel zu ändern.\n\n- **Breite** und **Höhe**: halb oder voll. Automatisch nimmt die übliche Größe des Entitätstyps. Bei voller Höhe liegen die eigenen Tasten der Entität direkt auf der Kachel.\n- **Name**: tippe einen eigenen Namen ein. Bleibt das Feld leer, zeigt die Kachel den Namen aus Home Assistant.\n- **Zusatzzeile**: die zweite Zeile unter dem Namen.\n\nDie Alarmo-Schnellaktion steht auf keiner Seite; sie hat nur Name und Zusatzzeile."
@@ -881,11 +929,55 @@
           "dashboard_alarm": "Alarmo-Integration, unabhaengig von der Display-Unterstuetzung."
         }
       },
+      "init_c100x": {
+        "title": "C100X-Einstellungen",
+        "description": "Wähle, was du ändern möchtest. Jeder Bereich speichert für sich, sobald du ihn absendest, und führt in das Menü zurück, aus dem er geöffnet wurde; die anderen Bereiche behalten ihre Einstellungen. Um einen Bereich ohne Änderung zu verlassen, sende ihn unverändert ab.",
+        "menu_options": {
+          "connection": "Verbindung zum C100X",
+          "features": "Video und Audio",
+          "visitor_snapshot": "Besucher-Snapshot",
+          "camera_quality": "Kameraqualität",
+          "device_activations": "Aktivierungen: Schlösser, Lichter, Treppenlicht",
+          "speech": "Sprachausgabe",
+          "display": "Display",
+          "done": "Fertig",
+          "dashboard_alarm": "Alarmo"
+        },
+        "menu_option_descriptions": {
+          "connection": "Adresse, Zugangs- und Wartungsschlüssel des C100X, Adresse von Home Assistant.",
+          "features": "Livebild, Gegensprechen, Lautstärken und der Zugang für Video und Ton auf dem C100X.",
+          "visitor_snapshot": "Größe des gespeicherten Besucherbilds, Verzögerung der Aufnahme, Aufbewahrung und das Datum im Bild.",
+          "camera_quality": "Größe, Bitrate und Bildrate des Kamerastreams; eine Änderung startet das Gerät neu.",
+          "device_activations": "Zusätzliche Schlösser und Lichter der Türanlage, die Home Assistant auslösen kann, und die Adresse des Treppenlichts.",
+          "speech": "Sprachausgabe-Engine und Sprache für gesprochene Meldungen.",
+          "display": "Seiten, Kacheln und Alarmo.",
+          "done": "Einstellungen schließen. Alles Abgesendete ist bereits gespeichert.",
+          "dashboard_alarm": "Alarmo-Integration, unabhaengig von der Display-Unterstuetzung."
+        }
+      },
       "display": {
         "title": "Display",
         "description": "Alles, was das Display des C300X aus Home Assistant zeigt. Seiten und Kacheln erscheinen hier, sobald der Display-Patch an ist.",
         "menu_options": {
           "dashboard": "Display und Display-Patch",
+          "dashboard_page_list": "Display-Seiten",
+          "dashboard_entity_display": "Display-Kacheln",
+          "dashboard_alarm": "Alarm (Alarmo)",
+          "init": "Zurück"
+        },
+        "menu_option_descriptions": {
+          "dashboard": "Home-Assistant-Seiten auf dem Display ein- oder ausschalten, Seitenwechsel, Seite im Bildschirm-Standby und erlaubte Aktionen.",
+          "dashboard_page_list": "Wetter und welche Entitäten auf welcher Seite in welcher Reihenfolge erscheinen.",
+          "dashboard_entity_display": "Größe, Name und Zusatzzeile jeder Kachel.",
+          "dashboard_alarm": "Alarmo-Alarmzentrale und die Schnellaktion der Alarm-Seite.",
+          "init": "Zurück zum Einstellungsmenü."
+        }
+      },
+      "display_c100x": {
+        "title": "Display",
+        "description": "Alles, was das Display des C100X aus Home Assistant zeigt. Seiten und Kacheln erscheinen hier, sobald die Displayseiten aktiviert sind.",
+        "menu_options": {
+          "dashboard": "Home-Assistant-Seiten auf dem Display",
           "dashboard_page_list": "Display-Seiten",
           "dashboard_entity_display": "Display-Kacheln",
           "dashboard_alarm": "Alarm (Alarmo)",
@@ -1432,8 +1524,14 @@
     "gui_function_patch_required": {
       "message": "Diese Aktion benötigt den {model}-Display-Patch. Aktiviere und wende den Display-Patch zuerst in den Integrationsoptionen an."
     },
+    "gui_function_patch_required_c100x": {
+      "message": "Diese Aktion braucht die Home-Assistant-Seiten auf dem C100X-Display. Aktiviere sie zuerst mit Displayseiten aktivieren auf der Geräteseite; der C100X startet dafür einmal neu."
+    },
     "display_disabled": {
       "message": "Display-Benachrichtigungen brauchen die Home-Assistant-Seiten auf dem {model}-Display. Schalte sie zuerst in den Integrationsoptionen ein."
+    },
+    "display_disabled_c100x": {
+      "message": "Display-Benachrichtigungen brauchen die Home-Assistant-Seiten auf dem C100X-Display. Aktiviere sie zuerst mit Displayseiten aktivieren auf der Geräteseite."
     },
     "unknown_notification_action": {
       "message": "Eine Schaltfläche der Benachrichtigung nutzt eine Aktions-ID, die bei den {model}-Aktionen nicht eingerichtet ist."

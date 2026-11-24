@@ -1,14 +1,19 @@
 """The model a user reads in texts: a C300X keeps its texts, a C100X gets its own.
 
-Texts name the model through the ``{model}`` placeholder.
+Texts name the model through the ``{model}`` placeholder. Forms whose wording
+differs beyond the name have a C100X twin step with the ``_c100x`` suffix.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, cast
 
-from homeassistant.config_entries import SOURCE_REAUTH, SOURCE_RECONFIGURE
+from homeassistant.config_entries import (
+    SOURCE_REAUTH,
+    SOURCE_RECONFIGURE,
+    ConfigFlowResult,
+)
 
 from .const import DEFAULT_NAME
 from .display_support import entry_is_c100x, setup_is_c100x
@@ -20,6 +25,8 @@ C100X = "C100X"
 # Before the device answered, a manual setup cannot know the model.
 EITHER = "C300X/C100X"
 C100X_DEFAULT_NAME = "BTicino C100X"
+# The C100X activates its display pages by reboot: no Display patch, no reload.
+C100X_STEPS = frozenset({"user_dashboard", "reconfigure_dashboard", "dashboard", "display", "init"})
 
 
 def setup_model(setup: Any, hint: str = "") -> str:
@@ -42,6 +49,12 @@ def model_placeholders(model: str, placeholders: Mapping[str, str] | None = None
     return {MODEL: model, **(placeholders or {})}
 
 
+def model_step_id(step_id: str | None, model: str) -> str | None:
+    """The C100X twin of a step whose wording describes the C300X mechanism."""
+
+    return f"{step_id}_c100x" if model == C100X and step_id in C100X_STEPS else step_id
+
+
 class ModelTextFlow:
     """Give every form, menu and abort of a flow the model it is about."""
 
@@ -49,27 +62,27 @@ class ModelTextFlow:
         raise NotImplementedError
 
     def async_show_form(self, *, step_id: str | None = None,
-                        description_placeholders: Mapping[str, str] | None = None, **kwargs: Any) -> Any:
+                        description_placeholders: Mapping[str, str] | None = None, **kwargs: Any) -> ConfigFlowResult:
         model = self._text_model()
-        return super().async_show_form(  # type: ignore[misc]
-            step_id=step_id,
+        return cast(ConfigFlowResult, super().async_show_form(  # type: ignore[misc]
+            step_id=model_step_id(step_id, model),
             description_placeholders=model_placeholders(model, description_placeholders), **kwargs,
-        )
+        ))
 
     def async_show_menu(self, *, step_id: str | None = None,
-                        description_placeholders: Mapping[str, str] | None = None, **kwargs: Any) -> Any:
+                        description_placeholders: Mapping[str, str] | None = None, **kwargs: Any) -> ConfigFlowResult:
         model = self._text_model()
-        return super().async_show_menu(  # type: ignore[misc]
-            step_id=step_id,
+        return cast(ConfigFlowResult, super().async_show_menu(  # type: ignore[misc]
+            step_id=model_step_id(step_id, model),
             description_placeholders=model_placeholders(model, description_placeholders), **kwargs,
-        )
+        ))
 
     def async_abort(self, *, reason: str, description_placeholders: Mapping[str, str] | None = None,
-                    **kwargs: Any) -> Any:
-        return super().async_abort(  # type: ignore[misc]
+                    **kwargs: Any) -> ConfigFlowResult:
+        return cast(ConfigFlowResult, super().async_abort(  # type: ignore[misc]
             reason=reason,
             description_placeholders=model_placeholders(self._text_model(), description_placeholders), **kwargs,
-        )
+        ))
 
 
 class ModelTextConfigFlow(ModelTextFlow):
@@ -87,10 +100,20 @@ class ModelTextConfigFlow(ModelTextFlow):
                 return C300X
         return setup_model(getattr(self, "_setup_agent_info", None), self._model_hint)
 
-    def async_create_entry(self, *, title: str, **kwargs: Any) -> Any:
+    def async_create_entry(
+        self, *, title: str | None = None, data: Mapping[str, Any], **kwargs: Any,
+    ) -> ConfigFlowResult:
         if title == DEFAULT_NAME and self._text_model() == C100X:
             title = C100X_DEFAULT_NAME
-        return super().async_create_entry(title=title, **kwargs)  # type: ignore[misc]
+        return cast(ConfigFlowResult, super().async_create_entry(  # type: ignore[misc]
+            title=title, data=data, **kwargs,
+        ))
+
+    async def async_step_user_dashboard_c100x(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        return cast(ConfigFlowResult, await self.async_step_user_dashboard(user_input))  # type: ignore[attr-defined]
+
+    async def async_step_reconfigure_dashboard_c100x(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        return cast(ConfigFlowResult, await self.async_step_reconfigure_dashboard(user_input))  # type: ignore[attr-defined]
 
 
 class ModelTextOptionsFlow(ModelTextFlow):
@@ -98,3 +121,6 @@ class ModelTextOptionsFlow(ModelTextFlow):
 
     def _text_model(self) -> str:
         return entry_model(getattr(self, "_config_entry", None))
+
+    async def async_step_dashboard_c100x(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        return cast(ConfigFlowResult, await self.async_step_dashboard(user_input))  # type: ignore[attr-defined]

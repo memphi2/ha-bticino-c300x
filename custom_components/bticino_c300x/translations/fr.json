@@ -133,6 +133,22 @@
           "dashboard_dynamic_homepage": "Où se placent les boutons Alarme et Home Assistant sur la page d'accueil du C300X. D'usine : chaque bouton n'apparaît que s'il a quelque chose à ouvrir et prend sa place parmi les boutons d'origine, aussi en dessous quand la rangée est pleine. Côte à côte, fixes : les deux gardent deux places fixes l'une à côté de l'autre ; un bouton sans rien à ouvrir laisse sa place vide. Un changement réapplique le patch display et redémarre l'écran une fois."
         }
       },
+      "user_dashboard_c100x": {
+        "title": "Dashboard display C100X",
+        "description": "Configurez le dashboard optionnel de l'écran C100X.\n\n**Activer les pages de l'écran** sur la page de l'appareil active les pages Home Assistant sur le C100X, **Restaurer l'écran d'origine** les désactive. Chacun prend effet avec un redémarrage du C100X, après environ deux minutes d'inactivité. Il n'y a ni patch display ni rechargement de l'écran.\n\nLorsque les pages sont actives, l'étape suivante configure les pages de l'écran : la météo et les entités de chaque page.",
+        "data": {
+          "device_ui_enabled": "Pages Home Assistant sur l'écran",
+          "actions_json": "Actions autorisées (pour experts)",
+          "dashboard_prevent_return": "Garder la page ouverte pendant la veille de l'écran",
+          "dashboard_navigation": "Navigation entre les pages"
+        },
+        "data_description": {
+          "device_ui_enabled": "Activé tant que les pages Home Assistant sont actives sur l'écran du C100X ; elles arrivent avec Activer les pages de l'écran. Désactivé : restaure l'écran d'origine avec un redémarrage du C100X et supprime les réglages de météo, de pages, de tuiles et d'actions. Les réglages Alarmo sont conservés.",
+          "actions_json": "Actions que l'écran et ses notifications peuvent exécuter, en JSON : une entrée par action avec domain et service, éventuellement target et data. Laissez vide si vous n'en utilisez pas.",
+          "dashboard_prevent_return": "Activé : les pages Home Assistant et Alarme restent ouvertes quand l'écran passe en veille. Désactivé : l'écran revient alors à la page d'accueil.",
+          "dashboard_navigation": "Manière dont l'écran change de page. La barre de favoris affiche les quatre premières pages sous forme de boutons en bas de l'écran. Au-delà de quatre pages, le quatrième bouton devient « Plus » et ouvre la liste des autres pages. L'ordre suit les positions des pages."
+        }
+      },
       "user_dashboard_entity_display": {
         "title": "Tuiles de l'écran",
         "description": "Chaque tuile a sa propre section, dans l'ordre de l'écran : d'abord la page, puis l'entité. Ouvrez une section pour modifier sa tuile.\n\n- **Largeur** et **Hauteur** : demie ou pleine. Automatique reprend la taille habituelle du type d'entité. En pleine hauteur, la tuile porte les boutons de l'entité.\n- **Nom** : saisissez votre propre nom. Si le champ reste vide, la tuile affiche le nom de Home Assistant.\n- **Ligne secondaire** : la deuxième ligne sous le nom.\n\nL'action rapide Alarmo n'est sur aucune page ; elle n'a qu'un nom et une ligne secondaire."
@@ -244,6 +260,22 @@
           "dashboard_prevent_return": "Activé : les pages Home Assistant et Alarme restent ouvertes quand l'écran passe en veille. Désactivé : l'écran revient alors à la page d'accueil.",
           "dashboard_navigation": "Manière dont l'écran change de page. La barre de favoris affiche les quatre premières pages sous forme de boutons en bas de l'écran. Au-delà de quatre pages, le quatrième bouton devient « Plus » et ouvre la liste des autres pages. L'ordre suit les positions des pages.",
           "dashboard_dynamic_homepage": "Où se placent les boutons Alarme et Home Assistant sur la page d'accueil du C300X. D'usine : chaque bouton n'apparaît que s'il a quelque chose à ouvrir et prend sa place parmi les boutons d'origine, aussi en dessous quand la rangée est pleine. Côte à côte, fixes : les deux gardent deux places fixes l'une à côté de l'autre ; un bouton sans rien à ouvrir laisse sa place vide. Un changement réapplique le patch display et redémarre l'écran une fois."
+        }
+      },
+      "reconfigure_dashboard_c100x": {
+        "title": "Reconfigurer le dashboard display C100X",
+        "description": "Configurez le dashboard optionnel de l'écran C100X.\n\n**Activer les pages de l'écran** sur la page de l'appareil active les pages Home Assistant sur le C100X, **Restaurer l'écran d'origine** les désactive. Chacun prend effet avec un redémarrage du C100X, après environ deux minutes d'inactivité. Il n'y a ni patch display ni rechargement de l'écran.\n\nLorsque les pages sont actives, l'étape suivante configure les pages de l'écran : la météo et les entités de chaque page.",
+        "data": {
+          "device_ui_enabled": "Pages Home Assistant sur l'écran",
+          "actions_json": "Actions autorisées (pour experts)",
+          "dashboard_prevent_return": "Garder la page ouverte pendant la veille de l'écran",
+          "dashboard_navigation": "Navigation entre les pages"
+        },
+        "data_description": {
+          "device_ui_enabled": "Activé tant que les pages Home Assistant sont actives sur l'écran du C100X ; elles arrivent avec Activer les pages de l'écran. Désactivé : restaure l'écran d'origine avec un redémarrage du C100X et supprime les réglages de météo, de pages, de tuiles et d'actions. Les réglages Alarmo sont conservés.",
+          "actions_json": "Actions que l'écran et ses notifications peuvent exécuter, en JSON : une entrée par action avec domain et service, éventuellement target et data. Laissez vide si vous n'en utilisez pas.",
+          "dashboard_prevent_return": "Activé : les pages Home Assistant et Alarme restent ouvertes quand l'écran passe en veille. Désactivé : l'écran revient alors à la page d'accueil.",
+          "dashboard_navigation": "Manière dont l'écran change de page. La barre de favoris affiche les quatre premières pages sous forme de boutons en bas de l'écran. Au-delà de quatre pages, le quatrième bouton devient « Plus » et ouvre la liste des autres pages. L'ordre suit les positions des pages."
         }
       },
       "reconfigure_dashboard_entity_display": {
@@ -851,6 +883,22 @@
           "dashboard_dynamic_homepage": "Où se placent les boutons Alarme et Home Assistant sur la page d'accueil du C300X. D'usine : chaque bouton n'apparaît que s'il a quelque chose à ouvrir et prend sa place parmi les boutons d'origine, aussi en dessous quand la rangée est pleine. Côte à côte, fixes : les deux gardent deux places fixes l'une à côté de l'autre ; un bouton sans rien à ouvrir laisse sa place vide. Un changement réapplique le patch display et redémarre l'écran une fois."
         }
       },
+      "dashboard_c100x": {
+        "title": "Pages Home Assistant sur l'écran",
+        "description": "Pages Home Assistant sur l'écran du C100X.\n\n**Activer les pages de l'écran** sur la page de l'appareil les active ; **Restaurer l'écran d'origine**, ou cet interrupteur désactivé, ramène l'écran d'origine. Chacun prend effet avec un redémarrage du C100X, après environ deux minutes d'inactivité. Il n'y a ni patch display ni rechargement de l'écran.\n\nLorsque les pages sont actives, le menu Écran propose aussi **Pages de l'écran** (météo et ce qui s'affiche où) et **Tuiles de l'écran**.",
+        "data": {
+          "device_ui_enabled": "Pages Home Assistant sur l'écran",
+          "actions_json": "Actions autorisées (pour experts)",
+          "dashboard_prevent_return": "Garder la page ouverte pendant la veille de l'écran",
+          "dashboard_navigation": "Navigation entre les pages"
+        },
+        "data_description": {
+          "device_ui_enabled": "Activé tant que les pages Home Assistant sont actives sur l'écran du C100X ; elles arrivent avec Activer les pages de l'écran. Désactivé : restaure l'écran d'origine avec un redémarrage du C100X et supprime les réglages de météo, de pages, de tuiles et d'actions. Les réglages Alarmo sont conservés.",
+          "actions_json": "Actions que l'écran et ses notifications peuvent exécuter, en JSON : une entrée par action avec domain et service, éventuellement target et data. Laissez vide si vous n'en utilisez pas.",
+          "dashboard_prevent_return": "Activé : les pages Home Assistant et Alarme restent ouvertes quand l'écran passe en veille. Désactivé : l'écran revient alors à la page d'accueil.",
+          "dashboard_navigation": "Manière dont l'écran change de page. La barre de favoris affiche les quatre premières pages sous forme de boutons en bas de l'écran. Au-delà de quatre pages, le quatrième bouton devient « Plus » et ouvre la liste des autres pages. L'ordre suit les positions des pages."
+        }
+      },
       "dashboard_entity_display": {
         "title": "Tuiles de l'écran",
         "description": "Chaque tuile a sa propre section, dans l'ordre de l'écran : d'abord la page, puis l'entité. Ouvrez une section pour modifier sa tuile.\n\n- **Largeur** et **Hauteur** : demie ou pleine. Automatique reprend la taille habituelle du type d'entité. En pleine hauteur, la tuile porte les boutons de l'entité.\n- **Nom** : saisissez votre propre nom. Si le champ reste vide, la tuile affiche le nom de Home Assistant.\n- **Ligne secondaire** : la deuxième ligne sous le nom.\n\nL'action rapide Alarmo n'est sur aucune page ; elle n'a qu'un nom et une ligne secondaire."
@@ -881,11 +929,55 @@
           "dashboard_alarm": "Integration Alarmo, independante de la prise en charge de l ecran."
         }
       },
+      "init_c100x": {
+        "title": "Réglages C100X",
+        "description": "Choisissez ce que vous voulez modifier. Chaque rubrique s'enregistre séparément à la validation et vous ramène au menu d'où elle a été ouverte ; les autres rubriques conservent leurs réglages. Pour quitter une rubrique sans modification, validez-la telle quelle.",
+        "menu_options": {
+          "connection": "Connexion au C100X",
+          "features": "Vidéo et audio",
+          "visitor_snapshot": "Instantané visiteur",
+          "camera_quality": "Qualité de la caméra",
+          "device_activations": "Activations : serrures, lumières, éclairage d'escalier",
+          "speech": "Synthèse vocale",
+          "display": "Écran",
+          "done": "Terminé",
+          "dashboard_alarm": "Alarmo"
+        },
+        "menu_option_descriptions": {
+          "connection": "Adresse, clé d'accès et clé de maintenance du C100X, adresse de Home Assistant.",
+          "features": "Image en direct, parole, volumes et accès vidéo et audio sur le C100X.",
+          "visitor_snapshot": "Taille de l'image du visiteur enregistrée, délai de capture, conservation et date inscrite dans l'image.",
+          "camera_quality": "Taille, débit et fréquence d'images du flux caméra ; une modification redémarre l'appareil.",
+          "device_activations": "Serrures et lumières supplémentaires de l'installation que Home Assistant peut déclencher, et l'adresse de l'éclairage d'escalier.",
+          "speech": "Moteur de synthèse vocale et langue des notifications parlées.",
+          "display": "Pages, tuiles et Alarmo.",
+          "done": "Fermer les réglages. Tout ce qui a été validé est déjà enregistré.",
+          "dashboard_alarm": "Integration Alarmo, independante de la prise en charge de l ecran."
+        }
+      },
       "display": {
         "title": "Écran",
         "description": "Tout ce que l'écran du C300X affiche depuis Home Assistant. Les pages et les tuiles apparaissent ici dès que le patch display est activé.",
         "menu_options": {
           "dashboard": "Écran et patch display",
+          "dashboard_page_list": "Pages de l'écran",
+          "dashboard_entity_display": "Tuiles de l'écran",
+          "dashboard_alarm": "Alarme (Alarmo)",
+          "init": "Retour"
+        },
+        "menu_option_descriptions": {
+          "dashboard": "Activer ou désactiver les pages Home Assistant sur l'écran, navigation entre les pages, page pendant la veille de l'écran et actions autorisées.",
+          "dashboard_page_list": "Météo, et quelles entités apparaissent sur quelle page et dans quel ordre.",
+          "dashboard_entity_display": "Taille, nom et ligne secondaire de chaque tuile.",
+          "dashboard_alarm": "Centrale d'alarme Alarmo et action rapide de la page Alarme.",
+          "init": "Retour au menu des réglages."
+        }
+      },
+      "display_c100x": {
+        "title": "Écran",
+        "description": "Tout ce que l'écran du C100X affiche depuis Home Assistant. Les pages et les tuiles apparaissent ici dès que les pages de l'écran sont activées.",
+        "menu_options": {
+          "dashboard": "Pages Home Assistant sur l'écran",
           "dashboard_page_list": "Pages de l'écran",
           "dashboard_entity_display": "Tuiles de l'écran",
           "dashboard_alarm": "Alarme (Alarmo)",
@@ -1432,8 +1524,14 @@
     "gui_function_patch_required": {
       "message": "Cette action nécessite le patch display {model}. Activez et appliquez d'abord le patch display dans les options de l'intégration."
     },
+    "gui_function_patch_required_c100x": {
+      "message": "Cette action nécessite les pages Home Assistant sur l'écran C100X. Activez-les d'abord avec Activer les pages de l'écran sur la page de l'appareil ; le C100X redémarre une fois."
+    },
     "display_disabled": {
       "message": "Les notifications de l'écran nécessitent les pages Home Assistant sur l'écran {model}. Activez-les d'abord dans les options de l'intégration."
+    },
+    "display_disabled_c100x": {
+      "message": "Les notifications de l'écran nécessitent les pages Home Assistant sur l'écran C100X. Activez-les d'abord avec Activer les pages de l'écran sur la page de l'appareil."
     },
     "unknown_notification_action": {
       "message": "Un bouton de la notification utilise un ID d'action qui n'est pas configuré dans les actions {model}."

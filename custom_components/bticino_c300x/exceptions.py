@@ -7,15 +7,21 @@ from typing import Any
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 
 from .const import DOMAIN
-from .model_names import entry_model, model_placeholders
+from .model_names import C100X, entry_model, model_placeholders
+
+# Their C300X wording names the Display patch; a C100X has its own text.
+_C100X_KEYS = frozenset({"display_disabled", "gui_function_patch_required"})
 
 
 def _kwargs(translation_key: str, placeholders: dict[str, str] | None, entry: Any) -> dict[str, Any]:
     # Messages name the entry's model; without an entry they keep the C300X text.
+    model = entry_model(entry)
+    if model == C100X and translation_key in _C100X_KEYS:
+        translation_key = f"{translation_key}_c100x"
     return {
         "translation_domain": DOMAIN,
         "translation_key": translation_key,
-        "translation_placeholders": model_placeholders(entry_model(entry), placeholders),
+        "translation_placeholders": model_placeholders(model, placeholders),
     }
 
 

@@ -133,6 +133,22 @@
           "dashboard_dynamic_homepage": "Where the Alarm and Home Assistant buttons sit on the home page of the C300X. Stock: each button appears only while it has something to open and takes its place among the original buttons, also below them when the row is full. Fixed side by side: both keep two fixed places next to each other; a button with nothing to open leaves its place empty. A change applies the Display patch again and restarts the display once."
         }
       },
+      "user_dashboard_c100x": {
+        "title": "C100X display dashboard",
+        "description": "Configure the optional C100X display dashboard.\n\n**Activate display pages** on the device page turns the Home Assistant pages on the C100X on, **Restore original display** turns them off. Each takes effect with one reboot of the C100X once it has been idle for about two minutes. There is no Display patch and no screen reload.\n\nWith the pages active, the next step sets up the display pages: the weather and the entities on each page.",
+        "data": {
+          "device_ui_enabled": "Home Assistant pages on the display",
+          "actions_json": "Allowed actions (for experts)",
+          "dashboard_prevent_return": "Keep the page open on screen standby",
+          "dashboard_navigation": "Page navigation"
+        },
+        "data_description": {
+          "device_ui_enabled": "On while the Home Assistant pages are active on the display of the C100X; they come with Activate display pages. Off: restores the original display with one reboot of the C100X and discards the weather, page, tile and action settings. The Alarmo settings are kept.",
+          "actions_json": "Actions the display and its notifications may run, written as JSON: one entry per action with domain and service, optionally target and data. Leave empty if you use none.",
+          "dashboard_prevent_return": "On: the Home Assistant and Alarm pages stay open when the screen goes to standby. Off: the display then returns to its home page.",
+          "dashboard_navigation": "How the display changes pages. The favourites bar shows the first four pages as buttons along the bottom edge. With more than four pages, the fourth button is More and opens the list of the other pages. The order follows the page positions."
+        }
+      },
       "user_dashboard_entity_display": {
         "title": "Display tiles",
         "description": "Each tile has its own section, in the order the display shows them: first the page, then the entity. Open a section to change its tile.\n\n- **Width** and **Height**: half or full. Automatic uses the usual size of the entity type. At full height the tile carries the entity's own buttons.\n- **Name**: type a name of your own. Left empty, the tile shows the name from Home Assistant.\n- **Secondary line**: the second line below the name.\n\nThe Alarmo quick action is on no page; it has a name and a secondary line only."
@@ -244,6 +260,22 @@
           "dashboard_prevent_return": "On: the Home Assistant and Alarm pages stay open when the screen goes to standby. Off: the display then returns to its home page.",
           "dashboard_navigation": "How the display changes pages. The favourites bar shows the first four pages as buttons along the bottom edge. With more than four pages, the fourth button is More and opens the list of the other pages. The order follows the page positions.",
           "dashboard_dynamic_homepage": "Where the Alarm and Home Assistant buttons sit on the home page of the C300X. Stock: each button appears only while it has something to open and takes its place among the original buttons, also below them when the row is full. Fixed side by side: both keep two fixed places next to each other; a button with nothing to open leaves its place empty. A change applies the Display patch again and restarts the display once."
+        }
+      },
+      "reconfigure_dashboard_c100x": {
+        "title": "Reconfigure C100X display dashboard",
+        "description": "Configure the optional C100X display dashboard.\n\n**Activate display pages** on the device page turns the Home Assistant pages on the C100X on, **Restore original display** turns them off. Each takes effect with one reboot of the C100X once it has been idle for about two minutes. There is no Display patch and no screen reload.\n\nWith the pages active, the next step sets up the display pages: the weather and the entities on each page.",
+        "data": {
+          "device_ui_enabled": "Home Assistant pages on the display",
+          "actions_json": "Allowed actions (for experts)",
+          "dashboard_prevent_return": "Keep the page open on screen standby",
+          "dashboard_navigation": "Page navigation"
+        },
+        "data_description": {
+          "device_ui_enabled": "On while the Home Assistant pages are active on the display of the C100X; they come with Activate display pages. Off: restores the original display with one reboot of the C100X and discards the weather, page, tile and action settings. The Alarmo settings are kept.",
+          "actions_json": "Actions the display and its notifications may run, written as JSON: one entry per action with domain and service, optionally target and data. Leave empty if you use none.",
+          "dashboard_prevent_return": "On: the Home Assistant and Alarm pages stay open when the screen goes to standby. Off: the display then returns to its home page.",
+          "dashboard_navigation": "How the display changes pages. The favourites bar shows the first four pages as buttons along the bottom edge. With more than four pages, the fourth button is More and opens the list of the other pages. The order follows the page positions."
         }
       },
       "reconfigure_dashboard_entity_display": {
@@ -851,6 +883,22 @@
           "dashboard_dynamic_homepage": "Where the Alarm and Home Assistant buttons sit on the home page of the C300X. Stock: each button appears only while it has something to open and takes its place among the original buttons, also below them when the row is full. Fixed side by side: both keep two fixed places next to each other; a button with nothing to open leaves its place empty. A change applies the Display patch again and restarts the display once."
         }
       },
+      "dashboard_c100x": {
+        "title": "Home Assistant pages on the display",
+        "description": "Home Assistant pages on the display of the C100X.\n\n**Activate display pages** on the device page turns them on; **Restore original display**, or this switch turned off, brings back the original display. Each takes effect with one reboot of the C100X once it has been idle for about two minutes. There is no Display patch and no screen reload.\n\nWith the pages active, the Display menu also offers **Display pages** (weather and what is shown where) and **Display tiles**.",
+        "data": {
+          "device_ui_enabled": "Home Assistant pages on the display",
+          "actions_json": "Allowed actions (for experts)",
+          "dashboard_prevent_return": "Keep the page open on screen standby",
+          "dashboard_navigation": "Page navigation"
+        },
+        "data_description": {
+          "device_ui_enabled": "On while the Home Assistant pages are active on the display of the C100X; they come with Activate display pages. Off: restores the original display with one reboot of the C100X and discards the weather, page, tile and action settings. The Alarmo settings are kept.",
+          "actions_json": "Actions the display and its notifications may run, written as JSON: one entry per action with domain and service, optionally target and data. Leave empty if you use none.",
+          "dashboard_prevent_return": "On: the Home Assistant and Alarm pages stay open when the screen goes to standby. Off: the display then returns to its home page.",
+          "dashboard_navigation": "How the display changes pages. The favourites bar shows the first four pages as buttons along the bottom edge. With more than four pages, the fourth button is More and opens the list of the other pages. The order follows the page positions."
+        }
+      },
       "dashboard_entity_display": {
         "title": "Display tiles",
         "description": "Each tile has its own section, in the order the display shows them: first the page, then the entity. Open a section to change its tile.\n\n- **Width** and **Height**: half or full. Automatic uses the usual size of the entity type. At full height the tile carries the entity's own buttons.\n- **Name**: type a name of your own. Left empty, the tile shows the name from Home Assistant.\n- **Secondary line**: the second line below the name.\n\nThe Alarmo quick action is on no page; it has a name and a secondary line only."
@@ -881,11 +929,55 @@
           "dashboard_alarm": "Alarmo integration, independent of device display support."
         }
       },
+      "init_c100x": {
+        "title": "C100X settings",
+        "description": "Choose what to change. Each area saves on its own when you submit it and brings you back to the menu it was opened from; the other areas keep their settings. To leave an area without a change, submit it as it is.",
+        "menu_options": {
+          "connection": "Connection to the C100X",
+          "features": "Video and audio",
+          "visitor_snapshot": "Visitor Snapshot",
+          "camera_quality": "Camera quality",
+          "device_activations": "Activations: locks, lights, stair light",
+          "speech": "Speech",
+          "display": "Display",
+          "done": "Done",
+          "dashboard_alarm": "Alarmo"
+        },
+        "menu_option_descriptions": {
+          "connection": "Address, access key and maintenance key of the C100X, address of Home Assistant.",
+          "features": "Live picture, talking, volumes and the video and audio access on the C100X.",
+          "visitor_snapshot": "Size of the saved visitor image, capture delay, retention and the date written into the image.",
+          "camera_quality": "Size, bit rate and frame rate of the camera stream; a change restarts the device.",
+          "device_activations": "Additional locks and lights of the door system that Home Assistant can trigger, and the stair-light address.",
+          "speech": "Text-to-speech engine and language for spoken notifications.",
+          "display": "Pages, tiles and Alarmo.",
+          "done": "Close the settings. Everything submitted is already saved.",
+          "dashboard_alarm": "Alarmo integration, independent of device display support."
+        }
+      },
       "display": {
         "title": "Display",
         "description": "Everything the C300X display shows from Home Assistant. Pages and tiles appear here once the Display patch is on.",
         "menu_options": {
           "dashboard": "Display and Display patch",
+          "dashboard_page_list": "Display pages",
+          "dashboard_entity_display": "Display tiles",
+          "dashboard_alarm": "Alarm (Alarmo)",
+          "init": "Back"
+        },
+        "menu_option_descriptions": {
+          "dashboard": "Home Assistant pages on the display on or off, page navigation, the page on screen standby and allowed actions.",
+          "dashboard_page_list": "Weather, and which entities appear on which page and in which order.",
+          "dashboard_entity_display": "Size, name and secondary line of each tile.",
+          "dashboard_alarm": "Alarmo alarm panel and the quick action of the Alarm page.",
+          "init": "Back to the settings menu."
+        }
+      },
+      "display_c100x": {
+        "title": "Display",
+        "description": "Everything the C100X display shows from Home Assistant. Pages and tiles appear here once the display pages are activated.",
+        "menu_options": {
+          "dashboard": "Home Assistant pages on the display",
           "dashboard_page_list": "Display pages",
           "dashboard_entity_display": "Display tiles",
           "dashboard_alarm": "Alarm (Alarmo)",
@@ -1432,8 +1524,14 @@
     "gui_function_patch_required": {
       "message": "This action requires the {model} Display patch. Enable and apply the Display patch in the integration options first."
     },
+    "gui_function_patch_required_c100x": {
+      "message": "This action needs the Home Assistant pages on the C100X display. Activate them first with Activate display pages on the device page; the C100X reboots once."
+    },
     "display_disabled": {
       "message": "Display notifications need the Home Assistant pages on the {model} display. Turn them on in the integration options first."
+    },
+    "display_disabled_c100x": {
+      "message": "Display notifications need the Home Assistant pages on the C100X display. Activate them first with Activate display pages on the device page."
     },
     "unknown_notification_action": {
       "message": "A notification button uses an action ID that is not configured in the {model} actions."

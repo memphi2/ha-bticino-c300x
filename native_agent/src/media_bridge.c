@@ -22,6 +22,7 @@
 
 #include <arpa/inet.h>
 #include <errno.h>
+#include <limits.h>
 #include <netinet/in.h>
 #include <dlfcn.h>
 #include <pthread.h>
@@ -1379,6 +1380,14 @@ static void fill_random_bytes(unsigned char *out, size_t len) {
     }
 }
 
+/* Call-ID, tags and branches must not be guessable from the clock and pid:
+ * whoever knows them can end or take over the dialog. */
+static long random_sip_id(void) {
+    unsigned long value = 0;
+    fill_random_bytes((unsigned char *)&value, sizeof(value));
+    return (long)(value & (unsigned long)LONG_MAX);
+}
+
 static bool format_uuid_bytes(const unsigned char *bytes, char *out, size_t out_len) {
     if (bytes == NULL || out == NULL || out_len < MEDIA_INSTANCE_UUID_LEN) {
         return false;
@@ -1673,7 +1682,7 @@ static bool send_ring_registration(
     char request[2048];
     char response[SIP_BUFFER_SIZE];
     char instance_uuid[MEDIA_INSTANCE_UUID_LEN];
-    long unique_id = (long)time(NULL) ^ (long)getpid() ^ (long)cseq;
+    long unique_id = random_sip_id();
     if (!bridge_instance_uuid(bridge, bridge->ring_instance_uuid, "ring", instance_uuid, sizeof(instance_uuid))) {
         return false;
     }
@@ -2409,7 +2418,7 @@ static void handle_ring_invite(
         goto cleanup;
     }
 
-    snprintf(to_tag, sizeof(to_tag), "ha-ring%ld", (long)time(NULL));
+    snprintf(to_tag, sizeof(to_tag), "ha-ring%ld", random_sip_id());
     c300x_media_sip_header_value(invite, "Contact:", remote_contact, sizeof(remote_contact));
     c300x_media_sip_uri_from_header(remote_contact, remote_contact_uri, sizeof(remote_contact_uri));
 
@@ -3631,7 +3640,7 @@ static bool send_sip_setup(media_bridge_t *bridge, unsigned long generation) {
         return false;
     }
 
-    long unique_id = (long)time(NULL) ^ (long)getpid();
+    long unique_id = random_sip_id();
     char call_id[128];
     char from_tag[64];
     snprintf(call_id, sizeof(call_id), "haapp%ld", unique_id);
@@ -4169,7 +4178,7 @@ static bool send_home_call_register(
     char request[2048];
     char response[SIP_BUFFER_SIZE];
     char instance_uuid[MEDIA_INSTANCE_UUID_LEN];
-    long unique_id = (long)time(NULL) ^ (long)getpid() ^ (long)cseq;
+    long unique_id = random_sip_id();
     if (!bridge_instance_uuid(bridge, bridge->home_call_instance_uuid, "home_call", instance_uuid, sizeof(instance_uuid))) {
         return false;
     }
@@ -4413,7 +4422,7 @@ static void *home_call_thread_func(void *arg) {
         goto cleanup;
     }
 
-    long unique_id = (long)time(NULL) ^ (long)getpid();
+    long unique_id = random_sip_id();
     snprintf(call_id, sizeof(call_id), "hahomecall%ld", unique_id);
     snprintf(from_tag, sizeof(from_tag), "hahomecall%ld", unique_id);
     snprintf(invite_branch, sizeof(invite_branch), "z9hG4bKhomecallinv%ld", unique_id);

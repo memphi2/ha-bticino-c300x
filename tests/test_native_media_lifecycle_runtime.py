@@ -145,3 +145,20 @@ def test_a_playing_ring_or_home_call_client_gets_the_advertised_timeout():
     assert "media_started" not in call
     play = handler[handler.index("media_started = !ring_session && !home_call_session;"):][:120]
     assert play.split(";")[1].strip() == "playing = true"
+
+
+def test_sip_dialog_identifiers_are_random():
+    """Call-ID, tags and branches came from time(NULL) ^ getpid().
+
+    Anyone on the LAN who could guess them could end or hijack the dialog.
+    They now come from /dev/urandom through random_sip_id().
+    """
+
+    import re
+
+    source = (Path(__file__).parents[1] / "native_agent/src/media_bridge.c").read_text()
+    assert not re.search(r"\(long\)time\(NULL\)\s*\^", source)
+    assert '"ha-ring%ld", (long)time(NULL)' not in source
+    assert source.count("long unique_id = random_sip_id();") == 4
+    helper = source[source.index("static long random_sip_id(void)"):][:300]
+    assert "fill_random_bytes(" in helper

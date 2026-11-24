@@ -145,7 +145,7 @@
         "data_description": {
           "device_ui_enabled": "On while the Home Assistant pages are active on the display of the C100X; they come with Activate display pages. Off: restores the original display with one reboot of the C100X and discards the weather, page, tile and action settings. The Alarmo settings are kept.",
           "actions_json": "Actions the display and its notifications may run, written as JSON: one entry per action with domain and service, optionally target and data. Leave empty if you use none.",
-          "dashboard_prevent_return": "On: the Home Assistant and Alarm pages stay open when the screen goes to standby. Off: the display then returns to its home page.",
+          "dashboard_prevent_return": "On: the Home Assistant and Alarmo pages stay open when the screen goes to standby. Off: the display then returns to its home page.",
           "dashboard_navigation": "How the display changes pages. The favourites bar shows the first four pages as buttons along the bottom edge. With more than four pages, the fourth button is More and opens the list of the other pages. The order follows the page positions."
         }
       },
@@ -274,7 +274,7 @@
         "data_description": {
           "device_ui_enabled": "On while the Home Assistant pages are active on the display of the C100X; they come with Activate display pages. Off: restores the original display with one reboot of the C100X and discards the weather, page, tile and action settings. The Alarmo settings are kept.",
           "actions_json": "Actions the display and its notifications may run, written as JSON: one entry per action with domain and service, optionally target and data. Leave empty if you use none.",
-          "dashboard_prevent_return": "On: the Home Assistant and Alarm pages stay open when the screen goes to standby. Off: the display then returns to its home page.",
+          "dashboard_prevent_return": "On: the Home Assistant and Alarmo pages stay open when the screen goes to standby. Off: the display then returns to its home page.",
           "dashboard_navigation": "How the display changes pages. The favourites bar shows the first four pages as buttons along the bottom edge. With more than four pages, the fourth button is More and opens the list of the other pages. The order follows the page positions."
         }
       },
@@ -294,6 +294,18 @@
           "alarm_page_entity_id": "Optional entity on the Alarm page of the display (Display patch), for example the stair light. Buttons, switches, scenes and scripts can be operated there, other entities are only shown. Leave empty to hide it."
         }
       },
+      "user_dashboard_alarm_c100x": {
+        "title": "Alarmo",
+        "description": "Alarmo drives the alarm commands and the Alarmo page of the display, which opens from the Alarmo item in the main menu of the {model}. Choose the Alarmo alarm panel and, if you like, a quick action beside it on the Alarmo page.",
+        "data": {
+          "alarm_entity_id": "Alarmo alarm panel",
+          "alarm_page_entity_id": "Quick action"
+        },
+        "data_description": {
+          "alarm_entity_id": "Alarm panel that Home Assistant arms and disarms from the {model} and the Alarmo page shows. Leave empty if you do not use Alarmo: the Alarmo item then does not appear in the main menu.",
+          "alarm_page_entity_id": "Optional entity on the Alarmo page of the display, for example the stair light. Buttons, switches, scenes and scripts can be operated there, other entities are only shown. Leave empty to hide it."
+        }
+      },
       "reconfigure_dashboard_alarm": {
         "title": "Alarm (Alarmo)",
         "description": "Alarmo drives the alarm commands and the Alarm page of the display, which opens from the Alarm button on the home page of the {model}. Choose the Alarmo alarm panel and, if you like, a quick action beside it on the Alarm page.",
@@ -304,6 +316,18 @@
         "data_description": {
           "alarm_entity_id": "Alarm panel that Home Assistant arms and disarms from the {model} and the Alarm page shows. Leave empty if you do not use Alarmo: the Alarm button then does not appear.",
           "alarm_page_entity_id": "Optional entity on the Alarm page of the display (Display patch), for example the stair light. Buttons, switches, scenes and scripts can be operated there, other entities are only shown. Leave empty to hide it."
+        }
+      },
+      "reconfigure_dashboard_alarm_c100x": {
+        "title": "Alarmo",
+        "description": "Alarmo drives the alarm commands and the Alarmo page of the display, which opens from the Alarmo item in the main menu of the {model}. Choose the Alarmo alarm panel and, if you like, a quick action beside it on the Alarmo page.",
+        "data": {
+          "alarm_entity_id": "Alarmo alarm panel",
+          "alarm_page_entity_id": "Quick action"
+        },
+        "data_description": {
+          "alarm_entity_id": "Alarm panel that Home Assistant arms and disarms from the {model} and the Alarmo page shows. Leave empty if you do not use Alarmo: the Alarmo item then does not appear in the main menu.",
+          "alarm_page_entity_id": "Optional entity on the Alarmo page of the display, for example the stair light. Buttons, switches, scenes and scripts can be operated there, other entities are only shown. Leave empty to hide it."
         }
       },
       "user_dashboard_pages": {
@@ -895,7 +919,7 @@
         "data_description": {
           "device_ui_enabled": "On while the Home Assistant pages are active on the display of the C100X; they come with Activate display pages. Off: restores the original display with one reboot of the C100X and discards the weather, page, tile and action settings. The Alarmo settings are kept.",
           "actions_json": "Actions the display and its notifications may run, written as JSON: one entry per action with domain and service, optionally target and data. Leave empty if you use none.",
-          "dashboard_prevent_return": "On: the Home Assistant and Alarm pages stay open when the screen goes to standby. Off: the display then returns to its home page.",
+          "dashboard_prevent_return": "On: the Home Assistant and Alarmo pages stay open when the screen goes to standby. Off: the display then returns to its home page.",
           "dashboard_navigation": "How the display changes pages. The favourites bar shows the first four pages as buttons along the bottom edge. With more than four pages, the fourth button is More and opens the list of the other pages. The order follows the page positions."
         }
       },
@@ -980,14 +1004,14 @@
           "dashboard": "Home Assistant pages on the display",
           "dashboard_page_list": "Display pages",
           "dashboard_entity_display": "Display tiles",
-          "dashboard_alarm": "Alarm (Alarmo)",
+          "dashboard_alarm": "Alarmo",
           "init": "Back"
         },
         "menu_option_descriptions": {
           "dashboard": "Home Assistant pages on the display on or off, page navigation, the page on screen standby and allowed actions.",
           "dashboard_page_list": "Weather, and which entities appear on which page and in which order.",
           "dashboard_entity_display": "Size, name and secondary line of each tile.",
-          "dashboard_alarm": "Alarmo alarm panel and the quick action of the Alarm page.",
+          "dashboard_alarm": "Alarmo alarm panel and the quick action of the Alarmo page.",
           "init": "Back to the settings menu."
         }
       },
@@ -1025,6 +1049,18 @@
         "data_description": {
           "alarm_entity_id": "Alarm panel that Home Assistant arms and disarms from the {model} and the Alarm page shows. Leave empty if you do not use Alarmo: the Alarm button then does not appear.",
           "alarm_page_entity_id": "Optional entity on the Alarm page of the display (Display patch), for example the stair light. Buttons, switches, scenes and scripts can be operated there, other entities are only shown. Leave empty to hide it."
+        }
+      },
+      "dashboard_alarm_c100x": {
+        "title": "Alarmo",
+        "description": "Alarmo drives the alarm commands and the Alarmo page of the display, which opens from the Alarmo item in the main menu of the {model}. Choose the Alarmo alarm panel and, if you like, a quick action beside it on the Alarmo page.",
+        "data": {
+          "alarm_entity_id": "Alarmo alarm panel",
+          "alarm_page_entity_id": "Quick action"
+        },
+        "data_description": {
+          "alarm_entity_id": "Alarm panel that Home Assistant arms and disarms from the {model} and the Alarmo page shows. Leave empty if you do not use Alarmo: the Alarmo item then does not appear in the main menu.",
+          "alarm_page_entity_id": "Optional entity on the Alarmo page of the display, for example the stair light. Buttons, switches, scenes and scripts can be operated there, other entities are only shown. Leave empty to hide it."
         }
       },
       "dashboard_pages": {

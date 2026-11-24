@@ -145,7 +145,7 @@
         "data_description": {
           "device_ui_enabled": "Activé tant que les pages Home Assistant sont actives sur l'écran du C100X ; elles arrivent avec Activer les pages de l'écran. Désactivé : restaure l'écran d'origine avec un redémarrage du C100X et supprime les réglages de météo, de pages, de tuiles et d'actions. Les réglages Alarmo sont conservés.",
           "actions_json": "Actions que l'écran et ses notifications peuvent exécuter, en JSON : une entrée par action avec domain et service, éventuellement target et data. Laissez vide si vous n'en utilisez pas.",
-          "dashboard_prevent_return": "Activé : les pages Home Assistant et Alarme restent ouvertes quand l'écran passe en veille. Désactivé : l'écran revient alors à la page d'accueil.",
+          "dashboard_prevent_return": "Activé : les pages Home Assistant et Alarmo restent ouvertes quand l'écran passe en veille. Désactivé : l'écran revient alors à la page d'accueil.",
           "dashboard_navigation": "Manière dont l'écran change de page. La barre de favoris affiche les quatre premières pages sous forme de boutons en bas de l'écran. Au-delà de quatre pages, le quatrième bouton devient « Plus » et ouvre la liste des autres pages. L'ordre suit les positions des pages."
         }
       },
@@ -274,7 +274,7 @@
         "data_description": {
           "device_ui_enabled": "Activé tant que les pages Home Assistant sont actives sur l'écran du C100X ; elles arrivent avec Activer les pages de l'écran. Désactivé : restaure l'écran d'origine avec un redémarrage du C100X et supprime les réglages de météo, de pages, de tuiles et d'actions. Les réglages Alarmo sont conservés.",
           "actions_json": "Actions que l'écran et ses notifications peuvent exécuter, en JSON : une entrée par action avec domain et service, éventuellement target et data. Laissez vide si vous n'en utilisez pas.",
-          "dashboard_prevent_return": "Activé : les pages Home Assistant et Alarme restent ouvertes quand l'écran passe en veille. Désactivé : l'écran revient alors à la page d'accueil.",
+          "dashboard_prevent_return": "Activé : les pages Home Assistant et Alarmo restent ouvertes quand l'écran passe en veille. Désactivé : l'écran revient alors à la page d'accueil.",
           "dashboard_navigation": "Manière dont l'écran change de page. La barre de favoris affiche les quatre premières pages sous forme de boutons en bas de l'écran. Au-delà de quatre pages, le quatrième bouton devient « Plus » et ouvre la liste des autres pages. L'ordre suit les positions des pages."
         }
       },
@@ -294,6 +294,18 @@
           "alarm_page_entity_id": "Entité optionnelle sur la page Alarme de l'écran (patch display), par exemple l'éclairage d'escalier. Les boutons, interrupteurs, scènes et scripts peuvent y être commandés, les autres entités sont seulement affichées. Laissez vide pour la masquer."
         }
       },
+      "user_dashboard_alarm_c100x": {
+        "title": "Alarmo",
+        "description": "Alarmo pilote les commandes d'alarme et la page Alarmo de l'écran, qui s'ouvre depuis l'élément Alarmo du menu principal du {model}. Choisissez la centrale d'alarme Alarmo et, si vous le souhaitez, une action rapide à côté sur la page Alarmo.",
+        "data": {
+          "alarm_entity_id": "Centrale d'alarme Alarmo",
+          "alarm_page_entity_id": "Action rapide"
+        },
+        "data_description": {
+          "alarm_entity_id": "Centrale d'alarme que Home Assistant arme et désarme depuis le {model} et que la page Alarmo affiche. Laissez vide si vous n'utilisez pas Alarmo : l'élément Alarmo n'apparaît alors pas dans le menu principal.",
+          "alarm_page_entity_id": "Entité optionnelle sur la page Alarmo de l'écran, par exemple l'éclairage d'escalier. Les boutons, interrupteurs, scènes et scripts peuvent y être commandés, les autres entités sont seulement affichées. Laissez vide pour la masquer."
+        }
+      },
       "reconfigure_dashboard_alarm": {
         "title": "Alarme (Alarmo)",
         "description": "Alarmo pilote les commandes d'alarme et la page Alarme de l'écran, qui s'ouvre depuis le bouton Alarme de la page d'accueil du {model}. Choisissez la centrale d'alarme Alarmo et, si vous le souhaitez, une action rapide à côté sur la page Alarme.",
@@ -304,6 +316,18 @@
         "data_description": {
           "alarm_entity_id": "Centrale d'alarme que Home Assistant arme et désarme depuis le {model} et que la page Alarme affiche. Laissez vide si vous n'utilisez pas Alarmo : le bouton Alarme n'apparaît alors pas.",
           "alarm_page_entity_id": "Entité optionnelle sur la page Alarme de l'écran (patch display), par exemple l'éclairage d'escalier. Les boutons, interrupteurs, scènes et scripts peuvent y être commandés, les autres entités sont seulement affichées. Laissez vide pour la masquer."
+        }
+      },
+      "reconfigure_dashboard_alarm_c100x": {
+        "title": "Alarmo",
+        "description": "Alarmo pilote les commandes d'alarme et la page Alarmo de l'écran, qui s'ouvre depuis l'élément Alarmo du menu principal du {model}. Choisissez la centrale d'alarme Alarmo et, si vous le souhaitez, une action rapide à côté sur la page Alarmo.",
+        "data": {
+          "alarm_entity_id": "Centrale d'alarme Alarmo",
+          "alarm_page_entity_id": "Action rapide"
+        },
+        "data_description": {
+          "alarm_entity_id": "Centrale d'alarme que Home Assistant arme et désarme depuis le {model} et que la page Alarmo affiche. Laissez vide si vous n'utilisez pas Alarmo : l'élément Alarmo n'apparaît alors pas dans le menu principal.",
+          "alarm_page_entity_id": "Entité optionnelle sur la page Alarmo de l'écran, par exemple l'éclairage d'escalier. Les boutons, interrupteurs, scènes et scripts peuvent y être commandés, les autres entités sont seulement affichées. Laissez vide pour la masquer."
         }
       },
       "user_dashboard_pages": {
@@ -895,7 +919,7 @@
         "data_description": {
           "device_ui_enabled": "Activé tant que les pages Home Assistant sont actives sur l'écran du C100X ; elles arrivent avec Activer les pages de l'écran. Désactivé : restaure l'écran d'origine avec un redémarrage du C100X et supprime les réglages de météo, de pages, de tuiles et d'actions. Les réglages Alarmo sont conservés.",
           "actions_json": "Actions que l'écran et ses notifications peuvent exécuter, en JSON : une entrée par action avec domain et service, éventuellement target et data. Laissez vide si vous n'en utilisez pas.",
-          "dashboard_prevent_return": "Activé : les pages Home Assistant et Alarme restent ouvertes quand l'écran passe en veille. Désactivé : l'écran revient alors à la page d'accueil.",
+          "dashboard_prevent_return": "Activé : les pages Home Assistant et Alarmo restent ouvertes quand l'écran passe en veille. Désactivé : l'écran revient alors à la page d'accueil.",
           "dashboard_navigation": "Manière dont l'écran change de page. La barre de favoris affiche les quatre premières pages sous forme de boutons en bas de l'écran. Au-delà de quatre pages, le quatrième bouton devient « Plus » et ouvre la liste des autres pages. L'ordre suit les positions des pages."
         }
       },
@@ -980,14 +1004,14 @@
           "dashboard": "Pages Home Assistant sur l'écran",
           "dashboard_page_list": "Pages de l'écran",
           "dashboard_entity_display": "Tuiles de l'écran",
-          "dashboard_alarm": "Alarme (Alarmo)",
+          "dashboard_alarm": "Alarmo",
           "init": "Retour"
         },
         "menu_option_descriptions": {
           "dashboard": "Activer ou désactiver les pages Home Assistant sur l'écran, navigation entre les pages, page pendant la veille de l'écran et actions autorisées.",
           "dashboard_page_list": "Météo, et quelles entités apparaissent sur quelle page et dans quel ordre.",
           "dashboard_entity_display": "Taille, nom et ligne secondaire de chaque tuile.",
-          "dashboard_alarm": "Centrale d'alarme Alarmo et action rapide de la page Alarme.",
+          "dashboard_alarm": "Centrale d'alarme Alarmo et action rapide de la page Alarmo.",
           "init": "Retour au menu des réglages."
         }
       },
@@ -1025,6 +1049,18 @@
         "data_description": {
           "alarm_entity_id": "Centrale d'alarme que Home Assistant arme et désarme depuis le {model} et que la page Alarme affiche. Laissez vide si vous n'utilisez pas Alarmo : le bouton Alarme n'apparaît alors pas.",
           "alarm_page_entity_id": "Entité optionnelle sur la page Alarme de l'écran (patch display), par exemple l'éclairage d'escalier. Les boutons, interrupteurs, scènes et scripts peuvent y être commandés, les autres entités sont seulement affichées. Laissez vide pour la masquer."
+        }
+      },
+      "dashboard_alarm_c100x": {
+        "title": "Alarmo",
+        "description": "Alarmo pilote les commandes d'alarme et la page Alarmo de l'écran, qui s'ouvre depuis l'élément Alarmo du menu principal du {model}. Choisissez la centrale d'alarme Alarmo et, si vous le souhaitez, une action rapide à côté sur la page Alarmo.",
+        "data": {
+          "alarm_entity_id": "Centrale d'alarme Alarmo",
+          "alarm_page_entity_id": "Action rapide"
+        },
+        "data_description": {
+          "alarm_entity_id": "Centrale d'alarme que Home Assistant arme et désarme depuis le {model} et que la page Alarmo affiche. Laissez vide si vous n'utilisez pas Alarmo : l'élément Alarmo n'apparaît alors pas dans le menu principal.",
+          "alarm_page_entity_id": "Entité optionnelle sur la page Alarmo de l'écran, par exemple l'éclairage d'escalier. Les boutons, interrupteurs, scènes et scripts peuvent y être commandés, les autres entités sont seulement affichées. Laissez vide pour la masquer."
         }
       },
       "dashboard_pages": {

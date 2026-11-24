@@ -145,7 +145,7 @@
         "data_description": {
           "device_ui_enabled": "Attivo finché le pagine Home Assistant sono attive sul display del C100X; arrivano con Attiva pagine del display. Disattivo: ripristina il display originale con un riavvio del C100X ed elimina le impostazioni di meteo, pagine, riquadri e azioni. Le impostazioni Alarmo vengono mantenute.",
           "actions_json": "Azioni che il display e le sue notifiche possono eseguire, in JSON: una voce per azione con domain e service, facoltativamente target e data. Lascia vuoto se non ne usi.",
-          "dashboard_prevent_return": "Attivo: le pagine Home Assistant e Allarme restano aperte quando lo schermo va in standby. Disattivo: il display torna alla pagina iniziale.",
+          "dashboard_prevent_return": "Attivo: le pagine Home Assistant e Alarmo restano aperte quando lo schermo va in standby. Disattivo: il display torna alla pagina iniziale.",
           "dashboard_navigation": "Come il display cambia pagina. La barra dei preferiti mostra le prime quattro pagine come pulsanti lungo il bordo inferiore. Con più di quattro pagine, il quarto pulsante diventa «Altro» e apre l'elenco delle altre pagine. L'ordine segue le posizioni delle pagine."
         }
       },
@@ -274,7 +274,7 @@
         "data_description": {
           "device_ui_enabled": "Attivo finché le pagine Home Assistant sono attive sul display del C100X; arrivano con Attiva pagine del display. Disattivo: ripristina il display originale con un riavvio del C100X ed elimina le impostazioni di meteo, pagine, riquadri e azioni. Le impostazioni Alarmo vengono mantenute.",
           "actions_json": "Azioni che il display e le sue notifiche possono eseguire, in JSON: una voce per azione con domain e service, facoltativamente target e data. Lascia vuoto se non ne usi.",
-          "dashboard_prevent_return": "Attivo: le pagine Home Assistant e Allarme restano aperte quando lo schermo va in standby. Disattivo: il display torna alla pagina iniziale.",
+          "dashboard_prevent_return": "Attivo: le pagine Home Assistant e Alarmo restano aperte quando lo schermo va in standby. Disattivo: il display torna alla pagina iniziale.",
           "dashboard_navigation": "Come il display cambia pagina. La barra dei preferiti mostra le prime quattro pagine come pulsanti lungo il bordo inferiore. Con più di quattro pagine, il quarto pulsante diventa «Altro» e apre l'elenco delle altre pagine. L'ordine segue le posizioni delle pagine."
         }
       },
@@ -294,6 +294,18 @@
           "alarm_page_entity_id": "Entità opzionale nella pagina Allarme del display (patch display), per esempio la luce scale. Pulsanti, interruttori, scene e script si possono comandare lì, le altre entità vengono solo mostrate. Lascia vuoto per nasconderla."
         }
       },
+      "user_dashboard_alarm_c100x": {
+        "title": "Alarmo",
+        "description": "Alarmo gestisce i comandi di allarme e la pagina Alarmo del display, che si apre dalla voce Alarmo nel menu principale del {model}. Scegli la centrale di allarme Alarmo e, se vuoi, accanto un'azione rapida nella pagina Alarmo.",
+        "data": {
+          "alarm_entity_id": "Centrale di allarme Alarmo",
+          "alarm_page_entity_id": "Azione rapida"
+        },
+        "data_description": {
+          "alarm_entity_id": "Centrale di allarme che Home Assistant inserisce e disinserisce dal {model} e che la pagina Alarmo mostra. Lascia vuoto se non usi Alarmo: la voce Alarmo non compare nel menu principale.",
+          "alarm_page_entity_id": "Entità opzionale nella pagina Alarmo del display, per esempio la luce scale. Pulsanti, interruttori, scene e script si possono comandare lì, le altre entità vengono solo mostrate. Lascia vuoto per nasconderla."
+        }
+      },
       "reconfigure_dashboard_alarm": {
         "title": "Allarme (Alarmo)",
         "description": "Alarmo gestisce i comandi di allarme e la pagina Allarme del display, che si apre dal pulsante Allarme nella pagina iniziale del {model}. Scegli la centrale di allarme Alarmo e, se vuoi, accanto un'azione rapida nella pagina Allarme.",
@@ -304,6 +316,18 @@
         "data_description": {
           "alarm_entity_id": "Centrale di allarme che Home Assistant inserisce e disinserisce dal {model} e che la pagina Allarme mostra. Lascia vuoto se non usi Alarmo: il pulsante Allarme non compare.",
           "alarm_page_entity_id": "Entità opzionale nella pagina Allarme del display (patch display), per esempio la luce scale. Pulsanti, interruttori, scene e script si possono comandare lì, le altre entità vengono solo mostrate. Lascia vuoto per nasconderla."
+        }
+      },
+      "reconfigure_dashboard_alarm_c100x": {
+        "title": "Alarmo",
+        "description": "Alarmo gestisce i comandi di allarme e la pagina Alarmo del display, che si apre dalla voce Alarmo nel menu principale del {model}. Scegli la centrale di allarme Alarmo e, se vuoi, accanto un'azione rapida nella pagina Alarmo.",
+        "data": {
+          "alarm_entity_id": "Centrale di allarme Alarmo",
+          "alarm_page_entity_id": "Azione rapida"
+        },
+        "data_description": {
+          "alarm_entity_id": "Centrale di allarme che Home Assistant inserisce e disinserisce dal {model} e che la pagina Alarmo mostra. Lascia vuoto se non usi Alarmo: la voce Alarmo non compare nel menu principale.",
+          "alarm_page_entity_id": "Entità opzionale nella pagina Alarmo del display, per esempio la luce scale. Pulsanti, interruttori, scene e script si possono comandare lì, le altre entità vengono solo mostrate. Lascia vuoto per nasconderla."
         }
       },
       "user_dashboard_pages": {
@@ -895,7 +919,7 @@
         "data_description": {
           "device_ui_enabled": "Attivo finché le pagine Home Assistant sono attive sul display del C100X; arrivano con Attiva pagine del display. Disattivo: ripristina il display originale con un riavvio del C100X ed elimina le impostazioni di meteo, pagine, riquadri e azioni. Le impostazioni Alarmo vengono mantenute.",
           "actions_json": "Azioni che il display e le sue notifiche possono eseguire, in JSON: una voce per azione con domain e service, facoltativamente target e data. Lascia vuoto se non ne usi.",
-          "dashboard_prevent_return": "Attivo: le pagine Home Assistant e Allarme restano aperte quando lo schermo va in standby. Disattivo: il display torna alla pagina iniziale.",
+          "dashboard_prevent_return": "Attivo: le pagine Home Assistant e Alarmo restano aperte quando lo schermo va in standby. Disattivo: il display torna alla pagina iniziale.",
           "dashboard_navigation": "Come il display cambia pagina. La barra dei preferiti mostra le prime quattro pagine come pulsanti lungo il bordo inferiore. Con più di quattro pagine, il quarto pulsante diventa «Altro» e apre l'elenco delle altre pagine. L'ordine segue le posizioni delle pagine."
         }
       },
@@ -980,14 +1004,14 @@
           "dashboard": "Pagine Home Assistant sul display",
           "dashboard_page_list": "Pagine del display",
           "dashboard_entity_display": "Riquadri del display",
-          "dashboard_alarm": "Allarme (Alarmo)",
+          "dashboard_alarm": "Alarmo",
           "init": "Indietro"
         },
         "menu_option_descriptions": {
           "dashboard": "Attivare o disattivare le pagine Home Assistant sul display, navigazione tra le pagine, pagina durante lo standby dello schermo e azioni consentite.",
           "dashboard_page_list": "Meteo, e quali entità compaiono su quale pagina e in quale ordine.",
           "dashboard_entity_display": "Dimensione, nome e riga secondaria di ogni riquadro.",
-          "dashboard_alarm": "Centrale di allarme Alarmo e azione rapida della pagina Allarme.",
+          "dashboard_alarm": "Centrale di allarme Alarmo e azione rapida della pagina Alarmo.",
           "init": "Torna al menu delle impostazioni."
         }
       },
@@ -1025,6 +1049,18 @@
         "data_description": {
           "alarm_entity_id": "Centrale di allarme che Home Assistant inserisce e disinserisce dal {model} e che la pagina Allarme mostra. Lascia vuoto se non usi Alarmo: il pulsante Allarme non compare.",
           "alarm_page_entity_id": "Entità opzionale nella pagina Allarme del display (patch display), per esempio la luce scale. Pulsanti, interruttori, scene e script si possono comandare lì, le altre entità vengono solo mostrate. Lascia vuoto per nasconderla."
+        }
+      },
+      "dashboard_alarm_c100x": {
+        "title": "Alarmo",
+        "description": "Alarmo gestisce i comandi di allarme e la pagina Alarmo del display, che si apre dalla voce Alarmo nel menu principale del {model}. Scegli la centrale di allarme Alarmo e, se vuoi, accanto un'azione rapida nella pagina Alarmo.",
+        "data": {
+          "alarm_entity_id": "Centrale di allarme Alarmo",
+          "alarm_page_entity_id": "Azione rapida"
+        },
+        "data_description": {
+          "alarm_entity_id": "Centrale di allarme che Home Assistant inserisce e disinserisce dal {model} e che la pagina Alarmo mostra. Lascia vuoto se non usi Alarmo: la voce Alarmo non compare nel menu principale.",
+          "alarm_page_entity_id": "Entità opzionale nella pagina Alarmo del display, per esempio la luce scale. Pulsanti, interruttori, scene e script si possono comandare lì, le altre entità vengono solo mostrate. Lascia vuoto per nasconderla."
         }
       },
       "dashboard_pages": {

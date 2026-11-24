@@ -315,6 +315,41 @@ def test_the_c100x_reads_its_own_display_mechanism(monkeypatch):
         monkeypatch.setattr(flow, f"async_step_{step}", original)
         assert asyncio.run(getattr(flow, f"async_step_{twin}")({"a": 1})) == (step, {"a": 1})
 
+    # Alarmo: the C100X opens it from an item of the station's main menu, not from a home page button.
+    for step in ("dashboard_alarm",):
+        assert BticinoC300XOptionsFlow(C100X_ENTRY).async_show_form(step_id=step)["step_id"] == f"{step}_c100x"
+        assert BticinoC300XOptionsFlow(C300X_ENTRY).async_show_form(step_id=step)["step_id"] == step
+    for step in ("user_dashboard_alarm", "reconfigure_dashboard_alarm"):
+        assert _setup_flow(monkeypatch, {"model": "C100X"}).async_show_form(step_id=step)["step_id"] == f"{step}_c100x"
+        assert _setup_flow(monkeypatch, {"model": "C300X"}).async_show_form(step_id=step)["step_id"] == step
+    for flow, step in (
+        (BticinoC300XConfigFlow(), "user_dashboard_alarm"), (BticinoC300XConfigFlow(), "reconfigure_dashboard_alarm"),
+        (BticinoC300XOptionsFlow(C100X_ENTRY), "dashboard_alarm"),
+    ):
+        async def original_alarm(user_input, step=step):
+            return (step, user_input)
+
+        monkeypatch.setattr(flow, f"async_step_{step}", original_alarm)
+        assert asyncio.run(getattr(flow, f"async_step_{step}_c100x")({"a": 1})) == (step, {"a": 1})
+    menu_word = {"base": "main menu", "en": "main menu", "de": "Hauptmenü", "it": "menu principale", "fr": "menu principal"}
+    old_words = ("Display patch", "Display-Patch", "patch display", "home page", "Startseite", "pagina iniziale",
+                 "page d'accueil", "Alarm page", "Alarm-Seite", "pagina Allarme", "page Alarme", "Button", "pulsante Allarme",
+                 "bouton Alarme")
+    for lang in LANGUAGES:
+        data = _load(lang)
+        for area, step in (("config", "user_dashboard_alarm"), ("config", "reconfigure_dashboard_alarm"),
+                           ("options", "dashboard_alarm")):
+            twin, original = data[area]["step"][f"{step}_c100x"], data[area]["step"][step]
+            assert twin["title"] == "Alarmo" and twin["data"] == original["data"], (lang, step)
+            assert set(twin["data_description"]) == set(original["data_description"])
+            words = json.dumps(twin, ensure_ascii=False)
+            assert menu_word[lang] in twin["description"] and menu_word[lang] in twin["data_description"]["alarm_entity_id"]
+            assert "{model}" in twin["description"] and "C300X" not in words
+            assert not [word for word in old_words if word in words], (lang, step)
+        display = json.dumps(data["options"]["step"]["display_c100x"], ensure_ascii=False)
+        assert data["options"]["step"]["display_c100x"]["menu_options"]["dashboard_alarm"] == "Alarmo"
+        assert not [word for word in old_words[5:] if word in display], lang
+
     for entry, suffix in ((C100X_ENTRY, "_c100x"), (C300X_ENTRY, ""), (None, "")):
         for key in ("display_disabled", "gui_function_patch_required"):
             assert service_validation_error(key, entry=entry).translation_key == key + suffix

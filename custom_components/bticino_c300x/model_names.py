@@ -26,7 +26,11 @@ C100X = "C100X"
 EITHER = "C300X/C100X"
 C100X_DEFAULT_NAME = "BTicino C100X"
 # The C100X activates its display pages by reboot: no Display patch, no reload.
-C100X_STEPS = frozenset({"user_dashboard", "reconfigure_dashboard", "dashboard", "display", "init"})
+# Its Alarmo page opens from an item of the station's main menu, not from a home page button.
+C100X_STEPS = frozenset({
+    "user_dashboard", "reconfigure_dashboard", "dashboard", "display", "init",
+    "user_dashboard_alarm", "reconfigure_dashboard_alarm", "dashboard_alarm",
+})
 
 
 def setup_model(setup: Any, hint: str = "") -> str:
@@ -115,6 +119,14 @@ class ModelTextConfigFlow(ModelTextFlow):
     async def async_step_reconfigure_dashboard_c100x(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         return cast(ConfigFlowResult, await self.async_step_reconfigure_dashboard(user_input))  # type: ignore[attr-defined]
 
+    async def async_step_user_dashboard_alarm_c100x(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        return cast(ConfigFlowResult, await self.async_step_user_dashboard_alarm(user_input))  # type: ignore[attr-defined]
+
+    async def async_step_reconfigure_dashboard_alarm_c100x(
+        self, user_input: dict[str, Any] | None = None,
+    ) -> ConfigFlowResult:
+        return cast(ConfigFlowResult, await self.async_step_reconfigure_dashboard_alarm(user_input))  # type: ignore[attr-defined]
+
 
 class ModelTextOptionsFlow(ModelTextFlow):
     """Options name the model of their entry."""
@@ -124,3 +136,6 @@ class ModelTextOptionsFlow(ModelTextFlow):
 
     async def async_step_dashboard_c100x(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         return cast(ConfigFlowResult, await self.async_step_dashboard(user_input))  # type: ignore[attr-defined]
+
+    async def async_step_dashboard_alarm_c100x(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        return cast(ConfigFlowResult, await self.async_step_dashboard_alarm(user_input))  # type: ignore[attr-defined]

@@ -145,7 +145,7 @@
         "data_description": {
           "device_ui_enabled": "An, solange die Home-Assistant-Seiten auf dem Display des C100X aktiv sind; sie kommen mit Displayseiten aktivieren. Aus: stellt das originale Display mit einem Neustart des C100X wieder her und verwirft die Einstellungen zu Wetter, Seiten, Kacheln und Aktionen. Die Alarmo-Einstellungen bleiben erhalten.",
           "actions_json": "Aktionen, die das Display und seine Benachrichtigungen ausführen dürfen, als JSON: ein Eintrag je Aktion mit domain und service, optional target und data. Leer lassen, wenn du keine nutzt.",
-          "dashboard_prevent_return": "An: Die Home-Assistant- und die Alarm-Seite bleiben offen, wenn der Bildschirm in den Standby geht. Aus: Das Display kehrt dann zur Startseite zurück.",
+          "dashboard_prevent_return": "An: Die Home-Assistant- und die Alarmo-Seite bleiben offen, wenn der Bildschirm in den Standby geht. Aus: Das Display kehrt dann zur Startseite zurück.",
           "dashboard_navigation": "So wechselt das Display die Seiten. Die Favoritenleiste zeigt die ersten vier Seiten als Schaltflächen am unteren Rand. Bei mehr als vier Seiten heißt die vierte Schaltfläche „Mehr“ und öffnet die Liste der übrigen Seiten. Die Reihenfolge folgt den Seitenpositionen."
         }
       },
@@ -274,7 +274,7 @@
         "data_description": {
           "device_ui_enabled": "An, solange die Home-Assistant-Seiten auf dem Display des C100X aktiv sind; sie kommen mit Displayseiten aktivieren. Aus: stellt das originale Display mit einem Neustart des C100X wieder her und verwirft die Einstellungen zu Wetter, Seiten, Kacheln und Aktionen. Die Alarmo-Einstellungen bleiben erhalten.",
           "actions_json": "Aktionen, die das Display und seine Benachrichtigungen ausführen dürfen, als JSON: ein Eintrag je Aktion mit domain und service, optional target und data. Leer lassen, wenn du keine nutzt.",
-          "dashboard_prevent_return": "An: Die Home-Assistant- und die Alarm-Seite bleiben offen, wenn der Bildschirm in den Standby geht. Aus: Das Display kehrt dann zur Startseite zurück.",
+          "dashboard_prevent_return": "An: Die Home-Assistant- und die Alarmo-Seite bleiben offen, wenn der Bildschirm in den Standby geht. Aus: Das Display kehrt dann zur Startseite zurück.",
           "dashboard_navigation": "So wechselt das Display die Seiten. Die Favoritenleiste zeigt die ersten vier Seiten als Schaltflächen am unteren Rand. Bei mehr als vier Seiten heißt die vierte Schaltfläche „Mehr“ und öffnet die Liste der übrigen Seiten. Die Reihenfolge folgt den Seitenpositionen."
         }
       },
@@ -294,6 +294,18 @@
           "alarm_page_entity_id": "Optionale Entität auf der Alarm-Seite des Displays (Display-Patch), zum Beispiel das Treppenlicht. Buttons, Schalter, Szenen und Skripte lassen sich dort bedienen, andere Entitäten werden nur angezeigt. Leer lassen, um sie auszublenden."
         }
       },
+      "user_dashboard_alarm_c100x": {
+        "title": "Alarmo",
+        "description": "Alarmo steuert die Alarm-Befehle und die Alarmo-Seite des Displays, die sich über den Punkt Alarmo im Hauptmenü des {model} öffnet. Wähle die Alarmo-Alarmzentrale und, wenn du magst, daneben eine Schnellaktion auf der Alarmo-Seite.",
+        "data": {
+          "alarm_entity_id": "Alarmo-Alarmzentrale",
+          "alarm_page_entity_id": "Schnellaktion"
+        },
+        "data_description": {
+          "alarm_entity_id": "Alarmzentrale, die Home Assistant vom {model} aus scharf und unscharf schaltet und die die Alarmo-Seite zeigt. Leer lassen, wenn du Alarmo nicht nutzt: Der Punkt Alarmo erscheint dann nicht im Hauptmenü.",
+          "alarm_page_entity_id": "Optionale Entität auf der Alarmo-Seite des Displays, zum Beispiel das Treppenlicht. Buttons, Schalter, Szenen und Skripte lassen sich dort bedienen, andere Entitäten werden nur angezeigt. Leer lassen, um sie auszublenden."
+        }
+      },
       "reconfigure_dashboard_alarm": {
         "title": "Alarm (Alarmo)",
         "description": "Alarmo steuert die Alarm-Befehle und die Alarm-Seite des Displays, die sich über den Button Alarm auf der Startseite des {model} öffnet. Wähle die Alarmo-Alarmzentrale und, wenn du magst, daneben eine Schnellaktion auf der Alarm-Seite.",
@@ -304,6 +316,18 @@
         "data_description": {
           "alarm_entity_id": "Alarmzentrale, die Home Assistant vom {model} aus scharf und unscharf schaltet und die die Alarm-Seite zeigt. Leer lassen, wenn du Alarmo nicht nutzt: Der Button Alarm erscheint dann nicht.",
           "alarm_page_entity_id": "Optionale Entität auf der Alarm-Seite des Displays (Display-Patch), zum Beispiel das Treppenlicht. Buttons, Schalter, Szenen und Skripte lassen sich dort bedienen, andere Entitäten werden nur angezeigt. Leer lassen, um sie auszublenden."
+        }
+      },
+      "reconfigure_dashboard_alarm_c100x": {
+        "title": "Alarmo",
+        "description": "Alarmo steuert die Alarm-Befehle und die Alarmo-Seite des Displays, die sich über den Punkt Alarmo im Hauptmenü des {model} öffnet. Wähle die Alarmo-Alarmzentrale und, wenn du magst, daneben eine Schnellaktion auf der Alarmo-Seite.",
+        "data": {
+          "alarm_entity_id": "Alarmo-Alarmzentrale",
+          "alarm_page_entity_id": "Schnellaktion"
+        },
+        "data_description": {
+          "alarm_entity_id": "Alarmzentrale, die Home Assistant vom {model} aus scharf und unscharf schaltet und die die Alarmo-Seite zeigt. Leer lassen, wenn du Alarmo nicht nutzt: Der Punkt Alarmo erscheint dann nicht im Hauptmenü.",
+          "alarm_page_entity_id": "Optionale Entität auf der Alarmo-Seite des Displays, zum Beispiel das Treppenlicht. Buttons, Schalter, Szenen und Skripte lassen sich dort bedienen, andere Entitäten werden nur angezeigt. Leer lassen, um sie auszublenden."
         }
       },
       "user_dashboard_pages": {
@@ -895,7 +919,7 @@
         "data_description": {
           "device_ui_enabled": "An, solange die Home-Assistant-Seiten auf dem Display des C100X aktiv sind; sie kommen mit Displayseiten aktivieren. Aus: stellt das originale Display mit einem Neustart des C100X wieder her und verwirft die Einstellungen zu Wetter, Seiten, Kacheln und Aktionen. Die Alarmo-Einstellungen bleiben erhalten.",
           "actions_json": "Aktionen, die das Display und seine Benachrichtigungen ausführen dürfen, als JSON: ein Eintrag je Aktion mit domain und service, optional target und data. Leer lassen, wenn du keine nutzt.",
-          "dashboard_prevent_return": "An: Die Home-Assistant- und die Alarm-Seite bleiben offen, wenn der Bildschirm in den Standby geht. Aus: Das Display kehrt dann zur Startseite zurück.",
+          "dashboard_prevent_return": "An: Die Home-Assistant- und die Alarmo-Seite bleiben offen, wenn der Bildschirm in den Standby geht. Aus: Das Display kehrt dann zur Startseite zurück.",
           "dashboard_navigation": "So wechselt das Display die Seiten. Die Favoritenleiste zeigt die ersten vier Seiten als Schaltflächen am unteren Rand. Bei mehr als vier Seiten heißt die vierte Schaltfläche „Mehr“ und öffnet die Liste der übrigen Seiten. Die Reihenfolge folgt den Seitenpositionen."
         }
       },
@@ -980,14 +1004,14 @@
           "dashboard": "Home-Assistant-Seiten auf dem Display",
           "dashboard_page_list": "Display-Seiten",
           "dashboard_entity_display": "Display-Kacheln",
-          "dashboard_alarm": "Alarm (Alarmo)",
+          "dashboard_alarm": "Alarmo",
           "init": "Zurück"
         },
         "menu_option_descriptions": {
           "dashboard": "Home-Assistant-Seiten auf dem Display ein- oder ausschalten, Seitenwechsel, Seite im Bildschirm-Standby und erlaubte Aktionen.",
           "dashboard_page_list": "Wetter und welche Entitäten auf welcher Seite in welcher Reihenfolge erscheinen.",
           "dashboard_entity_display": "Größe, Name und Zusatzzeile jeder Kachel.",
-          "dashboard_alarm": "Alarmo-Alarmzentrale und die Schnellaktion der Alarm-Seite.",
+          "dashboard_alarm": "Alarmo-Alarmzentrale und die Schnellaktion der Alarmo-Seite.",
           "init": "Zurück zum Einstellungsmenü."
         }
       },
@@ -1025,6 +1049,18 @@
         "data_description": {
           "alarm_entity_id": "Alarmzentrale, die Home Assistant vom {model} aus scharf und unscharf schaltet und die die Alarm-Seite zeigt. Leer lassen, wenn du Alarmo nicht nutzt: Der Button Alarm erscheint dann nicht.",
           "alarm_page_entity_id": "Optionale Entität auf der Alarm-Seite des Displays (Display-Patch), zum Beispiel das Treppenlicht. Buttons, Schalter, Szenen und Skripte lassen sich dort bedienen, andere Entitäten werden nur angezeigt. Leer lassen, um sie auszublenden."
+        }
+      },
+      "dashboard_alarm_c100x": {
+        "title": "Alarmo",
+        "description": "Alarmo steuert die Alarm-Befehle und die Alarmo-Seite des Displays, die sich über den Punkt Alarmo im Hauptmenü des {model} öffnet. Wähle die Alarmo-Alarmzentrale und, wenn du magst, daneben eine Schnellaktion auf der Alarmo-Seite.",
+        "data": {
+          "alarm_entity_id": "Alarmo-Alarmzentrale",
+          "alarm_page_entity_id": "Schnellaktion"
+        },
+        "data_description": {
+          "alarm_entity_id": "Alarmzentrale, die Home Assistant vom {model} aus scharf und unscharf schaltet und die die Alarmo-Seite zeigt. Leer lassen, wenn du Alarmo nicht nutzt: Der Punkt Alarmo erscheint dann nicht im Hauptmenü.",
+          "alarm_page_entity_id": "Optionale Entität auf der Alarmo-Seite des Displays, zum Beispiel das Treppenlicht. Buttons, Schalter, Szenen und Skripte lassen sich dort bedienen, andere Entitäten werden nur angezeigt. Leer lassen, um sie auszublenden."
         }
       },
       "dashboard_pages": {

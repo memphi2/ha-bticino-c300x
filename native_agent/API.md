@@ -67,6 +67,13 @@ scheme. Do not log or expose the header value.
 unauthenticated; the proof route never returns the token. `GET /` and
 `GET /setup` are served only while `api.noAuth=true`.
 
+Every API listener route except `GET /` and `GET /setup` refuses, with 403
+`cross_site_request`, a request whose `Origin` header is not this host, and a
+non-GET request whose `Content-Type` is `text/plain`,
+`application/x-www-form-urlencoded` or `multipart/form-data`: what a web page
+of another site can send without a CORS preflight. Clients send JSON and no
+`Origin`, as Home Assistant does.
+
 ### Maintenance Token
 
 Maintenance endpoints require the maintenance token through the

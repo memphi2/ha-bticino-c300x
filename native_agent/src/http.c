@@ -58,6 +58,7 @@
 #include "memo_deleted.h"
 #include "firewall_file.h"
 #include "detached_command.h"
+#include "http_origin.h"
 #include <arpa/inet.h>
 #include <ctype.h>
 #include <dirent.h>
@@ -8718,6 +8719,17 @@ static void handle_api_request(
             send_json(client_fd, 404, "Not Found", "{\"ok\":false,\"error\":\"setup_disabled\"}\n");
         }
         return;
+    }
+    {
+        /* With noAuth a LAN web page could otherwise open the door. */
+        char origin[256] = "", host[256] = "", content_type[128] = "";
+        (void)header_value(request, "origin", origin, sizeof(origin));
+        (void)header_value(request, "host", host, sizeof(host));
+        (void)header_value(request, "content-type", content_type, sizeof(content_type));
+        if (!c300x_http_cross_site_safe(request->method, origin, host, content_type)) {
+            send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"cross_site_request\"}\n");
+            return;
+        }
     }
 
     if (strcmp(request->method, "GET") == 0 && strcmp(request->path, "/api/v1/health") == 0) {

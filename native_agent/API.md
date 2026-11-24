@@ -1260,6 +1260,12 @@ Authentication: maintenance.
 Side effects: restores the Home Assistant media-user/routing setup from device
 backups.
 
+The label is put back first, by `qml_patch.sh media-user-label-restore`. When
+that script fails, or exits zero and reports `"ok":false` (a display restart
+that failed, after which it put the labelled files back), the agent answers
+`500` with `media_user_label_restore_failed` and leaves the media user and the
+routing as they are. A script that prints no JSON counts by its exit status.
+
 Request fields:
 
 ```json

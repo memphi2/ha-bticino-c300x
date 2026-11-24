@@ -28,7 +28,7 @@ def test_mqtt_output_boundaries(tmp_path, sanitize):
 
 
 MQTT_CONNECT_SOURCES = [str(NATIVE / "src" / name) for name in (
-    "mqtt_connect.c", "openwebnet_waiters.c", "request_queue.c")]
+    "mqtt_connect.c", "mqtt_packet.c", "openwebnet_waiters.c", "request_queue.c")]
 
 
 @pytest.mark.parametrize("case", ["slow_dns", "cancel", "deadline"])

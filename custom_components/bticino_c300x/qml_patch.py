@@ -51,6 +51,15 @@ async def async_refresh_qml_patch_status(
     return status
 
 
+async def async_refresh_qml_patch_status_between_writes(
+    entry: BticinoC300XConfigEntry,
+) -> dict[str, Any]:
+    """Read the status under the patch lock: never inside a running write."""
+
+    async with _qml_patch_lock(entry):
+        return await async_refresh_qml_patch_status(entry, wait_busy=True)
+
+
 type _StatusChanged = Callable[[], None]
 
 

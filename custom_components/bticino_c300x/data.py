@@ -14,6 +14,7 @@ from .callback_target import (
 )
 from .media_timeline import C300XMediaTimeline
 from .media_watchdog import AgentCpuWatchdog
+from .qml_status_watch import QmlStatusWatch
 from .system_metrics import SystemMetricsCache
 
 if TYPE_CHECKING:
@@ -329,6 +330,7 @@ class BticinoC300XRuntimeData:
     activations: dict[str, Any] = field(default_factory=dict)
     qml_patch_status: dict[str, Any] = field(default_factory=dict)
     qml_patch_status_updated_at: datetime | None = None
+    qml_status_watch: QmlStatusWatch = field(default_factory=QmlStatusWatch)
     device_user_status: dict[str, Any] = field(default_factory=dict)
     device_user_status_updated_at: datetime | None = None
     self_test_status: Mapping[str, Any] = field(default_factory=dict)

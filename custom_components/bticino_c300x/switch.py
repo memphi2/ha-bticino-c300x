@@ -126,6 +126,13 @@ class C300XSnapshotSwitch(C300XEntity, SwitchEntity):
         manager = get_snapshots(self.hass, self._entry.entry_id) if self.hass else None
         return manager.enabled if manager else None
 
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Why the last visitor image could not be taken; None after a success."""
+
+        manager = get_snapshots(self.hass, self._entry.entry_id) if self.hass else None
+        return {"last_failure": manager.capture.last_failure if manager else None}
+
     async def async_turn_on(self, **kwargs: Any) -> None:
         await self._set_enabled(True)
 

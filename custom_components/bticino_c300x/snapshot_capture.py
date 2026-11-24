@@ -99,6 +99,9 @@ class SnapshotCapture:
         self.last_ring: str | None = None
         self.visitor_id: str | None = None
         self.unsubscribe: Any = None
+        # Why the last visitor image could not be taken; None after a success.
+        self.last_failure: str | None = None
+        self.warned: set[str] = set()
 
     def start(self) -> None:
         """Subscribe only after persisted settings and preview have loaded."""
@@ -231,12 +234,43 @@ class SnapshotCapture:
                 )
                 image = await self.manager.disk_job(framebuffer_jpeg, content, content_type, stamp)
                 if self._current(generation):
+                    self._failed(None)
                     item = await self.manager.save(image, identity, is_current=lambda: self._current(generation))
                     if self._current(generation) and self.manager.journal is not None:
                         # Read now: a ring during the settling delay adopts this image.
                         await self.manager.journal.attach_snapshot(self.visitor_id, item.name, image)
         except asyncio.CancelledError:
             raise
-        except (C300XAgentApiError, ClientConnectionError, OSError, TimeoutError, ValueError):
+        except (C300XAgentApiError, ClientConnectionError, OSError, TimeoutError, ValueError) as err:
             # Failed reads must never replace a previously useful preview.
             _LOGGER.debug("Could not acquire C300X framebuffer snapshot", exc_info=True)
+            self._failed(snapshot_failure_cause(err))
+
+    def _failed(self, cause: str | None) -> None:
+        """Record the outcome; warn once per cause until an image succeeds again."""
+
+        if cause is None:
+            self.warned.clear()
+        elif cause not in self.warned:
+            self.warned.add(cause)
+            _LOGGER.warning(
+                "C300X visitor image could not be taken (%s); the last image is kept",
+                cause,
+            )
+        if cause != self.last_failure:
+            self.last_failure = cause
+            self.manager.notify()
+
+
+def snapshot_failure_cause(err: BaseException) -> str:
+    """Name why a visitor image failed, from the agent's answer where it gives one."""
+
+    text = str(err)
+    for code in ("snapshot_unavailable", "snapshot_throttled", "invalid_snapshot_size"):
+        if code in text:
+            return code
+    if isinstance(err, ValueError):
+        return "invalid_image"
+    if isinstance(err, (C300XAgentApiConnectionError, ClientConnectionError, OSError, TimeoutError)):
+        return "agent_unreachable"
+    return "agent_error"

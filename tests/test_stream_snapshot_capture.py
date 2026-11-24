@@ -336,3 +336,32 @@ def test_generation_invalidated_during_write_rolls_back_only_new_image(tmp_path,
         manager.close()
 
     asyncio.run(run())
+
+
+def test_a_failing_visitor_image_is_reported_once_per_cause(tmp_path, monkeypatch, caplog):
+    """No firmware gate: a station whose screen cannot be read says so (firmware 3.0.6)."""
+
+    async def run():
+        manager = setup(tmp_path, monkeypatch)
+        api = manager.entry.runtime_data.api.async_doorbell_snapshot
+        api.side_effect = C300XAgentApiConnectionError("device agent returned HTTP 503: snapshot_unavailable")
+        for stamp in ("one", "two"):
+            event(manager, "doorbell_pressed", stamp)
+            await drain(manager)
+            event(manager, "doorbell_media_closed", stamp)
+        assert manager.capture.last_failure == "snapshot_unavailable"
+        warnings = [record for record in caplog.records if record.levelname == "WARNING"]
+        assert len(warnings) == 1 and "snapshot_unavailable" in warnings[0].getMessage()
+        api.side_effect = C300XAgentApiResponseError("bad payload")
+        event(manager, "doorbell_pressed", "three")
+        await drain(manager)
+        assert manager.capture.last_failure == "agent_error"
+        api.side_effect = None
+        api.return_value = (bmp(), "image/bmp")
+        event(manager, "doorbell_media_closed", "three")
+        event(manager, "doorbell_pressed", "four")
+        await drain(manager)
+        assert manager.capture.last_failure is None and manager.preview
+        manager.close()
+
+    asyncio.run(run())

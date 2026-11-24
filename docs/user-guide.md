@@ -236,6 +236,12 @@ Turning **Save images** off stops new images and hides snapshots in the card,
 including the history. Clips and clip automations are not affected; existing
 images stay until they expire.
 
+When an image cannot be taken, the last one stays, HA logs a warning once per
+cause, and the attribute `last_failure` of **Save images** names the cause
+(for example `snapshot_unavailable` when the station's display picture cannot
+be read) until the next image succeeds. On firmware 3.0.6 reading the display
+picture is checked offline only and may fail.
+
 ### Browsing in the Card
 
 With **Browse saved images and videos** on, the arrows on the picture (**Older

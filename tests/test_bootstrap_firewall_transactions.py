@@ -195,3 +195,28 @@ def test_existing_backup_symlink_fails_closed(tmp_path: Path) -> None:
     assert result.returncode != 0
     assert live.read_text() == ORIGINAL
     assert not (tmp_path / "mount.log").exists()
+
+
+@pytest.mark.parametrize("video", ["0", "1"])
+def test_missing_hook_opens_the_live_ports_and_writes_nothing(tmp_path: Path, video: str) -> None:
+    # Some rooted stations have no boot hook at all (moved away by other tools).
+    result = _run(tmp_path, C300X_VIDEO_ENABLED=video)
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "changed_files=0\n"
+    assert not (tmp_path / "iptables").exists()
+    assert not (tmp_path / "backup").exists()
+    assert not (tmp_path / "mount.log").exists()
+    rules = (tmp_path / "iptables.log").read_text()
+    assert "-A INPUT -p tcp --dport 8089 -j ACCEPT" in rules
+    assert ("--dport 6554" in rules) is (video == "1")
+
+
+def test_a_hook_that_is_no_regular_file_still_fails_closed(tmp_path: Path) -> None:
+    (tmp_path / "iptables").mkdir()
+
+    result = _run(tmp_path)
+
+    assert result.returncode != 0
+    assert not (tmp_path / "iptables.log").exists()
+    assert not (tmp_path / "mount.log").exists()

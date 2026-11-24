@@ -39,6 +39,21 @@ validate_port api "$PORT"
 validate_port rtsp "$RTSP_PORT"
 validate_port talkback "$TALKBACK_RTP_PORT"
 
+apply_live_rules() {
+    command -v iptables >/dev/null 2>&1 || return 0
+    if ! iptables -C INPUT -p tcp --dport "$PORT" -j ACCEPT 2>/dev/null; then
+        iptables -A INPUT -p tcp --dport "$PORT" -j ACCEPT
+    fi
+    if [ "$VIDEO_ENABLED" = "1" ]; then
+        if ! iptables -C INPUT -p tcp --dport "$RTSP_PORT" -j ACCEPT 2>/dev/null; then
+            iptables -A INPUT -p tcp --dport "$RTSP_PORT" -j ACCEPT
+        fi
+        if ! iptables -C INPUT -p udp --dport "$TALKBACK_RTP_PORT" -j ACCEPT 2>/dev/null; then
+            iptables -A INPUT -p udp --dport "$TALKBACK_RTP_PORT" -j ACCEPT
+        fi
+    fi
+}
+
 TMP="/tmp/c300x-firewall.$$"
 BASE="/tmp/c300x-firewall-base.$$"
 ORIGINAL="/tmp/c300x-firewall-original.$$"
@@ -60,6 +75,13 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Without a boot hook there is nothing to keep the rules across a reboot:
+# open the ports for this run and write no file.
+if [ ! -e "$IPTABLES" ] && [ ! -L "$IPTABLES" ]; then
+    apply_live_rules
+    printf 'changed_files=0\n'
+    exit 0
+fi
 [ -f "$IPTABLES" ] || exit 1
 
 awk -v begin="$BEGIN" -v end="$END" '
@@ -143,18 +165,5 @@ if ! cmp -s "$IPTABLES" "$TMP"; then
     changed_files=$((changed_files + 1))
 fi
 
-if command -v iptables >/dev/null 2>&1; then
-    if ! iptables -C INPUT -p tcp --dport "$PORT" -j ACCEPT 2>/dev/null; then
-        iptables -A INPUT -p tcp --dport "$PORT" -j ACCEPT
-    fi
-    if [ "$VIDEO_ENABLED" = "1" ]; then
-        if ! iptables -C INPUT -p tcp --dport "$RTSP_PORT" -j ACCEPT 2>/dev/null; then
-            iptables -A INPUT -p tcp --dport "$RTSP_PORT" -j ACCEPT
-        fi
-        if ! iptables -C INPUT -p udp --dport "$TALKBACK_RTP_PORT" -j ACCEPT 2>/dev/null; then
-            iptables -A INPUT -p udp --dport "$TALKBACK_RTP_PORT" -j ACCEPT
-        fi
-    fi
-fi
-
+apply_live_rules
 printf 'changed_files=%s\n' "$changed_files"

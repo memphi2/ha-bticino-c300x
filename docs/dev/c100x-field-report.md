@@ -29,6 +29,9 @@ The station used WLAN and root2 SSH; HA was Container 2026.11.2 with Python
   disables agent IPv4 firewall management and leaves live rules alone. A
   symlink at the hook or in its directory path, or a non-executable hook,
   stops installation before writes. Skipping does not guarantee reachability.
+  Run on its own without the hook, `bootstrap_firewall.sh` no longer exits 1:
+  it adds the live rules for the API (and media, when enabled) and writes no
+  file, so nothing persists across a reboot.
 - HA reported `installer_dependency_missing` even though dist-info for the
   pinned AsyncSSH was present. Repeating the form did not help; checking
   configuration under Developer tools > YAML cleared HA's failed-install

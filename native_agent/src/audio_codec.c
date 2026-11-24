@@ -489,8 +489,8 @@ static int switch_codec(
 
 int c300x_audio_codec_apply(struct c300x_audio_codec_status *status, char *error, size_t error_len)
 {
-    /* First C100X test builds keep the stock device codec. Transport PCMU
-     * transcoding is independent; this is not a claim of codec incompatibility. */
+    /* C100X firmware PCMU cannot work: the device PCM runs at 16 kHz and
+     * rtppcmupay accepts only 8 kHz. The agent's PCMU transcode is independent. */
     if (c300x_device_model() == C300X_DEVICE_MODEL_C100X) {
         set_err(error, error_len, C300X_AUDIO_CODEC_TEST_BUILD_BLOCKED);
         return 0;

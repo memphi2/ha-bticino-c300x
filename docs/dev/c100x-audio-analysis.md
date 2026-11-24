@@ -38,20 +38,36 @@ evidence of working paths. `stack_open.xml` agrees with `enable_speex=1`.
 The existing agent's paired stack/linphone codec checks are appropriate;
 changing only one side would not constitute a codec implementation.
 
-Configuration compatibility is not hardware-safety evidence for switching
-the firmware to PCMU. The first-test baseline remains stock Speex. The C100X
-test-build guard rejects firmware-PCMU apply in the core, HTTP API and CLI;
-capabilities and the HA selector do not offer that change. Read-only status
+Firmware PCMU cannot work on C100X 1.5.8, verified offline:
+
+- `stack_open.xml` has a C100X-only `<sampling_rate>16000</sampling_rate>`;
+  `bt_av_media` runs the device-side PCM at 16 kHz.
+- The PCMU send pipeline has no resampler (`alsasrc` caps
+  `rate=sampling_rate` -> `mulawenc` -> `rtppcmupay`), and GStreamer's
+  `rtppcmupay` accepts only `rate=8000`. Under qemu the device's own
+  gst-launch fails to negotiate at 16 kHz, so PCMU at 16 kHz cannot exist.
+- Setting `sampling_rate` to 8000 does not work either: the ZL38067 is the
+  I2S clock master, all DSP profiles run at 16 kHz (`SysSampPerMs=0x0010`)
+  and the zl380xx `hw_params` is a no-op, so audio would run at the wrong
+  speed.
+- A possible workaround would change four files, including a global
+  `/etc/asound.conf` plug resampler. It is unproven and not pursued.
+
+Speex/8000 stays the C100X codec; HA and the browser still get PCMU through
+the agent's transcode. The C100X guard rejects firmware-PCMU apply in the
+core, HTTP API and CLI; capabilities and the HA selector do not offer that
+change. Read-only status
 remains available. Explicit restore/removal can recover Speex only from a
 managed backup pair that passes stock-Speex field validation; missing, partial
 or incompatible backups do not authorize writes. Unpatched removal with no
 codec backups remains a no-op. These checks validate codec fields, not a full
-firmware identity or acoustic result. Client-side PCMU transport/transcoding
-is unchanged and distinct from rewriting the stack/linphone configuration.
+firmware identity or acoustic result. The agent's PCMU transcode is
+distinct from rewriting the stack/linphone configuration.
 
 The same XML's `bt_av_media` section uses a 16000-Hz device sample rate,
-640-byte blocks, and 20000/60000 microsecond latency/buffer settings. This is
-not a 16-kHz SIP codec claim: device PCM and negotiated RTP are distinct.
+640-byte blocks, and 20000/60000 microsecond latency/buffer settings. Device
+PCM and negotiated RTP are distinct; this 16 kHz device rate is what rules out
+firmware PCMU above.
 Stock `ring1.wav` is PCM S16LE, 16000 Hz, two channels.
 
 Media executable string offsets identify separate local WAV and RTP paths:

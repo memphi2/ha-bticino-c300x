@@ -37,16 +37,20 @@ unknown, skip the action. Report each result separately; an accepted HA
 service call is not proof that the output operated. Neither test requires
 opening the camera, enabling video, creating a SIP user or changing routes.
 
-The audio baseline is the existing stock Speex configuration. Firmware-PCMU
-apply is blocked in this C100X test build at the native core, API and CLI;
-HA does not offer the firmware codec selector. Matching configuration keys
-and codec-library tests do not establish hardware safety.
+The C100X firmware codec is stock Speex/8000; HA and the browser still get
+PCMU through the agent's transcode. Firmware PCMU is unsupported on the
+C100X: the station runs its device-side PCM at 16 kHz, its PCMU send pipeline
+has no resampler and the RTP PCMU payloader accepts only 8000 Hz, while the
+audio DSP clocks all its profiles at 16 kHz, so 8000 Hz would play at the
+wrong speed ([details](dev/c100x-audio-analysis.md)). Firmware-PCMU apply is
+therefore blocked at the native core, API and CLI; HA does not offer the
+firmware codec selector.
 Read-only codec status remains available. Explicit restore and removal retain
 Speex recovery only when both managed backups pass stock-Speex field validation;
 missing, partial or incompatible recovery backups are refused. Unpatched removal
 with neither codec backup remains a no-op. Recovery is not a first-test action.
-Client-side PCMU transport/transcoding is unchanged and separate from the
-firmware codec setting; it does not authorize media activation during this test.
+The agent's PCMU transcode for HA is separate from the firmware codec setting;
+it does not authorize media activation during this test.
 
 - The C100X-aware agent, installer and update guards are implemented offline.
   Routing restoration checks complete known firmware identity; GUI-free restore

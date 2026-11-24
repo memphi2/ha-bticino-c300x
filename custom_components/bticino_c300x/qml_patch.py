@@ -234,8 +234,12 @@ async def _async_settle_qml_patch_action(
     except Exception:
         try:
             await refresh(entry)
-        except Exception:
+        except BaseException as read_err:
             _store_qml_patch_status(entry, previous_status)
+            if not isinstance(read_err, Exception):
+                # Cancelled during that read: the cancellation wins.
+                _notify_status_changed(status_changed)
+                raise
         _notify_status_changed(status_changed)
         raise
     except BaseException:

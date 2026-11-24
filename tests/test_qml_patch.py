@@ -469,6 +469,31 @@ def test_a_cancelled_write_never_keeps_the_transient_status(core: bool) -> None:
 
 
 @pytest.mark.parametrize("core", [False, True])
+def test_a_cancel_during_the_read_after_a_failed_write_restores_the_status(
+    core: bool,
+) -> None:
+    api = _FakeApi(
+        action_error=C300XAgentApiConnectionError("timeout"),
+        fail_status=asyncio.CancelledError(),
+    )
+    previous = {"available": True, "patched": False, "state": "original", "core_patched": True}
+    entry = _entry(api, previous)
+    changes = 0
+
+    def _changed() -> None:
+        nonlocal changes
+        changes += 1
+
+    action = async_apply_qml_core_patch_and_confirm if core else async_apply_qml_patch_and_confirm
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(action(entry, _changed))
+
+    assert api.calls[-1] == "qml_status"
+    assert entry.runtime_data.qml_patch_status == previous
+    assert changes == 2
+
+
+@pytest.mark.parametrize("core", [False, True])
 def test_a_failed_confirming_read_keeps_the_writes_own_answer(core: bool) -> None:
     """A busy or timed-out read right after a successful write must not leave
     the "patching" status behind until a reload."""

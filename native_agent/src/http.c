@@ -56,6 +56,7 @@
 #include "video_rtsp.h"
 #include "video_snapshot.h"
 #include "root_mount.h"
+#include "memo_deleted.h"
 #include <arpa/inet.h>
 #include <ctype.h>
 #include <dirent.h>
@@ -114,7 +115,7 @@
 /* Every stored text and voice memo with a text that escapes to six bytes
  * per byte must fit: the list is not paged. */
 #define C300X_MEMOS_RESPONSE_SIZE \
-    (1024 + (2 * C300X_MAX_VOICEMAIL_MESSAGES * (C300X_MAX_MEMO_TEXT_JSON_LEN + 768)))
+    (3072 + (2 * C300X_MAX_VOICEMAIL_MESSAGES * (C300X_MAX_MEMO_TEXT_JSON_LEN + 768)))
 enum listener_kind {
     LISTENER_API = C300X_HTTP_KIND_API,
     LISTENER_UI = C300X_HTTP_KIND_UI
@@ -6913,6 +6914,7 @@ static int append_memo_entries(
             read_json = "true";
         }
         c300x_json_escape_string(message->id, message_id, sizeof(message_id));
+        c300x_memo_deleted_seen(kind, message->id);
         if (message->date[0] != '\0') {
             c300x_json_escape_string(message->date, date, sizeof(date));
             date_json = date;
@@ -7021,7 +7023,7 @@ static void handle_memos_get(int client_fd, const struct agent_runtime *runtime)
     }
     if (!append_memo_entries(body, C300X_MEMOS_RESPONSE_SIZE, &used, text, "text", &first)
         || !append_memo_entries(body, C300X_MEMOS_RESPONSE_SIZE, &used, voice, "voice", &first)
-        || !c300x_appendf(body, C300X_MEMOS_RESPONSE_SIZE, &used, "]}\n")) {
+        || !c300x_memo_deleted_finish_json(body, C300X_MEMOS_RESPONSE_SIZE, &used)) {
         send_response_too_large(client_fd);
         free(text);
         free(voice);
@@ -7201,6 +7203,7 @@ static void handle_memos_delete(
         return;
     }
 
+    c300x_memo_deleted_add(kind, entry_name);
     voicemail_refresh_watches(&runtime->text_memos);
     voicemail_refresh_watches(&runtime->voice_memos);
     memos_event_dispatch_if_changed(config, runtime);

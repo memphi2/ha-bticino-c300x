@@ -898,7 +898,10 @@ Authentication: normal API token.
 
 Side effects: none.
 
-Returns local text and voice memo metadata.
+Returns local text and voice memo metadata. `deleted` lists the ids (same
+format as `memos[].id`) of the last 32 memos deleted through the agent, oldest
+first, until a memo with that id exists again; the display drops a memo it
+still shows only once its id is listed there. `/ui/memos` returns the same.
 
 ### `POST /api/v1/memos/text/actions/create`
 

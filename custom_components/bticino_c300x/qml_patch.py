@@ -9,13 +9,13 @@ from typing import Any
 
 from .agent_update import async_retry_update_maintenance_busy
 from .api_errors import C300XAgentApiError
-from .display_activation import display_activation_confirmed, require_display_activation
 from .const import (
     CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
     DEFAULT_DASHBOARD_DYNAMIC_HOMEPAGE,
     HOME_BUTTONS_SIDE_BY_SIDE,
     HOME_BUTTONS_STOCK,
 )
+from .display_activation import display_activation_confirmed, require_display_activation
 from .entry_config import entry_config_value
 from .entry_locks import entry_lock
 from .entry_types import BticinoC300XConfigEntry

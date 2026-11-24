@@ -581,9 +581,28 @@ recover_transactions() {
     [ "$recover_blocked" = "0" ]
 }
 
+finish_signal() {
+    FINISH_SIGNALLED=1
+    FINISH_STEP_SIGNALLED=1
+}
+
+finish_step() {
+    FINISH_STEP_SIGNALLED=0
+    finish_step_rc=0
+    "$@" || finish_step_rc=$?
+    if [ "$FINISH_STEP_SIGNALLED" = "1" ]; then
+        FINISH_STEP_SIGNALLED=0
+        finish_step_rc=0
+        "$@" || finish_step_rc=$?
+    fi
+    return "$finish_step_rc"
+}
+
 finish_write_action() {
     write_rc=$?
-    trap - EXIT HUP INT TERM
+    trap - EXIT
+    FINISH_SIGNALLED=0
+    trap finish_signal HUP INT TERM
     if [ "$write_rc" != "0" ]; then
         cleanup_staging
     fi
@@ -591,16 +610,16 @@ finish_write_action() {
     restart_previous=0
     if [ "${WRITE_TRANSACTION_READY:-0}" = "1" ] && [ "${WRITE_TRANSACTION_COMMITTED:-0}" != "1" ]; then
         restart_previous="${WRITE_RELOAD_ATTEMPTED:-0}"
-        rollback_transaction "$WRITE_TRANSACTION" || recovery_ok=0
+        finish_step rollback_transaction "$WRITE_TRANSACTION" || recovery_ok=0
     fi
     if [ "$restart_previous" = "1" ] && [ "$recovery_ok" = "1" ]; then
-        if ! reload_gui; then
+        if ! finish_step reload_gui; then
             printf 'Previous GUI files restored, but GUI restart could not be confirmed\n' >&2
         fi
     fi
     if [ "$recovery_ok" = "1" ]; then
         if [ -n "${WRITE_TRANSACTION:-}" ]; then
-            remove_transaction "$WRITE_TRANSACTION" || write_rc=1
+            finish_step remove_transaction "$WRITE_TRANSACTION" || write_rc=1
         fi
     else
         printf 'GUI rollback failed; recovery files retained in %s\n' "$WRITE_TRANSACTION" >&2
@@ -610,19 +629,27 @@ finish_write_action() {
         rmdir "$GUI_DIR/js" >/dev/null 2>&1 || true
     fi
     write_root_ro=1
-    if ! remount_ro; then
+    if ! finish_step remount_ro; then
         write_rc=1
         write_root_ro=0
+    fi
+    trap - HUP INT TERM
+    if [ "$FINISH_SIGNALLED" = "1" ]; then
+        exit_write_signal
     fi
     return "$write_rc"
 }
 
-abort_write_action() {
-    finish_write_action || true
-    if [ "$recovery_ok" = "1" ] && [ "$write_root_ro" = "1" ]; then
+exit_write_signal() {
+    if [ "$recovery_ok" = "1" ] && [ "$write_root_ro" = "1" ] && [ "${WRITE_TRANSACTION_COMMITTED:-0}" != "1" ]; then
         exit 130
     fi
     exit 131
+}
+
+abort_write_action() {
+    finish_write_action || true
+    exit_write_signal
 }
 
 run_write_action() {

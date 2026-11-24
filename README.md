@@ -110,8 +110,10 @@ Details: [Live picture and talkback](docs/user-guide.md#live-picture-and-talkbac
   </tr>
 </table>
 
-All screenshots come from a C300X and its Home Assistant; the card shows an
-earlier visitor image. Entities and pages depend on the enabled options.
+All screenshots come from a C300X and its Home Assistant; camera pictures and
+some values are examples, see [legal notes](docs/legal.md#no-firmware-or-apk-payloads).
+The card shows an earlier visitor image. Entities and pages depend on the
+enabled options.
 
 ## Documentation
 

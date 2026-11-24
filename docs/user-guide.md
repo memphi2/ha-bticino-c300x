@@ -107,6 +107,9 @@ The card's sliders icon reads and changes **brightness**, **contrast** and
 changes that one setting. These are station settings, not browser filters, so
 saved recordings and snapshots are never recoloured.
 
+While the sliders panel is open, the card hides the play, mute and volume
+controls under it; they return when the panel closes.
+
 - **Ring Call:** uses the stock controls of the video call. Opening the sliders
   does not answer.
 - **On-demand video:** start live video first; the sliders icon appears about
@@ -401,7 +404,6 @@ data:
   message: The front window is still open.
   data:
     display: true
-    led: true
     notification_id: front_window
     severity: warning
     wake_duration: 30
@@ -457,6 +459,19 @@ Each switch turns on one channel; combine them freely, at least one on:
   not that the LED changed. The LED stays on while any unread HA notice that
   asked for it is live; a replacement without `led` releases it. An unread
   station memo keeps the LED on by itself.
+
+To light the message LED as well, add `led: true`. This needs an agent that
+reports message LED support, which depends on the station hardware:
+
+```yaml
+action: notify.bticino_c300x
+data:
+  title: Front window
+  message: The front window is still open.
+  data:
+    display: true
+    led: true
+```
 
 **Without switches** (and without `mode`) the call works as `mode: display`
 always did: notice, popup, wake and tone, and the notice also lights the LED

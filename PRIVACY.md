@@ -43,8 +43,9 @@ copies and backups remain subject to your own access and backup policy.
 
 Diagnostics redact secrets and avoid exposing callback URLs or token values.
 
-In LED-only Notify mode the station's envelope LED receives only the unread
-state, never the notification text; see
+When a notice lights the station's message LED (the `led` switch, legacy
+`mode: display`, `both` or `led`, or a call without switches), the LED receives
+only the unread state, never the notification text; see
 [Notifications](docs/user-guide.md#notifications).
 
 The live text-memo sensor can expose the latest memo text to authorized Home

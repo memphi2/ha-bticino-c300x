@@ -14,12 +14,12 @@ what each model offers is in
 
 ## Doorbell Card
 
-The **C300X Doorbell Call Card** shows live video, Ring Calls, Home Calls, saved
+The **BTicino Doorbell Call Card** shows live video, Ring Calls, Home Calls, saved
 images and clips in one window, for a C300X and a C100X alike.
 [Add the card](quickstart.md#add-the-card) and select the station's camera
 entity.
 
-<img src="images/readme/ha-doorbell-card-en.webp" alt="C300X Doorbell Call Card with a saved visitor snapshot, the history arrow, play and call buttons on the left and door and light buttons on the right" width="420">
+<img src="images/readme/ha-doorbell-card-en.webp" alt="BTicino Doorbell Call Card with a saved visitor snapshot, the history arrow, play and call buttons on the left and door and light buttons on the right" width="420">
 
 | Mode | YAML | Use |
 | --- | --- | --- |
@@ -308,14 +308,14 @@ Deleting memos is not offered on a C100X.
 ## Recording Clips and Capture Modes
 
 The card does not record. Clips come from `bticino_c300x.capture_doorbell_call`,
-usually through the **C300X Ring capture** blueprint.
+usually through the **BTicino Ring capture** blueprint.
 
 ### Record on Every Ring
 
 1. Check Media Readiness and set **Forwarding** to **Home Assistant**.
-2. Open **Settings > Automations & scenes > Blueprints**, choose **C300X Ring
+2. Open **Settings > Automations & scenes > Blueprints**, choose **BTicino Ring
    capture** (`bticino_c300x/ring_capture.yaml`) and create an automation.
-3. Select the C300X device. The blueprint finds its readiness sensor, matches
+3. Select the door station. The blueprint finds its readiness sensor, matches
    ring events to that device and runs only while readiness is `ready` or
    `warning`.
 4. Choose the duration (**5 seconds** by default, **1-15** allowed) and whether
@@ -558,13 +558,13 @@ match a known original. If one is missing, restart Home Assistant once, or use
 
 | Blueprint | File | Purpose |
 | --- | --- | --- |
-| C300X Doorbell notification | `doorbell_notification.yaml` | Your own notification action on a ring; does not answer. |
-| C300X Ring Call Android phone alert | `doorbell_call_android.yaml` | Rings an Android phone with **Answer**, **Hang Up**, **Open**. |
-| C300X Ring Call iOS phone alert | `doorbell_call_ios.yaml` | Rings an iPhone (critical sound) with **Answer**, **Hang Up**, **Open**. |
-| C300X Ring capture | `ring_capture.yaml` | [Records a clip on a ring](#record-on-every-ring). |
-| C300X Ring capture and Wyoming transcription | `ring_capture_wyoming.yaml` | Records and transcribes with a local Wyoming Whisper service. |
-| C300X strict phrase decision | `strict_phrase_decision.yaml` | Checks a transcription for an exact phrase; optional unlock. |
-| C300X Calendar display reminder | `calendar_display_reminder.yaml` | Reminder on the station's HA page before a calendar event. |
+| BTicino Doorbell notification | `doorbell_notification.yaml` | Your own notification action on a ring; does not answer. |
+| BTicino Ring Call Android phone alert | `doorbell_call_android.yaml` | Rings an Android phone with **Answer**, **Hang Up**, **Open**. |
+| BTicino Ring Call iOS phone alert | `doorbell_call_ios.yaml` | Rings an iPhone (critical sound) with **Answer**, **Hang Up**, **Open**. |
+| BTicino Ring capture | `ring_capture.yaml` | [Records a clip on a ring](#record-on-every-ring). |
+| BTicino Ring capture and Wyoming transcription | `ring_capture_wyoming.yaml` | Records and transcribes with a local Wyoming Whisper service. |
+| BTicino strict phrase decision | `strict_phrase_decision.yaml` | Checks a transcription for an exact phrase; optional unlock. |
+| BTicino Calendar display reminder | `calendar_display_reminder.yaml` | Reminder on the station's HA page before a calendar event. |
 
 The device-based blueprints find the camera, forwarding select and Media
 Readiness sensor of the selected C300X and match its ring events, so no entry

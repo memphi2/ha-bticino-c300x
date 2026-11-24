@@ -316,3 +316,14 @@ def test_the_c100x_reads_its_own_display_mechanism(monkeypatch):
     assert _load("en")["options"]["step"]["display_c100x"]["menu_option_descriptions"]["dashboard"] == (
         _load("en")["options"]["step"]["display"]["menu_option_descriptions"]["dashboard"]
     )
+
+
+def test_global_texts_name_no_model():
+    """Service names are the same for every station; only the integration name stays."""
+
+    for lang in LANGUAGES:
+        for service, value in _load(lang)["services"].items():
+            for field in _leaves(value).values():
+                assert "C300X" not in field.replace("BTicino C300X", "") and "C100X" not in field, (lang, service)
+    assert _load("en")["services"]["capture_doorbell_call"]["name"] == "Capture doorbell video"
+    assert _load("de")["services"]["capture_doorbell_call"]["name"] == "Türvideo aufnehmen"

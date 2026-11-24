@@ -2238,3 +2238,38 @@ test("the picture frame has the shape the browser keeps for the camera the card 
     delete globalThis.localStorage;
   }
 });
+
+test("the default card names keep the C300X words and name a C100X by its own model", async () => {
+  const registry = installFakeDom();
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?model-names");
+  const Card = registry.get("c300x-doorbell-call-card");
+  const names = {
+    en: ["C300X Door Station", "C300X Home Call", "C100X Door Station", "C100X Home Call"],
+    de: ["C300X Türstation", "C300X Home Call", "C100X Türstation", "C100X Home Call"],
+    fr: ["Platine C300X", "Home Call C300X", "Platine C100X", "Home Call C100X"],
+    it: ["Postazione porta C300X", "C300X Home Call", "Postazione porta C100X", "C100X Home Call"],
+  };
+  for (const [language, expected] of Object.entries(names)) {
+    const seen = [];
+    for (const model of [undefined, "Classe 300X", "Classe 100X"]) {
+      for (const mode of ["doorbell_call", "home_call"]) {
+        const card = new Card();
+        card.setConfig({ type: "custom:c300x-doorbell-call-card", entity: "camera.bticino_c300x_doorbell_camera", mode });
+        const hass = { ...fakeHass(), language };
+        hass.devices = { "device-1": { config_entry_id: "entry-1", ...(model ? { model } : {}) } };
+        card.hass = hass;
+        seen.push(card._defaultName());
+      }
+    }
+    // Unknown model and a C300X show the unchanged C300X words.
+    assert.deepEqual(seen, [expected[0], expected[1], expected[0], expected[1], expected[2], expected[3]], language);
+  }
+});
+
+test("the card picker names no model", async () => {
+  installFakeDom();
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?picker-name");
+  const [entry] = globalThis.window.customCards;
+  assert.equal(entry.name, "BTicino Doorbell Call Card");
+  assert.doesNotMatch(`${entry.name} ${entry.description}`, /C[13]00X/);
+});

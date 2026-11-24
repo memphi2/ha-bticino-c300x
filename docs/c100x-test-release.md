@@ -369,8 +369,8 @@ accounts unchanged; their presence is not permission to migrate them.
 
 The ZIP includes all current card ES modules; there is no separate npm build or
 card download for the tester. HA registers the bundled resource automatically
-after integration setup. The card picker currently calls it **C300X Doorbell Call
-Card**, also on C100X. Its type remains `custom:c300x-doorbell-call-card`.
+after integration setup. The card picker calls it **BTicino Doorbell Call
+Card**; on a C100X its default title names the C100X. Its type remains `custom:c300x-doorbell-call-card`.
 
 For a dashboard with just the first two actions, use Home Assistant's built-in
 Entities card and select the stair-light and door-unlock buttons from this

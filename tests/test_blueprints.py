@@ -703,3 +703,19 @@ def test_phone_action_ids_use_real_script_run_contexts(tmp_path):
             unsubscribe()
 
     asyncio.run(run())
+
+
+def test_blueprint_texts_fit_both_station_models() -> None:
+    """A blueprint serves a C300X and a C100X: its shown texts name no model.
+
+    Only the integration name "BTicino C300X" stays.
+    """
+
+    for directory in (BLUEPRINT_DIR, PACKAGED_BLUEPRINT_DIR):
+        for path in directory.glob("*.yaml"):
+            blueprint = yaml.load(path.read_text(encoding="utf-8"), Loader=BlueprintLoader)["blueprint"]
+            texts = [blueprint["name"], blueprint.get("description", "")]
+            for field in blueprint.get("input", {}).values():
+                texts += [str(field.get("name", "")), str(field.get("description", "")), str(field.get("default", ""))]
+            shown = " ".join(texts).replace("BTicino C300X", "")
+            assert "C300X" not in shown and "C100X" not in shown, path.name

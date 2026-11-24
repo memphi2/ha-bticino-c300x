@@ -1890,7 +1890,7 @@
       }
     },
     "capture_doorbell_call": {
-      "name": "Enregistrer la vidéo C300X",
+      "name": "Enregistrer la vidéo de la sonnette",
       "description": "Enregistre une courte vidéo dans Home Assistant depuis un appel entrant ou à la demande lorsque les médias sont libres.",
       "fields": {
         "capture_mode": {

@@ -1890,7 +1890,7 @@
       }
     },
     "capture_doorbell_call": {
-      "name": "Registra il video C300X",
+      "name": "Registra il video del campanello",
       "description": "Registra un breve video in Home Assistant da una chiamata in arrivo o a richiesta quando le risorse multimediali sono libere.",
       "fields": {
         "capture_mode": {

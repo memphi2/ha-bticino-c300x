@@ -513,7 +513,7 @@ removes a notice.
 - An action never runs because a notice arrives, only when tapped. **Mark
   read** only dismisses the notice; it neither fixes the condition nor runs an
   action. Commands for a notice that has since changed are rejected.
-- The bundled **C300X Calendar display reminder** blueprint shows a notice
+- The bundled **BTicino Calendar display reminder** blueprint shows a notice
   before a calendar event ([Blueprints](user-guide.md#blueprints)). For a
   reliable test, create the event more than 15 minutes ahead, as the
   [Home Assistant calendar documentation](https://www.home-assistant.io/integrations/calendar/#automation)

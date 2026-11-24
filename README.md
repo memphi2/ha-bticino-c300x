@@ -117,7 +117,7 @@ through the options and adds the card. Later releases: [Update](docs/quickstart.
 
 ## Doorbell Video, Ring Calls and Talkback
 
-Use one **C300X Doorbell Call Card** in **Doorstation + Home Call** mode; the
+Use one **BTicino Doorbell Call Card** in **Doorstation + Home Call** mode; the
 same card serves a C100X.
 
 | Task | How |
@@ -140,7 +140,7 @@ Details: [Live picture and talkback](docs/user-guide.md#live-picture-and-talkbac
 
 <table>
   <tr>
-    <td align="center"><strong>Doorbell card</strong><br><img src="docs/images/readme/ha-doorbell-card-en.webp" alt="C300X Doorbell Call Card in Home Assistant dark mode with a saved visitor snapshot, play, call, door and light buttons" width="360"></td>
+    <td align="center"><strong>Doorbell card</strong><br><img src="docs/images/readme/ha-doorbell-card-en.webp" alt="BTicino Doorbell Call Card in Home Assistant dark mode with a saved visitor snapshot, play, call, door and light buttons" width="360"></td>
     <td align="center"><strong>Station home page</strong><br><img src="docs/images/readme/display-home-stock-en.webp" alt="C300X home page with the station's own buttons and the added Alarm and Home Assistant buttons in two rows" width="360"></td>
   </tr>
 </table>

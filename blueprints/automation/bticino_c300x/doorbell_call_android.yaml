@@ -1,12 +1,12 @@
 blueprint:
-  name: C300X Ring Call Android phone alert
-  description: Ring an Android phone for an answerable C300X Ring Call. The notification can open the configured dashboard, answer the call, and hang up.
+  name: BTicino Ring Call Android phone alert
+  description: Ring an Android phone for an answerable Ring Call of the door station. The notification can open the configured dashboard, answer the call, and hang up.
   domain: automation
   source_url: https://github.com/memphi2/ha-bticino-c300x/blob/main/blueprints/automation/bticino_c300x/doorbell_call_android.yaml
   input:
     c300x_device:
-      name: C300X device
-      description: Select the C300X device. The blueprint derives the camera, forwarding select and media-readiness sensor from this device.
+      name: Door station
+      description: Select the door station. The blueprint derives the camera, forwarding select and media-readiness sensor from this device.
       selector:
         device:
           integration: bticino_c300x
@@ -61,7 +61,7 @@ blueprint:
     active_call_channel:
       name: Active-call notification channel
       description: Android notification channel for the quiet in-call Hang Up notification after Answer.
-      default: C300X Call
+      default: Door station call
       selector:
         text:
     notification_timeout_seconds:

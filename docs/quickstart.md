@@ -152,7 +152,7 @@ Details: [Media Readiness](media-troubleshooting.md#media-readiness).
 ### Add It to a Dashboard
 
 1. Open the dashboard where the card should go and add a card.
-2. Select **C300X Doorbell Call Card**.
+2. Select **BTicino Doorbell Call Card**.
 3. Choose the C300X camera entity.
 
 Keep the mode **Doorstation + Home Call** (`mode: auto`): one card handles

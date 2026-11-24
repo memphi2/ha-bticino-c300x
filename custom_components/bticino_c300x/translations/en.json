@@ -1890,7 +1890,7 @@
       }
     },
     "capture_doorbell_call": {
-      "name": "Capture C300X doorbell video",
+      "name": "Capture doorbell video",
       "description": "Record a short video on Home Assistant from an incoming ring call or an idle on-demand stream.",
       "fields": {
         "capture_mode": {

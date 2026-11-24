@@ -557,7 +557,9 @@ gui_worker() {
         fi
         for gui_request in "$GUI_RUN_DIR"/serving/*; do
             [ -f "$gui_request" ] || continue
-            printf '%s\n' "$gui_answer" > "$GUI_RUN_DIR/done/${gui_request##*/}"
+            # Whole or not at all: the requester reads the answer as it appears.
+            printf '%s\n' "$gui_answer" > "$GUI_RUN_DIR/done/${gui_request##*/}.tmp" \
+                && mv -f "$GUI_RUN_DIR/done/${gui_request##*/}.tmp" "$GUI_RUN_DIR/done/${gui_request##*/}"
             rm -f "$gui_request"
         done
     done
@@ -577,8 +579,8 @@ gui_restart() {
         gui_until=$(($(date +%s) + 5))
     fi
     while :; do
-        if [ -f "$GUI_RUN_DIR/done/$gui_id" ]; then
-            gui_answer="$(cat "$GUI_RUN_DIR/done/$gui_id")"
+        gui_answer="$(cat "$GUI_RUN_DIR/done/$gui_id" 2>/dev/null || true)"
+        if [ -n "$gui_answer" ]; then
             rm -f "$GUI_RUN_DIR/done/$gui_id"
             [ "$gui_answer" = "0" ] && return 0
             return 1

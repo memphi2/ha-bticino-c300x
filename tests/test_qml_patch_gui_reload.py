@@ -473,3 +473,31 @@ def test_a_start_script_that_starts_nothing_falls_back_to_the_original_one(
     assert len(_settled(overlay)) == 1
     assert overlay.mark.read_text() == "boot-1\n"
     assert _starts(overlay)[-1] == "plain"
+
+
+def _held_lock(station: Station) -> Path:
+    """An flock stand-in that finds the lock always held: no worker is started."""
+
+    held = station.root / "tools/flock-held"
+    held.write_text("#!/bin/sh\nexit 1\n")
+    held.chmod(0o755)
+    return held
+
+
+def test_an_answer_is_read_only_once_it_is_complete(station: Station) -> None:
+    """The worker's answer may be seen while it is written; an empty one is not an answer."""
+
+    station.boot()
+    process = subprocess.Popen([str(SCRIPT), "reload"], env=station.script_env(
+        C300X_QML_GUI_FLOCK=str(_held_lock(station))),
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    requests = station.run_dir / "requests"
+    assert _wait_for(lambda: any(not p.name.endswith(".tmp") for p in requests.glob("*")))
+    request = next(p for p in requests.glob("*") if not p.name.endswith(".tmp"))
+    answer = station.run_dir / "done" / request.name
+    answer.write_text("")
+    time.sleep(2.5)
+    answer.write_text("0\n")
+    _, stderr = process.communicate(timeout=60)
+    assert process.returncode == 0, stderr
+    assert "No display program could be started" not in stderr

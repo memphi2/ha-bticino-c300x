@@ -56,6 +56,7 @@
 #include "video_rtsp.h"
 #include "video_snapshot.h"
 #include "memo_deleted.h"
+#include "memo_vendor.h"
 #include "firewall_file.h"
 #include "detached_command.h"
 #include "http_origin.h"
@@ -92,9 +93,6 @@
 #define C300X_MAX_MEMO_TEXT_JSON_LEN ((C300X_MAX_MEMO_TEXT_LEN * 6) + 1)
 #define C300X_MAX_PATH_JSON_LEN ((C300X_MAX_PATH_LEN * 6) + 1)
 #define C300X_TOKEN_FINGERPRINT_LEN 32
-#define C300X_ANSWERING_DIRECTORY_VIDEO_MESSAGE 0
-#define C300X_ANSWERING_DIRECTORY_VOICE_MEMO 2
-#define C300X_ANSWERING_DIRECTORY_TEXT_MEMO 3
 #define C300X_UI_LISTEN_HOST "127.0.0.1"
 #define C300X_FIREWALL_BEGIN "# c300x-native-agent firewall begin"
 #define C300X_FIREWALL_END "# c300x-native-agent firewall end"
@@ -1312,28 +1310,6 @@ static int entry_number_from_prefixed_name(const char *name, const char *prefix,
     }
     *number = (int)parsed;
     return 1;
-}
-
-static int send_answering_delete_command(
-    const struct c300x_config *config,
-    int entry_number,
-    int directory,
-    char *reply,
-    size_t reply_len,
-    char *error,
-    size_t error_len
-)
-{
-    char command[64];
-
-    if (entry_number <= 0 || directory < 0) {
-        if (error_len > 0) {
-            snprintf(error, error_len, "%s", "invalid_answering_delete_target");
-        }
-        return 0;
-    }
-    snprintf(command, sizeof(command), "*8*94#%d#%d##", entry_number, directory);
-    return c300x_openwebnet_send(config, command, reply, reply_len, error, error_len);
 }
 
 static const char *trim_ascii(char *value)
@@ -6851,11 +6827,11 @@ static void handle_answering_message_delete(
     char message_id[C300X_MAX_VOICEMAIL_ID_LEN];
     char message_path[C300X_MAX_PATH_LEN];
     char message_id_json[256];
-    char reply[C300X_MAX_FRAME_LEN];
     char error[C300X_MAX_ERROR_LEN];
     char body[512];
     int message_number = 0;
     int path_present;
+    int sent;
 
     if (!config->answering_machine_messages_enabled || !runtime->voicemail.enabled) {
         send_json(client_fd, 404, "Not Found", "{\"ok\":false,\"error\":\"video_messages_disabled\"}\n");
@@ -6878,15 +6854,13 @@ static void handle_answering_message_delete(
     if (path_present < 0) {
         return;
     }
-    if (!send_answering_delete_command(
-        config,
-        message_number,
-        C300X_ANSWERING_DIRECTORY_VIDEO_MESSAGE,
-        reply,
-        sizeof(reply),
-        error,
-        sizeof(error)
-    )) {
+    sent = c300x_memo_vendor_delete(config, message_number, C300X_ANSWERING_DIRECTORY_VIDEO_MESSAGE,
+                                    error, sizeof(error));
+    if (sent == C300X_MEMO_VENDOR_REFUSED) {
+        send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"video_message_delete_refused\"}\n");
+        return;
+    }
+    if (sent != C300X_MEMO_VENDOR_DONE) {
         send_device_error(client_fd, error);
         return;
     }
@@ -7173,7 +7147,6 @@ static void handle_memos_delete(
     char kind[16];
     char entry_name[C300X_MAX_VOICEMAIL_ID_LEN];
     char memo_path[C300X_MAX_PATH_LEN];
-    char reply[C300X_MAX_FRAME_LEN];
     char error[C300X_MAX_ERROR_LEN];
     char body[1024];
     char memo_id_json[256];
@@ -7181,6 +7154,7 @@ static void handle_memos_delete(
     int memo_number = 0;
     int memo_directory = 0;
     int path_present;
+    int sent;
 
     if (!config->memos_enabled) {
         send_json(client_fd, 404, "Not Found", "{\"ok\":false,\"error\":\"memos_disabled\"}\n");
@@ -7211,15 +7185,12 @@ static void handle_memos_delete(
     if (path_present < 0) {
         return;
     }
-    if (!send_answering_delete_command(
-        config,
-        memo_number,
-        memo_directory,
-        reply,
-        sizeof(reply),
-        error,
-        sizeof(error)
-    )) {
+    sent = c300x_memo_vendor_delete(config, memo_number, memo_directory, error, sizeof(error));
+    if (sent == C300X_MEMO_VENDOR_REFUSED) {
+        send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"memo_delete_refused\"}\n");
+        return;
+    }
+    if (sent != C300X_MEMO_VENDOR_DONE) {
         send_device_error(client_fd, error);
         return;
     }

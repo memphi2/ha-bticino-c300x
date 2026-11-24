@@ -23,6 +23,11 @@ int main(int argc, char **argv)
         printf("%d", c300x_ui_status_json("2.9.2", "1.7.19", argv[1], 1, 100, 160, small, sizeof(small)));
         return 0;
     }
+    if (argc == 5) {
+        if (!c300x_ui_status_json("2.9.2", argv[4], argv[1], 1, 100, 160, out, sizeof(out))) return 1;
+        fputs(out, stdout);
+        return 0;
+    }
     if (!c300x_ui_status_json("2.9.2", "1.7.19", argv[1], argv[2][0] == '1', 100, argv[3][0] == 'b' ? 40 : 160, out, sizeof(out))) return 1;
     fputs(out, stdout);
     return 0;
@@ -38,7 +43,9 @@ def probe(tmp_path_factory):
     work = tmp_path_factory.mktemp("ui-status")
     (work / "main.c").write_text(MAIN)
     subprocess.run([cc, "-std=c11", "-Wall", "-Wextra", "-Werror", "-I", str(ROOT / "native_agent/src"),
-                    str(work / "main.c"), str(ROOT / "native_agent/src/ui_status.c"), "-o", str(work / "probe")],
+                    str(work / "main.c"), str(ROOT / "native_agent/src/ui_status.c"),
+                    str(ROOT / "native_agent/src/json_util.c"), "-ffunction-sections", "-Wl,--gc-sections",
+                    "-o", str(work / "probe")],
                    check=True, capture_output=True, text=True, timeout=60)
 
     def run(*args):
@@ -86,3 +93,15 @@ def test_status_body(probe):
     # An address that is not shown still counts as registered.
     assert json.loads(probe("http://u:p@h/x", "1", "a"))["registered"] is True
     assert probe(url, "small") == "0"
+
+
+def test_a_configured_firmware_value_cannot_break_the_status_body(probe):
+    """`device_firmware` comes from the configuration and was printed unescaped."""
+    import json
+
+    url = "https://ha.example.org:8123/api/webhook/abc"
+    body = json.loads(probe(url, "1", "a", '1.7"x\\y\n'))
+    assert body["firmware"] == '1.7"x\\y\n' and body["ok"] is True and body["registered"] is True
+    source = (ROOT / "native_agent/src/firmware_version.c").read_text(encoding="utf-8")
+    resolver = source.rsplit("void resolve_device_firmware(", 1)[1].split("\n}", 1)[0]
+    assert "firmware_version_is_safe(config->device_firmware, strlen(config->device_firmware))" in resolver

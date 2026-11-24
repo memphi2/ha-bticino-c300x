@@ -1,4 +1,5 @@
 #include "ui_status.h"
+#include "json_util.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -48,6 +49,8 @@ int c300x_ui_status_json(
 {
     char origin[C300X_UI_STATUS_ORIGIN_MAX];
     char age[32] = "null";
+    char version_json[C300X_JSON_QUOTED_LEN(48)];
+    char firmware_json[C300X_JSON_QUOTED_LEN(64)];
     int registered = webhook_url != NULL && webhook_url[0] != '\0';
     int written;
 
@@ -58,9 +61,9 @@ int c300x_ui_status_json(
     written = snprintf(
         out,
         out_len,
-        "{\"ok\":true,\"version\":\"%s\",\"firmware\":\"%s\",\"registered\":%s,\"home_assistant\":\"%s\",\"last_contact_age\":%s}\n",
-        version,
-        firmware,
+        "{\"ok\":true,\"version\":%s,\"firmware\":%s,\"registered\":%s,\"home_assistant\":\"%s\",\"last_contact_age\":%s}\n",
+        c300x_json_string(version, version_json, sizeof(version_json)),
+        c300x_json_string(firmware, firmware_json, sizeof(firmware_json)),
         registered ? "true" : "false",
         origin,
         age

@@ -1535,6 +1535,10 @@
       },
       "description": "Installed: {installed_version}. Packaged: {available_version}. Update path: {update_path}. Reason: {reason}."
     },
+    "device_agent_update_regular_package": {
+      "title": "Agent C300X : utilisez le paquet normal",
+      "description": "{entry_title} est un Classe 300X, mais l'intégration installée est le paquet de test pour le Classe 100X, prévu uniquement pour le C100X. Il ne met pas à jour et ne réinstalle pas un agent C300X. Installez plutôt la version normale de l'intégration ; rien n'a été modifié sur l'appareil.\n\nInstallé : {installed_version}. Dans le paquet : {available_version}."
+    },
     "device_agent_startup_disabled": {
       "title": "L'agent C300X ne démarre pas après redémarrage",
       "description": "{entry_title} peut joindre l'agent C300X maintenant, mais le lien de démarrage du périphérique est manquant ou invalide. Après le prochain redémarrage du C300X, l'agent cessera de fonctionner à nouveau. Lancez la réparation/mise à jour de l'agent ou réinstallez l'agent via SSH pour recréer le lien de démarrage."

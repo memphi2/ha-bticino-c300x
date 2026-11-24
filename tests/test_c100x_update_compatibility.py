@@ -148,3 +148,36 @@ def test_c100x_native_apply_rejects_unmarked_then_accepts_verified_package(tmp_p
     assert json.loads((agent / "bundle.json").read_text())["c100x_compatible"] is True
     apply(True)
     assert not list(agent.rglob("*.update-backup"))
+
+
+@pytest.mark.parametrize("model", ["C300X", "C100X"])
+def test_c300x_entry_is_told_to_use_the_regular_package(monkeypatch, model):
+    from custom_components.bticino_c300x import repair_issues
+
+    bundle = {"version": "new", "bundle_hash": "sha256:new", "c100x_only": True,
+              "c100x_compatible": model == "C300X"}
+    state = agent_update.compare_agent_bundle({
+        "model": model, "version": "old",
+        "agent": {"bundle_hash": "sha256:old", "self_update_supported": True},
+    }, bundle)
+    assert state.reason == "device_model_incompatible"
+    advice = state.repair_placeholders["update_path"]
+    issues = []
+    monkeypatch.setattr(repair_issues.ir, "async_create_issue", lambda **kw: issues.append(kw))
+    entry = SimpleNamespace(entry_id="e", title="Station", runtime_data=SimpleNamespace(
+        agent_update_state=state, qml_patch_status={},
+    ))
+    repair_issues._sync_device_agent_update_issue(None, entry)
+    issue, = issues
+    assert issue["is_fixable"] is False
+    if model == "C100X":
+        assert advice == "blocked: install a C100X-compatible integration package"
+        assert issue["translation_key"] == "device_agent_update_required"
+        return
+    assert advice == "blocked: install the regular release package"
+    assert issue["translation_key"] == "device_agent_update_regular_package"
+    for name in ("strings.json", "translations/en.json", "translations/de.json",
+                 "translations/it.json", "translations/fr.json"):
+        texts = json.loads((ROOT / "custom_components/bticino_c300x" / name).read_text())
+        text = texts["issues"]["device_agent_update_regular_package"]["description"]
+        assert "{entry_title}" in text and "C100X" in text

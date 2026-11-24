@@ -1535,6 +1535,10 @@
       },
       "description": "Installed: {installed_version}. Packaged: {available_version}. Update path: {update_path}. Reason: {reason}."
     },
+    "device_agent_update_regular_package": {
+      "title": "C300X device agent: use the regular package",
+      "description": "{entry_title} is a Classe 300X, but the installed integration is the Classe 100X test package, which is for the C100X only. It does not update or reinstall a C300X agent. Install the regular release of the integration instead; nothing on the device was changed.\n\nInstalled: {installed_version}. Packaged: {available_version}."
+    },
     "device_agent_startup_disabled": {
       "title": "C300X device agent does not start after reboot",
       "description": "{entry_title} can reach the C300X device agent now, but the device startup link is missing or invalid. The agent will stop working again after the next C300X reboot. Run the device-agent repair/update action or reinstall the agent over SSH to recreate the startup link."

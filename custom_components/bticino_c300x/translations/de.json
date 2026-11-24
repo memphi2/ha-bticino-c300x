@@ -1535,6 +1535,10 @@
       },
       "description": "Installed: {installed_version}. Packaged: {available_version}. Update path: {update_path}. Reason: {reason}."
     },
+    "device_agent_update_regular_package": {
+      "title": "C300X-Device-Agent: reguläres Paket verwenden",
+      "description": "{entry_title} ist eine Classe 300X, installiert ist aber das Testpaket für die Classe 100X, das nur für die C100X gedacht ist. Es aktualisiert oder installiert keinen C300X-Agenten. Installiere stattdessen das reguläre Release der Integration; am Gerät wurde nichts geändert.\n\nInstalliert: {installed_version}. Im Paket: {available_version}."
+    },
     "device_agent_startup_disabled": {
       "title": "C300X Device-Agent startet nach Reboot nicht",
       "description": "{entry_title} erreicht den C300X Device-Agent aktuell, aber der Geräte-Autostart-Link fehlt oder ist ungültig. Nach dem nächsten C300X-Reboot fällt der Agent wieder aus. Führe die Device-Agent-Reparatur/Aktualisierung aus oder installiere den Agent per SSH neu, um den Autostart-Link wieder anzulegen."

@@ -2607,17 +2607,11 @@ static void handle_ui_media_closed(
     struct agent_runtime *runtime
 )
 {
+    (void)config;
     if (runtime != NULL) {
-        /* The GUI also emits onCallEnded during on-demand startup. Apply the
-         * same transition guard as UDP before consuming the close event. */
-        if (
-            runtime->video != NULL
-            && !c300x_media_session_stop_in_progress(runtime->video)
-            && !c300x_video_ignore_transient_media_closed(runtime->video)
-            && c300x_video_consume_media_closed_event(runtime->video)
-        ) {
-            dispatch_event(config, runtime, "doorbell.media.closed", "{}", 0);
-        }
+        /* The GUI's onCallEnded also fires during on-demand startup and when
+         * HA answers a ring, so it never ends HA media: the bus, SIP and
+         * stream stops publish doorbell.media.closed. */
         ui_event_notify(runtime, "media.closed");
     }
     send_json(client_fd, 200, "OK", "{\"ok\":true,\"event\":\"media.closed\"}\n");

@@ -125,10 +125,12 @@ def test_native_agent_blocks_ha_video_when_external_media_is_active() -> None:
     media_actions = (ROOT / "native_agent" / "src" / "http_media_actions.c").read_text(encoding="utf-8")
     assert 'http_status = strcmp(error, "external_session_active") == 0 ? 409 : 503' in media_actions
     assert 'strcmp(request->path, "/ui/media-closed") == 0' in http
-    assert 'dispatch_event(config, runtime, "doorbell.media.closed", "{}", 0)' in http
-    assert "c300x_media_session_stop_in_progress(runtime->video)" in http
-    assert "c300x_video_consume_media_closed_event(runtime->video)" in http
-    assert 'ui_event_notify(runtime, "media.closed")' in http
+    # The GUI call-end hook only wakes display pages; HA media ends come from
+    # the bus, SIP and stream stops (it also fires when HA answers a ring).
+    gui_closed = http.split("static void handle_ui_media_closed(", 1)[1].split("\n}\n", 1)[0]
+    assert 'ui_event_notify(runtime, "media.closed")' in gui_closed
+    assert "dispatch_event" not in gui_closed
+    assert "c300x_video_consume_media_closed_event" not in gui_closed
 
 
 def test_native_agent_ignores_transient_on_demand_media_closed_during_start() -> None:

@@ -1,6 +1,7 @@
 # C100X Issue #51: Complete Test Package
 
-Status: local preparation, not a published beta or authorization to install.
+Status: test package for the current round in issue #51, not a release or a
+published beta.
 Target: **C100X, original firmware 1.5.8**, branch `c100x_1.5.8`.
 No release number has been selected. The current `2.9.1` metadata is inherited
 development metadata, not a C100X release designation. Do not distribute an old
@@ -15,6 +16,30 @@ The display pages become active only through that supervised activation; no
 other GUI install path is enabled.
 The selected test-package scope excludes local speaker/TTS. Investigation of
 a safe audio backend continues separately; no unsupported audio path is enabled.
+
+## Test Plan at a Glance
+
+Run the steps in order, after the [private pre-test backup](#private-pre-test-backup)
+and the [manual installation](#manual-ha-installation). Each step links to its
+detailed checks. Stop at the first failure and follow the
+[stop conditions and rollback](#recovery-and-stop-conditions).
+
+| # | Do | Expected |
+|---|---|---|
+| 1 | Add **BTicino C300X** with the C100X host ([details](#first-authorized-installation-and-checks)) | Setup completes without a workaround; model C100X, firmware 1.5.8 |
+| 2 | Press **Stair light** once | The light comes on |
+| 3 | Press **Door unlock** once, with an authorized person at the door | The door releases |
+| 4 | Start the live stream on the card | Picture and sound; the stream ends cleanly |
+| 5 | Ring at the outdoor station and answer in HA | Picture, two-way audio, hang-up works |
+| 6 | Move brightness, contrast and saturation on the card | The picture changes; a new stream shows the station's own values again |
+| 7 | Enable Maintenance with reboot, press **Activate display pages** ([details](#display-activation-by-reboot-device-test)) | One reboot after two minutes idle, then the extra pages are in the menu |
+| 8 | Press **Restore original display** | One reboot, stock display back |
+| 9 | Optional: repeat step 7 and pull the power within 60 s after the reboot | Stock display back, repair message in HA, no further reboot |
+
+Stop on an unexpected reboot, if a vendor call, the BTicino app or a physical
+key stops working, or if setup fails. Report **pass / fail / not tested** per
+step with firmware and HA version, as described in
+[Diagnostics for Issue #51](#diagnostics-for-issue-51).
 
 ## What This First Test Covers
 

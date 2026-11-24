@@ -1080,7 +1080,7 @@ patch_home_page() {
             print "            c300xDisplayPreferences.bridgeShown = pages !== false"
             print "            page.alarmButtonVisible = alarmConfigured"
             print "            page.haButtonVisible = dashboardAvailable"
-            print "        }, page)"
+            print "        }, page, function() { return page.visible && generation === page.buttonReadGeneration })"
             print "    }"
             print ""
             print "    Image {"

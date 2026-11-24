@@ -534,7 +534,7 @@ function dashboardControl(item, control, value, statusItem, pageItem) {
     }, commandScope(pageItem, "commandGeneration"))
 }
 
-function homeButtons(callback, owner) {
+function homeButtons(callback, owner, wanted) {
     if (owner) useBaseUrl(owner.uiBaseUrl)
     getJsonShared("/ui/state", function(data) {
         if (callback) {
@@ -547,9 +547,16 @@ function homeButtons(callback, owner) {
             )
         }
     }, function(error) {
-        if (callback) {
-            callback(false, false, false, error === "API error: 404" ? "bridge_not_registered" : "bridge_unreachable", true)
+        if (!callback) return
+        if (error !== "API error: 404") {
+            callback(false, false, false, "bridge_unreachable", true)
+            return
         }
+        if (wanted && !wanted()) return
+        stationStatus(function(status) {
+            if (status && status.disabled === true) callback(false, false, true, "", false)
+            else callback(false, false, false, "bridge_not_registered", true)
+        }, owner)
     }, owner)
 }
 

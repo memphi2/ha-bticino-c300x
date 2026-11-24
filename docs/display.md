@@ -522,7 +522,8 @@ mark and the page keeps asking every five minutes while it is visible. The
 next answer removes the mark. The symbol follows what the home page last
 read: when it is shown, on a message from Home Assistant, and on those
 retries. It is hidden while the display pages are switched off in the
-integration. The **Integration** tab names the reason for as long as the
+integration, also when Home Assistant has told the agent so and no longer
+answers the station. The **Integration** tab names the reason for as long as the
 problem lasts:
 
 - **Home Assistant has not registered since the agent started.** The agent is

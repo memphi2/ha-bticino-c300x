@@ -103,7 +103,7 @@ for (const previous of [false, true]) {
     requests[0].status = 404;
     requests[0].onreadystatechange();
     assert.equal(requests.length, 2, 'the event must queue a fresh read after the old response');
-    assert.ok(requests.every(request => request.url.endsWith('/ui/state')));
+    assert.ok(requests.every(request => request.url.endsWith('/ui/state')), 'an outdated 404 asks nothing further');
     requests[1].finish(!previous);
     assert.equal(page.alarmButtonVisible, !previous);
     assert.equal(page.haButtonVisible, !previous);
@@ -266,7 +266,13 @@ for (const [status, reason] of [[404, 'bridge_not_registered'], [502, 'bridge_un
     Request.prototype.finish = function(code, body) {
         this.readyState = 4; this.status = code; this.responseText = JSON.stringify(body || {});
         this.onreadystatechange();
+        // A 404 of the bridge is followed by the local status, which says whether it is switched off.
+        if (code === 404 && /\/ui\/state$/.test(this.url)) {
+            assert.match(requests.at(-1).url, /\/ui\/status$/);
+            requests.pop().finish(200, {ok: true, disabled: off});
+        }
     };
+    let off = false;
     const api = vm.createContext({XMLHttpRequest: Request});
     vm.runInContext(apiSource, api);
     const page = {visible: true, buttonReadGeneration: 0, buttonRetries: 0,
@@ -307,6 +313,19 @@ for (const [status, reason] of [[404, 'bridge_not_registered'], [502, 'bridge_un
     home.refreshDisplayBridgeButtons();
     requests.pop().finish(200, {device_ui_enabled: true});
     assert.equal(preferences.bridgeShown, true);
+    if (status === 404) {
+        // Home Assistant switched the bridge off: no symbol, no mark, no retries.
+        off = true;
+        const starts = timer.starts.length;
+        home.refreshDisplayBridgeButtons();
+        requests.pop().finish(404);
+        assert.deepEqual([preferences.bridgeShown, preferences.bridgeProblem, page.alarmButtonVisible, page.haButtonVisible,
+            timer.starts.length], [false, '', false, false, starts], 'switched off is not a fault');
+        off = false;
+        home.refreshDisplayBridgeButtons();
+        requests.pop().finish(200, {device_ui_enabled: true});
+        assert.equal(preferences.bridgeShown, true);
+    }
     const seen = [];
     api.homeButtons(function() { seen.push(Array.prototype.slice.call(arguments)); }, page);
     requests.pop().finish(200, {});

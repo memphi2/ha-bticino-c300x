@@ -1,6 +1,6 @@
 # Changelog
 
-## v2.9.2 - Unreleased
+## v2.9.2 - 2026-11-25
 
 Station:
 

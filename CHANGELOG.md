@@ -71,6 +71,10 @@ Home Assistant and agent:
   limit and is rolled back, and the agent stays responsive meanwhile. A
   display step of the SSH install that runs past its time limit is rolled
   back on the station.
+- A repair that was confirmed finishes even when the browser tab closes or
+  the connection drops meanwhile, the agent update with its reload included.
+  When Home Assistant stops while the station applies an agent update, the
+  next start still offers the repair that brings the display pages back.
 - The native agent is rebuilt as 2.10.0; an agent update is required.
 
 ## v2.9.2 - 2026-11-25

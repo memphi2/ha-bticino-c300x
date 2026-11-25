@@ -672,6 +672,7 @@
     "error": {
       "agent_bundle_missing": "Le bundle agent ARMHF package est manquant. Construisez/packagez le bundle de release avant d'utiliser l'installateur.",
       "device_install_failed": "L'installation SSH a échoué. Vérifiez l'accès SSH et réessayez.",
+      "device_display_timeout": "Les fichiers de l'écran n'ont pas été écrits dans le délai imparti ; l'appareil a reçu l'ordre de remettre les fichiers précédents. Vérifiez que l'écran fonctionne et réessayez.",
       "device_install_verify_failed": "L'installation est terminée, mais l'agent natif ne répond pas avec la clé d'accès générée.",
       "invalid_agent_port": "Saisissez un port valide pour l'agent appareil.",
       "invalid_agent_host": "Saisissez l'hôte de l'agent appareil.",
@@ -1518,6 +1519,7 @@
         },
         "error": {
           "ssh_install_failed": "La réparation par SSH a échoué. Vérifiez l'accès SSH et réessayez.",
+          "device_display_timeout": "Les fichiers de l'écran n'ont pas été écrits dans le délai imparti ; l'appareil a reçu l'ordre de remettre les fichiers précédents. Vérifiez que l'écran fonctionne et réessayez.",
           "update_failed": "La mise à jour de l'agent a échoué. Vérifiez que l'accès maintenance est actif et réessayez.",
           "update_root_already_writable": "La mise à jour a été refusée avant application car le système de fichiers racine (/) était déjà accessible en écriture. Si vous avez auparavant remonté / manuellement en écriture, redémarrez normalement l'appareil, puis relancez cette réparation. Sinon, recherchez pourquoi / est accessible en écriture avant de réessayer.",
           "update_root_readonly_failed": "La mise à jour n'a pas pu remettre le système de fichiers racine (/) en lecture seule. L'état final de l'appareil est incertain ; le retour à l'état précédent n'est pas confirmé. Conservez les fichiers de récupération et vérifiez l'agent et le système de fichiers avant toute autre mise à jour.",

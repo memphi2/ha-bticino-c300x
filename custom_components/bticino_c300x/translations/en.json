@@ -672,6 +672,7 @@
     "error": {
       "agent_bundle_missing": "The packaged ARMHF agent bundle is missing. Build/package the release bundle before using the installer.",
       "device_install_failed": "The SSH install failed. Check SSH access and try again.",
+      "device_display_timeout": "The display files were not written within the time limit; the device was told to put the previous files back. Check that the display works and retry.",
       "device_install_verify_failed": "The installer finished, but the native agent did not answer with the generated access key.",
       "invalid_agent_port": "Enter a valid device agent port.",
       "invalid_agent_host": "Enter the device agent host.",
@@ -1518,6 +1519,7 @@
         },
         "error": {
           "ssh_install_failed": "The SSH repair install failed. Check SSH access and retry.",
+          "device_display_timeout": "The display files were not written within the time limit; the device was told to put the previous files back. Check that the display works and retry.",
           "update_failed": "The device-agent update failed. Check that maintenance access is enabled and retry.",
           "update_root_already_writable": "The update was refused before applying because the root filesystem (/) was already writable. If you previously remounted / writable manually, restart the device normally, then retry this Repair. Otherwise, investigate why / is writable before retrying.",
           "update_root_readonly_failed": "The update could not return the root filesystem (/) to read-only. The final device state is uncertain; successful rollback is not confirmed. Keep recovery files and check the agent and filesystem state before any further update.",

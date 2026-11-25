@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from custom_components.bticino_c300x import device_installer
 from custom_components.bticino_c300x._api_maintenance import (
     _GUI_RELOAD_JOB_TIMEOUT,
     _QML_WRITE_JOB_TIMEOUT,
@@ -43,3 +44,27 @@ def test_home_assistant_outwaits_a_qml_write_and_its_rollback() -> None:
     assert "term_grace_ms = C300X_QML_WRITE_TERM_GRACE_MS" in label
     assert "command_transaction" not in (SRC / "http_device_user.c").read_text(encoding="utf-8")
     assert "term_grace_ms = C300X_QML_WRITE_TERM_GRACE_MS" in recovery
+
+
+def test_the_ssh_installer_gives_a_display_write_the_agents_deadline_and_grace() -> None:
+    """Over SSH the script has no agent job around it; the installer stands in
+    for it with the same two numbers."""
+
+    header = (SRC / "http_maintenance.h").read_text(encoding="utf-8")
+    assert _define(
+        header, "C300X_QML_WRITE_TIMEOUT_MS") == device_installer._SSH_DISPLAY_WRITE_TIMEOUT * 1000
+    assert _define(
+        header, "C300X_QML_WRITE_TERM_GRACE_MS") == device_installer._SSH_DISPLAY_WRITE_TERM_GRACE * 1000
+
+
+def test_the_ssh_command_limit_covers_the_init_scripts_restart() -> None:
+    """restart = stop (wait, SIGKILL, wait) + start + status checks, each wait
+    one pause of 100 ms; the limit leaves it three times that."""
+
+    init = (SRC.parents[1] / "custom_components/bticino_c300x/device_agent/init"
+            / "c300x-native-agent").read_text(encoding="utf-8")
+    assert "usleep 100000" in init
+    stop_wait, kill_wait = (int(n) for n in re.findall(r'wait_gone "\$pid" (\d+)', init))
+    status_checks = int(re.search(r"^        tries=(\d+)$", init, re.MULTILINE).group(1))
+    longest = (stop_wait + kill_wait + 1 + status_checks) * 0.1
+    assert longest * 3 <= device_installer._SSH_COMMAND_TIMEOUT

@@ -216,10 +216,15 @@ A request left by a worker that died is taken over by the next worker.
 4. Verify: ready when `BtClass` has written its watchdog file after the start
    and the same `BtClass` still runs `C300X_QML_QT5_STABLE_SECONDS` (8) after
    that first write, so a display that crashes right after its first write is
-   still seen. A program other than the one seen before, and the shipped
+   still seen. BtClass creates the file from a 5 s timer only when it is
+   missing, and bt_daemon removes it at its check about every 60 s (reboot
+   when missing, tester measurement): the file of the display before stays
+   until that check, so the first write of a new display may come 60 to 75 s
+   after its start, and the worker never removes the file itself. A program
+   other than the one seen before, and the shipped
    display that the start script starts after a failed overlay, count only
    on a write of their own (a fresh stamp), not on the crashed one's. The
-   40 s are counted from the start, not again for each program: a PID set
+   90 s are counted from the start, not again for each program: a PID set
    that changes late (a second `BtClass` PID for a moment) leaves too little
    time for that write, and the start counts as failed. Kept on purpose: the
    wait stays bounded, and the fallback below still leaves one display; the
@@ -229,10 +234,9 @@ A request left by a worker that died is taken over by the next worker.
    worker's own; the worker removes any other. The overlay failed when the
    start script wrote this boot's quarantine mark; failed when no start
    script and no `BtClass` run any more, or when no watchdog write came
-   within `C300X_QML_QT5_START_SECONDS` (40). bt_daemon checks that file at least every 32 s and reboots the
-   station without it, so a display that wrote none in 40 s is hung or far
-   slower than the vendor tolerates; a slow but healthy cold start writes
-   within one watchdog period. A failed start of the overlay start script is
+   within `C300X_QML_QT5_START_SECONDS` (90), one bt_daemon period, the 5 s
+   timer and a margin; a display that hangs alive is rebooted by bt_daemon
+   at its second check (about 110 to 130 s), as on a cold start. A failed start of the overlay start script is
    followed by the stock fallback (step 6). There is still no QML readiness
    handshake: the watchdog write and a stable process are the evidence.
 5. Retry once: when the overlay failed in a cycle that should retry it (apply,

@@ -41,9 +41,12 @@ if [ -e "${C300X_QML_QT5_MARKER:-/usr/lib/libQt5Core.so.5}" ]; then
     # eglfs/Vivante gets 5 s to release the framebuffer of the display that ended.
     GUI_RELOAD_DELAY_SECONDS="${C300X_QML_GUI_RELOAD_DELAY_SECONDS:-5}"
     QT5_UPTIME="${C300X_QML_UPTIME:-/proc/uptime}"
-    # bt_daemon checks the watchdog file at least every 32 s and reboots
-    # without it: a display that wrote none within 40 s is not starting.
-    QT5_START_SECONDS="${C300X_QML_QT5_START_SECONDS:-40}"
+    # BtClass creates its watchdog file from a 5 s timer only when it is
+    # missing; bt_daemon removes it at its check, about every 60 s, and
+    # reboots when it is missing. The file of the display before stays until
+    # that check, so a new display may write first 60 to 75 s after its start:
+    # one that wrote none within 90 s is not starting.
+    QT5_START_SECONDS="${C300X_QML_QT5_START_SECONDS:-90}"
     QT5_STABLE_SECONDS="${C300X_QML_QT5_STABLE_SECONDS:-8}"
     QT5_ALIVE_FILE="${C300X_QML_GUI_ALIVE_FILE:-/var/tmp/bticino/bt_wd/BtClass_qws}"
     # The Qt 5 restart: one worker in a session of its own serves the requests.

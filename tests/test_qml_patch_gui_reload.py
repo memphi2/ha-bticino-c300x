@@ -145,6 +145,13 @@ trap stop TERM
 if [ -z "${LD_PRELOAD:-}" ] && [ -f "$C300X_TEST_CRASHES.silent" ]; then
     while :; do sleep 0.2; done
 fi
+# As BtClass of firmware 3.0.6: a timer creates the file only when it is missing.
+if [ -f "$C300X_TEST_CRASHES.vendor" ]; then
+    while :; do
+        sleep 1
+        [ -e "$C300X_TEST_ALIVE" ] || : > "$C300X_TEST_ALIVE"
+    done
+fi
 while :; do
     : > "$C300X_TEST_ALIVE"
     sleep 0.2
@@ -905,3 +912,60 @@ def test_the_display_starts_after_the_pause_of_its_firmware(station: Station, qt
         assert result.returncode == 0, result.stderr
 
     assert pause - 0.3 <= _restart_pause(station, run, qt5=qt5) < pause + 1.5
+
+
+class _WatchdogDaemon:
+    """bt_daemon's watchdog of firmware 3.0.6: every period it removes the display's
+    file, and a file missing at a check reboots the station."""
+
+    def __init__(self, path: Path, period: float) -> None:
+        self.path, self.period = path, period
+        self.checks: list[str] = []
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+
+    def _run(self) -> None:
+        while not self._stop.wait(self.period):
+            try:
+                self.path.unlink()
+                self.checks.append("ok")
+            except FileNotFoundError:
+                self.checks.append("reboot")
+
+    def __enter__(self) -> _WatchdogDaemon:
+        self._thread.start()
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        self._stop.set()
+        self._thread.join()
+
+
+def watched_restart(station: OverlayStation, run: Callable[[dict[str, str]], object]) -> None:
+    """A restart that falls 50 s before bt_daemon's next check, as in a tester trace: the old
+    display's file stays, and the new display writes first after that check."""
+
+    Path(f"{station.crashes}.vendor").write_text("")
+    station.boot()
+    alive = Path(station.env["C300X_TEST_ALIVE"])
+    assert _wait_for(alive.exists, 5)
+    with _WatchdogDaemon(alive, 50) as daemon:
+        run(station.script_env(C300X_QML_DYNAMIC_HOME_PAGE="0"))
+        assert len(_settled(station)) == 1
+        status = station.run("status")
+        assert status["qt5_overlay"] == "active" and status["gui_running"] is True, status
+        assert not station.mark.exists()
+        # The boot display and one start with the pages: no retry, no stock fallback.
+        assert len(_starts(station)) == 2 and _starts(station)[-1] == "overlay"
+        assert daemon.checks == ["ok"]
+
+
+def test_a_display_that_writes_only_after_the_next_watchdog_check_is_seen_starting(
+    overlay: OverlayStation,
+) -> None:
+    def run(env: dict[str, str]) -> None:
+        result = subprocess.run([str(SCRIPT), "apply"], capture_output=True, text=True,
+                                env=env, check=False, timeout=180)
+        assert result.returncode == 0, result.stderr
+
+    watched_restart(overlay, run)

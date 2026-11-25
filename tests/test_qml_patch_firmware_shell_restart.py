@@ -26,6 +26,7 @@ from tests.test_qml_patch_gui_reload import (
     _settled,
     _starts,
     _wait_for,
+    watched_restart,
 )
 from tests.test_qml_patch_qt5_overlay import programs as programs
 from tests.test_qml_patch_script import SCRIPT
@@ -138,3 +139,20 @@ def test_the_qt5_display_starts_after_a_pause_of_5_s(station: Station, shell: Pa
         assert process.returncode == 0, stderr
 
     assert 4.7 <= _restart_pause(station, run, qt5=True) < 6.5
+
+
+def test_a_display_that_writes_only_after_the_next_watchdog_check_under_the_firmware_shell(
+    tmp_path: Path, programs: dict[str, Path], shell: Path
+) -> None:
+    (tmp_path / "device").mkdir()
+    station = OverlayStation(tmp_path, programs)
+
+    def run(env: dict[str, str]) -> None:
+        process = _run(station, shell, "apply", env)
+        _, stderr = process.communicate(timeout=180)
+        assert process.returncode == 0, stderr
+
+    try:
+        watched_restart(station, run)
+    finally:
+        station.stop_all()

@@ -139,20 +139,6 @@ def test_command_timeout_closes_channel(ssh_server, monkeypatch):
         client.close()
 
 
-def test_a_raised_command_timeout_is_the_one_used(ssh_server, monkeypatch):
-    """The Qt 5 display steps raise it; otherwise the module's 2.9.2 timeout holds."""
-    client = installer._connect_device_client(ssh_server)
-    monkeypatch.setattr(installer, "_SSH_COMMAND_TIMEOUT", 30.0)
-    try:
-        client.command_timeout = 0.1
-        started = time.monotonic()
-        with pytest.raises(installer.C300XDeviceInstallError, match="device_install_failed"):
-            client.run("hang")
-        assert time.monotonic() - started < 5
-    finally:
-        client.close()
-
-
 DISPLAY_STAND_IN = """#!/bin/sh
 {trap}
 : > "$0.started"
@@ -190,6 +176,32 @@ def test_a_display_write_past_its_deadline_is_ended_by_sigterm_and_reported(
         assert script.with_name("qml_patch.sh.rolled").exists() is rolled_back
         assert (elapsed < 1.4) is rolled_back and elapsed < 5
         # The connection is still good for the next step or attempt.
+        assert client.run("true") == ""
+    finally:
+        client.close()
+
+
+def test_a_display_step_past_its_deadline_on_the_qt5_display_is_ended_the_same_way(
+    ssh_server, monkeypatch, tmp_path: Path,
+) -> None:
+    """Firmware 3.0.x: the display step is the same write with the same limits.
+    Ended at its deadline it is not an owed step (it did not finish): the
+    install fails with the display timeout, as on 1.7.x/2.0.2."""
+
+    script = tmp_path / "qml_patch.sh"
+    script.write_text(DISPLAY_STAND_IN.format(
+        trap="trap 'sleep 0.2; : > \"$0.rolled\"; exit 130' TERM"))
+    script.chmod(0o700)
+    monkeypatch.setattr(installer, "_SSH_DISPLAY_WRITE_TIMEOUT", 0.5, raising=False)
+    monkeypatch.setattr(installer, "_SSH_DISPLAY_WRITE_TERM_GRACE", 1.0, raising=False)
+    client = installer._connect_device_client(ssh_server)
+    started = time.monotonic()
+    try:
+        with pytest.raises(installer.C300XDeviceInstallError) as result:
+            installer._apply_display_step_sync(client, str(tmp_path), "core-apply", qt5=True)
+        assert result.value.reason == "device_display_timeout"
+        assert script.with_name("qml_patch.sh.rolled").exists()
+        assert time.monotonic() - started < 1.4
         assert client.run("true") == ""
     finally:
         client.close()

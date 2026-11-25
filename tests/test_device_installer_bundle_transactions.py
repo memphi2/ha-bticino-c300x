@@ -42,8 +42,8 @@ def transaction(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
             self.files = {manifest_path: old_manifest, obsolete_path: b"old distribution"}
             self.operations: list[str] = []
             self.writes: list[str] = []
-            # The command timeout each command ran with (None: the 2.9.2 one).
-            self.timeouts: list[tuple[str, float | None]] = []
+            # The display steps run as display writes (SIGTERM and grace at the deadline).
+            self.display_writes: list[str] = []
 
         def stage(self, name: str) -> None:
             self.operations.append(name)
@@ -63,8 +63,11 @@ def transaction(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
             ))
             return self.write(path, source.read_bytes())
 
+        def run_display_write(self, command: str) -> str:
+            self.display_writes.append(command)
+            return self.run(command)
+
         def run(self, command: str, input_data: bytes | None = None) -> str:
-            self.timeouts.append((command, self.command_timeout))
             if "libQt5Core" in command:
                 # By default a device with the Qt 4 display, which the Display patch edits.
                 return "yes\n" if self.qt5 else "no\n"
@@ -198,17 +201,19 @@ def test_source_cleanup_failure_is_not_install_success(transaction) -> None:
 
 
 @pytest.mark.parametrize("qt5", [False, True])
-def test_the_display_steps_wait_longer_only_on_the_qt5_display(transaction, qt5) -> None:
-    """1.7.x/2.0.2: every command keeps 2.9.2's SSH timeout (30 s)."""
+def test_the_display_steps_are_display_writes_with_the_same_limits_on_every_display(
+    transaction, qt5,
+) -> None:
+    """Every command 30 s; each display step a display write (30 s, SIGTERM,
+    15 s grace) on 1.7.x/2.0.2 and on the Qt 5 display alike."""
     transaction.client.qt5 = qt5
     transaction.install(apply_gui_patch=True)
-    assert installer._SSH_COMMAND_TIMEOUT == 30.0
-    steps = [timeout for command, timeout in transaction.client.timeouts if "qml_patch.sh " in command]
-    assert len(steps) == 2
-    if qt5:
-        assert steps == [installer._SSH_COMMAND_TIMEOUT_QT5] * 2 == [60.0] * 2
-    else:
-        assert {timeout for _command, timeout in transaction.client.timeouts} == {None}
+    assert (installer._SSH_COMMAND_TIMEOUT, installer._SSH_DISPLAY_WRITE_TIMEOUT,
+            installer._SSH_DISPLAY_WRITE_TERM_GRACE) == (30.0, 30.0, 15.0)
+    assert not hasattr(installer, "_SSH_COMMAND_TIMEOUT_QT5")
+    assert [command.rsplit(" ", 1)[1] for command in transaction.client.display_writes] == [
+        "core-apply", "apply"]
+    assert all(command.startswith("exec env ") for command in transaction.client.display_writes)
 
 
 def test_native_metadata_reader_observes_manifest_commit_without_restart(tmp_path) -> None:

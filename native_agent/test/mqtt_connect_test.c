@@ -13,6 +13,13 @@
 #include "../src/mqtt_bridge.h"
 #include "../src/time_util.h"
 
+/* The connect deadline of this build, set by the test's compiler call. The
+ * delays below leave whole seconds between "slow" and "too late", so a busy
+ * machine does not turn one into the other. */
+#define DEADLINE_MS MQTT_RESOLVE_CONNECT_TIMEOUT_MS
+#define SLOW_MS 500
+_Static_assert(DEADLINE_MS >= SLOW_MS + 1500, "the deadline must leave room after a slow answer");
+
 /* A DNS server that takes its time. */
 static atomic_int resolve_delay_ms, resolving;
 int __real_getaddrinfo(const char *, const char *, const struct addrinfo *, struct addrinfo **);
@@ -64,17 +71,17 @@ static void slow_dns_test(void)
     int listener = broker(&port);
     config_for(&config, port);
     c300x_mqtt_init(&mqtt);
-    /* The connect deadline is 500 ms in this build. */
-    atomic_store(&resolve_delay_ms, 300);
+    atomic_store(&resolve_delay_ms, SLOW_MS);
     long long start = c300x_monotonic_ms();
     c300x_mqtt_open_if_needed(&mqtt, &config, 1, 1000);
-    assert(c300x_monotonic_ms() - start < 150);
+    /* Returned before the answer could be there. */
+    assert(c300x_monotonic_ms() - start < SLOW_MS - 100);
     int fd = c300x_mqtt_fd(&mqtt);
     assert(fd >= 0 && (c300x_mqtt_poll_events(&mqtt) & POLLIN));
     int timeout = c300x_mqtt_poll_timeout_ms(&mqtt, 1000);
-    assert(timeout > 300 && timeout <= 500);
+    assert(timeout > SLOW_MS && timeout <= DEADLINE_MS);
     struct pollfd wait = {.fd = fd, .events = c300x_mqtt_poll_events(&mqtt)};
-    assert(poll(&wait, 1, 5000) == 1);
+    assert(poll(&wait, 1, DEADLINE_MS + 5000) == 1);
     c300x_mqtt_handle_poll(&mqtt, &config, wait.revents, 1000);
     assert(c300x_mqtt_fd(&mqtt) >= 0 && c300x_mqtt_fd(&mqtt) != fd);
     int peer = accept(listener, NULL, NULL);
@@ -97,11 +104,12 @@ static void cancel_test(void)
     struct c300x_mqtt mqtt;
     config_for(&config, 1);
     c300x_mqtt_init(&mqtt);
-    atomic_store(&resolve_delay_ms, 500);
+    atomic_store(&resolve_delay_ms, SLOW_MS);
     c300x_mqtt_open_if_needed(&mqtt, &config, 1, 1000);
     long long start = c300x_monotonic_ms();
     c300x_mqtt_close(&mqtt);
-    assert(c300x_monotonic_ms() - start < 100);
+    /* Did not wait for the answer. */
+    assert(c300x_monotonic_ms() - start < SLOW_MS - 100);
     assert(c300x_mqtt_fd(&mqtt) == -1 && c300x_mqtt_poll_events(&mqtt) == 0);
     config.mqtt_enabled = 0;
     c300x_mqtt_open_if_needed(&mqtt, &config, 1, 1000);
@@ -115,10 +123,10 @@ static void deadline_test(void)
     struct c300x_mqtt mqtt;
     config_for(&config, 1);
     c300x_mqtt_init(&mqtt);
-    atomic_store(&resolve_delay_ms, 2000);
+    atomic_store(&resolve_delay_ms, DEADLINE_MS + 1500);
     c300x_mqtt_open_if_needed(&mqtt, &config, 1, 1000);
     assert(c300x_mqtt_fd(&mqtt) >= 0);
-    usleep(700000);
+    usleep((DEADLINE_MS + 200) * 1000);
     c300x_mqtt_tick(&mqtt, &config, 1001);
     assert(c300x_mqtt_fd(&mqtt) == -1);
     assert(mqtt.next_connect_at == 1005);
@@ -130,7 +138,7 @@ static void deadline_test(void)
 int main(int argc, char **argv)
 {
     assert(argc == 2);
-    alarm(20);
+    alarm(60);
     if (strcmp(argv[1], "slow_dns") == 0) {
         slow_dns_test();
     } else if (strcmp(argv[1], "cancel") == 0) {

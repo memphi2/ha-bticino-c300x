@@ -41,19 +41,22 @@ cd64c8c333ae2cfde2f32a8681054c1a5755a2edafadec1183501cd774088834
 
 ## No firmware or APK payloads
 
-Documentation illustrations under `docs/images/readme/` show the maintainer's
-own setup or renders of the integration's pages. None of them are extracted
-firmware assets, and their values are examples.
+Documentation illustrations under `docs/images/readme/` show pages of this
+integration, rendered on a PC from the integration's own page files with
+example data, on a plain background of our own, or browser captures of the
+maintainer's Home Assistant test instance. They contain no firmware artwork,
+and no firmware file is part of this repository. The values shown are
+examples; the two camera pictures are AI-generated views of an entrance and a
+garden, supplied by the maintainer.
 
-- The `display-*-en` images are renders, not captures from a station. The
-  display pages of the release run on the station's own Qt 4.8 libraries with
-  the skin of firmware 1.7.19 in an emulator on a PC, in English, 800 x 480
-  pixels. Station pages such as Settings and the home page are the station's
-  own pages with the integration's changes applied.
-- The contents of the rendered pages are examples: the integration builds the
-  page data from example entities, appointments, energy values and consumer
-  names. The two camera pictures are AI-generated views of an entrance and a
-  garden, supplied by the maintainer, cropped and softened.
+- The `display-*-en` images show only the integration's own pages, no
+  station pages. The pages run on the station's Qt 4.8 libraries in an
+  emulator on a PC, in English, 800 x 480 pixels. For the render, the
+  station's wallpaper and every station graphic the pages use (button
+  backgrounds, switches, arrows, icons) are replaced by a gradient and
+  similar shapes drawn for the render; the text is set in the free fonts
+  Ubuntu Light (Ubuntu Font Licence 1.0) and DejaVu Sans. The Integration tab
+  picture shows the tab's content without the surrounding Settings page.
 - The `ha-*-en` images are browser captures of the Home Assistant test
   instance from 2026-11-23, in English and dark mode. The picture in the
   doorbell card is an earlier visitor image from the maintainer's own station,

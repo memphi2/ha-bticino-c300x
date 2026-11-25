@@ -130,7 +130,7 @@
           "actions_json": "Actions the display and its notifications may run, written as JSON: one entry per action with domain and service, optionally target and data. Leave empty if you use none.",
           "dashboard_prevent_return": "On: the Home Assistant and Alarm pages stay open when the screen goes to standby. Off: the display then returns to its home page.",
           "dashboard_navigation": "How the display changes pages. The favourites bar shows the first four pages as buttons along the bottom edge. With more than four pages, the fourth button is More and opens the list of the other pages. The order follows the page positions.",
-          "dashboard_dynamic_homepage": "Where the Alarm and Home Assistant buttons sit on the home page of the C300X. Stock: each button appears only while it has something to open and takes its place among the original buttons, also below them when the row is full. Fixed side by side: both keep two fixed places next to each other; a button with nothing to open leaves its place empty. A change applies the Display patch again and restarts the display once."
+          "dashboard_dynamic_homepage": "Where the Alarm and Home Assistant buttons sit on the home page of the C300X. Stock view: each button appears only while it has something to open and takes its place among the original buttons, also below them when the row is full. Fixed side by side: both keep two fixed places next to each other; a button with nothing to open leaves its place empty. A change applies the Display patch again and restarts the display once."
         }
       },
       "user_dashboard_entity_display": {
@@ -243,7 +243,7 @@
           "actions_json": "Actions the display and its notifications may run, written as JSON: one entry per action with domain and service, optionally target and data. Leave empty if you use none.",
           "dashboard_prevent_return": "On: the Home Assistant and Alarm pages stay open when the screen goes to standby. Off: the display then returns to its home page.",
           "dashboard_navigation": "How the display changes pages. The favourites bar shows the first four pages as buttons along the bottom edge. With more than four pages, the fourth button is More and opens the list of the other pages. The order follows the page positions.",
-          "dashboard_dynamic_homepage": "Where the Alarm and Home Assistant buttons sit on the home page of the C300X. Stock: each button appears only while it has something to open and takes its place among the original buttons, also below them when the row is full. Fixed side by side: both keep two fixed places next to each other; a button with nothing to open leaves its place empty. A change applies the Display patch again and restarts the display once."
+          "dashboard_dynamic_homepage": "Where the Alarm and Home Assistant buttons sit on the home page of the C300X. Stock view: each button appears only while it has something to open and takes its place among the original buttons, also below them when the row is full. Fixed side by side: both keep two fixed places next to each other; a button with nothing to open leaves its place empty. A change applies the Display patch again and restarts the display once."
         }
       },
       "reconfigure_dashboard_entity_display": {
@@ -843,7 +843,7 @@
           "actions_json": "Actions the display and its notifications may run, written as JSON: one entry per action with domain and service, optionally target and data. Leave empty if you use none.",
           "dashboard_prevent_return": "On: the Home Assistant and Alarm pages stay open when the screen goes to standby. Off: the display then returns to its home page.",
           "dashboard_navigation": "How the display changes pages. The favourites bar shows the first four pages as buttons along the bottom edge. With more than four pages, the fourth button is More and opens the list of the other pages. The order follows the page positions.",
-          "dashboard_dynamic_homepage": "Where the Alarm and Home Assistant buttons sit on the home page of the C300X. Stock: each button appears only while it has something to open and takes its place among the original buttons, also below them when the row is full. Fixed side by side: both keep two fixed places next to each other; a button with nothing to open leaves its place empty. A change applies the Display patch again and restarts the display once."
+          "dashboard_dynamic_homepage": "Where the Alarm and Home Assistant buttons sit on the home page of the C300X. Stock view: each button appears only while it has something to open and takes its place among the original buttons, also below them when the row is full. Fixed side by side: both keep two fixed places next to each other; a button with nothing to open leaves its place empty. A change applies the Display patch again and restarts the display once."
         }
       },
       "dashboard_entity_display": {
@@ -1784,7 +1784,7 @@
     },
     "dashboard_dynamic_homepage": {
       "options": {
-        "stock": "Stock (when needed, also stacked)",
+        "stock": "Stock view (when needed, also stacked)",
         "side_by_side": "Fixed side by side"
       }
     },

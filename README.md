@@ -98,7 +98,7 @@ Details: [Live picture and talkback](docs/user-guide.md#live-picture-and-talkbac
 <table>
   <tr>
     <td align="center"><strong>Doorbell card</strong><br><img src="docs/images/readme/ha-doorbell-card-en.webp" alt="C300X Doorbell Call Card in Home Assistant dark mode with a saved visitor snapshot, play, call, door and light buttons" width="360"></td>
-    <td align="center"><strong>Station home page</strong><br><img src="docs/images/readme/display-home-stock-en.webp" alt="C300X home page with the station's own buttons and the added Alarm and Home Assistant buttons in two rows" width="360"></td>
+    <td align="center"><strong>Station display</strong><br><img src="docs/images/readme/display-start-en.webp" alt="Home Assistant start page on the station with status, weather and the favourites bar" width="360"></td>
   </tr>
 </table>
 <table>
@@ -110,7 +110,8 @@ Details: [Live picture and talkback](docs/user-guide.md#live-picture-and-talkbac
 </table>
 
 The card is a capture from Home Assistant; the station pages are renders of
-the display pages with example values, see [legal notes](docs/legal.md#no-firmware-or-apk-payloads).
+the integration's own display pages with example values on a plain background
+of our own, see [legal notes](docs/legal.md#no-firmware-or-apk-payloads).
 The card shows an earlier visitor image. Entities and pages depend on the
 enabled options.
 

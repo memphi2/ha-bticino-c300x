@@ -86,7 +86,7 @@ from .repair_issues import (
     UNSUPPORTED_CALLBACK_URL_ISSUE,
     repair_issue_id,
 )
-from .repair_work import OTHER_FLOW_FINISHED, RepairStepWork
+from .repair_work import OTHER_FLOW_FINISHED, RepairStepWork, async_run_repair_step
 from .schema_compat import vol
 
 _LOGGER = logging.getLogger(__name__)
@@ -309,6 +309,7 @@ class CallbackUrlRepairFlow(RepairsFlow):
 
         self.hass = hass
         self._entry_id = entry_id
+        self._work = RepairStepWork(hass, entry_id)
 
     async def async_step_init(
         self,
@@ -324,6 +325,11 @@ class CallbackUrlRepairFlow(RepairsFlow):
     ) -> Any:
         """Store a local HTTP callback base URL override."""
 
+        return await async_run_repair_step(
+            self, self._work, UNSUPPORTED_CALLBACK_URL_ISSUE, self._async_configure, user_input
+        )
+
+    async def _async_configure(self, user_input: dict[str, Any] | None) -> Any:
         entry = self.hass.config_entries.async_get_entry(self._entry_id)
         if entry is None:
             return self.async_abort(reason="entry_not_loaded")

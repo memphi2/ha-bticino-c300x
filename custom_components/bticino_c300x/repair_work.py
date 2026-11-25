@@ -15,8 +15,10 @@ from collections.abc import Callable, Coroutine
 from typing import Any, Final
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import issue_registry as ir
 
 from .const import DOMAIN
+from .repair_issues import repair_issue_id
 
 _RUNNING: Final = f"{DOMAIN}_repair_work"
 
@@ -83,3 +85,29 @@ class RepairStepWork:
             task: asyncio.Task[Any] = create_task(coro, name)
             return task
         return asyncio.create_task(coro, name=name)
+
+
+async def async_run_repair_step(
+    flow: Any,
+    work: RepairStepWork,
+    issue_type: str,
+    step: Callable[[dict[str, Any] | None], Coroutine[Any, Any, Any]],
+    user_input: dict[str, Any] | None,
+) -> Any:
+    """Run a submitted repair step so that a dropped request cannot end it.
+
+    ``step`` is the body of the step. Showing its form runs in the request;
+    a submit runs as work that Home Assistant owns. When another flow's work
+    for the entry ended meanwhile, the issue tells what is left: gone means
+    repaired, otherwise the form is shown again.
+    """
+
+    if user_input is None:
+        return await step(None)
+    result = await work.async_run(lambda: step(user_input))
+    if result is not OTHER_FLOW_FINISHED:
+        return result
+    issue_id = repair_issue_id(issue_type, flow._entry_id)
+    if ir.async_get(flow.hass).async_get_issue(DOMAIN, issue_id) is None:
+        return flow.async_create_entry(data={})
+    return await step(None)

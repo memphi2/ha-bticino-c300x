@@ -25,6 +25,7 @@ from .capabilities import (
     auth_config_supported,
     entry_device_ui_configured,
     entry_maintenance_action_is_advertised,
+    ringer_mute_supported,
 )
 from .const import (
     CONF_AGENT_TOKEN,
@@ -70,7 +71,7 @@ async def async_setup_entry(
         entities.append(C300XTouchToneSwitch(entry))
     if entry_video_enabled(entry) and supports_capability(entry, "doorbell_video"):
         entities.append(C300XSnapshotSwitch(entry))
-    if supports_capability(entry, "ringer"):
+    if ringer_mute_supported(entry.runtime_data.capabilities):
         entities.append(C300XRingerMuteSwitch(entry))
     if supports_capability(entry, "answering_machine"):
         entities.append(C300XAnsweringMachineSwitch(entry))

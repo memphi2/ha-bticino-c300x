@@ -3,6 +3,10 @@
 
 #include "http_maintenance.h"
 
+#ifndef C300X_REBOOT_PROGRAM
+#define C300X_REBOOT_PROGRAM "/sbin/reboot"
+#endif
+
 typedef int (*c300x_schedule_command_fn)(const char *, const char *, int);
 typedef void (*c300x_reboot_reply_fn)(int, int, void *);
 /* Takes ownership of context, also on immediate failure. Reply runs only on

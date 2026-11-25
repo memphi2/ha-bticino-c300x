@@ -5,6 +5,7 @@
 #include "camera_running.h"
 #include "camera_update.h"
 #include "camera_update_lock.h"
+#include "device_detect.h"
 #include "device_file.h"
 #include "media_geometry_patch.h"
 
@@ -16,10 +17,10 @@
 /* What the device started with; zero while not known. */
 static struct c300x_camera_values running;
 
-/* Firmware 3.0.x, the one with the Qt 5 display, sends only the low stream. */
+/* C300X 3.0.x and the C100X send only the low stream. */
 static int low_stream(void)
 {
-    return c300x_device_display_is_qt5();
+    return c300x_device_camera_resolution_fixed();
 }
 
 static int read_values(const char *path, const char *cut_path, struct c300x_camera_values *values)

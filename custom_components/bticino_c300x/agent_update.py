@@ -48,6 +48,8 @@ class AgentUpdateState:
     self_update_supported: bool = False
     payload_bootstrap_required: bool = False
     reason: str | None = None
+    # A C300X entry met this C100X-only package: its advice is the regular one.
+    needs_regular_package: bool = False
 
     @property
     def update_required(self) -> bool:
@@ -59,7 +61,7 @@ class AgentUpdateState:
     def repair_fixable(self) -> bool:
         """Return true when HA can guide the user through a local repair."""
 
-        return self.update_required
+        return self.update_required and self.reason != "device_model_incompatible"
 
     @property
     def self_update_repair_supported(self) -> bool:
@@ -112,6 +114,15 @@ async def async_load_packaged_bundle_metadata(
     )
 
 
+def bundle_supports_device(setup_data: Mapping[str, Any], bundle: Mapping[str, Any]) -> bool:
+    """Check both compatibility and test-package isolation, never version order."""
+
+    only = bundle.get("c100x_only", False)
+    if not isinstance(only, bool) or (only and setup_data.get("model") != "C100X"):
+        return False
+    return setup_data.get("model") != "C100X" or bundle.get("c100x_compatible") is True
+
+
 def compare_agent_bundle(
     setup_data: Mapping[str, Any],
     bundle: dict[str, Any] | None,
@@ -151,6 +162,14 @@ def compare_agent_bundle(
         "self_update_supported": self_update_supported,
         "payload_bootstrap_required": not payload_supported,
     }
+    if not bundle_supports_device(setup_data, bundle):
+        return AgentUpdateState(
+            state=UPDATE_STATE_INCOMPATIBLE, reason="device_model_incompatible",
+            needs_regular_package=(
+                bundle.get("c100x_only") is True and setup_data.get("model") == "C300X"
+            ),
+            **common,
+        )
     if not installed_version or not available_version:
         return AgentUpdateState(state=UPDATE_STATE_UNKNOWN, reason="version_missing", **common)
     if installed_api_version and available_api_version and installed_api_version != available_api_version:
@@ -245,6 +264,10 @@ async def async_apply_packaged_agent_update(hass: Any, api: Any) -> dict[str, An
     files = bundle.get("files")
     if not bundle_hash or not agent_version or not isinstance(files, list):
         raise RuntimeError("packaged native-agent bundle metadata is incomplete")
+
+    setup_data = await api.async_validate_setup()
+    if not bundle_supports_device(setup_data, bundle):
+        raise RuntimeError("device_model_incompatible: package does not support this model")
 
     await async_retry_update_maintenance_busy(
         lambda: api.async_prepare_agent_update(
@@ -368,6 +391,10 @@ def _short_hash(value: str | None) -> str:
 
 
 def _update_path_label(update_state: AgentUpdateState) -> str:
+    if update_state.reason == "device_model_incompatible":
+        if update_state.needs_regular_package:
+            return "blocked: install the regular release package"
+        return "blocked: install a C100X-compatible integration package"
     if not update_state.update_required:
         return "none"
     if update_state.self_update_repair_supported:

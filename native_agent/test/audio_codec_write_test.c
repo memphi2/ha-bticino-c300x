@@ -20,6 +20,8 @@ static int checked_rename(const char *, const char *);
 #undef fsync
 #undef rename
 
+enum c300x_device_model c300x_device_model(void) { return C300X_DEVICE_MODEL_C300X; }
+
 static int failure, last_fd;
 static mode_t renamed_mode;
 static size_t checked_write(const void *data, size_t size, size_t count, FILE *fp) {

@@ -23,6 +23,11 @@
  */
 
 #define C300X_AUDIO_CODEC_STATE_LEN 16
+#define C300X_AUDIO_CODEC_TEST_BUILD_BLOCKED "c100x_test_build_codec_apply_blocked"
+#define C300X_AUDIO_CODEC_RECOVERY_BLOCKED "c100x_codec_recovery_requires_stock_speex_backup"
+
+/* C100X test scope: status remains available, apply is blocked, and explicit
+ * restore/removal may only recover Speex from validated managed backups. */
 
 struct c300x_audio_codec_status {
     int supported;        /* both target files exist */

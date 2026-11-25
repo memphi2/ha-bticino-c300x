@@ -74,11 +74,67 @@ from .dashboard_energy import normalize_energy_page
 from .dashboard_entities import normalize_dashboard_pages
 from .dashboard_optional_config import OPTIONAL_PAGE_KEYS, optional_page_values
 from .dashboard_page_order import dashboard_navigation
+from .display_support import entry_display_supported
 from .entry_config import entry_config_value
 from .entry_types import BticinoC300XConfigEntry
 from .schema_compat import vol
 
 CREATE_HOMEASSISTANT_USER_DEFAULT = True
+RECONFIGURED_OPTION_KEYS = frozenset(
+    {
+        *SNAPSHOT_DEFAULTS,
+        *OPTIONAL_PAGE_KEYS,
+        CONF_ACTIONS,
+        CONF_AGENT_HOST,
+        CONF_AGENT_PORT,
+        CONF_AGENT_TOKEN,
+        CONF_CALLBACK_BASE_URL,
+        CONF_CREATE_HOMEASSISTANT_USER,
+        CONF_ALARM_ENTITY_ID,
+        CONF_ALARM_PAGE_ENTITY_ID,
+        CONF_DASHBOARD_ENTITIES,
+        CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
+        CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
+        CONF_DASHBOARD_NAVIGATION,
+        CONF_DASHBOARD_PAGES,
+        CONF_ENERGY_PAGE,
+        CONF_DASHBOARD_STATUS_PAGE_ENABLED,
+        CONF_DASHBOARD_PREVENT_RETURN,
+        CONF_DEVICE_ACTIVATION_MODE,
+        CONF_DEVICE_ACTIVATIONS,
+        CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
+        CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
+        CONF_DEVICE_UI_ENABLED,
+        CONF_DOORSTATION_AUDIO_GAIN_DB,
+        CONF_MAINTENANCE_TOKEN,
+        CONF_NATIVE_TWO_WAY_AUDIO,
+        CONF_RING_CAPTURE_AUDIO_GAIN_DB,
+        CONF_VIDEO_ENABLED,
+        CONF_VIDEO_PORT,
+        CONF_VIDEO_STREAM_PATH,
+        CONF_WEATHER_ENTITY_ID,
+        CONF_WEBRTC_ICE_POLICY,
+    }
+)
+
+
+def clear_reconfigured_option_overrides(
+    hass: Any,
+    config_entry: BticinoC300XConfigEntry,
+    data_updates: dict[str, Any],
+) -> None:
+    """Clear stale option values for settings written through reconfigure."""
+
+    options = dict(config_entry.options)
+    keys_to_clear = RECONFIGURED_OPTION_KEYS & data_updates.keys()
+    if not options or not keys_to_clear:
+        return
+    updated_options = {
+        key: value for key, value in options.items() if key not in keys_to_clear
+    }
+    if updated_options == options:
+        return
+    hass.config_entries.async_update_entry(config_entry, options=updated_options)
 
 
 def webrtc_ice_policy_or_default(value: Any) -> str:
@@ -475,5 +531,5 @@ def options_menu(config_entry: BticinoC300XConfigEntry) -> list[str]:
     menu.append("device_activations")
     if speech_offered(config_entry):
         menu.append("speech")
-    menu.append("display")
+    menu.append("display" if entry_display_supported(config_entry) else "dashboard_alarm")
     return menu

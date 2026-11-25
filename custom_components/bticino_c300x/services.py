@@ -224,7 +224,7 @@ def _entry_with_runtime_data(hass: HomeAssistant, entry: Any) -> Any:
     runtime_entries = hass.data.get(DOMAIN, {}).get(DATA_RUNTIME_ENTRIES, {})
     runtime_data = runtime_entries.get(getattr(entry, "entry_id", None))
     if runtime_data is None:
-        raise service_validation_error("agent_command_failed")
+        raise service_validation_error("agent_command_failed", entry=entry)
     return _EntryRuntimeProxy(entry, runtime_data)
 
 
@@ -252,14 +252,14 @@ class _C300XServiceHandlers:
         try:
             show_notification(self._hass, entry, dict(call.data))
         except ValueError as err:
-            raise display_notification_service_error(err) from err
+            raise display_notification_service_error(err, entry) from err
 
     async def async_dismiss_display_notification(self, call: ServiceCall) -> None:
         entry = _entry_for_call(self._hass, call)
         try:
             notifications_for_entry(self._hass, entry).dismiss(call.data["notification_id"])
         except ValueError as err:
-            raise display_notification_service_error(err) from err
+            raise display_notification_service_error(err, entry) from err
 
     async def async_run_action(self, call: ServiceCall) -> None:
         """Run one allowlisted Home Assistant action."""

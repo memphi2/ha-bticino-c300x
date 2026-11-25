@@ -7,6 +7,7 @@ from typing import Any
 
 from .const import CONF_DEVICE_UI_ENABLED
 from .display_activation import display_activation_confirmed
+from .display_support import entry_display_supported
 from .event_types import (
     ACTIVATION_EVENTS,
     ALWAYS_REGISTERED_EVENTS,
@@ -181,10 +182,16 @@ def gate_capabilities(
     capabilities: dict[str, Any],
     *,
     doorbell_video_enabled: bool,
+    c100x: bool = False,
 ) -> dict[str, Any]:
     """Apply HA config gates to device-agent capabilities."""
 
     result = dict(capabilities) if isinstance(capabilities, dict) else {}
+    if c100x:
+        # The station has no page for text memos and records no voice memos:
+        # no memo sensor, no memo event and no memo service on a C100X.
+        memos = result.get("memos")
+        result["memos"] = {**memos, "supported": False} if isinstance(memos, dict) else False
     if not doorbell_video_enabled:
         for capability in ("doorbell_video", "home_call"):
             video = result.get(capability)
@@ -195,12 +202,21 @@ def gate_capabilities(
     return result
 
 
+def ringer_mute_supported(capabilities: Mapping[str, Any]) -> bool:
+    """Keep legacy read/mute support, but honor an explicit mute exclusion."""
+
+    ringer = capabilities.get("ringer")
+    return capability_is_supported(capabilities, "ringer") and (
+        not isinstance(ringer, Mapping) or ringer.get("mute", True) is True
+    )
+
+
 def entry_gui_function_patch_active(entry: Any) -> bool:
     """Return true when the loaded entry reports the full C300X Display patch."""
 
     runtime_data = getattr(entry, "runtime_data", None)
     status = getattr(runtime_data, "qml_patch_status", {})
-    return qml_patch_status_is_active(status)
+    return entry_display_supported(entry) and qml_patch_status_is_active(status)
 
 
 def entry_device_ui_configured(entry: Any) -> bool | None:
@@ -221,12 +237,14 @@ def entry_device_ui_configured(entry: Any) -> bool | None:
 def entry_device_ui_enabled(entry: Any) -> bool:
     """Return the effective HA setting for C300X device UI integration."""
 
-    return bool(entry_device_ui_configured(entry))
+    return entry_display_supported(entry) and bool(entry_device_ui_configured(entry))
 
 
 def entry_device_ui_effective(entry: Any) -> bool | None:
     """Prefer an explicit choice; only a confirmed patch state resolves a legacy entry."""
 
+    if not entry_display_supported(entry):
+        return False
     configured = entry_device_ui_configured(entry)
     if configured is not None:
         return configured
@@ -389,6 +407,33 @@ def memos_supported(capabilities: dict[str, Any]) -> bool:
     """Return true when local manual memo metadata is supported."""
 
     return capability_is_supported(capabilities, "memos")
+
+
+def voice_memos_supported(capabilities: dict[str, Any]) -> bool:
+    """Return true when the agent offers voice memos.
+
+    A C100X agent reports ``voice: false``; agents before the field always
+    offered them, so only an explicit false hides them.
+    """
+
+    if not memos_supported(capabilities):
+        return False
+    memos = capabilities.get("memos")
+    return not (isinstance(memos, dict) and memos.get("voice") is False)
+
+
+def stored_media_offered(capabilities: Any, kind: str) -> bool:
+    """Return false when the agent reports no video messages or voice memos.
+
+    Only a reported capability counts: capabilities that name neither keep
+    the earlier behaviour of asking the agent.
+    """
+
+    if not isinstance(capabilities, dict):
+        return True
+    if kind == "video":
+        return "answering_machine" not in capabilities or answering_machine_messages_supported(capabilities)
+    return "memos" not in capabilities or voice_memos_supported(capabilities)
 
 
 def diagnostics_supported(capabilities: dict[str, Any]) -> bool:

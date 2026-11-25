@@ -74,7 +74,9 @@ int c300x_http_audio_codec_route(struct c300x_http_maintenance *owner, int fd,
         c300x_json_string(error, error_json, sizeof(error_json));
         snprintf(body, sizeof(body), "{\"ok\":false,\"error\":\"audio_codec_%s_failed\",\"detail\":%s}\n",
             action, error_json);
-        c300x_http_send_json(fd, 500, "Internal Server Error", body);
+        int blocked = strcmp(error, C300X_AUDIO_CODEC_TEST_BUILD_BLOCKED) == 0
+            || strcmp(error, C300X_AUDIO_CODEC_RECOVERY_BLOCKED) == 0;
+        c300x_http_send_json(fd, blocked ? 403 : 500, blocked ? "Forbidden" : "Internal Server Error", body);
         free(reply);
         return 1;
     }

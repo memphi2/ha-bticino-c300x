@@ -155,7 +155,10 @@ def test_strip_covers_every_file_the_bundle_stages() -> None:
         str(path.relative_to(SOURCE_DIR))
         for path in SOURCE_DIR.rglob("*")
         if path.suffix in strip.STRIPPED_SUFFIXES
+        and path.relative_to(SOURCE_DIR).parts[0] != "c100x"
     )
+    # C100X templates belong to the separately generated compact payload;
+    # test_display_file_lists checks their complete inclusion there.
     assert sorted(strip.DEVICE_SOURCE_FILES) == on_disk
     assert "strip_device_file(" in stager_source
     assert "device_qml" in stager_source

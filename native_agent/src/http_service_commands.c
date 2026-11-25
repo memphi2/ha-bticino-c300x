@@ -26,9 +26,6 @@
 #ifndef C300X_SSH_STATUS_TIMEOUT_MS
 #define C300X_SSH_STATUS_TIMEOUT_MS 15000
 #endif
-#ifndef C300X_REBOOT_PROGRAM
-#define C300X_REBOOT_PROGRAM "/sbin/reboot"
-#endif
 
 enum service_action { SSH_STATUS, SSH_START, SSH_STOP, SSH_SET, REBOOT, REMOVE };
 enum service_phase { SERVICE_COMMAND, STATUS_COMMAND, START_SSH };

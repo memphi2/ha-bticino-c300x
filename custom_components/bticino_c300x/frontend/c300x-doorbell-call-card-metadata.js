@@ -1,4 +1,4 @@
-import "./c300x-doorbell-call-card.js?v=ebfcfca6e627d88b";
+import "./c300x-doorbell-call-card.js?v=ba002e0c693501b4";
 
 const C300X_CARD_TAG = "c300x-doorbell-call-card";
 const C300X_CARD_TYPE = `custom:${C300X_CARD_TAG}`;
@@ -95,9 +95,9 @@ window.customCards = window.customCards || [];
 window.customCards = window.customCards.filter((card) => card.type !== C300X_CARD_TAG);
 window.customCards.push({
   type: C300X_CARD_TAG,
-  name: "C300X Doorbell Call Card",
+  name: "BTicino Doorbell Call Card",
   preview: false,
-  description: "Doorbell video and Home Call controls for BTicino C300X.",
+  description: "Doorbell video and Home Call controls of the BTicino door station.",
   documentationURL: C300X_DOCUMENTATION_URL,
   getEntitySuggestion: c300xMetadataEntitySuggestion,
 });

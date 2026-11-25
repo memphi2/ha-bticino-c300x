@@ -5,6 +5,7 @@
 #endif
 
 #include "audio_codec.h"
+#include "device_detect.h"
 #include "device_file.h"
 
 #include <errno.h>
@@ -488,12 +489,48 @@ static int switch_codec(
 
 int c300x_audio_codec_apply(struct c300x_audio_codec_status *status, char *error, size_t error_len)
 {
+    /* C100X firmware PCMU cannot work: the device PCM runs at 16 kHz and
+     * rtppcmupay accepts only 8 kHz. The agent's PCMU transcode is independent. */
+    if (c300x_device_model() == C300X_DEVICE_MODEL_C100X) {
+        set_err(error, error_len, C300X_AUDIO_CODEC_TEST_BUILD_BLOCKED);
+        return 0;
+    }
     return switch_codec(status, 1, error, error_len);
+}
+
+static int stock_speex_backup(void)
+{
+    char sb[C300X_MAX_PATH_LEN], lb[C300X_MAX_PATH_LEN];
+    char *original = NULL, *normalized = NULL;
+    size_t original_len = 0, normalized_len = 0;
+    int pcmu = 0, speex = 0;
+    int valid = 0;
+
+    if (!c300x_device_file_backup_path("stack_open.xml", sb, sizeof(sb))
+        || !c300x_device_file_backup_path("linphone.conf", lb, sizeof(lb))
+        || !file_has(sb, "<enable_speex>1</enable_speex>")
+        || file_has(sb, "<enable_speex>0</enable_speex>")) {
+        return 0;
+    }
+    read_linphone_facts(lb, &pcmu, &speex);
+    /* Validate every field the switch owns, including payload 110. A missing,
+     * partial or PCMU backup must not authorize a new C100X codec mutation. */
+    if (speex && transform_file(lb, patch_linphone, 0, &normalized, &normalized_len, NULL, 0)
+        && c300x_device_file_read(lb, &original, &original_len, NULL)) {
+        valid = original_len == normalized_len && memcmp(original, normalized, original_len) == 0;
+    }
+    free(original);
+    free(normalized);
+    return valid;
 }
 
 /* Speex, also where the device came with PCMU (firmware 3.0.x). */
 int c300x_audio_codec_restore(struct c300x_audio_codec_status *status, char *error, size_t error_len)
 {
+    if (c300x_device_model() == C300X_DEVICE_MODEL_C100X && !stock_speex_backup()) {
+        set_err(error, error_len, C300X_AUDIO_CODEC_RECOVERY_BLOCKED);
+        return 0;
+    }
     return switch_codec(status, 0, error, error_len);
 }
 
@@ -526,6 +563,9 @@ int c300x_audio_codec_remove_patches(char *error, size_t error_len)
     }
     if (access(sb, F_OK) != 0 && access(lb, F_OK) != 0) {
         return 1; /* No managed codec changes on this device. */
+    }
+    if (c300x_device_model() == C300X_DEVICE_MODEL_C100X) {
+        return c300x_audio_codec_restore(&status, error, error_len);
     }
     /* Only the codec lines go back: a firmware update may have replaced the
      * rest of both files since the backups were taken. */

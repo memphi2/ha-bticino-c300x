@@ -46,7 +46,7 @@ def test_active_route_modes(active_route_binary, tmp_path, mode, existing):
     users = tmp_path / "users"
     users.mkdir()
     (users / "users.db.txt").write_text(
-        "version:1\nc300x@plant.example md5:synthetic ;\ncompanion@plant.example md5:synthetic ;\n"
+        "version:1\nc100x@plant.example md5:synthetic ;\ncompanion@plant.example md5:synthetic ;\n"
         + (f"{HA} md5:synthetic ;\n" if existing else ""))
     (users / "accounts.txt").write_text(
         "App|app\nCompanion|companion\n" + ("Home Assistant|homeassistant\n" if existing else ""))

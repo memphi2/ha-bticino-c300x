@@ -6,13 +6,20 @@ in the [Reference](feature-reference.md); the station display pages are in
 [Station Display Pages](display.md). When something does not work, start with
 [Media Readiness](media-troubleshooting.md#media-readiness).
 
+Everything here applies to the Classe 300X (C300X) and the Classe 100X (C100X)
+unless a section names a model. On the C100X 1.5.8 every feature is still
+**in test** in [issue #51](https://github.com/memphi2/ha-bticino-c300x/issues/51);
+what each model offers is in
+[Models and Features](feature-reference.md#models-and-features).
+
 ## Doorbell Card
 
-The **C300X Doorbell Call Card** shows live video, Ring Calls, Home Calls, saved
-images and clips in one window. [Add the card](quickstart.md#add-the-card) and
-select the C300X camera entity.
+The **BTicino Doorbell Call Card** shows live video, Ring Calls, Home Calls, saved
+images and clips in one window, for a C300X and a C100X alike.
+[Add the card](quickstart.md#add-the-card) and select the station's camera
+entity.
 
-<img src="images/readme/ha-doorbell-card-en.webp" alt="C300X Doorbell Call Card with a saved visitor snapshot, the history arrow, play and call buttons on the left and door and light buttons on the right" width="420">
+<img src="images/readme/ha-doorbell-card-en.webp" alt="BTicino Doorbell Call Card with a saved visitor snapshot, the history arrow, play and call buttons on the left and door and light buttons on the right" width="420">
 
 | Mode | YAML | Use |
 | --- | --- | --- |
@@ -75,7 +82,10 @@ Repair never changes it.
 **Ringer mute** and **Ringer volume** (C300X scale `0..10`, `0` is mute) set
 the ringtone. Mute stays in step with the display's own audio setting through
 the agent's core GUI hook (see [Device Agent](advanced-maintenance.md#device-agent)),
-without the optional display pages.
+without the optional display pages. On a C100X, **Ringer mute** appears only
+after the [display activation](display.md#classe-100x-activation-by-reboot):
+the confirmed display pages carry its connection to the station's audio
+setting. **Ringer volume** works without it.
 
 ### Talkback
 
@@ -113,9 +123,9 @@ controls under it; they return when the panel closes.
 - **Ring Call:** uses the stock controls of the video call. Opening the sliders
   does not answer.
 - **On-demand video:** start live video first; the sliders icon appears about
-  two seconds later. On firmware 1.7.19, 2.0.2 (either video decoder) and
-  3.0.6 (TVP5150 boards only) the agent checks during the session whether the
-  video source offers all three settings. A slider move writes only that
+  two seconds later. On firmware 1.7.19, 2.0.2 (either video decoder),
+  3.0.6 (TVP5150 boards only) and the Classe 100X on 1.5.8 the agent checks
+  during the session whether the video source offers all three settings. A slider move writes only that
   setting and succeeds only after reading the exact value back; otherwise the
   old value is put back. On a TVP5150 board contrast reads back from the
   driver's own copy, so a contrast write the decoder missed goes unnoticed.
@@ -125,6 +135,9 @@ controls under it; they return when the panel closes.
   (through the display). Every 3.0.6 station has a TVP5150. Tested on
   1.7.19; 2.0.2 and 3.0.6 are checked offline only. Changes last until the
   video ends; the station starts each video with its own values.
+- **Classe 100X:** in test in issue #51. The percentages are the station's own day settings. In the
+  dark the station switches to its night values, and its own menu has steps
+  between the 10 % marks; the sliders then show the nearest 10 % step.
 
 Automations use `bticino_c300x.camera_picture` in an active session: omit
 `control` and `value` to read, or send both (for example `control: contrast`,
@@ -145,20 +158,21 @@ choose a time without a call or recording, then open a new stream.
 | --- | --- | --- | --- | --- |
 | 1.7.x, 2.0.2 | High | 688x480 (factory cut-out), 704x576 (full height), optional 960x576 | 300-3000 kbit/s (factory 800) | 5-24 fps (factory 15) |
 | 3.0.6 | Low | 320x240 to 720x576, including the 5:3 sizes 480x288, 640x384 and 720x432 (factory 400x288) | 100-2000 kbit/s (factory 180) | 5-25 fps (factory 10) |
+| Classe 100X 1.5.8 | Low | 352x288 to 720x576 (factory 640x480) | 100-2000 kbit/s (factory 800) | 5-25 fps (factory 12) |
 
 On 3.0.6 only the factory size is tested on a device. The 5:3 sizes match the
 display's ratio, not its pixel count, and do not change its picture. Only the
 station's Low configuration changes; no program is patched. The other sizes,
 their framing and performance are checked offline only; keep the factory size
 unless you deliberately test another one
-([offline evidence and limits](dev/firmware-3.0.6-camera.md)). High video stops at
+([offline evidence and limits](dev/firmware-3.0.6-camera.md)). On the Classe 100X the camera quality is in test. High video stops at
 **24 fps**: at 25 the older firmware turns its frame-rate control off and sends
 only about 8 fps. A higher bit rate reduces compression artifacts; lower it
 again if your network shows stalls or grey blocks.
 
 The **Camera resolution** select picks the high (688x480 from the factory,
-default) or low (400x288) stream from the next stream on. Firmware 3.0.x always
-uses the low stream and has no such select.
+default) or low (400x288) stream from the next stream on. Firmware 3.0.x and
+the Classe 100X always use the low stream and have no such select.
 
 ### 960x576
 
@@ -169,7 +183,8 @@ detail.
 
 - Offered only for the exact, verified media program of firmware **1.7.19** or
   **2.0.2**; the version number alone is not enough. The live picture is tested
-  on 1.7.19; 2.0.2 is checked offline only. Firmware 3.0.x is not changed.
+  on 1.7.19; 2.0.2 is checked offline only. Firmware 3.0.x and the Classe 100X
+  are not changed.
 - Applying it patches the media program after keeping a verified backup of the
   original on the station; choosing 688x480 or 704x576 restores the original.
   A missing or invalid backup blocks restoring: do not delete recovery backups
@@ -193,6 +208,11 @@ PCMU; that gives clearer audio and leaves the device more room. Switching
 restarts the C300X once. It writes the same codec settings that BTicino ships
 on firmware 3.0.6, which already runs PCMU from the factory (1.7.19 and 2.0.2
 ship with Speex).
+
+The Classe 100X has no **Audio codec** select. Its firmware keeps Speex: the
+station runs its audio at 16 kHz, and the firmware's PCMU path works only at
+8 kHz. Home Assistant and the browser still get PCMU there, converted by the
+agent.
 
 ### Audio Levels
 
@@ -304,17 +324,22 @@ switch, the message and memo sensors and the `play_latest_video_message`,
 `play_latest_voice_memo`, `write_text_memo` and `delete_latest_*` actions;
 deleting needs the Display patch. See [Services](feature-reference.md#services).
 
+A Classe 100X has no answering machine (its firmware switches it off for this
+hardware), no voice memos and no text memos in Home Assistant: HA creates no
+message or memo entities for it and refuses `write_text_memo` with a message
+that says so.
+
 ## Recording Clips and Capture Modes
 
 The card does not record. Clips come from `bticino_c300x.capture_doorbell_call`,
-usually through the **C300X Ring capture** blueprint.
+usually through the **BTicino Ring capture** blueprint.
 
 ### Record on Every Ring
 
 1. Check Media Readiness and set **Forwarding** to **Home Assistant**.
-2. Open **Settings > Automations & scenes > Blueprints**, choose **C300X Ring
+2. Open **Settings > Automations & scenes > Blueprints**, choose **BTicino Ring
    capture** (`bticino_c300x/ring_capture.yaml`) and create an automation.
-3. Select the C300X device. The blueprint finds its readiness sensor, matches
+3. Select the door station. The blueprint finds its readiness sensor, matches
    ring events to that device and runs only while readiness is `ready` or
    `warning`.
 4. Choose the duration (**5 seconds** by default, **1-15** allowed) and whether
@@ -369,8 +394,10 @@ cleanup.
 
 ## Speaker Announcements and TTS
 
-The **Speaker** media player is the station's own loudspeaker. Use it like any
-other speaker in Home Assistant:
+The **Speaker** media player is the station's own loudspeaker. It exists on the
+Classe 300X only: on the Classe 100X no safe way to play sound on the station
+is known, so the agent offers no speaker and Home Assistant creates none. Use
+it like any other speaker in Home Assistant:
 
 ```yaml
 action: tts.speak
@@ -426,6 +453,12 @@ uses `notify.bticino_c300x`; an entry named **Front door** gets
 ID shown in HA's action editor; it survives restarts and renames. If HA cannot
 read its saved name reservations, it registers no action under another
 device's name; fix the HA storage or restore it from a working HA backup.
+
+On a Classe 100X the action exists once the
+[display activation](display.md#classe-100x-activation-by-reboot) is
+confirmed, and only `display` works there: the notice wakes the screen without
+a tone, a positive `sound_duration` is refused, and `tts` and `led` are refused
+because the station has no speaker backend and no message LED.
 
 ```yaml
 action: notify.bticino_c300x
@@ -552,13 +585,13 @@ match a known original. If one is missing, restart Home Assistant once, or use
 
 | Blueprint | File | Purpose |
 | --- | --- | --- |
-| C300X Doorbell notification | `doorbell_notification.yaml` | Your own notification action on a ring; does not answer. |
-| C300X Ring Call Android phone alert | `doorbell_call_android.yaml` | Rings an Android phone with **Answer**, **Hang Up**, **Open**. |
-| C300X Ring Call iOS phone alert | `doorbell_call_ios.yaml` | Rings an iPhone (critical sound) with **Answer**, **Hang Up**, **Open**. |
-| C300X Ring capture | `ring_capture.yaml` | [Records a clip on a ring](#record-on-every-ring). |
-| C300X Ring capture and Wyoming transcription | `ring_capture_wyoming.yaml` | Records and transcribes with a local Wyoming Whisper service. |
-| C300X strict phrase decision | `strict_phrase_decision.yaml` | Checks a transcription for an exact phrase; optional unlock. |
-| C300X Calendar display reminder | `calendar_display_reminder.yaml` | Reminder on the station's HA page before a calendar event. |
+| BTicino Doorbell notification | `doorbell_notification.yaml` | Your own notification action on a ring; does not answer. |
+| BTicino Ring Call Android phone alert | `doorbell_call_android.yaml` | Rings an Android phone with **Answer**, **Hang Up**, **Open**. |
+| BTicino Ring Call iOS phone alert | `doorbell_call_ios.yaml` | Rings an iPhone (critical sound) with **Answer**, **Hang Up**, **Open**. |
+| BTicino Ring capture | `ring_capture.yaml` | [Records a clip on a ring](#record-on-every-ring). |
+| BTicino Ring capture and Wyoming transcription | `ring_capture_wyoming.yaml` | Records and transcribes with a local Wyoming Whisper service. |
+| BTicino strict phrase decision | `strict_phrase_decision.yaml` | Checks a transcription for an exact phrase; optional unlock. |
+| BTicino Calendar display reminder | `calendar_display_reminder.yaml` | Reminder on the station's HA page before a calendar event. |
 
 The device-based blueprints find the camera, forwarding select and Media
 Readiness sensor of the selected C300X and match its ring events, so no entry

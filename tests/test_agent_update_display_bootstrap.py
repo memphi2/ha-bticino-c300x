@@ -117,8 +117,8 @@ class TemporaryDisplayApi(FakePatchApi):
     async def async_apply_agent_update(self, **_kwargs):
         self.passes.append(self.running_file_set)
         stage = self.agent / ".update/device_agent"
-        failed = self.running_file_set == 6 and self.failure is not None
-        if self.running_file_set == 6:
+        failed = self.running_file_set == 7 and self.failure is not None
+        if self.running_file_set == 7:
             # A leftover retired source must be restored on rollback, removed on success.
             (self.agent / "qml/C300XEnergyDistribution.qml").write_text("retired source")
         before = {path: value for path, value in snapshot(self.agent).items() if not path.startswith(".update/")}
@@ -151,7 +151,7 @@ class TemporaryDisplayApi(FakePatchApi):
         else:
             assert all((self.agent / "qml" / name).is_file() for name in NEW_FILES)
             assert not (self.agent / "qml/C300XEnergyDistribution.qml").exists()
-        self.running_file_set = 6  # Simulated agent restart, not a GUI restart.
+        self.running_file_set = 7  # Simulated agent restart, not a GUI restart.
         return {**summary, "restart_scheduled": True}
 
     async def async_validate_setup(self):
@@ -165,7 +165,7 @@ class TemporaryDisplayApi(FakePatchApi):
         return self.patch("status")
 
     async def async_apply_qml_core_patch(self):
-        assert self.passes[-1] == 6
+        assert self.passes[-1] == 7
         assert all((self.agent / "qml" / name).is_file() for name in NEW_FILES)
         return self.patch("core-apply")
 
@@ -181,13 +181,17 @@ class TemporaryDisplayApi(FakePatchApi):
 )])
 def test_active_display_bootstrap_completes_before_gui_reload(tmp_path, monkeypatch, bootstrap_inputs, failure):
     monkeypatch.syspath_prepend(str(ROOT / "scripts"))
+    import stage_device_agent_bundle as stager
     from stage_device_agent_bundle import LEGACY_BOOTSTRAP_CONTENT, stage_bundle
 
+    # Exercise the shared Qt4 transaction, not C100X package admission.
+    # The real model guard is covered by test_c100x_update_compatibility.
+    monkeypatch.setattr(stager, "C100X_ONLY", False)
     package = tmp_path / "package"
     stage_bundle(package, version="2.7.0", skip_build=True, agent_binary=ROOT / "project-versions.json")
     manifest_path = package / "device_agent/bundle.json"
     bundle = json.loads(manifest_path.read_text())
-    assert bundle["update_file_set_version"] == 6
+    assert bundle["update_file_set_version"] == 7
     monkeypatch.setattr(agent_update, "COMPONENT_DIR", package)
     monkeypatch.setattr(agent_update, "BUNDLE_MANIFEST", manifest_path)
     monkeypatch.setattr(repairs, "_AGENT_UPDATE_RESTART_SETTLE_SECONDS", 0)
@@ -209,7 +213,7 @@ def test_active_display_bootstrap_completes_before_gui_reload(tmp_path, monkeypa
     flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}
     flow.async_create_entry = lambda **kwargs: {"type": "create_entry", **kwargs}
     result = asyncio.run(flow.async_step_confirm({}))
-    assert api.passes == [5, 6]
+    assert api.passes == [5, 7]
     if failure:
         assert result["errors"] == {"base": "update_failed"}
         assert entry.data["agent_update_payload_pending"] is True
@@ -220,7 +224,7 @@ def test_active_display_bootstrap_completes_before_gui_reload(tmp_path, monkeypa
         assert entry.runtime_data.agent_update_state.reason == "payload_bootstrap_pending"
         api.failure = None
         result = asyncio.run(flow.async_step_confirm({}))
-        assert api.passes == [5, 6, 6]
+        assert api.passes == [5, 7, 7]
     assert result == {"type": "create_entry", "data": {}}
     assert not entry.runtime_data.agent_update_state.update_required
     assert "agent_update_payload_pending" not in entry.data

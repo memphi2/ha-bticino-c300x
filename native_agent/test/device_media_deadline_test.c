@@ -176,5 +176,12 @@ int main(int argc, char **argv) {
     assert(strcmp(commands[4], commands[0]) == 0 && strcmp(commands[5], commands[1]) == 0);
     assert(strcmp(commands[6], commands[0]) == 0 && strcmp(commands[7], commands[1]) == 0);
     assert(elapsed == 8 * 300 + 3 * 300 + 800);
+    /* C300X 3.0.x and C100X: the low stream (#1) is the one bt_av_media sends on. */
+    command_count = 0;
+    config.video_av_high_resolution = 0;
+    assert(c300x_device_media_start(&config));
+    c300x_device_media_stop(&config);
+    assert(strcmp(commands[0], "*7*300#127#0#0#1#5002#1*##") == 0);
+    assert(strcmp(commands[3], "*7*301#127#0#0#1#5002#1*##") == 0);
     return 0;
 }

@@ -167,7 +167,7 @@ def test_a_display_write_past_its_deadline_is_ended_by_sigterm_and_reported(
     script = tmp_path / "qml_patch.sh"
     script.write_text(DISPLAY_STAND_IN.format(trap=trap))
     script.chmod(0o700)
-    monkeypatch.setattr(installer, "_device_display_is_qt5", lambda client: False)
+    monkeypatch.setattr(installer, "_device_display_kind", lambda client: "qt4_ondisk")
     monkeypatch.setattr(installer, "_SSH_DISPLAY_WRITE_TIMEOUT", 0.5, raising=False)
     monkeypatch.setattr(installer, "_SSH_DISPLAY_WRITE_TERM_GRACE", grace, raising=False)
     client = installer._connect_device_client(ssh_server)
@@ -238,7 +238,7 @@ def test_a_display_write_whose_channel_closed_at_the_deadline_is_a_timeout(
     script.write_text(DISPLAY_STAND_IN.format(trap=""))
     script.chmod(0o700)
     grace = 30.0
-    monkeypatch.setattr(installer, "_device_display_is_qt5", lambda client: False)
+    monkeypatch.setattr(installer, "_device_display_kind", lambda client: "qt4_ondisk")
     monkeypatch.setattr(installer, "_SSH_DISPLAY_WRITE_TIMEOUT", 0.5)
     monkeypatch.setattr(installer, "_SSH_DISPLAY_WRITE_TERM_GRACE", grace)
     client = installer._connect_device_client(ssh_server)

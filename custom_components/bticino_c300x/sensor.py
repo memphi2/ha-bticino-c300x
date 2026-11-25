@@ -35,6 +35,7 @@ from .capabilities import (
     capability_is_supported,
     diagnostics_supported,
     memos_supported,
+    voice_memos_supported,
 )
 from .const import (
     EVENT_AGENT_EVENT_RECEIVED,
@@ -193,6 +194,7 @@ def _agent_info_attributes(agent_info: Mapping[str, Any]) -> dict[str, Any]:
             ("agent_version", version),
             ("api_version", agent_info.get("api_version")),
             ("model", agent_info.get("model")),
+            ("display_kind", agent_info.get("display_kind")),
             ("firmware", agent_info.get("firmware")),
         )
         if value is not None
@@ -246,14 +248,10 @@ async def async_setup_entry(
         entities.append(message_sensor)
     if memos_supported(entry.runtime_data.capabilities):
         await _async_refresh_initial_memos(entry)
-        text_memos_sensor = C300XTextMemosSensor(entry)
-        voice_memos_sensor = C300XVoiceMemosSensor(entry)
-        entities.extend(
-            [
-                text_memos_sensor,
-                voice_memos_sensor,
-            ]
-        )
+        entities.append(C300XTextMemosSensor(entry))
+        # A C100X records no voice memos: a count that stays 0 is not shown.
+        if voice_memos_supported(entry.runtime_data.capabilities):
+            entities.append(C300XVoiceMemosSensor(entry))
     async_add_entities(entities)
 
 

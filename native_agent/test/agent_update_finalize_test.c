@@ -9,6 +9,9 @@
 #include <unistd.h>
 #include "../src/agent_update.h"
 #include "../src/file_io.h"
+#include "../src/device_detect.h"
+
+enum c300x_device_model c300x_device_model(void) { return C300X_DEVICE_MODEL_C300X; }
 
 /* The agent's Qt 5 display check; the updates here run on a Qt 4 station. */
 int c300x_device_display_is_qt5(void) { return 0; }

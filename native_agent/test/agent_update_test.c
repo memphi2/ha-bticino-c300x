@@ -8,6 +8,10 @@
 #include <unistd.h>
 #include "../src/agent_update.h"
 #include "../src/file_io.h"
+#include "../src/device_detect.h"
+
+static enum c300x_device_model test_model;
+enum c300x_device_model c300x_device_model(void) { return test_model; }
 
 /* The agent's Qt 5 display check; the updates here run on a Qt 4 station. */
 int c300x_device_display_is_qt5(void) { return 0; }
@@ -302,6 +306,14 @@ static void whole_bundle_preflight_test(struct c300x_config *config)
     assert(agent_update_stage_path(config, "device_agent/bundle.json", path, sizeof(path)));
     assert(write_binary_chunk(path, (const unsigned char *)manifest, strlen(manifest), 0, 0600));
     assert(validate_agent_update_files(config, manifest));
+    test_model = C300X_DEVICE_MODEL_C100X;
+    assert(!apply_agent_update_files(config, manifest, "{}", &summary, NULL));
+    assert(summary.changed_files == 0);
+    assert(read_bounded_text_file(binary, installed, sizeof(installed), NULL));
+    assert(strcmp(installed, "original") == 0);
+    assert(access(test_init_script, F_OK) != 0);
+    assert(access(test_init_link, F_OK) != 0);
+    test_model = C300X_DEVICE_MODEL_C300X;
     assert(write_binary_chunk(obsolete_source, (const unsigned char *)"old-distribution", 16, 0, 0640));
     for (size_t i = 0; i < C300X_AGENT_UPDATE_FILE_COUNT; i++) {
         const char *name = C300X_AGENT_UPDATE_FILES[i].path;
@@ -332,6 +344,16 @@ static void whole_bundle_preflight_test(struct c300x_config *config)
 int main(int argc, char **argv)
 {
     assert(argc == 2);
+    test_model = C300X_DEVICE_MODEL_C100X;
+    const char *unsupported[] = {NULL, "{}", "{\"c100x_compatible\":false}",
+        "{\"c100x_compatible\":1}", "{\"c100x_compatible\":\"true\"}",
+        "{\"nested\":{\"c100x_compatible\":true}}", "{\"c100x_compatible\":true}garbage"};
+    for (size_t i = 0; i < sizeof(unsupported) / sizeof(unsupported[0]); i++) {
+        assert(!agent_update_model_compatible(unsupported[i]));
+    }
+    assert(agent_update_model_compatible("{\"c100x_compatible\":true}"));
+    test_model = C300X_DEVICE_MODEL_C300X;
+    assert(agent_update_model_compatible("{}"));
     struct c300x_config config = {0};
     struct agent_update_change_summary summary = {0};
     const char *bundle_path = "device_agent/qml/test.qml";

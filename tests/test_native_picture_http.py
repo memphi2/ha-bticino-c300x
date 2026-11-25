@@ -25,7 +25,8 @@ GUI = "/ui/ringer/next?picture=1"
 @pytest.fixture(scope="module")
 def binary(tmp_path_factory):
     build = tmp_path_factory.mktemp("picture-http")
-    ldflags = ("-pthread -ldl -Wl,--wrap=c300x_video_status,--wrap=picture_source_execute,--wrap=resolve_device_firmware "
+    ldflags = ("-pthread -ldl -Wl,--wrap=c300x_video_status,--wrap=picture_source_execute,--wrap=resolve_device_firmware,"
+               "--wrap=c300x_device_model,--wrap=picture_source_supported "
                f"{NATIVE}/test/picture_http_fixture.c")
     subprocess.run(["make", "-C", NATIVE, f"BUILD_DIR={build}", f"LDFLAGS={ldflags}", "-j4", "all"],
                    check=True, capture_output=True)
@@ -126,3 +127,22 @@ def test_configured_version_cannot_enable_another_firmware(station, tmp_path):
     assert not api_get(api, STATUS)["bridge"]["picture_controls_supported"]
     api_request(api, "POST", PICTURE, {"control": "saturation", "value": 50}, expected_status=409)
     assert not (tmp_path / "source-calls").exists()
+
+
+def test_the_runtime_model_picks_the_profile_not_the_configured_one(station, tmp_path):
+    api, _ = station
+    # The installer writes model C300X into the config on every station.
+    (tmp_path / "c100x-station").touch()
+    (tmp_path / "session").write_text("agent 1")
+    assert api_get(api, STATUS)["bridge"]["picture_controls_supported"]
+    assert api_request(api, "POST", PICTURE, {"control": "brightness", "value": 60})["brightness"] == 60
+    assert (tmp_path / "supported-calls").read_text().splitlines() == ["C100X 1.5.8"]
+    assert set((tmp_path / "profiles").read_text().split()) == {"2"}
+
+
+def test_a_c300x_keeps_its_profile(station, tmp_path):
+    api, _ = station
+    (tmp_path / "session").write_text("agent 1")
+    assert api_get(api, STATUS)["bridge"]["picture_controls_supported"]
+    assert (tmp_path / "supported-calls").read_text().splitlines() == ["C300X 1.7.19"]
+    assert set((tmp_path / "profiles").read_text().split()) == {"1"}

@@ -15,8 +15,14 @@
       "door_unlock": {
         "default": "mdi:door-open"
       },
+      "activate_display_pages": {
+        "default": "mdi:monitor-arrow-down"
+      },
       "reboot": {
         "default": "mdi:restart-alert"
+      },
+      "restore_display_pages": {
+        "default": "mdi:monitor-off"
       },
       "remove_agent": {
         "default": "mdi:delete-alert"

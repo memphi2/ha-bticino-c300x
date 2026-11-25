@@ -41,6 +41,16 @@ if TYPE_CHECKING:
 
 PARALLEL_UPDATES = 1
 
+
+def _audio_codec_select_allowed(entry: BticinoC300XConfigEntry) -> bool:
+    """Keep device-codec changes outside the first C100X test scope."""
+
+    info = getattr(entry.runtime_data, "agent_info", {})
+    return not (isinstance(info, Mapping) and info.get("model") == "C100X") and (
+        entry_maintenance_action_is_advertised(entry, "audio_codec_apply")
+    )
+
+
 # The options are the agent's mode keys; their texts come from the state
 # translations. "unprovisioned" -- a device with no smartphone pairing at
 # all -- is a state the agent reports but not a mode that can be chosen, so
@@ -60,7 +70,7 @@ async def async_setup_entry(
     entities: list[SelectEntity] = []
     if supports_capability(entry, "smartphone_forwarding"):
         entities.append(C300XSmartphoneForwardingModeSelect(entry))
-    if entry_maintenance_action_is_advertised(entry, "audio_codec_apply"):
+    if _audio_codec_select_allowed(entry):
         entities.append(C300XAudioCodecSelect(entry))
     if entry_maintenance_action_is_advertised(entry, "camera_resolution"):
         entities.append(C300XCameraResolutionSelect(entry))
@@ -234,6 +244,10 @@ class C300XAudioCodecSelect(C300XEntity, SelectEntity):
         self._attr_available = True
 
     @property
+    def available(self) -> bool:
+        return super().available and _audio_codec_select_allowed(self._entry)
+
+    @property
     def current_option(self) -> str | None:
         """Return the codec the device is currently running (None while partial)."""
 
@@ -248,6 +262,10 @@ class C300XAudioCodecSelect(C300XEntity, SelectEntity):
     async def async_select_option(self, option: str) -> None:
         """Switch the device codec (apply=PCMU, restore=speex); reboots."""
 
+        if not _audio_codec_select_allowed(self._entry):
+            raise HomeAssistantError(
+                "Device codec changes are unavailable in this test build"
+            )
         api = self._entry.runtime_data.api
         try:
             if option == "pcmu":

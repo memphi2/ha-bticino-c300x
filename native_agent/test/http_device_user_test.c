@@ -1,6 +1,7 @@
 /* Real route/job ownership, with all device file operations replaced locally. */
 #include "../src/http_device_user.h"
 #include "../src/device_user.h"
+#include "../src/device_detect.h"
 #include "../src/device_routing.h"
 #include "../src/string_util.h"
 
@@ -69,6 +70,12 @@ int c300x_device_user_read_status(struct c300x_device_user_status *status)
     status->supported = 1;
     c300x_copy_string(status->account_label, sizeof(status->account_label), "A \"quoted\" label");
     return 1;
+}
+
+/* A C100X has no Display patch and no label. */
+int c300x_device_display_files_patchable(void)
+{
+    return strcmp(test_case, "c100x") != 0;
 }
 
 int c300x_device_routing_read_status(struct c300x_device_routing_status *status)
@@ -252,6 +259,7 @@ int main(int argc, char **argv)
         assert(strstr(response_body, rolled ? "\"rolled_back\":true" : "\"rolled_back\":false") != NULL);
         assert((access(marker, F_OK) == 0) == rolled);
     } else if (strcmp(test_case, "success") == 0 || strcmp(test_case, "overflow") == 0
+        || strcmp(test_case, "c100x") == 0
         || strcmp(test_case, "busy-root") == 0
         || (strcmp(test_case, "missing") == 0 && strcmp(operation, "restore") == 0)) {
         assert(response_status == 200 && writes == 1

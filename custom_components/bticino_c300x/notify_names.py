@@ -14,6 +14,7 @@ from homeassistant.util import slugify
 
 from .const import DEFAULT_NAME, DOMAIN
 from .entry_types import BticinoC300XConfigEntry
+from .model_names import C100X_DEFAULT_NAME
 
 _NAMES = f"{DOMAIN}_notify_names"
 
@@ -105,7 +106,9 @@ class NotifyNames:
         if name := names.get(entry.entry_id):
             return name
         title = slugify(entry.title.strip())
-        name = DOMAIN if not title or title == slugify(DEFAULT_NAME) else f"{DOMAIN}_{title}"
+        # A new C100X entry is titled BTicino C100X; its default name is still the domain.
+        default = title in (slugify(DEFAULT_NAME), slugify(C100X_DEFAULT_NAME))
+        name = DOMAIN if not title or default else f"{DOMAIN}_{title}"
         if name in names.values():
             suffix = sha256(entry.entry_id.encode()).hexdigest()[:8]
             name = f"{name}_{suffix}"

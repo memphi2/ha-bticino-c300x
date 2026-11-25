@@ -55,6 +55,11 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+if [[ -e "$ROOT_DIR/c100x-test-policy.json" ]]; then
+    printf 'C100X test branch: this legacy installer has no model guard. Use the reviewed HA test installer; see docs/c100x-test-release.md.\n' >&2
+    exit 1
+fi
+
 for name in C300X_HOST C300X_USER C300X_PASSWORD; do
     if [[ -z "${!name:-}" ]]; then
         printf 'Missing required environment variable: %s\n' "$name" >&2

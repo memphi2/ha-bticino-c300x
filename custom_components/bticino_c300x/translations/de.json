@@ -3,32 +3,32 @@
     "step": {
       "user": {
         "title": "BTicino C300X",
-        "description": "Gib zuerst die C300X-Adresse ein. Wenn der native Device-Agent nicht erreichbar ist, kann Home Assistant vor der Eingabe der Schlüssel und der Funktionsauswahl durch eine einmalige Agent-Installation führen.",
+        "description": "Gib zuerst die {model}-Adresse ein. Wenn der native Device-Agent nicht erreichbar ist, kann Home Assistant vor der Eingabe der Schlüssel und der Funktionsauswahl durch eine einmalige Agent-Installation führen.",
         "data": {
           "name": "Name",
-          "agent_host": "Adresse des C300X",
+          "agent_host": "Adresse des {model}",
           "agent_port": "Port",
-          "callback_base_url": "Adresse von Home Assistant für den C300X (optional)"
+          "callback_base_url": "Adresse von Home Assistant für den {model} (optional)"
         },
         "data_description": {
-          "agent_host": "IP-Adresse oder Hostname deines C300X.",
-          "agent_port": "Port, auf dem der C300X Home Assistant antwortet. Bei 8091 lassen, außer du hast ihn bei der Installation geändert.",
-          "callback_base_url": "An diese Adresse meldet der C300X Klingeln und andere Ereignisse. Leer lassen, dann gilt die Adresse, die Home Assistant für sich selbst kennt. Eine https-Adresse verschlüsselt die Verbindung; sie braucht ein gültiges Zertifikat und belastet den C300X stärker. Ein Wechsel zwischen http und https startet den Dienst auf dem C300X neu, sobald kein Anruf und kein Stream läuft."
+          "agent_host": "IP-Adresse oder Hostname deines {model}.",
+          "agent_port": "Port, auf dem der {model} Home Assistant antwortet. Bei 8091 lassen, außer du hast ihn bei der Installation geändert.",
+          "callback_base_url": "An diese Adresse meldet der {model} Klingeln und andere Ereignisse. Leer lassen, dann gilt die Adresse, die Home Assistant für sich selbst kennt. Eine https-Adresse verschlüsselt die Verbindung; sie braucht ein gültiges Zertifikat und belastet den {model} stärker. Ein Wechsel zwischen http und https startet den Dienst auf dem {model} neu, sobald kein Anruf und kein Stream läuft."
         }
       },
       "agent_missing": {
         "title": "Nativer Agent nicht gefunden",
-        "description": "Home Assistant konnte den nativen C300X-Agent an der konfigurierten Adresse nicht erreichen. Du kannst den gebündelten nativen Agent jetzt installieren oder manuell mit einem bereits installierten Agent fortfahren.",
+        "description": "Home Assistant konnte den nativen {model}-Agent an der konfigurierten Adresse nicht erreichen. Du kannst den gebündelten nativen Agent jetzt installieren oder manuell mit einem bereits installierten Agent fortfahren.",
         "data": {
-          "bootstrap_install_agent": "Nativen Agent auf dem C300X installieren"
+          "bootstrap_install_agent": "Nativen Agent auf dem {model} installieren"
         }
       },
       "bootstrap_install": {
-        "title": "Nativen C300X-Agent installieren",
-        "description": "Home Assistant meldet sich zuerst mit dem Werks-Login des C300X an. Gib SSH-User und Passwort nur ein, wenn das Gerät ihn abgelehnt hat; leer bleibt es beim Werks-Login. Schreibt den nativen Agent, eine Konfiguration mit generierten Schlüsseln, das Startscript und die Display-Supportdateien per SSH auf den C300X. SSH-Zugangsdaten werden nur für diesen Installationsschritt verwendet und nicht gespeichert.",
+        "title": "Nativen {model}-Agent installieren",
+        "description": "Home Assistant meldet sich zuerst mit dem Werks-Login des {model} an. Gib SSH-User und Passwort nur ein, wenn das Gerät ihn abgelehnt hat; leer bleibt es beim Werks-Login. Schreibt den nativen Agent, eine Konfiguration mit generierten Schlüsseln, das Startscript und die Display-Supportdateien per SSH auf den {model}. SSH-Zugangsdaten werden nur für diesen Installationsschritt verwendet und nicht gespeichert.",
         "data": {
-          "bootstrap_ssh_username": "C300X-SSH-User",
-          "bootstrap_ssh_password": "C300X-SSH-Passwort"
+          "bootstrap_ssh_username": "{model}-SSH-User",
+          "bootstrap_ssh_password": "{model}-SSH-Passwort"
         }
       },
       "agent_auth": {
@@ -39,16 +39,16 @@
           "maintenance_token": "Wartungsschlüssel"
         },
         "data_description": {
-          "agent_token": "Schlüssel, mit dem sich Home Assistant beim C300X anmeldet. Er wurde bei der Installation erzeugt.",
+          "agent_token": "Schlüssel, mit dem sich Home Assistant beim {model} anmeldet. Er wurde bei der Installation erzeugt.",
           "maintenance_token": "Eigener Schlüssel für Wartung: Updates, Änderungen am Display und Neustarts."
         }
       },
       "user_features": {
-        "title": "BTicino C300X Funktionen",
-        "description": "Wählt die Home-Assistant-Medienfunktionen für diese C300X-Installation aus.",
+        "title": "BTicino {model} Funktionen",
+        "description": "Wählt die Home-Assistant-Medienfunktionen für diese {model}-Installation aus.",
         "data": {
           "video_enabled": "Video und Ton der Türstation",
-          "create_homeassistant_user": "Zugang für Video und Ton auf dem C300X einrichten",
+          "create_homeassistant_user": "Zugang für Video und Ton auf dem {model} einrichten",
           "doorstation_audio_gain_db": "Lautstärke live (dB)",
           "ring_capture_audio_gain_db": "Lautstärke von Klingel-Aufnahmen (dB)",
           "webrtc_ice_policy": "Verbindungswege für das Livebild",
@@ -56,11 +56,11 @@
         },
         "data_description": {
           "video_enabled": "Bild und Ton der Türstation in Home Assistant: beim Klingeln, auf Abruf und für Home Call.",
-          "create_homeassistant_user": "Video und Ton brauchen einen eigenen Zugang auf dem C300X. Ist das an, richtet die Integration ihn bei der Einrichtung oder über ihre Reparatur ein.",
+          "create_homeassistant_user": "Video und Ton brauchen einen eigenen Zugang auf dem {model}. Ist das an, richtet die Integration ihn bei der Einrichtung oder über ihre Reparatur ein.",
           "doorstation_audio_gain_db": "Lautstärke der Türstation in der Live-Ansicht und im Gespräch. -20 bis +20 dB; 0 lässt den Ton unverändert.",
           "ring_capture_audio_gain_db": "Lautstärke des Tons in Aufnahmen, die beim Klingeln entstehen. -20 bis +20 dB; Standard ist 6.",
           "webrtc_ice_policy": "Welche Netzwerkadressen der Browser für das Livebild nutzen darf. Nur ändern, wenn das Livebild nicht verbindet.",
-          "native_two_way_audio": "Optional, standardmäßig aus. Voraussetzungen: Home Assistant 2026.11 oder neuer, „Two-way audio“ unter Einstellungen > System > Labs eingeschaltet, das Livebild über WebRTC, Zugriff über HTTPS und das Mikrofon im Browser erlaubt. Einen Anruf nimmst du zuerst in der C300X-Karte an; diese Option nimmt ihn nicht an. Das Sprechen in der C300X-Karte bleibt, wie es ist."
+          "native_two_way_audio": "Optional, standardmäßig aus. Voraussetzungen: Home Assistant 2026.11 oder neuer, „Two-way audio“ unter Einstellungen > System > Labs eingeschaltet, das Livebild über WebRTC, Zugriff über HTTPS und das Mikrofon im Browser erlaubt. Einen Anruf nimmst du zuerst in der {model}-Karte an; diese Option nimmt ihn nicht an. Das Sprechen in der {model}-Karte bleibt, wie es ist."
         }
       },
       "user_visitor_snapshot": {
@@ -133,35 +133,51 @@
           "dashboard_dynamic_homepage": "Wo die Knöpfe Alarm und Home Assistant auf der Startseite des C300X stehen. Werksansicht: Jeder Knopf erscheint nur, solange er etwas zu öffnen hat, und reiht sich zwischen die originalen Knöpfe ein, auch untereinander, wenn die Reihe voll ist. Fest nebeneinander: Beide behalten zwei feste Plätze nebeneinander; ein Knopf ohne Inhalt lässt seinen Platz leer. Eine Änderung wendet den Display-Patch erneut an und startet das Display einmal neu."
         }
       },
+      "user_dashboard_c100x": {
+        "title": "C100X-Display-Dashboard",
+        "description": "Konfiguriert das optionale C100X-Display-Dashboard.\n\n**Displayseiten aktivieren** auf der Geräteseite schaltet die Home-Assistant-Seiten auf dem C100X ein, **Originales Display wiederherstellen** schaltet sie aus. Beides wirkt mit einem Neustart des C100X, sobald er etwa zwei Minuten ungenutzt war. Einen Display-Patch und ein Neuladen der Anzeige gibt es nicht.\n\nSind die Seiten aktiv, richtet der nächste Schritt die Display-Seiten ein: das Wetter und die Entitäten jeder Seite.",
+        "data": {
+          "device_ui_enabled": "Home-Assistant-Seiten auf dem Display",
+          "actions_json": "Erlaubte Aktionen (für Fortgeschrittene)",
+          "dashboard_prevent_return": "Seite im Bildschirm-Standby offen lassen",
+          "dashboard_navigation": "Seitenwechsel"
+        },
+        "data_description": {
+          "device_ui_enabled": "An, solange die Home-Assistant-Seiten auf dem Display des C100X aktiv sind; sie kommen mit Displayseiten aktivieren. Aus: stellt das originale Display mit einem Neustart des C100X wieder her und verwirft die Einstellungen zu Wetter, Seiten, Kacheln und Aktionen. Die Alarmo-Einstellungen bleiben erhalten.",
+          "actions_json": "Aktionen, die das Display und seine Benachrichtigungen ausführen dürfen, als JSON: ein Eintrag je Aktion mit domain und service, optional target und data. Leer lassen, wenn du keine nutzt.",
+          "dashboard_prevent_return": "An: Die Home-Assistant- und die Alarmo-Seite bleiben offen, wenn der Bildschirm in den Standby geht. Aus: Das Display kehrt dann zur Startseite zurück.",
+          "dashboard_navigation": "Wird am {model} nicht verwendet: Die Seiten folgen aufeinander wie die eigenen Menüs der Station. Auf und Ab wechseln die Seite, die Eingabetaste öffnet sie, der letzte Eintrag ist EXIT. Die Reihenfolge folgt den Seitenpositionen."
+        }
+      },
       "user_dashboard_entity_display": {
         "title": "Display-Kacheln",
         "description": "Jede Kachel hat einen eigenen Abschnitt, sortiert wie auf dem Display: erst die Seite, dann die Entität. Klappe einen Abschnitt auf, um seine Kachel zu ändern.\n\n- **Breite** und **Höhe**: halb oder voll. Automatisch nimmt die übliche Größe des Entitätstyps. Bei voller Höhe liegen die eigenen Tasten der Entität direkt auf der Kachel.\n- **Name**: tippe einen eigenen Namen ein. Bleibt das Feld leer, zeigt die Kachel den Namen aus Home Assistant.\n- **Zusatzzeile**: die zweite Zeile unter dem Namen.\n\nDie Alarmo-Schnellaktion steht auf keiner Seite; sie hat nur Name und Zusatzzeile."
       },
       "reconfigure": {
-        "title": "BTicino C300X neu konfigurieren",
+        "title": "BTicino {model} neu konfigurieren",
         "description": "Aktualisiert die Device-Agent-Verbindung oder den Wartungsschlüssel oder rotiert die Webhook-Zugangsdaten.",
         "data": {
-          "agent_host": "Adresse des C300X",
+          "agent_host": "Adresse des {model}",
           "agent_port": "Port",
           "agent_token": "Zugangsschlüssel",
           "maintenance_token": "Wartungsschlüssel",
-          "callback_base_url": "Adresse von Home Assistant für den C300X (optional)",
+          "callback_base_url": "Adresse von Home Assistant für den {model} (optional)",
           "rotate_shared_secret": "Shared Secret rotieren"
         },
         "data_description": {
-          "agent_host": "IP-Adresse oder Hostname deines C300X.",
-          "agent_port": "Port, auf dem der C300X Home Assistant antwortet. Bei 8091 lassen, außer du hast ihn bei der Installation geändert.",
-          "agent_token": "Schlüssel, mit dem sich Home Assistant beim C300X anmeldet. Er wurde bei der Installation erzeugt. Leer lassen, um den gespeicherten Schlüssel zu behalten.",
+          "agent_host": "IP-Adresse oder Hostname deines {model}.",
+          "agent_port": "Port, auf dem der {model} Home Assistant antwortet. Bei 8091 lassen, außer du hast ihn bei der Installation geändert.",
+          "agent_token": "Schlüssel, mit dem sich Home Assistant beim {model} anmeldet. Er wurde bei der Installation erzeugt. Leer lassen, um den gespeicherten Schlüssel zu behalten.",
           "maintenance_token": "Eigener Schlüssel für Wartung: Updates, Änderungen am Display und Neustarts. Leer lassen, um den gespeicherten Schlüssel zu behalten.",
-          "callback_base_url": "An diese Adresse meldet der C300X Klingeln und andere Ereignisse. Leer lassen, dann gilt die Adresse, die Home Assistant für sich selbst kennt. Eine https-Adresse verschlüsselt die Verbindung; sie braucht ein gültiges Zertifikat und belastet den C300X stärker. Ein Wechsel zwischen http und https startet den Dienst auf dem C300X neu, sobald kein Anruf und kein Stream läuft."
+          "callback_base_url": "An diese Adresse meldet der {model} Klingeln und andere Ereignisse. Leer lassen, dann gilt die Adresse, die Home Assistant für sich selbst kennt. Eine https-Adresse verschlüsselt die Verbindung; sie braucht ein gültiges Zertifikat und belastet den {model} stärker. Ein Wechsel zwischen http und https startet den Dienst auf dem {model} neu, sobald kein Anruf und kein Stream läuft."
         }
       },
       "reconfigure_features": {
-        "title": "BTicino C300X Funktionen neu konfigurieren",
+        "title": "BTicino {model} Funktionen neu konfigurieren",
         "description": "Aktualisiert Medien- und Home-Assistant-Media-User-Einstellungen.",
         "data": {
           "video_enabled": "Video und Ton der Türstation",
-          "create_homeassistant_user": "Zugang für Video und Ton auf dem C300X einrichten",
+          "create_homeassistant_user": "Zugang für Video und Ton auf dem {model} einrichten",
           "doorstation_audio_gain_db": "Lautstärke live (dB)",
           "ring_capture_audio_gain_db": "Lautstärke von Klingel-Aufnahmen (dB)",
           "webrtc_ice_policy": "Verbindungswege für das Livebild",
@@ -169,11 +185,11 @@
         },
         "data_description": {
           "video_enabled": "Bild und Ton der Türstation in Home Assistant: beim Klingeln, auf Abruf und für Home Call.",
-          "create_homeassistant_user": "Video und Ton brauchen einen eigenen Zugang auf dem C300X. Ist das an, richtet die Integration ihn bei der Einrichtung oder über ihre Reparatur ein.",
+          "create_homeassistant_user": "Video und Ton brauchen einen eigenen Zugang auf dem {model}. Ist das an, richtet die Integration ihn bei der Einrichtung oder über ihre Reparatur ein.",
           "doorstation_audio_gain_db": "Lautstärke der Türstation in der Live-Ansicht und im Gespräch. -20 bis +20 dB; 0 lässt den Ton unverändert.",
           "ring_capture_audio_gain_db": "Lautstärke des Tons in Aufnahmen, die beim Klingeln entstehen. -20 bis +20 dB; Standard ist 6.",
           "webrtc_ice_policy": "Welche Netzwerkadressen der Browser für das Livebild nutzen darf. Nur ändern, wenn das Livebild nicht verbindet.",
-          "native_two_way_audio": "Optional, standardmäßig aus. Voraussetzungen: Home Assistant 2026.11 oder neuer, „Two-way audio“ unter Einstellungen > System > Labs eingeschaltet, das Livebild über WebRTC, Zugriff über HTTPS und das Mikrofon im Browser erlaubt. Einen Anruf nimmst du zuerst in der C300X-Karte an; diese Option nimmt ihn nicht an. Das Sprechen in der C300X-Karte bleibt, wie es ist."
+          "native_two_way_audio": "Optional, standardmäßig aus. Voraussetzungen: Home Assistant 2026.11 oder neuer, „Two-way audio“ unter Einstellungen > System > Labs eingeschaltet, das Livebild über WebRTC, Zugriff über HTTPS und das Mikrofon im Browser erlaubt. Einen Anruf nimmst du zuerst in der {model}-Karte an; diese Option nimmt ihn nicht an. Das Sprechen in der {model}-Karte bleibt, wie es ist."
         }
       },
       "reconfigure_visitor_snapshot": {
@@ -246,32 +262,72 @@
           "dashboard_dynamic_homepage": "Wo die Knöpfe Alarm und Home Assistant auf der Startseite des C300X stehen. Werksansicht: Jeder Knopf erscheint nur, solange er etwas zu öffnen hat, und reiht sich zwischen die originalen Knöpfe ein, auch untereinander, wenn die Reihe voll ist. Fest nebeneinander: Beide behalten zwei feste Plätze nebeneinander; ein Knopf ohne Inhalt lässt seinen Platz leer. Eine Änderung wendet den Display-Patch erneut an und startet das Display einmal neu."
         }
       },
+      "reconfigure_dashboard_c100x": {
+        "title": "C100X-Display-Dashboard neu konfigurieren",
+        "description": "Konfiguriert das optionale C100X-Display-Dashboard.\n\n**Displayseiten aktivieren** auf der Geräteseite schaltet die Home-Assistant-Seiten auf dem C100X ein, **Originales Display wiederherstellen** schaltet sie aus. Beides wirkt mit einem Neustart des C100X, sobald er etwa zwei Minuten ungenutzt war. Einen Display-Patch und ein Neuladen der Anzeige gibt es nicht.\n\nSind die Seiten aktiv, richtet der nächste Schritt die Display-Seiten ein: das Wetter und die Entitäten jeder Seite.",
+        "data": {
+          "device_ui_enabled": "Home-Assistant-Seiten auf dem Display",
+          "actions_json": "Erlaubte Aktionen (für Fortgeschrittene)",
+          "dashboard_prevent_return": "Seite im Bildschirm-Standby offen lassen",
+          "dashboard_navigation": "Seitenwechsel"
+        },
+        "data_description": {
+          "device_ui_enabled": "An, solange die Home-Assistant-Seiten auf dem Display des C100X aktiv sind; sie kommen mit Displayseiten aktivieren. Aus: stellt das originale Display mit einem Neustart des C100X wieder her und verwirft die Einstellungen zu Wetter, Seiten, Kacheln und Aktionen. Die Alarmo-Einstellungen bleiben erhalten.",
+          "actions_json": "Aktionen, die das Display und seine Benachrichtigungen ausführen dürfen, als JSON: ein Eintrag je Aktion mit domain und service, optional target und data. Leer lassen, wenn du keine nutzt.",
+          "dashboard_prevent_return": "An: Die Home-Assistant- und die Alarmo-Seite bleiben offen, wenn der Bildschirm in den Standby geht. Aus: Das Display kehrt dann zur Startseite zurück.",
+          "dashboard_navigation": "Wird am {model} nicht verwendet: Die Seiten folgen aufeinander wie die eigenen Menüs der Station. Auf und Ab wechseln die Seite, die Eingabetaste öffnet sie, der letzte Eintrag ist EXIT. Die Reihenfolge folgt den Seitenpositionen."
+        }
+      },
       "reconfigure_dashboard_entity_display": {
         "title": "Display-Kacheln",
         "description": "Jede Kachel hat einen eigenen Abschnitt, sortiert wie auf dem Display: erst die Seite, dann die Entität. Klappe einen Abschnitt auf, um seine Kachel zu ändern.\n\n- **Breite** und **Höhe**: halb oder voll. Automatisch nimmt die übliche Größe des Entitätstyps. Bei voller Höhe liegen die eigenen Tasten der Entität direkt auf der Kachel.\n- **Name**: tippe einen eigenen Namen ein. Bleibt das Feld leer, zeigt die Kachel den Namen aus Home Assistant.\n- **Zusatzzeile**: die zweite Zeile unter dem Namen.\n\nDie Alarmo-Schnellaktion steht auf keiner Seite; sie hat nur Name und Zusatzzeile."
       },
       "user_dashboard_alarm": {
         "title": "Alarm (Alarmo)",
-        "description": "Alarmo steuert die Alarm-Befehle und die Alarm-Seite des Displays, die sich über den Button Alarm auf der Startseite des C300X öffnet. Wähle die Alarmo-Alarmzentrale und, wenn du magst, daneben eine Schnellaktion auf der Alarm-Seite.",
+        "description": "Alarmo steuert die Alarm-Befehle und die Alarm-Seite des Displays, die sich über den Button Alarm auf der Startseite des {model} öffnet. Wähle die Alarmo-Alarmzentrale und, wenn du magst, daneben eine Schnellaktion auf der Alarm-Seite.",
         "data": {
           "alarm_entity_id": "Alarmo-Alarmzentrale",
           "alarm_page_entity_id": "Schnellaktion"
         },
         "data_description": {
-          "alarm_entity_id": "Alarmzentrale, die Home Assistant vom C300X aus scharf und unscharf schaltet und die die Alarm-Seite zeigt. Leer lassen, wenn du Alarmo nicht nutzt: Der Button Alarm erscheint dann nicht.",
+          "alarm_entity_id": "Alarmzentrale, die Home Assistant vom {model} aus scharf und unscharf schaltet und die die Alarm-Seite zeigt. Leer lassen, wenn du Alarmo nicht nutzt: Der Button Alarm erscheint dann nicht.",
           "alarm_page_entity_id": "Optionale Entität auf der Alarm-Seite des Displays (Display-Patch), zum Beispiel das Treppenlicht. Buttons, Schalter, Szenen und Skripte lassen sich dort bedienen, andere Entitäten werden nur angezeigt. Leer lassen, um sie auszublenden."
+        }
+      },
+      "user_dashboard_alarm_c100x": {
+        "title": "Alarmo",
+        "description": "Alarmo steuert die Alarm-Befehle und die Alarmo-Seite des Displays, die sich über den Punkt Alarmo im Hauptmenü des {model} öffnet. Wähle die Alarmo-Alarmzentrale und, wenn du magst, daneben eine Schnellaktion auf der Alarmo-Seite.",
+        "data": {
+          "alarm_entity_id": "Alarmo-Alarmzentrale",
+          "alarm_page_entity_id": "Schnellaktion"
+        },
+        "data_description": {
+          "alarm_entity_id": "Alarmzentrale, die Home Assistant vom {model} aus scharf und unscharf schaltet und die die Alarmo-Seite zeigt. Leer lassen, wenn du Alarmo nicht nutzt: Der Punkt Alarmo erscheint dann nicht im Hauptmenü.",
+          "alarm_page_entity_id": "Optionale Entität auf der Alarmo-Seite des Displays, zum Beispiel das Treppenlicht. Buttons, Schalter, Szenen und Skripte lassen sich dort bedienen, andere Entitäten werden nur angezeigt. Leer lassen, um sie auszublenden."
         }
       },
       "reconfigure_dashboard_alarm": {
         "title": "Alarm (Alarmo)",
-        "description": "Alarmo steuert die Alarm-Befehle und die Alarm-Seite des Displays, die sich über den Button Alarm auf der Startseite des C300X öffnet. Wähle die Alarmo-Alarmzentrale und, wenn du magst, daneben eine Schnellaktion auf der Alarm-Seite.",
+        "description": "Alarmo steuert die Alarm-Befehle und die Alarm-Seite des Displays, die sich über den Button Alarm auf der Startseite des {model} öffnet. Wähle die Alarmo-Alarmzentrale und, wenn du magst, daneben eine Schnellaktion auf der Alarm-Seite.",
         "data": {
           "alarm_entity_id": "Alarmo-Alarmzentrale",
           "alarm_page_entity_id": "Schnellaktion"
         },
         "data_description": {
-          "alarm_entity_id": "Alarmzentrale, die Home Assistant vom C300X aus scharf und unscharf schaltet und die die Alarm-Seite zeigt. Leer lassen, wenn du Alarmo nicht nutzt: Der Button Alarm erscheint dann nicht.",
+          "alarm_entity_id": "Alarmzentrale, die Home Assistant vom {model} aus scharf und unscharf schaltet und die die Alarm-Seite zeigt. Leer lassen, wenn du Alarmo nicht nutzt: Der Button Alarm erscheint dann nicht.",
           "alarm_page_entity_id": "Optionale Entität auf der Alarm-Seite des Displays (Display-Patch), zum Beispiel das Treppenlicht. Buttons, Schalter, Szenen und Skripte lassen sich dort bedienen, andere Entitäten werden nur angezeigt. Leer lassen, um sie auszublenden."
+        }
+      },
+      "reconfigure_dashboard_alarm_c100x": {
+        "title": "Alarmo",
+        "description": "Alarmo steuert die Alarm-Befehle und die Alarmo-Seite des Displays, die sich über den Punkt Alarmo im Hauptmenü des {model} öffnet. Wähle die Alarmo-Alarmzentrale und, wenn du magst, daneben eine Schnellaktion auf der Alarmo-Seite.",
+        "data": {
+          "alarm_entity_id": "Alarmo-Alarmzentrale",
+          "alarm_page_entity_id": "Schnellaktion"
+        },
+        "data_description": {
+          "alarm_entity_id": "Alarmzentrale, die Home Assistant vom {model} aus scharf und unscharf schaltet und die die Alarmo-Seite zeigt. Leer lassen, wenn du Alarmo nicht nutzt: Der Punkt Alarmo erscheint dann nicht im Hauptmenü.",
+          "alarm_page_entity_id": "Optionale Entität auf der Alarmo-Seite des Displays, zum Beispiel das Treppenlicht. Buttons, Schalter, Szenen und Skripte lassen sich dort bedienen, andere Entitäten werden nur angezeigt. Leer lassen, um sie auszublenden."
         }
       },
       "user_dashboard_pages": {
@@ -653,7 +709,7 @@
         }
       },
       "reauth_confirm": {
-        "title": "C300X-Schlüssel aktualisieren",
+        "title": "{model}-Schlüssel aktualisieren",
         "description": "Gib die aktuellen Schlüssel für {name} ein. Ein leeres Feld behält den gespeicherten Schlüssel.",
         "data": {
           "agent_token": "Zugriffsschlüssel",
@@ -662,12 +718,15 @@
       }
     },
     "abort": {
+      "c100x_package_only": "Dieses Testpaket ist nur für die Classe 100X, diese Station ist eine Classe 300X. Installiere das reguläre Release der Integration, um sie einzurichten. Es wurde nichts geändert.",
+      "model_mismatch": "Diese Ankündigung stammt von einem anderen Stationsmodell als der eingerichtete Eintrag mit derselben Identität. Es wurde nichts geändert.",
       "already_configured": "BTicino C300X ist bereits konfiguriert.",
-      "reconfigure_successful": "BTicino C300X wurde neu konfiguriert. Aktualisiere die lokale Device-Agent- oder Display-Bridge-Konfiguration, falls Zugangsdaten rotiert wurden.",
+      "reconfigure_successful": "BTicino {model} wurde neu konfiguriert. Aktualisiere die lokale Device-Agent- oder Display-Bridge-Konfiguration, falls Zugangsdaten rotiert wurden.",
       "cannot_connect": "Der Device-Agent ist nicht erreichbar. Pruefe die Adresse und ob der Agent laeuft.",
       "unique_id_mismatch": "Das ist ein anderes Geraet als das eingerichtete. Konfiguriere den passenden Eintrag neu oder fuege das Geraet als neuen Eintrag hinzu.",
       "reauth_wrong_device": "Der Agent hat eine andere Identität. Der gespeicherte Eintrag wurde nicht geändert.",
-      "reauth_successful": "Die Zugangsdaten wurden aktualisiert."
+      "reauth_successful": "Die Zugangsdaten wurden aktualisiert.",
+      "unsupported_display": "Dieses Geraet unterstuetzt keine Home-Assistant-Displayseiten oder Display-Benachrichtigungen. Gespeicherte Layouts bleiben unveraendert."
     },
     "error": {
       "agent_bundle_missing": "Das paketierte ARMHF-Agent-Bundle fehlt. Baue/paketiere das Release-Bundle, bevor der Installer genutzt wird.",
@@ -676,11 +735,11 @@
       "device_install_verify_failed": "Die Installation ist fertig, aber der native Agent antwortet nicht mit dem generierten Zugangsschlüssel.",
       "invalid_agent_port": "Gib einen gültigen Device-Agent-Port ein.",
       "invalid_agent_host": "Gib den Device-Agent-Host ein.",
-      "invalid_callback_base_url": "Eine vom C300X erreichbare HTTP- oder HTTPS-Basis-URL von Home Assistant eingeben oder leer lassen.",
-      "invalid_device_host": "Gib die C300X-Adresse ein.",
-      "installer_dependency_missing": "Die optionale Python-SSH-Abhängigkeit konnte nicht installiert oder geladen werden. Prüfe die Home-Assistant-Paketinstallation und versuche es erneut.",
-      "invalid_ssh_password": "Gib das C300X-SSH-Passwort ein.",
-      "invalid_ssh_username": "Gib den C300X-SSH-User ein.",
+      "invalid_callback_base_url": "Eine vom {model} erreichbare HTTP- oder HTTPS-Basis-URL von Home Assistant eingeben oder leer lassen.",
+      "invalid_device_host": "Gib die {model}-Adresse ein.",
+      "installer_dependency_missing": "Home Assistant konnte das optionale SSH-Paket (asyncssh==2.24.1) nicht installieren oder laden. Das ist kein SSH-Anmeldefehler. Home Assistant merkt sich eine fehlgeschlagene Paketinstallation bis zur nächsten Konfigurationsprüfung oder zum Neustart, auch wenn das Paket danach angekommen ist: Wähle unter Entwicklerwerkzeuge > YAML „Konfiguration prüfen“ (oder starte Home Assistant neu) und versuche es dann erneut. Schlägt es wieder fehl, nennen Einstellungen > System > Protokolle die Ursache und die installierte asyncssh-Version.",
+      "invalid_ssh_password": "Gib das {model}-SSH-Passwort ein.",
+      "invalid_ssh_username": "Gib den {model}-SSH-User ein.",
       "invalid_alarm_entity": "Wähle eine Alarmo-Alarm-Control-Panel-Entität oder lasse das Feld leer.",
       "invalid_alarm_page_entity": "Wähle eine unterstützte Dashboard-Entität für die Alarmseite oder lasse das Feld leer.",
       "invalid_weather_entity": "Wähle eine Wetter-Entität oder lasse das Feld leer.",
@@ -698,34 +757,37 @@
       "invalid_dashboard_pages": "Die gespeicherten Display-Seiten sind ungültig; richte die Seiten neu ein.",
       "dashboard_page_name_missing": "Eine Seite mit Entitäten braucht einen Namen; das Display zeigt ihn als Überschrift.",
       "invalid_snapshot_option": "Ganze Zahlen eingeben: 1-300 Sekunden, 1-365 Tage, Breite 64-800 und Höhe 64-480. Das Bild wird vom 800×480-Display gelesen.",
-      "invalid_auth": "Der C300X hat den Zugriffsschlüssel abgelehnt. Gib den aktuellen Schlüssel ein.",
-      "wrong_device": "Diese Adresse gehört zu einem anderen C300X. Das bestehende Gerät wurde nicht geändert.",
-      "invalid_maintenance_auth": "Der C300X hat den Wartungsschlüssel abgelehnt. Gib den aktuellen Wartungsschlüssel ein.",
-      "cannot_connect": "Der C300X konnte nicht geprüft werden. Prüfe Adresse und Verbindung und versuche es erneut.",
-      "ssh_login_refused": "Der C300X hat die SSH-Anmeldung abgelehnt. Gib den SSH-User und das Passwort des Geräts ein."
+      "invalid_auth": "Der {model} hat den Zugriffsschlüssel abgelehnt. Gib den aktuellen Schlüssel ein.",
+      "wrong_device": "Diese Adresse gehört zu einem anderen {model}. Das bestehende Gerät wurde nicht geändert.",
+      "invalid_maintenance_auth": "Der {model} hat den Wartungsschlüssel abgelehnt. Gib den aktuellen Wartungsschlüssel ein.",
+      "cannot_connect": "Der {model} konnte nicht geprüft werden. Prüfe Adresse und Verbindung und versuche es erneut.",
+      "ssh_login_refused": "Der {model} hat die SSH-Anmeldung abgelehnt. Gib den SSH-User und das Passwort des Geräts ein.",
+      "installer_firewall_hook_unsupported": "Der Firewall-Hook lässt sich nicht sicher prüfen. Vor Änderungen am Gerät wurde abgebrochen. Bitte Dateityp und Berechtigungen prüfen und keinen Platzhalter anlegen.",
+      "device_model_incompatible": "Dieses Paket unterstuetzt dieses Geraetemodell nicht. C100X-Testpakete duerfen keine C300X-Geraete aktualisieren. Installiere vor dem Agent-Update oder der Neuinstallation das passende Paket. Es wurden keine Geraetedateien ersetzt."
     }
   },
   "options": {
     "abort": {
-      "unique_id_mismatch": "Dies ist ein anderes als das eingerichtete Gerät. Konfiguriere den passenden Eintrag oder füge das Gerät neu hinzu."
+      "unique_id_mismatch": "Dies ist ein anderes als das eingerichtete Gerät. Konfiguriere den passenden Eintrag oder füge das Gerät neu hinzu.",
+      "unsupported_display": "Dieses Geraet unterstuetzt keine Home-Assistant-Displayseiten oder Display-Benachrichtigungen. Gespeicherte Layouts bleiben unveraendert."
     },
     "step": {
       "connection": {
-        "title": "Verbindung zum C300X",
-        "description": "So erreichen sich Home Assistant und der C300X.",
+        "title": "Verbindung zum {model}",
+        "description": "So erreichen sich Home Assistant und der {model}.",
         "data": {
-          "agent_host": "Adresse des C300X",
+          "agent_host": "Adresse des {model}",
           "agent_port": "Port",
           "agent_token": "Zugangsschlüssel",
           "maintenance_token": "Wartungsschlüssel",
-          "callback_base_url": "Adresse von Home Assistant für den C300X (optional)"
+          "callback_base_url": "Adresse von Home Assistant für den {model} (optional)"
         },
         "data_description": {
-          "agent_host": "IP-Adresse oder Hostname deines C300X.",
-          "agent_port": "Port, auf dem der C300X Home Assistant antwortet. Bei 8091 lassen, außer du hast ihn bei der Installation geändert.",
-          "agent_token": "Schlüssel, mit dem sich Home Assistant beim C300X anmeldet. Er wurde bei der Installation erzeugt. Leer lassen, um den gespeicherten Schlüssel zu behalten.",
+          "agent_host": "IP-Adresse oder Hostname deines {model}.",
+          "agent_port": "Port, auf dem der {model} Home Assistant antwortet. Bei 8091 lassen, außer du hast ihn bei der Installation geändert.",
+          "agent_token": "Schlüssel, mit dem sich Home Assistant beim {model} anmeldet. Er wurde bei der Installation erzeugt. Leer lassen, um den gespeicherten Schlüssel zu behalten.",
           "maintenance_token": "Eigener Schlüssel für Wartung: Updates, Änderungen am Display und Neustarts. Leer lassen, um den gespeicherten Schlüssel zu behalten.",
-          "callback_base_url": "An diese Adresse meldet der C300X Klingeln und andere Ereignisse. Leer lassen, dann gilt die Adresse, die Home Assistant für sich selbst kennt. Eine https-Adresse verschlüsselt die Verbindung; sie braucht ein gültiges Zertifikat und belastet den C300X stärker. Ein Wechsel zwischen http und https startet den Dienst auf dem C300X neu, sobald kein Anruf und kein Stream läuft."
+          "callback_base_url": "An diese Adresse meldet der {model} Klingeln und andere Ereignisse. Leer lassen, dann gilt die Adresse, die Home Assistant für sich selbst kennt. Eine https-Adresse verschlüsselt die Verbindung; sie braucht ein gültiges Zertifikat und belastet den {model} stärker. Ein Wechsel zwischen http und https startet den Dienst auf dem {model} neu, sobald kein Anruf und kein Stream läuft."
         }
       },
       "features": {
@@ -733,7 +795,7 @@
         "description": "Bild und Ton der Türstation in Home Assistant.",
         "data": {
           "video_enabled": "Video und Ton der Türstation",
-          "create_homeassistant_user": "Zugang für Video und Ton auf dem C300X einrichten",
+          "create_homeassistant_user": "Zugang für Video und Ton auf dem {model} einrichten",
           "doorstation_audio_gain_db": "Lautstärke live (dB)",
           "ring_capture_audio_gain_db": "Lautstärke von Klingel-Aufnahmen (dB)",
           "webrtc_ice_policy": "Verbindungswege für das Livebild",
@@ -741,11 +803,11 @@
         },
         "data_description": {
           "video_enabled": "Bild und Ton der Türstation in Home Assistant: beim Klingeln, auf Abruf und für Home Call.",
-          "create_homeassistant_user": "Video und Ton brauchen einen eigenen Zugang auf dem C300X. Ist das an, richtet die Integration ihn bei der Einrichtung oder über ihre Reparatur ein.",
+          "create_homeassistant_user": "Video und Ton brauchen einen eigenen Zugang auf dem {model}. Ist das an, richtet die Integration ihn bei der Einrichtung oder über ihre Reparatur ein.",
           "doorstation_audio_gain_db": "Lautstärke der Türstation in der Live-Ansicht und im Gespräch. -20 bis +20 dB; 0 lässt den Ton unverändert.",
           "ring_capture_audio_gain_db": "Lautstärke des Tons in Aufnahmen, die beim Klingeln entstehen. -20 bis +20 dB; Standard ist 6.",
           "webrtc_ice_policy": "Welche Netzwerkadressen der Browser für das Livebild nutzen darf. Nur ändern, wenn das Livebild nicht verbindet.",
-          "native_two_way_audio": "Optional, standardmäßig aus. Voraussetzungen: Home Assistant 2026.11 oder neuer, „Two-way audio“ unter Einstellungen > System > Labs eingeschaltet, das Livebild über WebRTC, Zugriff über HTTPS und das Mikrofon im Browser erlaubt. Einen Anruf nimmst du zuerst in der C300X-Karte an; diese Option nimmt ihn nicht an. Das Sprechen in der C300X-Karte bleibt, wie es ist."
+          "native_two_way_audio": "Optional, standardmäßig aus. Voraussetzungen: Home Assistant 2026.11 oder neuer, „Two-way audio“ unter Einstellungen > System > Labs eingeschaltet, das Livebild über WebRTC, Zugriff über HTTPS und das Mikrofon im Browser erlaubt. Einen Anruf nimmst du zuerst in der {model}-Karte an; diese Option nimmt ihn nicht an. Das Sprechen in der {model}-Karte bleibt, wie es ist."
         }
       },
       "visitor_snapshot": {
@@ -846,6 +908,22 @@
           "dashboard_dynamic_homepage": "Wo die Knöpfe Alarm und Home Assistant auf der Startseite des C300X stehen. Werksansicht: Jeder Knopf erscheint nur, solange er etwas zu öffnen hat, und reiht sich zwischen die originalen Knöpfe ein, auch untereinander, wenn die Reihe voll ist. Fest nebeneinander: Beide behalten zwei feste Plätze nebeneinander; ein Knopf ohne Inhalt lässt seinen Platz leer. Eine Änderung wendet den Display-Patch erneut an und startet das Display einmal neu."
         }
       },
+      "dashboard_c100x": {
+        "title": "Home-Assistant-Seiten auf dem Display",
+        "description": "Home-Assistant-Seiten auf dem Display des C100X.\n\n**Displayseiten aktivieren** auf der Geräteseite schaltet sie ein; **Originales Display wiederherstellen** oder dieser Schalter aus bringt das originale Display zurück. Beides wirkt mit einem Neustart des C100X, sobald er etwa zwei Minuten ungenutzt war. Einen Display-Patch und ein Neuladen der Anzeige gibt es nicht.\n\nSind die Seiten aktiv, bietet das Display-Menü zusätzlich **Display-Seiten** (Wetter und was wo angezeigt wird) und **Display-Kacheln**.",
+        "data": {
+          "device_ui_enabled": "Home-Assistant-Seiten auf dem Display",
+          "actions_json": "Erlaubte Aktionen (für Fortgeschrittene)",
+          "dashboard_prevent_return": "Seite im Bildschirm-Standby offen lassen",
+          "dashboard_navigation": "Seitenwechsel"
+        },
+        "data_description": {
+          "device_ui_enabled": "An, solange die Home-Assistant-Seiten auf dem Display des C100X aktiv sind; sie kommen mit Displayseiten aktivieren. Aus: stellt das originale Display mit einem Neustart des C100X wieder her und verwirft die Einstellungen zu Wetter, Seiten, Kacheln und Aktionen. Die Alarmo-Einstellungen bleiben erhalten.",
+          "actions_json": "Aktionen, die das Display und seine Benachrichtigungen ausführen dürfen, als JSON: ein Eintrag je Aktion mit domain und service, optional target und data. Leer lassen, wenn du keine nutzt.",
+          "dashboard_prevent_return": "An: Die Home-Assistant- und die Alarmo-Seite bleiben offen, wenn der Bildschirm in den Standby geht. Aus: Das Display kehrt dann zur Startseite zurück.",
+          "dashboard_navigation": "Wird am {model} nicht verwendet: Die Seiten folgen aufeinander wie die eigenen Menüs der Station. Auf und Ab wechseln die Seite, die Eingabetaste öffnet sie, der letzte Eintrag ist EXIT. Die Reihenfolge folgt den Seitenpositionen."
+        }
+      },
       "dashboard_entity_display": {
         "title": "Display-Kacheln",
         "description": "Jede Kachel hat einen eigenen Abschnitt, sortiert wie auf dem Display: erst die Seite, dann die Entität. Klappe einen Abschnitt auf, um seine Kachel zu ändern.\n\n- **Breite** und **Höhe**: halb oder voll. Automatisch nimmt die übliche Größe des Entitätstyps. Bei voller Höhe liegen die eigenen Tasten der Entität direkt auf der Kachel.\n- **Name**: tippe einen eigenen Namen ein. Bleibt das Feld leer, zeigt die Kachel den Namen aus Home Assistant.\n- **Zusatzzeile**: die zweite Zeile unter dem Namen.\n\nDie Alarmo-Schnellaktion steht auf keiner Seite; sie hat nur Name und Zusatzzeile."
@@ -861,7 +939,8 @@
           "device_activations": "Aktivierungen: Schlösser, Lichter, Treppenlicht",
           "speech": "Sprachausgabe",
           "display": "Display",
-          "done": "Fertig"
+          "done": "Fertig",
+          "dashboard_alarm": "Alarmo"
         },
         "menu_option_descriptions": {
           "connection": "Adresse, Zugangs- und Wartungsschlüssel des C300X, Adresse von Home Assistant.",
@@ -871,7 +950,34 @@
           "device_activations": "Zusätzliche Schlösser und Lichter der Türanlage, die Home Assistant auslösen kann, und die Adresse des Treppenlichts.",
           "speech": "Sprachausgabe-Engine und Sprache für gesprochene Meldungen.",
           "display": "Display-Patch, Seiten, Kacheln und Alarmo.",
-          "done": "Einstellungen schließen. Alles Abgesendete ist bereits gespeichert."
+          "done": "Einstellungen schließen. Alles Abgesendete ist bereits gespeichert.",
+          "dashboard_alarm": "Alarmo-Integration, unabhaengig von der Display-Unterstuetzung."
+        }
+      },
+      "init_c100x": {
+        "title": "C100X-Einstellungen",
+        "description": "Wähle, was du ändern möchtest. Jeder Bereich speichert für sich, sobald du ihn absendest, und führt in das Menü zurück, aus dem er geöffnet wurde; die anderen Bereiche behalten ihre Einstellungen. Um einen Bereich ohne Änderung zu verlassen, sende ihn unverändert ab.",
+        "menu_options": {
+          "connection": "Verbindung zum C100X",
+          "features": "Video und Audio",
+          "visitor_snapshot": "Besucher-Snapshot",
+          "camera_quality": "Kameraqualität",
+          "device_activations": "Aktivierungen: Schlösser, Lichter, Treppenlicht",
+          "speech": "Sprachausgabe",
+          "display": "Display",
+          "done": "Fertig",
+          "dashboard_alarm": "Alarmo"
+        },
+        "menu_option_descriptions": {
+          "connection": "Adresse, Zugangs- und Wartungsschlüssel des C100X, Adresse von Home Assistant.",
+          "features": "Livebild, Gegensprechen, Lautstärken und der Zugang für Video und Ton auf dem C100X.",
+          "visitor_snapshot": "Größe des gespeicherten Besucherbilds, Verzögerung der Aufnahme, Aufbewahrung und das Datum im Bild.",
+          "camera_quality": "Größe, Bitrate und Bildrate des Kamerastreams; eine Änderung startet das Gerät neu.",
+          "device_activations": "Zusätzliche Schlösser und Lichter der Türanlage, die Home Assistant auslösen kann, und die Adresse des Treppenlichts.",
+          "speech": "Sprachausgabe-Engine und Sprache für gesprochene Meldungen.",
+          "display": "Seiten, Kacheln und Alarmo.",
+          "done": "Einstellungen schließen. Alles Abgesendete ist bereits gespeichert.",
+          "dashboard_alarm": "Alarmo-Integration, unabhaengig von der Display-Unterstuetzung."
         }
       },
       "display": {
@@ -889,6 +995,24 @@
           "dashboard_page_list": "Wetter und welche Entitäten auf welcher Seite in welcher Reihenfolge erscheinen.",
           "dashboard_entity_display": "Größe, Name und Zusatzzeile jeder Kachel.",
           "dashboard_alarm": "Alarmo-Alarmzentrale und die Schnellaktion der Alarm-Seite.",
+          "init": "Zurück zum Einstellungsmenü."
+        }
+      },
+      "display_c100x": {
+        "title": "Display",
+        "description": "Alles, was das Display des C100X aus Home Assistant zeigt. Seiten und Kacheln erscheinen hier, sobald die Displayseiten aktiviert sind.",
+        "menu_options": {
+          "dashboard": "Home-Assistant-Seiten auf dem Display",
+          "dashboard_page_list": "Display-Seiten",
+          "dashboard_entity_display": "Display-Kacheln",
+          "dashboard_alarm": "Alarmo",
+          "init": "Zurück"
+        },
+        "menu_option_descriptions": {
+          "dashboard": "Home-Assistant-Seiten auf dem Display ein- oder ausschalten, Seitenwechsel, Seite im Bildschirm-Standby und erlaubte Aktionen.",
+          "dashboard_page_list": "Wetter und welche Entitäten auf welcher Seite in welcher Reihenfolge erscheinen.",
+          "dashboard_entity_display": "Größe, Name und Zusatzzeile jeder Kachel.",
+          "dashboard_alarm": "Alarmo-Alarmzentrale und die Schnellaktion der Alarmo-Seite.",
           "init": "Zurück zum Einstellungsmenü."
         }
       },
@@ -918,14 +1042,26 @@
       },
       "dashboard_alarm": {
         "title": "Alarm (Alarmo)",
-        "description": "Alarmo steuert die Alarm-Befehle und die Alarm-Seite des Displays, die sich über den Button Alarm auf der Startseite des C300X öffnet. Wähle die Alarmo-Alarmzentrale und, wenn du magst, daneben eine Schnellaktion auf der Alarm-Seite.",
+        "description": "Alarmo steuert die Alarm-Befehle und die Alarm-Seite des Displays, die sich über den Button Alarm auf der Startseite des {model} öffnet. Wähle die Alarmo-Alarmzentrale und, wenn du magst, daneben eine Schnellaktion auf der Alarm-Seite.",
         "data": {
           "alarm_entity_id": "Alarmo-Alarmzentrale",
           "alarm_page_entity_id": "Schnellaktion"
         },
         "data_description": {
-          "alarm_entity_id": "Alarmzentrale, die Home Assistant vom C300X aus scharf und unscharf schaltet und die die Alarm-Seite zeigt. Leer lassen, wenn du Alarmo nicht nutzt: Der Button Alarm erscheint dann nicht.",
+          "alarm_entity_id": "Alarmzentrale, die Home Assistant vom {model} aus scharf und unscharf schaltet und die die Alarm-Seite zeigt. Leer lassen, wenn du Alarmo nicht nutzt: Der Button Alarm erscheint dann nicht.",
           "alarm_page_entity_id": "Optionale Entität auf der Alarm-Seite des Displays (Display-Patch), zum Beispiel das Treppenlicht. Buttons, Schalter, Szenen und Skripte lassen sich dort bedienen, andere Entitäten werden nur angezeigt. Leer lassen, um sie auszublenden."
+        }
+      },
+      "dashboard_alarm_c100x": {
+        "title": "Alarmo",
+        "description": "Alarmo steuert die Alarm-Befehle und die Alarmo-Seite des Displays, die sich über den Punkt Alarmo im Hauptmenü des {model} öffnet. Wähle die Alarmo-Alarmzentrale und, wenn du magst, daneben eine Schnellaktion auf der Alarmo-Seite.",
+        "data": {
+          "alarm_entity_id": "Alarmo-Alarmzentrale",
+          "alarm_page_entity_id": "Schnellaktion"
+        },
+        "data_description": {
+          "alarm_entity_id": "Alarmzentrale, die Home Assistant vom {model} aus scharf und unscharf schaltet und die die Alarmo-Seite zeigt. Leer lassen, wenn du Alarmo nicht nutzt: Der Punkt Alarmo erscheint dann nicht im Hauptmenü.",
+          "alarm_page_entity_id": "Optionale Entität auf der Alarmo-Seite des Displays, zum Beispiel das Treppenlicht. Buttons, Schalter, Szenen und Skripte lassen sich dort bedienen, andere Entitäten werden nur angezeigt. Leer lassen, um sie auszublenden."
         }
       },
       "dashboard_pages": {
@@ -1122,7 +1258,7 @@
       "invalid_action_map": "Die Action-Allowlist ist kein gültiges JSON.",
       "invalid_agent_host": "Gib den Device-Agent-Host ein.",
       "invalid_agent_port": "Gib einen gültigen Device-Agent-Port ein.",
-      "invalid_callback_base_url": "Eine vom C300X erreichbare HTTP- oder HTTPS-Basis-URL von Home Assistant eingeben oder leer lassen.",
+      "invalid_callback_base_url": "Eine vom {model} erreichbare HTTP- oder HTTPS-Basis-URL von Home Assistant eingeben oder leer lassen.",
       "invalid_alarm_entity": "Wähle eine Alarmo-Alarm-Control-Panel-Entität oder lasse das Feld leer.",
       "invalid_alarm_page_entity": "Wähle eine unterstützte Dashboard-Entität für die Alarmseite oder lasse das Feld leer.",
       "invalid_weather_entity": "Wähle eine Wetter-Entität oder lasse das Feld leer.",
@@ -1139,12 +1275,12 @@
       "dashboard_page_name_missing": "Eine Seite mit Entitäten braucht einen Namen; das Display zeigt ihn als Überschrift.",
       "required": "Dieses Feld ist erforderlich.",
       "invalid_snapshot_option": "Ganze Zahlen eingeben: 1-300 Sekunden, 1-365 Tage, Breite 64-800 und Höhe 64-480. Das Bild wird vom 800×480-Display gelesen.",
-      "invalid_auth": "Der C300X hat den Zugriffsschlüssel abgelehnt. Gib den aktuellen Schlüssel ein.",
-      "wrong_device": "Diese Adresse gehört zu einem anderen C300X. Das bestehende Gerät wurde nicht geändert.",
-      "invalid_maintenance_auth": "Der C300X hat den Wartungsschlüssel abgelehnt. Gib den aktuellen Wartungsschlüssel ein.",
-      "cannot_connect": "Der C300X konnte nicht geprüft werden. Prüfe Adresse und Verbindung und versuche es erneut.",
-      "camera_quality_failed": "Die C300X hat die Werte nicht gespeichert. Prüfe die Verbindung und versuche es erneut.",
-      "camera_quality_unsupported": "Diese C300X bietet die Einstellung der Kameraqualität nicht an.",
+      "invalid_auth": "Der {model} hat den Zugriffsschlüssel abgelehnt. Gib den aktuellen Schlüssel ein.",
+      "wrong_device": "Diese Adresse gehört zu einem anderen {model}. Das bestehende Gerät wurde nicht geändert.",
+      "invalid_maintenance_auth": "Der {model} hat den Wartungsschlüssel abgelehnt. Gib den aktuellen Wartungsschlüssel ein.",
+      "cannot_connect": "Der {model} konnte nicht geprüft werden. Prüfe Adresse und Verbindung und versuche es erneut.",
+      "camera_quality_failed": "Die {model} hat die Werte nicht gespeichert. Prüfe die Verbindung und versuche es erneut.",
+      "camera_quality_unsupported": "Diese {model} bietet die Einstellung der Kameraqualität nicht an.",
       "camera_quality_out_of_range": "Außerhalb dessen, was das Gerät für diesen Stream annimmt; nur der auf dem Gerät gespeicherte Wert darf so bleiben.",
       "camera_quality_restart_pending": "Gespeichert, aber das Gerät wurde nicht neu gestartet. Es nutzt die neuen Werte nach seinem nächsten Neustart.",
       "tts_engine_missing": "Diese Sprachausgabe-Entität gibt es nicht.",
@@ -1167,8 +1303,14 @@
       "door_unlock": {
         "name": "Tür öffnen"
       },
+      "activate_display_pages": {
+        "name": "Displayseiten aktivieren"
+      },
       "reboot": {
         "name": "Neu starten"
+      },
+      "restore_display_pages": {
+        "name": "Originales Display wiederherstellen"
       },
       "remove_agent": {
         "name": "Agent entfernen"
@@ -1428,34 +1570,40 @@
       "message": "Es ist keine Alarm-Control-Panel-Entität konfiguriert."
     },
     "agent_command_failed": {
-      "message": "Der C300X-Device-Agent-Befehl ist fehlgeschlagen oder wird vom installierten Agent nicht unterstützt."
+      "message": "Der {model}-Device-Agent-Befehl ist fehlgeschlagen oder wird vom installierten Agent nicht unterstützt."
     },
     "station_busy": {
       "message": "Die Station ist gerade mit einem Anruf beschäftigt. Versuche es erneut, wenn er beendet ist."
     },
     "gui_function_patch_required": {
-      "message": "Diese Aktion benötigt den C300X-Display-Patch. Aktiviere und wende den Display-Patch zuerst in den Integrationsoptionen an."
+      "message": "Diese Aktion benötigt den {model}-Display-Patch. Aktiviere und wende den Display-Patch zuerst in den Integrationsoptionen an."
+    },
+    "gui_function_patch_required_c100x": {
+      "message": "Diese Aktion braucht die Home-Assistant-Seiten auf dem C100X-Display. Aktiviere sie zuerst mit Displayseiten aktivieren auf der Geräteseite; der C100X startet dafür einmal neu."
     },
     "display_disabled": {
-      "message": "Display-Benachrichtigungen brauchen die Home-Assistant-Seiten auf dem C300X-Display. Schalte sie zuerst in den Integrationsoptionen ein."
+      "message": "Display-Benachrichtigungen brauchen die Home-Assistant-Seiten auf dem {model}-Display. Schalte sie zuerst in den Integrationsoptionen ein."
+    },
+    "display_disabled_c100x": {
+      "message": "Display-Benachrichtigungen brauchen die Home-Assistant-Seiten auf dem C100X-Display. Aktiviere sie zuerst mit Displayseiten aktivieren auf der Geräteseite."
     },
     "unknown_notification_action": {
-      "message": "Eine Schaltfläche der Benachrichtigung nutzt eine Aktions-ID, die bei den C300X-Aktionen nicht eingerichtet ist."
+      "message": "Eine Schaltfläche der Benachrichtigung nutzt eine Aktions-ID, die bei den {model}-Aktionen nicht eingerichtet ist."
     },
     "display_notification_queue_full": {
-      "message": "Das C300X-Display hat bereits die Höchstzahl an Benachrichtigungen mit gleicher oder höherer Priorität. Schließe eine oder warte, bis eine abläuft."
+      "message": "Das {model}-Display hat bereits die Höchstzahl an Benachrichtigungen mit gleicher oder höherer Priorität. Schließe eine oder warte, bis eine abläuft."
     },
     "display_notifications_unloaded": {
-      "message": "Die C300X-Display-Benachrichtigungen werden gerade neu geladen. Versuche es gleich noch einmal."
+      "message": "Die {model}-Display-Benachrichtigungen werden gerade neu geladen. Versuche es gleich noch einmal."
     },
     "doorbell_video_not_available": {
-      "message": "Doorbell-Video ist nicht aktiviert oder wird vom installierten C300X-Device-Agent nicht unterstützt."
+      "message": "Doorbell-Video ist nicht aktiviert oder wird vom installierten {model}-Device-Agent nicht unterstützt."
     },
     "home_call_not_available": {
-      "message": "Zuhause-Anruf ist nicht aktiviert oder wird vom installierten C300X-Device-Agent nicht unterstützt."
+      "message": "Zuhause-Anruf ist nicht aktiviert oder wird vom installierten {model}-Device-Agent nicht unterstützt."
     },
     "ring_capture_busy": {
-      "message": "Die C300X-Ring-Aufnahme ist belegt, weil bereits ein anderer Video-Client verbunden ist."
+      "message": "Die {model}-Ring-Aufnahme ist belegt, weil bereits ein anderer Video-Client verbunden ist."
     },
     "capture_announcement_requires_ring": {
       "message": "Ansagen sind nur im Aufnahmemodus Klingelruf verfügbar. Entferne announcement_path für eine Liveaufnahme ohne Klingeln."
@@ -1473,16 +1621,19 @@
       "message": "Der Alarmbefehl ist ungültig."
     },
     "maintenance_action_not_supported": {
-      "message": "Die C300X-Device-Agent-Maintenance-Aktion wird nicht unterstützt, ist nicht aktiviert oder es ist kein Maintenance-Token konfiguriert."
+      "message": "Die {model}-Device-Agent-Maintenance-Aktion wird nicht unterstützt, ist nicht aktiviert oder es ist kein Maintenance-Token konfiguriert."
     },
     "video_message_not_available": {
-      "message": "Es ist keine C300X-Video-Nachricht verfügbar."
+      "message": "Es ist keine {model}-Video-Nachricht verfügbar."
     },
     "text_memo_not_available": {
-      "message": "Es ist kein C300X-Text-Memo verfügbar."
+      "message": "Es ist kein {model}-Text-Memo verfügbar."
     },
     "text_memo_write_not_supported": {
-      "message": "Das Schreiben eines Text-Memos wird vom installierten C300X-Device-Agent nicht unterstützt."
+      "message": "Das Schreiben eines Text-Memos wird vom installierten {model}-Device-Agent nicht unterstützt."
+    },
+    "text_memo_write_not_supported_c100x": {
+      "message": "Die {model} hat keine Text-Memos: die Station kann sie nicht anzeigen."
     },
     "unknown_action": {
       "message": "Die Action-ID {action_id} ist nicht konfiguriert."
@@ -1494,7 +1645,7 @@
       "message": "Der BTicino-C300X-Eintrag ist nicht geladen. Aktiviere ihn oder warte, bis er gestartet ist."
     },
     "voice_memo_not_available": {
-      "message": "Es ist kein C300X-Sprach-Memo verfügbar."
+      "message": "Es ist kein {model}-Sprach-Memo verfügbar."
     },
     "alarm_not_ready": {
       "message": "Die Alarmanlage kann nicht scharfgeschaltet werden, weil mindestens ein Sensor dies verhindert."
@@ -1510,21 +1661,29 @@
     }
   },
   "issues": {
+    "c100x_display_boot_check_failed": {
+      "title": "C100X-Display-Prüfung beim Start der Station fehlgeschlagen",
+      "description": "{entry_title}: Beim Start der Station konnte der Geräteagent die ausstehende Display-Aktivierung nicht prüfen (das Display-Paket fehlte oder die Prüfung schlug fehl, zum Beispiel nach einem Firmware-Update). Der Agent wurde trotzdem gestartet. Die Display-Aktivierung bleibt aus, die Sicherungen der Originalseiten bleiben erhalten. Drücke „Originales Display wiederherstellen“, um dorthin zurückzukehren; schlägt das fehl, aktualisiere zuerst den Geräteagenten über seine Reparatur. Tritt es wieder auf, melde es mit der Agent-Diagnose."
+    },
+    "c100x_display_rolled_back": {
+      "title": "C100X-Displayseiten wurden zurückgesetzt",
+      "description": "{entry_title}: Die Home-Assistant-Seiten sind nach dem Neustart nicht auf dem C100X-Display gestartet, daher hat die Station beim folgenden Start ihr originales Display zurückgeholt. Sonst wurde nichts geändert. Drücke „Displayseiten aktivieren“, um es erneut zu versuchen. Wird wieder zurückgesetzt, melde es mit der Agent-Diagnose."
+    },
     "agent_capability_mismatch": {
-      "title": "C300X Device-Agent meldet keine Capabilities",
-      "description": "Der konfigurierte C300X Device-Agent für {entry_title} hat ohne nutzbare Capabilities geantwortet. Aktualisiere oder konfiguriere den lokalen Device-Agent neu und lade danach die Integration neu."
+      "title": "{model} Device-Agent meldet keine Capabilities",
+      "description": "Der konfigurierte {model} Device-Agent für {entry_title} hat ohne nutzbare Capabilities geantwortet. Aktualisiere oder konfiguriere den lokalen Device-Agent neu und lade danach die Integration neu."
     },
     "device_agent_update_required": {
-      "title": "C300X Device-Agent muss aktualisiert werden",
+      "title": "{model} Device-Agent muss aktualisiert werden",
       "fix_flow": {
         "step": {
           "confirm": {
-            "title": "C300X Device-Agent aktualisieren",
+            "title": "{model} Device-Agent aktualisieren",
             "description": "Home Assistant lädt den paketierten nativen Agent über die aktuell konfigurierte Maintenance-API hoch. SSH-Zugangsdaten werden nicht benötigt. Aktive Display- und Firewall-Patches werden vorher read-only geprüft und nur erneuert, wenn sie bereits aktiv waren und sich die paketierte Patch-Quelle geändert hat. Wenn du Home-Assistant-only Ring Calls nutzt, prüfe nach dem Update zusätzlich den Home-Assistant-Media-User-/Routing-Setup in den Integrationsoptionen.\n\nInstalliert: {installed_version} (API {installed_api_version}, Bundle {installed_bundle_hash})\nPaketiert: {available_version} (API {available_api_version}, Bundle {available_bundle_hash})\nUpdate-Pfad: {update_path}\nDisplay-Patch-Status: {qml_patch_status}\nGrund: {reason}"
           },
           "ssh_install": {
-            "title": "C300X Device-Agent per SSH neu installieren",
-            "description": "Der installierte Agent kann sich noch nicht selbst aktualisieren. Home Assistant meldet sich mit dem Werks-Login des C300X an, oder mit den hier eingegebenen SSH-Zugangsdaten, wenn das Gerät ihn abgelehnt hat, installiert den paketierten Agent und erneuert danach nur aktive Display- und Firewall-Patches, wenn sich die paketierte Patch-Quelle geändert hat. Die SSH-Zugangsdaten werden nicht gespeichert. Wenn du Home-Assistant-only Ring Calls nutzt, prüfe nach dem Update zusätzlich den Home-Assistant-Media-User-/Routing-Setup in den Integrationsoptionen.\n\nInstalliert: {installed_version} (API {installed_api_version}, Bundle {installed_bundle_hash})\nPaketiert: {available_version} (API {available_api_version}, Bundle {available_bundle_hash})\nUpdate-Pfad: {update_path}\nDisplay-Patch-Status: {qml_patch_status}\nGrund: {reason}",
+            "title": "{model} Device-Agent per SSH neu installieren",
+            "description": "Der installierte Agent kann sich noch nicht selbst aktualisieren. Home Assistant meldet sich mit dem Werks-Login des {model} an, oder mit den hier eingegebenen SSH-Zugangsdaten, wenn das Gerät ihn abgelehnt hat, installiert den paketierten Agent und erneuert danach nur aktive Display- und Firewall-Patches, wenn sich die paketierte Patch-Quelle geändert hat. Die SSH-Zugangsdaten werden nicht gespeichert. Wenn du Home-Assistant-only Ring Calls nutzt, prüfe nach dem Update zusätzlich den Home-Assistant-Media-User-/Routing-Setup in den Integrationsoptionen.\n\nInstalliert: {installed_version} (API {installed_api_version}, Bundle {installed_bundle_hash})\nPaketiert: {available_version} (API {available_api_version}, Bundle {available_bundle_hash})\nUpdate-Pfad: {update_path}\nDisplay-Patch-Status: {qml_patch_status}\nGrund: {reason}",
             "data": {
               "bootstrap_ssh_username": "SSH-Benutzername",
               "bootstrap_ssh_password": "SSH-Passwort"
@@ -1539,36 +1698,42 @@
           "update_root_readonly_failed": "Das Update konnte das Root-Dateisystem (/) nicht wieder schreibgeschützt einhängen. Der endgültige Gerätezustand ist ungewiss; eine erfolgreiche Wiederherstellung ist nicht bestätigt. Bewahre Wiederherstellungsdateien auf und prüfe Agent und Dateisystem vor einem weiteren Update.",
           "update_apply_failed": "Der Agent meldet einen allgemeinen Updatefehler; Ursache und endgültiger Gerätezustand sind unbekannt. Falls du / zuvor manuell beschreibbar eingehängt hast, kann ein normaler Geräteneustart helfen. Prüfe vor einem neuen Versuch den Gerätezustand; der Fehler bestätigt keine erfolgreiche Wiederherstellung.",
           "update_verify_failed": "Das Update wurde gesendet, aber der Agent meldet weiterhin ein altes oder inkompatibles Bundle.",
-          "ssh_login_refused": "Der C300X hat die SSH-Anmeldung abgelehnt. Gib den SSH-User und das Passwort des Geräts ein."
+          "ssh_login_refused": "Der {model} hat die SSH-Anmeldung abgelehnt. Gib den SSH-User und das Passwort des Geräts ein."
         },
         "abort": {
-          "entry_not_loaded": "Der BTicino-C300X-Eintrag ist nicht geladen."
+          "entry_not_loaded": "Der BTicino-C300X-Eintrag ist nicht geladen.",
+          "device_model_incompatible": "Dieses Paket unterstuetzt dieses Geraetemodell nicht. C100X-Testpakete duerfen keine C300X-Geraete aktualisieren. Installiere vor dem Agent-Update oder der Neuinstallation das passende Paket. Es wurden keine Geraetedateien ersetzt."
         }
-      }
+      },
+      "description": "Installed: {installed_version}. Packaged: {available_version}. Update path: {update_path}. Reason: {reason}."
+    },
+    "device_agent_update_regular_package": {
+      "title": "C300X-Device-Agent: reguläres Paket verwenden",
+      "description": "{entry_title} ist eine Classe 300X, installiert ist aber das Testpaket für die Classe 100X, das nur für die C100X gedacht ist. Es aktualisiert oder installiert keinen C300X-Agenten. Installiere stattdessen das reguläre Release der Integration; am Gerät wurde nichts geändert.\n\nInstalliert: {installed_version}. Im Paket: {available_version}."
     },
     "device_agent_startup_disabled": {
-      "title": "C300X Device-Agent startet nach Reboot nicht",
-      "description": "{entry_title} erreicht den C300X Device-Agent aktuell, aber der Geräte-Autostart-Link fehlt oder ist ungültig. Nach dem nächsten C300X-Reboot fällt der Agent wieder aus. Führe die Device-Agent-Reparatur/Aktualisierung aus oder installiere den Agent per SSH neu, um den Autostart-Link wieder anzulegen."
+      "title": "{model} Device-Agent startet nach Reboot nicht",
+      "description": "{entry_title} erreicht den {model} Device-Agent aktuell, aber der Geräte-Autostart-Link fehlt oder ist ungültig. Nach dem nächsten {model}-Reboot fällt der Agent wieder aus. Führe die Device-Agent-Reparatur/Aktualisierung aus oder installiere den Agent per SSH neu, um den Autostart-Link wieder anzulegen."
     },
     "device_agent_self_test_failed": {
-      "title": "C300X Device-Agent-Self-Test meldet ein Problem",
-      "description": "{entry_title} erreicht den C300X Device-Agent, aber der read-only Self-Test meldet eine fehlgeschlagene Setup-Prüfung. Fehlgeschlagene Checks: {failed_checks}. Gründe: {reasons}. Was zu tun ist: {actions}. Es wurde keine automatische Reparatur ausgeführt. IPv6-Firewall ist optional, ausser diese HA-Instanz erreicht das Gerät über IPv6."
+      "title": "{model} Device-Agent-Self-Test meldet ein Problem",
+      "description": "{entry_title} erreicht den {model} Device-Agent, aber der read-only Self-Test meldet eine fehlgeschlagene Setup-Prüfung. Fehlgeschlagene Checks: {failed_checks}. Gründe: {reasons}. Was zu tun ist: {actions}. Es wurde keine automatische Reparatur ausgeführt. IPv6-Firewall ist optional, ausser diese HA-Instanz erreicht das Gerät über IPv6."
     },
     "device_agent_ui_event_watchdog": {
-      "title": "C300X Display-Ereignis-Watcher wurde geschützt",
-      "description": "{entry_title} hat zu viele gleichzeitige C300X Display-Ereignis-Watcher erkannt. Der Device Agent hat den zusätzlichen Watcher abgelehnt, damit keine lokale Display-Polling-Schleife den C300X überlastet. Aktive Watcher: {waiters}/{capacity}. Abgelehnte Watcher: {overflows}. Lade die C300X Display-GUI über die Integration neu, wenn Dashboard oder Memos am Display nicht mehr aktualisiert werden, und aktualisiere danach die Diagnose."
+      "title": "{model} Display-Ereignis-Watcher wurde geschützt",
+      "description": "{entry_title} hat zu viele gleichzeitige {model} Display-Ereignis-Watcher erkannt. Der Device Agent hat den zusätzlichen Watcher abgelehnt, damit keine lokale Display-Polling-Schleife den {model} überlastet. Aktive Watcher: {waiters}/{capacity}. Abgelehnte Watcher: {overflows}. Lade die {model} Display-GUI über die Integration neu, wenn Dashboard oder Memos am Display nicht mehr aktualisiert werden, und aktualisiere danach die Diagnose."
     },
     "device_display_unsupported": {
       "title": "C300X-Displayseiten sind auf dieser Station nicht verfügbar",
       "description": "{entry_title}: Der Geräte-Agent kennt das Displayprogramm oder das Display-Startskript dieser Station nicht ({reason}). Er hat das Display im Originalzustand gelassen und läuft ohne die Displayseiten: Die Station zeigt keine Home-Assistant-Seiten oder -Tasten, und der Display-Patch bleibt aus. Die übrigen Funktionen des Agenten arbeiten wie vor den Displayseiten für Firmware 3.0.x. Ein erneutes Anwenden des Display-Patches prüft die Station noch einmal."
     },
     "device_core_qml_hook_required": {
-      "title": "C300X Core-Media-Hook fehlt",
+      "title": "{model} Core-Media-Hook fehlt",
       "fix_flow": {
         "step": {
           "confirm": {
-            "title": "C300X Core-Media-Hook anwenden",
-            "description": "Home Assistant wendet nur den minimalen Core-Media-Hook an, der erkennt, wenn das C300X-Display oder ein anderer Media-Client eine Media-Session schliesst. Das ist getrennt vom optionalen Dashboard-Display-Patch.\n\nAktueller Core-Hook-Status: {qml_patch_status}"
+            "title": "{model} Core-Media-Hook anwenden",
+            "description": "Home Assistant wendet nur den minimalen Core-Media-Hook an, der erkennt, wenn das {model}-Display oder ein anderer Media-Client eine Media-Session schliesst. Das ist getrennt vom optionalen Dashboard-Display-Patch.\n\nAktueller Core-Hook-Status: {qml_patch_status}"
           }
         },
         "error": {
@@ -1577,7 +1742,7 @@
         },
         "abort": {
           "entry_not_loaded": "Der BTicino-C300X-Eintrag ist nicht geladen.",
-          "core_patch_unsupported": "Der installierte C300X Device-Agent unterstützt das Anwenden des Core-Media-Hooks nicht.",
+          "core_patch_unsupported": "Der installierte {model} Device-Agent unterstützt das Anwenden des Core-Media-Hooks nicht.",
           "display_unsupported": "Der Geräte-Agent kennt das Display dieser Station nicht; er läuft ohne die Displayseiten, und es gibt keinen Core-Media-Hook anzuwenden."
         }
       }
@@ -1603,21 +1768,21 @@
       }
     },
     "device_qml_transaction_stuck": {
-      "title": "C300X-Displayschreibvorgang nicht abgeschlossen",
-      "description": "Ein Schreibvorgang des Display-Patches auf {entry_title} wurde unterbrochen (Stromausfall, Absturz oder erzwungener Stopp), und der Geräte-Agent konnte ihn nicht selbst abschließen. Die Displaydateien bleiben, wie sie sind; nichts geht verloren: Die Dateien von vor diesem Schreibvorgang liegen auf dem Gerät in einem versteckten Ordner `.c300x-qml-transaction.*` in /home/bticino/bin/gui/skins/default.\n\nVorgehen: Prüfe das C300X-Display. Funktioniert es, wende den Display-Patch in der Integration erneut an (aus- und wieder einschalten); dabei werden alle Displaydateien aus den Originalsicherungen neu erstellt. Bleibt die Warnung, starte das C300X neu, damit der Agent es beim Start erneut versucht. Ein Rest von Agent 2.9.0 oder älter wird nie automatisch zurückgespielt: Sobald das Display funktioniert, entferne diesen Ordner per SSH (siehe Erweiterte Wartung, Wiederherstellung, in der Dokumentation)."
+      "title": "{model}-Displayschreibvorgang nicht abgeschlossen",
+      "description": "Ein Schreibvorgang des Display-Patches auf {entry_title} wurde unterbrochen (Stromausfall, Absturz oder erzwungener Stopp), und der Geräte-Agent konnte ihn nicht selbst abschließen. Die Displaydateien bleiben, wie sie sind; nichts geht verloren: Die Dateien von vor diesem Schreibvorgang liegen auf dem Gerät in einem versteckten Ordner `.c300x-qml-transaction.*` in /home/bticino/bin/gui/skins/default.\n\nVorgehen: Prüfe das {model}-Display. Funktioniert es, wende den Display-Patch in der Integration erneut an (aus- und wieder einschalten); dabei werden alle Displaydateien aus den Originalsicherungen neu erstellt. Bleibt die Warnung, starte das {model} neu, damit der Agent es beim Start erneut versucht. Ein Rest von Agent 2.9.0 oder älter wird nie automatisch zurückgespielt: Sobald das Display funktioniert, entferne diesen Ordner per SSH (siehe Erweiterte Wartung, Wiederherstellung, in der Dokumentation)."
     },
     "device_user_required": {
-      "title": "C300X Media-User-Setup erforderlich",
+      "title": "{model} Media-User-Setup erforderlich",
       "fix_flow": {
         "step": {
           "confirm": {
             "title": "Home-Assistant-Media-User erstellen",
-            "description": "Home Assistant weist den Device-Agent an, den dedizierten C300X-Media-User `homeassistant` zu erstellen oder zu reparieren. Vorhandene Media-User bleiben erhalten. Der Agent schreibt nur den notwendigen geräteseitigen User- und Routing-Zustand."
+            "description": "Home Assistant weist den Device-Agent an, den dedizierten {model}-Media-User `homeassistant` zu erstellen oder zu reparieren. Vorhandene Media-User bleiben erhalten. Der Agent schreibt nur den notwendigen geräteseitigen User- und Routing-Zustand."
           }
         },
         "error": {
           "device_user_setup_failed": "Das Device-User-Setup ist fehlgeschlagen. Prüfe den Maintenance-Zugriff und versuche es erneut.",
-          "device_not_registered": "Die C300X wurde noch nicht in der BTicino-App Door Entry angemeldet. Flexisip auf dem Gerät bekommt SIP-User, Domain und Zertifikate nur über diese Anmeldung. Melde das Gerät einmal in der App an und versuche es dann erneut. Die Weiterleitung kann danach auf Smartphone bleiben."
+          "device_not_registered": "Die {model} wurde noch nicht in der BTicino-App Door Entry angemeldet. Flexisip auf dem Gerät bekommt SIP-User, Domain und Zertifikate nur über diese Anmeldung. Melde das Gerät einmal in der App an und versuche es dann erneut. Die Weiterleitung kann danach auf Smartphone bleiben."
         },
         "abort": {
           "entry_not_loaded": "Der BTicino-C300X-Eintrag ist nicht geladen."
@@ -1625,11 +1790,11 @@
       }
     },
     "media_setup_repair_required": {
-      "title": "C300X Medien-Setup: Prüfung fehlgeschlagen ({failed_checks})",
+      "title": "{model} Medien-Setup: Prüfung fehlgeschlagen ({failed_checks})",
       "fix_flow": {
         "step": {
           "confirm": {
-            "title": "C300X Medien-Setup reparieren",
+            "title": "{model} Medien-Setup reparieren",
             "description": "Home Assistant kann jetzt die passende Reparatur für fehlgeschlagene Medien-Readiness-Checks ausführen. Je nach Fehler werden Agent-Erreichbarkeit neu geprüft, Agent-Setup-Metadaten aktualisiert, die IPv4-Medien-Firewall angewendet oder Home-Assistant-Media-User/Routing repariert. Ring-Call-Forwarding wird durch diese Reparatur niemals geändert. IPv6 ist optional und wird ebenfalls nicht geändert.\n\nFehlgeschlagene Checks: {failed_checks}\nReparierbare Checks: {fixable_checks}\nEmpfohlene Aktion: {recommended_action}"
           }
         },
@@ -1642,32 +1807,32 @@
       }
     },
     "invalid_action_map": {
-      "title": "C300X Dashboard-Action-Allowlist ist ungültig",
+      "title": "{model} Dashboard-Action-Allowlist ist ungültig",
       "description": "Die Action-Allowlist für {entry_title} kann nicht gelesen werden: {error}. Korrigiere die konfigurierte Action-Map und lade danach die Integration neu."
     },
     "missing_alarm_entity": {
-      "title": "Konfigurierte C300X Alarm-Entität fehlt",
+      "title": "Konfigurierte {model} Alarm-Entität fehlt",
       "description": "{entry_title} verweist auf {entity_id}, aber Home Assistant kennt diese Entität nicht. Wähle in den Integrationsoptionen eine vorhandene Alarm-Control-Panel-Entität oder leere die Alarm-Einstellung."
     },
     "media_watchdog_timeout": {
-      "title": "C300X Media-Watchdog hat eine Hochlast-Session gestoppt",
-      "description": "{entry_title} meldete für mindestens {duration_seconds} Sekunden dauerhaft hohe Geräte-CPU-Last ({cpu_percent}%). Home Assistant hat seine aktiven C300X-Media-Sessions geschlossen, damit das Gerät nicht weiter unter Last gehalten wird. Grund: {reason}."
+      "title": "{model} Media-Watchdog hat eine Hochlast-Session gestoppt",
+      "description": "{entry_title} meldete für mindestens {duration_seconds} Sekunden dauerhaft hohe Geräte-CPU-Last ({cpu_percent}%). Home Assistant hat seine aktiven {model}-Media-Sessions geschlossen, damit das Gerät nicht weiter unter Last gehalten wird. Grund: {reason}."
     },
     "frontend_card_setup_hint": {
-      "title": "C300X Lovelace-Card hinzufügen",
+      "title": "{model} Lovelace-Card hinzufügen",
       "fix_flow": {
         "step": {
           "init": {
-            "title": "C300X Lovelace-Card einrichten",
-            "description": "Dieses Update erfordert eine Aktualisierung der generierten C300X-Lovelace-Cards. Führe diesen Repair einmal aus, um die C300X-Dashboard-View unter {dashboard_path} zu aktualisieren und alte generierte Split-Card-Layouts zu ersetzen. Ignoriere ihn nur, wenn du alle C300X-Cards bereits manuell aktualisiert hast.",
+            "title": "{model} Lovelace-Card einrichten",
+            "description": "Dieses Update erfordert eine Aktualisierung der generierten {model}-Lovelace-Cards. Führe diesen Repair einmal aus, um die {model}-Dashboard-View unter {dashboard_path} zu aktualisieren und alte generierte Split-Card-Layouts zu ersetzen. Ignoriere ihn nur, wenn du alle {model}-Cards bereits manuell aktualisiert hast.",
             "menu_options": {
               "confirm": "Card erstellen oder aktualisieren",
               "ignore": "Diesen Hinweis ignorieren"
             }
           },
           "confirm": {
-            "title": "C300X Lovelace-Card erstellen oder aktualisieren",
-            "description": "Home Assistant fügt einem Lovelace-Dashboard im Storage-Modus eine C300X-View hinzu oder aktualisiert sie. Die View enthält die zusammengeführte Doorstation/Home-Call-Card für {entry_title}. Alte generierte Split-Card-Layouts im ausgewählten Dashboard werden ersetzt.",
+            "title": "{model} Lovelace-Card erstellen oder aktualisieren",
+            "description": "Home Assistant fügt einem Lovelace-Dashboard im Storage-Modus eine {model}-View hinzu oder aktualisiert sie. Die View enthält die zusammengeführte Doorstation/Home-Call-Card für {entry_title}. Alte generierte Split-Card-Layouts im ausgewählten Dashboard werden ersetzt.",
             "data": {
               "dashboard_path": "Dashboard",
               "view_path": "View-Pfad"
@@ -1675,7 +1840,7 @@
           }
         },
         "error": {
-          "camera_entity_missing": "Home Assistant konnte die C300X-Kamera-Entität für diesen Config-Entry nicht finden.",
+          "camera_entity_missing": "Home Assistant konnte die {model}-Kamera-Entität für diesen Config-Entry nicht finden.",
           "lovelace_config_invalid": "Die ausgewählte Lovelace-Dashboard-Konfiguration ist nicht im erwarteten Format schreibbar.",
           "lovelace_storage_unavailable": "Es ist kein Lovelace-Dashboard im Storage-Modus verfügbar. YAML-Dashboards müssen manuell bearbeitet werden.",
           "lovelace_unavailable": "Lovelace ist noch nicht verfügbar."
@@ -1686,19 +1851,19 @@
       }
     },
     "unsupported_callback_url": {
-      "title": "C300X Callback-URL ist für den Device-Agent nicht nutzbar",
+      "title": "{model} Callback-URL ist für den Device-Agent nicht nutzbar",
       "fix_flow": {
         "step": {
           "configure": {
             "title": "Lokale Callback-URL konfigurieren",
-            "description": "Eine vom C300X erreichbare Basis-URL von Home Assistant eingeben. HTTP lässt TLS deaktiviert. HTTPS aktiviert TLS ausdrücklich und benötigt einen aktualisierten Agenten sowie ein vertrauenswürdiges, zum Hostnamen passendes Zertifikat. Beim Wechsel HTTP/HTTPS startet nur der Agent neu, sobald keine Medien aktiv sind. HTTPS erzeugt zusätzliche Gerätelast. Bei Zustellungsfehlern DNS und Gerätezeit prüfen.\n\nVorgeschlagener Wert: {suggested_callback_base_url}",
+            "description": "Eine vom {model} erreichbare Basis-URL von Home Assistant eingeben. HTTP lässt TLS deaktiviert. HTTPS aktiviert TLS ausdrücklich und benötigt einen aktualisierten Agenten sowie ein vertrauenswürdiges, zum Hostnamen passendes Zertifikat. Beim Wechsel HTTP/HTTPS startet nur der Agent neu, sobald keine Medien aktiv sind. HTTPS erzeugt zusätzliche Gerätelast. Bei Zustellungsfehlern DNS und Gerätezeit prüfen.\n\nVorgeschlagener Wert: {suggested_callback_base_url}",
             "data": {
               "callback_base_url": "Callback-Basis-URL (HTTP oder HTTPS)"
             }
           }
         },
         "error": {
-          "invalid_callback_base_url": "Eine vom C300X erreichbare HTTP- oder HTTPS-Basis-URL von Home Assistant eingeben."
+          "invalid_callback_base_url": "Eine vom {model} erreichbare HTTP- oder HTTPS-Basis-URL von Home Assistant eingeben."
         },
         "abort": {
           "entry_not_loaded": "Der BTicino-C300X-Eintrag ist nicht geladen."
@@ -1810,7 +1975,7 @@
       }
     },
     "capture_doorbell_call": {
-      "name": "C300X-Türvideo aufnehmen",
+      "name": "Türvideo aufnehmen",
       "description": "Nimmt ein kurzes Video in Home Assistant auf: von einem eingehenden Klingelruf oder ohne Klingeln bei freiem Medienkanal.",
       "fields": {
         "capture_mode": {

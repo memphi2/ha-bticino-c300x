@@ -754,6 +754,35 @@ def test_stop_doorbell_video_button_requires_enabled_video() -> None:
     asyncio.run(_run())
 
 
+def test_c100x_standalone_buttons_do_not_need_video_or_actuate_on_setup(monkeypatch) -> None:
+    from unittest.mock import AsyncMock
+
+    async def run() -> None:
+        entry = _FakeEntry(title="C100X", data={CONF_VIDEO_ENABLED: False}, runtime_data=_FakeRuntimeData(
+            capabilities={"stair_light": {"supported": True}, "locks": {
+                "supported": True, "locks": [{"id": "entry", "name": "Entry"}],
+            }},
+        ))
+        hass = _FakeHass()
+        stair, unlock = AsyncMock(), AsyncMock()
+        monkeypatch.setattr(button_module, "async_trigger_stair_light", stair)
+        monkeypatch.setattr(button_module, "async_unlock_door", unlock)
+        entities: list[Any] = []
+        await async_setup_entry(hass, entry, entities.extend)  # type: ignore[arg-type]
+        stair.assert_not_awaited()
+        unlock.assert_not_awaited()
+        light_button, = [e for e in entities if isinstance(e, C300XStairLightButton)]
+        lock_button, = [e for e in entities if isinstance(e, C300XDoorUnlockButton)]
+        light_button.hass = lock_button.hass = hass
+        await light_button.async_press()
+        stair.assert_awaited_once_with(hass, entry)
+        unlock.assert_not_awaited()
+        await lock_button.async_press()
+        unlock.assert_awaited_once_with(hass, entry, "entry")
+
+    asyncio.run(run())
+
+
 def test_action_buttons_translate_executor_agent_errors(monkeypatch) -> None:  # noqa: ANN001
     async def _run() -> None:
         for button_class, patched_name, expected_call in [
@@ -2038,3 +2067,57 @@ def test_delete_button_reports_success_when_only_the_reread_fails() -> None:
         entry.runtime_data.resources.memos_refresh_task.cancel()
 
     asyncio.run(_run())
+
+
+@pytest.mark.parametrize("model", ["C100X", "C300X"])
+def test_a_c100x_gets_no_message_or_memo_delete_button(model: str) -> None:
+    from c100x_answering_capabilities import C100X, C300X
+
+    async def _run() -> list[Any]:
+        entry = _FakeEntry(
+            options={CONF_DEVICE_UI_ENABLED: True},
+            runtime_data=_FakeRuntimeData(
+                capabilities=dict(C100X if model == "C100X" else C300X),
+                qml_patch_status={"available": True, "patched": True},
+            ),
+        )
+        entities: list[Any] = []
+        await async_setup_entry(_FakeHass(), entry, entities.extend)  # type: ignore[arg-type]
+        return entities
+
+    entities = asyncio.run(_run())
+    for kind in (C300XDeleteLatestVideoMessageButton, C300XDeleteLatestTextMemoButton,
+                 C300XDeleteLatestVoiceMemoButton):
+        assert any(isinstance(entity, kind) for entity in entities) is (model == "C300X")
+
+
+def test_an_agent_without_voice_memos_gets_no_voice_delete_button() -> None:
+    async def _run() -> list[Any]:
+        entry = _FakeEntry(
+            options={CONF_DEVICE_UI_ENABLED: True},
+            runtime_data=_FakeRuntimeData(
+                capabilities={"memos": {"supported": True, "delete": True, "voice": False}},
+                qml_patch_status={"available": True, "patched": True},
+            ),
+        )
+        entities: list[Any] = []
+        await async_setup_entry(_FakeHass(), entry, entities.extend)  # type: ignore[arg-type]
+        return entities
+
+    entities = asyncio.run(_run())
+    assert any(isinstance(entity, C300XDeleteLatestTextMemoButton) for entity in entities)
+    assert not any(isinstance(entity, C300XDeleteLatestVoiceMemoButton) for entity in entities)
+
+
+@pytest.mark.parametrize("model", ["C100X", "C300X"])
+def test_only_a_c300x_gets_the_display_reload_button(model: str) -> None:
+    async def _run() -> list[Any]:
+        entry = _FakeEntry(runtime_data=_FakeRuntimeData(capabilities={}))
+        entry.runtime_data.agent_info = {"model": model}  # type: ignore[attr-defined]
+        entities: list[Any] = []
+        await async_setup_entry(_FakeHass(), entry, entities.extend)  # type: ignore[arg-type]
+        return entities
+
+    entities = asyncio.run(_run())
+    assert any(isinstance(entity, C300XReloadGuiButton) for entity in entities) is (model == "C300X")
+    assert any(isinstance(entity, C300XRebootButton) for entity in entities)

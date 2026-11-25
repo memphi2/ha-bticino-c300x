@@ -23,6 +23,7 @@ from .api import (
     normalize_memo_id,
     normalize_video_message_id,
 )
+from .capabilities import stored_media_offered
 from .config_snapshots import snapshot_options
 from .const import DOMAIN
 from .media import runtime_entry
@@ -192,10 +193,14 @@ class C300XStoredMediaSource(MediaSource):
                 continue
             messages: dict[str, Any] = {}
             memos: dict[str, Any] = {}
-            with suppress(C300XAgentApiError):
-                messages = await _async_messages_for_entry(entry)
-            with suppress(C300XAgentApiError):
-                memos = await _async_memos_for_entry(entry)
+            capabilities = getattr(getattr(entry, "runtime_data", None), "capabilities", {})
+            # A C100X has neither: nothing is recorded there.
+            if stored_media_offered(capabilities, "video"):
+                with suppress(C300XAgentApiError):
+                    messages = await _async_messages_for_entry(entry)
+            if stored_media_offered(capabilities, "voice"):
+                with suppress(C300XAgentApiError):
+                    memos = await _async_memos_for_entry(entry)
             children.extend(_message_children(entry.entry_id, messages))
             children.extend(_voice_memo_children(entry.entry_id, memos))
             manager = get_snapshots(self.hass, entry.entry_id)

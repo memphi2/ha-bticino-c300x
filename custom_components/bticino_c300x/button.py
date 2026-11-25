@@ -17,6 +17,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .agent_diagnostics import async_refresh_agent_diagnostics
 from .api import C300XAgentApiError, C300XAgentApiUnsupportedError
+from .c100x_display_activation import async_follow_c100x_display, c100x_display_status
 from .capabilities import (
     answering_machine_message_delete_supported,
     entry_device_ui_enabled_or_patch_active,
@@ -24,12 +25,14 @@ from .capabilities import (
     entry_maintenance_action_is_advertised,
     locks_for_capabilities,
     memo_delete_supported,
+    voice_memos_supported,
 )
 from .const import (
     EVENT_AGENT_EVENT_RECEIVED,
     SIGNAL_QML_PATCH_CHANGED,
 )
 from .display_activation import gui_reload_kwargs
+from .display_support import entry_is_c100x
 from .entity import C300XEntity, entry_video_enabled, supports_capability
 from .entry_types import BticinoC300XConfigEntry
 from .event_payload import agent_event_key
@@ -75,13 +78,19 @@ async def async_setup_entry(
     entities.append(C300XRebootButton(entry))
     entities.append(C300XRemoveAgentButton(entry))
     entities.append(C300XRestartAgentButton(entry))
-    entities.append(C300XReloadGuiButton(entry))
+    if not entry_is_c100x(entry):
+        # The C100X GUI cannot be restarted; its agent never offers gui_reload.
+        entities.append(C300XReloadGuiButton(entry))
+    if c100x_display_status(capabilities) is not None:
+        entities.append(C300XActivateDisplayPagesButton(entry))
+        entities.append(C300XRestoreDisplayPagesButton(entry))
     if entry_device_ui_enabled_or_patch_active(entry):
         if answering_machine_message_delete_supported(capabilities):
             entities.append(C300XDeleteLatestVideoMessageButton(entry))
         if memo_delete_supported(capabilities):
             entities.append(C300XDeleteLatestTextMemoButton(entry))
-            entities.append(C300XDeleteLatestVoiceMemoButton(entry))
+            if voice_memos_supported(capabilities):
+                entities.append(C300XDeleteLatestVoiceMemoButton(entry))
     if entities:
         async_add_entities(entities)
 
@@ -599,3 +608,55 @@ async def _async_ensure_gui_function_patch(entry: BticinoC300XConfigEntry) -> No
         raise HomeAssistantError(
             "The C300X Display patch is required for this action"
         )
+
+
+class C300XC100XDisplayButton(C300XEntity, ButtonEntity):
+    """Activate or restore the C100X display pages; the agent reboots the station once idle."""
+
+    _attr_entity_category = EntityCategory.CONFIG
+    _key = ""
+    _flag = ""
+
+    def __init__(self, entry: BticinoC300XConfigEntry) -> None:
+        super().__init__(entry, self._key)
+
+    @property
+    def available(self) -> bool:
+        """Return true while the agent offers this action."""
+
+        status = c100x_display_status(getattr(self._entry.runtime_data, "capabilities", {}))
+        return super().available and status is not None and status.get(self._flag) is True
+
+    async def _async_call(self) -> None:
+        raise NotImplementedError
+
+    async def async_press(self) -> None:
+        """Ask the agent; it reboots the station only while it is idle."""
+
+        try:
+            await self._async_call()
+        except C300XAgentApiError as err:
+            raise HomeAssistantError(f"C100X display action {self._flag} was refused: {err}") from err
+        async_follow_c100x_display(self.hass, self._entry)
+
+
+class C300XActivateDisplayPagesButton(C300XC100XDisplayButton):
+    """Install the Home Assistant pages on the C100X display."""
+
+    _attr_translation_key = "activate_display_pages"
+    _key = "activate_display_pages"
+    _flag = "activate"
+
+    async def _async_call(self) -> None:
+        await self._entry.runtime_data.api.async_c100x_display_activate()
+
+
+class C300XRestoreDisplayPagesButton(C300XC100XDisplayButton):
+    """Bring back the original C100X display."""
+
+    _attr_translation_key = "restore_display_pages"
+    _key = "restore_display_pages"
+    _flag = "restore"
+
+    async def _async_call(self) -> None:
+        await self._entry.runtime_data.api.async_c100x_display_restore()

@@ -17,6 +17,7 @@ from .common import (
     async_ensure_gui_function_patch,
     async_play_media,
     async_refresh_after_message_mutation,
+    ensure_stored_media_supported,
     ensure_text_memo_write_supported,
     latest_item_id_for_entry,
     raise_agent_command_failed,
@@ -35,6 +36,7 @@ class MemosUseCase:
     async def play_latest_voice_memo(self, media_player_entity_id: str) -> None:
         """Play the latest voice memo on a media player."""
 
+        ensure_stored_media_supported(self._entry, "voice")
         memo_id = await self._latest_voice_memo_audio_id()
         await async_play_media(
             self._hass,
@@ -66,6 +68,7 @@ class MemosUseCase:
     async def delete_latest_voice_memo(self) -> None:
         """Delete the newest voice memo."""
 
+        ensure_stored_media_supported(self._entry, "voice")
         await self._async_delete_latest_memo("voice")
 
     async def _async_delete_latest_memo(self, kind: str) -> None:

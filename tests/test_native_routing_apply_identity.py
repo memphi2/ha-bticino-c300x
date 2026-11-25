@@ -9,7 +9,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 FIRMWARE_ROOT = Path(os.environ.get("C300X_FIRMWARE_WORK", ROOT.parent / "c300x-fwpatch/work"))
-FIRMWARES = ("1.7.19", "2.0.2", "3.0.6")
+FIRMWARES = ("c100x-1.5.8", "1.7.19", "2.0.2", "3.0.6")
 
 
 @pytest.fixture(scope="module")
@@ -54,24 +54,6 @@ def test_failed_sync_leaves_the_stock_binary(apply_identity_binary, tmp_path):
     assert target.read_bytes() == stock
     assert not list(target.parent.glob("*.tmp"))
     assert run(apply_identity_binary, target, backup, "apply").returncode == 0
-
-
-def test_c100x_remains_unsupported(apply_identity_binary, tmp_path):
-    original = FIRMWARE_ROOT / "rootfs-c100x-1.5.8/home/bticino/bin/bt_answering_machine"
-    if not original.is_file():
-        pytest.skip("Extracted C100X firmware unavailable")
-    target = tmp_path / "bin/bt_answering_machine"
-    backup = tmp_path / "backup/bt_answering_machine"
-    target.parent.mkdir()
-    backup.parent.mkdir()
-    shutil.copy2(original, target)
-    before = target.read_bytes()
-    result = run(apply_identity_binary, target, backup, "apply")
-    assert result.returncode != 0, result.stdout
-    assert "unsupported_routing_target_hash" in result.stdout
-    assert target.read_bytes() == before
-    assert not backup.exists()
-    assert not list(target.parent.glob("*.tmp"))
 
 
 @pytest.mark.parametrize("firmware", FIRMWARES)

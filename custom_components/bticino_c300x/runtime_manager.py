@@ -20,6 +20,7 @@ from .api import (
     display_bridge_callback_fingerprint,
 )
 from .api_errors import C300XDisplayBridgeNotRegisteredError
+from .c100x_display_activation import async_follow_c100x_display_if_open
 from .capabilities import (
     capability_is_supported,
     entry_device_ui_configured,
@@ -79,6 +80,11 @@ from .device_user import (
 )
 from .display_patch_sync import async_settle_display_setting, display_setting_pending
 from .display_settings import DISPLAY_SETTING_KEYS, display_settings
+from .display_support import (
+    entry_display_supported,
+    remember_display_support,
+    setup_is_c100x,
+)
 from .display_unread import async_release_unread_claim, async_send_unread_event
 from .entry_config import entry_config_value as _entry_config_value
 from .entry_locks import clear_entry_locks
@@ -249,7 +255,9 @@ class C300XRuntimeManager:
             self.capabilities = gate_capabilities(
                 capabilities,
                 doorbell_video_enabled=_entry_video_enabled(self.entry),
+                c100x=setup_is_c100x(self.setup_data),
             )
+            remember_display_support(self.hass, self.entry, self.setup_data)
 
         if self.connection_state.available:
             self.agent_update_state = compare_agent_bundle(
@@ -307,6 +315,7 @@ class C300XRuntimeManager:
         await _async_refresh_self_test(self.entry)
         if display_setting_pending(self.entry):
             await async_settle_display_setting(self.hass, self.entry)
+        async_follow_c100x_display_if_open(self.hass, self.entry)
 
     async def _async_refresh_display_registration(
         self, api: C300XAgentApi, *, startup: bool = False,
@@ -721,6 +730,7 @@ def _offline_setup_data(err: Exception) -> dict[str, Any]:
         "implementation": None,
         "api_version": None,
         "model": None,
+        "display_kind": None,
         "firmware": None,
         "capabilities": {},
         "offline_error": compact_error_text(err),
@@ -1043,6 +1053,11 @@ async def _async_configure_display_bridge(
 
     runtime_data = entry.runtime_data
     resources = getattr(runtime_data, "resources", None)
+
+    if not entry_display_supported(entry):
+        if resources is not None:
+            resources.display_bridge_registration_pending = False
+        return
 
     def check_active() -> None:
         if (

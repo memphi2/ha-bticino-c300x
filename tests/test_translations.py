@@ -167,8 +167,9 @@ def test_native_camera_audio_explains_prerequisites_on_all_feature_forms() -> No
             form = data[area]["step"][step]
             assert form["data"]["native_two_way_audio"]
             hint = form["data_description"]["native_two_way_audio"]
-            for prerequisite in ("2026.11", "Labs", "WebRTC", "HTTPS", "C300X"):
+            for prerequisite in ("2026.11", "Labs", "WebRTC", "HTTPS"):
                 assert prerequisite in hint
+            assert "{model}" in hint
 
 
 def test_display_patch_help_says_that_the_alarmo_settings_are_kept() -> None:
@@ -313,7 +314,14 @@ def test_localized_translation_placeholders_match_base_strings() -> None:
         TRANSLATIONS / "it.json",
         TRANSLATIONS / "fr.json",
     ):
-        assert _translation_placeholders(_load_json(path)) == base_placeholders
+        assert _without_model(_translation_placeholders(_load_json(path))) == _without_model(base_placeholders)
+
+
+def _without_model(placeholders: dict[tuple[str, ...], set[str]]) -> dict[tuple[str, ...], set[str]]:
+    """Every form, abort, issue and error gets the model; a language may name it where English does not."""
+
+    trimmed = {path: names - {"model"} for path, names in placeholders.items()}
+    return {path: names for path, names in trimmed.items() if names}
 
 
 def test_fixable_agent_update_repair_uses_ha_issue_fix_flow_schema() -> None:
@@ -454,7 +462,7 @@ def test_fixable_media_setup_repair_uses_ha_issue_fix_flow_schema() -> None:
             "media_setup_repair_required",
         )
         assert "description" not in issue
-        assert "firewall, rtsp" in issue["title"].format(failed_checks="firewall, rtsp")
+        assert "firewall, rtsp" in issue["title"].format(failed_checks="firewall, rtsp", model="C300X")
         fix_flow = _path_value(
             data,
             "issues",
@@ -560,7 +568,7 @@ def test_options_menu_names_and_explains_every_area() -> None:
     menus = {
         "init": {
             "features", "visitor_snapshot", "camera_quality", "device_activations", "speech", "connection",
-            "display", "done",
+            "display", "dashboard_alarm", "done",
         },
         "display": {
             "dashboard", "dashboard_page_list", "dashboard_entity_display", "dashboard_alarm", "init",

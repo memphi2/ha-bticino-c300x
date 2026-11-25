@@ -10,6 +10,15 @@ buttons on the station's home page, **Alarm** and **Home Assistant**, open
 them; where they sit is set with **Home page buttons**
 ([Enable the Display Pages](#enable-the-display-pages)).
 
+| Model and firmware | Display pages |
+| --- | --- |
+| Classe 300X, 1.7.x, 2.0.2 or 3.0.6 | Yes, through the Display patch below ([on 3.0.6](#display-patch-on-firmware-306)). |
+| Classe 100X, 1.5.8 (in test, [issue #51](https://github.com/memphi2/ha-bticino-c300x/issues/51)) | Yes, as a separate adapter that a reboot activates, operated with the station's keys; see [Classe 100X: Activation by Reboot](#classe-100x-activation-by-reboot). |
+
+The pages, tiles and settings below are the same on both models. Sections that
+name the Display patch apply to the Classe 300X; the Classe 100X differences
+are listed in [its own section](#classe-100x-activation-by-reboot).
+
 Page and tile settings are stored in Home Assistant, and the display asks for
 them, so changing them writes nothing to the station. Entity changes reach the
 display through the existing event connection, without polling. Only entities
@@ -17,6 +26,9 @@ selected for the display can be operated from it, and Home Assistant checks
 every command against the current selection and the entity's capabilities.
 
 ## Enable the Display Pages
+
+These steps are for a Classe 300X. On a Classe 100X use
+[Activation by Reboot](#classe-100x-activation-by-reboot) instead.
 
 1. Install or update the device agent
    ([Quick Start](quickstart.md#install-the-device-agent)).
@@ -157,6 +169,88 @@ right place; the other pages are checked offline only.
 
 Technical details: [Native Agent](dev/native-agent.md#supported-firmware-versions)
 and the [firmware display audit](dev/firmware-3.0.6-display.md).
+
+## Classe 100X: Activation by Reboot
+
+On a Classe 100X (firmware 1.5.8, in test in
+[issue #51](https://github.com/memphi2/ha-bticino-c300x/issues/51)) the pages
+come as a separate adapter for the station's own Qt 5 interface. Its display
+program cannot be restarted, so the pages take effect with one reboot, and the
+agent confirms them in that boot. The Display patch, its switch, the home page
+buttons and **Reload device display** do not exist there.
+
+Until the pages are confirmed, Home Assistant hides the display settings and
+keeps ringer mute, the touch tone and display notifications off. Saved display
+settings stay; **Alarm (Alarmo)** stays available.
+
+1. Install the device agent and finish the first tests
+   ([Quick Start](quickstart.md#first-media-tests)). The agent needs its
+   maintenance reboot, which the installation turns on.
+2. Press **Activate display pages** on the device page. The agent prepares the
+   pages and reboots the station once it has been idle for about two minutes;
+   a call meanwhile postpones the reboot and is never interrupted.
+3. After the reboot the agent checks the new display. Once it is confirmed,
+   Home Assistant reloads, turns **Home Assistant pages on the display** on
+   and offers **Display pages** and **Display tiles** like on a Classe 300X.
+
+**Restore original display**, or turning **Home Assistant pages on the
+display** off, brings back the original display with one reboot.
+
+If the new display does not start in its first boot, for example after a power
+loss, the station goes back to its original display at the following start and
+Repairs shows **C100X display pages were rolled back**; press **Activate
+display pages** to try again. If the agent cannot check a pending activation
+when the station starts, Repairs shows **C100X display check failed at the
+station start**; see
+[Troubleshooting](media-troubleshooting.md#classe-100x-display-pages).
+
+<table>
+  <tr>
+    <td align="center"><strong>Home Assistant</strong><br><img src="images/readme/c100x-display-start-en.webp" alt="Classe 100X page Home Assistant: status fields, weather with two forecasts, page dots at the bottom" width="360"></td>
+    <td align="center"><strong>Lights</strong><br><img src="images/readme/c100x-display-lights-en.webp" alt="Classe 100X page Lights: eight light tiles with switches, the selected tile marked with a white line" width="360"></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Light detail</strong><br><img src="images/readme/c100x-display-light-detail-en.webp" alt="Classe 100X detail page of a light: brightness value, switch and a brightness bar set with the keys" width="360"></td>
+    <td align="center"><strong>Energy: Now</strong><br><img src="images/readme/c100x-display-energy-flow-en.webp" alt="Classe 100X Energy page, Now view: flows between grid, solar, battery and home, the view row below with Now selected" width="360"></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Energy: Today</strong><br><img src="images/readme/c100x-display-energy-today-en.webp" alt="Classe 100X Energy page, Today view: hourly bars with the sums below" width="360"></td>
+    <td align="center"><strong>Agenda</strong><br><img src="images/readme/c100x-display-appointments-en.webp" alt="Classe 100X Agenda page: four appointments, an arrow marks more below" width="360"></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Alarmo</strong><br><img src="images/readme/c100x-display-alarmo-en.webp" alt="Classe 100X Alarmo page while arming: state line, the modes Off, Away and Night, the number pad and the Leaving Home action" width="360"></td>
+    <td></td>
+  </tr>
+</table>
+
+The pictures are renders of the Classe 100X pages with example values on a
+plain background of our own; on the station the pages lie on its wallpaper.
+
+What differs on the Classe 100X:
+
+- The station's main menu gets two items of its own directly after the ringtone
+  item: **Home Assistant** opens the dashboard and **Alarmo** the Alarmo page.
+  Each one is there only while it has something to open (a dashboard with
+  pages, a configured Alarmo panel); the station's other items stay as they are.
+- The pages work like the station's own menus, which have no back key: the
+  pages of a view follow one another with Up and Down, dots show the position
+  and the last entry is **EXIT**. Return enters a page; Up and Down then move
+  the selection, which is scrolled into view, and walking past the first or
+  last control leaves the page again. Arrows mark content above or below.
+  A number such as a brightness is set with Return, Up or Down, Return.
+  The call, hang-up and numbered keys keep their station functions.
+- The station's Settings menu gets the item **Status messages** (on/off) before
+  its EXIT: it shows or hides the routine confirmations on our pages. The
+  station's own key tone setting stays where the station has it.
+- Display notifications wake the screen without a tone; a notification with a
+  positive `sound_duration` is refused.
+- Text memos are not offered on a Classe 100X, neither on the display nor in
+  Home Assistant.
+- There is no message LED and no speech; see
+  [Models and Features](feature-reference.md#models-and-features).
+
+Every step is in test on a Classe 100X; the tester guide is
+[Classe 100X test package](c100x-test-release.md#display-activation-by-reboot-device-test).
 
 ## Pages and Positions
 
@@ -505,11 +599,12 @@ removes a notice.
   conditions that still apply. Nothing is written to the station or the
   recorder.
 - Where the agent reports message LED support, a notice also lights the
-  station's message LED until it is dismissed or expires.
+  station's message LED until it is dismissed or expires. The Classe 100X has
+  none.
 - An action never runs because a notice arrives, only when tapped. **Mark
   read** only dismisses the notice; it neither fixes the condition nor runs an
   action. Commands for a notice that has since changed are rejected.
-- The bundled **C300X Calendar display reminder** blueprint shows a notice
+- The bundled **BTicino Calendar display reminder** blueprint shows a notice
   before a calendar event ([Blueprints](user-guide.md#blueprints)). For a
   reliable test, create the event more than 15 minutes ahead, as the
   [Home Assistant calendar documentation](https://www.home-assistant.io/integrations/calendar/#automation)

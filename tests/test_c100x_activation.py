@@ -1,0 +1,377 @@
+"""Persistent activation transaction plus actual native challenge/CLI code."""
+
+import hashlib
+import json
+import shlex
+import shutil
+import subprocess
+import time
+from http.client import HTTPConnection
+
+import pytest
+from c100x_activation_lab import activation_binary as activation_binary
+from c100x_activation_lab import agent_lab, build_agent, gui_peer
+from test_c100x_boot_trial import LATER_BOOT, reboot
+from test_c100x_bundle_delivery import payload
+from test_c100x_display_transaction import (
+    advance_source,
+    assert_original,
+    fault_mv,
+    run,
+)
+from test_c100x_display_transaction import tree as tree
+from test_c100x_qml_adapter import ROOT
+
+from native_agent.test.smoke import TOKEN
+
+
+def generation(tree):
+    return hashlib.sha256((tree[0] / "source/SHA256SUMS").read_bytes()).hexdigest()
+
+
+@pytest.mark.parametrize("blocked", [False, True])
+def test_confirm_requires_actual_native_roundtrip_not_socket_or_marker(tree, activation_binary, blocked):
+    run(tree, "prepare")
+    pending = tree[0] / "backup/pending"
+    assert pending.is_dir()
+    with agent_lab(activation_binary, tree) as port, gui_peer(port, generation(tree), blocked=blocked):
+        result = run(tree, "confirm")
+    assert json.loads(result.stdout)["runtime_verified"] is True
+    assert not pending.exists()
+    assert list((tree[0] / "backup").glob("trial-history.*/snapshot/main.qml"))
+    assert (tree[0] / "backup/confirmed-release").read_text() == ".c100x-" + generation(tree) + "\n"
+    run(tree, "restore")
+    assert_original(tree)
+
+
+def test_hung_gui_rolls_back_prior_generation_without_signalling_it(tree, activation_binary):
+    run(tree, "apply")
+    prior = {name: (tree[1] / name).read_bytes() for name in tree[2]}
+    advance_source(tree)
+    run(tree, "prepare")
+    with agent_lab(activation_binary, tree) as port, gui_peer(port, generation(tree), responsive=False):
+        result = run(tree, "confirm", False)
+    assert "GUI runtime requires recovery" in result.stderr
+    assert prior == {name: (tree[1] / name).read_bytes() for name in tree[2]}
+    assert not (tree[0] / "backup/pending").exists()
+    assert all((tree[1] / name).stat().st_mode & 0o777 == 0o640 for name in prior)
+
+
+def trial_files(tree):
+    return {name: (tree[1] / name).read_bytes() for name in tree[2]}
+
+
+@pytest.mark.parametrize("boot", ["prepare_boot", "unmarked_later_boot", "further_boot"])
+def test_boot_confirm_is_refused_outside_the_trial_boot(tree, boot):
+    run(tree, "prepare")
+    trial = trial_files(tree)
+    if boot != "prepare_boot":
+        reboot(tree)
+    if boot == "further_boot":
+        run(tree, "boot")
+        reboot(tree, FURTHER_BOOT)
+    assert "not the trial boot" in run(tree, "boot-confirm", False).stderr
+    assert (tree[0] / "backup/pending").is_dir()
+    assert trial_files(tree) == trial
+    assert not (tree[0] / "backup/confirmed-release").exists()
+
+
+def test_boot_confirm_in_the_trial_boot_confirms_and_publishes(tree, activation_binary):
+    run(tree, "prepare")
+    reboot(tree)
+    run(tree, "boot")
+    with agent_lab(activation_binary, tree) as port, gui_peer(port, generation(tree)):
+        result = run(tree, "boot-confirm")
+    assert json.loads(result.stdout)["runtime_verified"] is True
+    backup = tree[0] / "backup"
+    release = ".c100x-" + generation(tree)
+    assert not (backup / "pending").exists()
+    assert (backup / "confirmed-release").read_text() == release + "\n"
+    assert (backup / "last-result").read_text() == f"confirmed {release}\n"
+    assert not (backup / "pending.prepare-boot").exists() and not (backup / "pending.trial-boot").exists()
+    reboot(tree, FURTHER_BOOT)
+    run(tree, "boot")
+    assert b"c100xFullScreen" in (tree[1] / "main.qml").read_bytes()
+
+
+def test_boot_confirm_with_a_hung_gui_keeps_the_trial_for_the_start_rule(tree, activation_binary):
+    run(tree, "apply")
+    prior = trial_files(tree)
+    advance_source(tree)
+    run(tree, "prepare")
+    trial = trial_files(tree)
+    reboot(tree)
+    run(tree, "boot")
+    with agent_lab(activation_binary, tree) as port, gui_peer(port, generation(tree), responsive=False):
+        result = run(tree, "boot-confirm", False)
+    assert "trial retained" in result.stderr
+    assert (tree[0] / "backup/pending").is_dir()
+    assert trial_files(tree) == trial
+    assert not (tree[0] / "backup/confirmed-release").exists()
+    reboot(tree, FURTHER_BOOT)
+    run(tree, "boot")
+    assert trial_files(tree) == prior
+
+
+@pytest.mark.parametrize("fault", ["kill_before", "kill_after"])
+def test_persistent_trial_recovers_previous_state_after_process_death(tree, fault):
+    run(tree, "apply")
+    prior = {name: (tree[1] / name).read_bytes() for name in tree[2]}
+    advance_source(tree)
+    fault_mv(tree, fault)
+    run(tree, "prepare", False)
+    assert (tree[0] / "backup/pending").is_dir()
+    shutil.rmtree(tree[0] / "source")
+    run(tree, "recover")
+    assert prior == {name: (tree[1] / name).read_bytes() for name in tree[2]}
+
+
+@pytest.mark.parametrize("damage", ["main", "release", "symlink", "extra"])
+def test_tampered_trial_cannot_authorize_rollback(tree, damage):
+    run(tree, "prepare")
+    pending = tree[0] / "backup/pending"
+    if damage == "main":
+        (pending / "main.qml").write_text("independent QML")
+    elif damage == "release":
+        (pending / "release").write_text(".c100x-" + "0" * 64)
+    elif damage == "extra":
+        (pending / "extra").touch()
+    else:
+        (pending / "main.qml").unlink()
+        (pending / "main.qml").symlink_to(tree[0] / "backup/main.qml")
+    before = (tree[1] / "main.qml").read_bytes()
+    run(tree, "recover", False)
+    assert (tree[1] / "main.qml").read_bytes() == before
+    assert pending.exists()
+
+
+def test_pending_trial_rejects_replacement_and_stock_restore_retains_history(tree):
+    run(tree, "prepare")
+    run(tree, "apply", False)
+    run(tree, "prepare", False)
+    run(tree, "restore")
+    assert_original(tree)
+    assert not (tree[0] / "backup/pending").exists()
+    assert list((tree[0] / "backup").glob("trial-history.*/snapshot/release"))
+
+
+@pytest.mark.parametrize("damage", ["missing", "corrupt", "symlink"])
+def test_failed_installed_payload_rolls_back_without_package_sources(tree, damage):
+    run(tree, "prepare")
+    page = tree[1] / (".c100x-" + generation(tree)) / "C100XBridge.qml"
+    if damage == "corrupt":
+        page.write_text("broken QML")
+    else:
+        page.unlink()
+        if damage == "symlink":
+            page.symlink_to(tree[0] / "wrapper")
+    shutil.rmtree(tree[0] / "source")
+    run(tree, "confirm", False)
+    assert_original(tree)
+
+
+@pytest.mark.parametrize("action", ["recover", "restore"])
+def test_readonly_failure_after_trial_rollback_never_reinstalls_candidate(tree, action):
+    run(tree, "prepare")
+    mount = tree[0] / "tools/mount"
+    mount.write_text('#!/bin/sh\n[ "$2" != remount,ro ]\n')
+    mount.chmod(0o700)
+    tree[3]["C100X_NO_REMOUNT"] = "0"
+    run(tree, action, False)
+    assert_original(tree)
+    assert list((tree[0] / "backup").glob("trial-history.*/snapshot/main.qml"))
+
+
+FURTHER_BOOT = "2b8e4f6a-0c1d-4e2f-a3b4-c5d6e7f80912"
+
+
+def service_start(tree, damage=None):
+    root, _, _, env = tree
+    agent = root / "agent"
+    agent.mkdir(exist_ok=True)
+    binary = agent / "c300x-agent-native"
+    binary.write_text('#!/bin/sh\nexit 99\n')
+    binary.chmod(0o700)
+    (agent / "config.json").write_text("{}")
+    bundle = payload.build(agent / "qml/c100x_bundle.sh")
+    if damage == "missing_payload":
+        bundle.unlink()
+    elif damage == "symlink_payload":
+        target = root / "saved-bundle"
+        bundle.rename(target)
+        bundle.symlink_to(target)
+    elif damage == "tampered_journal":
+        (root / "backup/pending/main.qml").write_text("unknown change")
+    launcher = root / "tools/start-stop-daemon"
+    launcher.write_text('#!/bin/sh\nprintf "start\\n" >> "$START_LOG"\n')
+    launcher.chmod(0o700)
+    settings = root / "agent.env"
+    settings.write_text("PATH=" + shlex.quote(env["PATH"]) + "\n")
+    env.update(C300X_AGENT_DIR=str(agent), C300X_AGENT_ENV=str(settings), START_LOG=str(root / "start.log"))
+    (root / "start.log").unlink(missing_ok=True)
+    result = subprocess.run(["sh", str(ROOT / "custom_components/bticino_c300x/device_agent/init/c300x-native-agent"),
+                             "start"], env=env, capture_output=True, text=True, timeout=20)
+    started = (root / "start.log").exists()
+    assert (result.returncode == 0) == started, result.stdout + result.stderr
+    assert binary.exists() and (root / "backup/main.qml").exists()
+    return started
+
+
+@pytest.mark.parametrize("sequence", ["same_boot", "trial_boot", "restart_in_trial_boot"])
+def test_service_start_keeps_the_trial_in_its_own_boots(tree, sequence):
+    run(tree, "prepare")
+    trial = {name: (tree[1] / name).read_bytes() for name in tree[2]}
+    if sequence != "same_boot":
+        reboot(tree)
+    assert service_start(tree)
+    if sequence == "restart_in_trial_boot":
+        assert service_start(tree)
+    assert (tree[0] / "backup/pending").is_dir()
+    assert trial == {name: (tree[1] / name).read_bytes() for name in tree[2]}
+    mark = tree[0] / "backup/pending.trial-boot"
+    assert mark.exists() == (sequence != "same_boot")
+
+
+@pytest.mark.parametrize("sequence", ["further_boot", "no_mark", "bad_boot_id"])
+def test_service_start_rolls_the_trial_back_after_its_trial_boot(tree, sequence):
+    run(tree, "prepare")
+    if sequence == "further_boot":
+        reboot(tree)
+        assert service_start(tree)
+        reboot(tree, FURTHER_BOOT)
+    elif sequence == "no_mark":
+        (tree[0] / "backup/pending.prepare-boot").unlink()
+    else:
+        reboot(tree, "not-a-boot-id")
+    assert service_start(tree)
+    assert_original(tree)
+    assert not (tree[0] / "backup/pending").exists()
+
+
+@pytest.mark.parametrize(("damage", "reason"), [
+    ("missing_payload", "payload_unavailable"), ("symlink_payload", "payload_unavailable"),
+    ("tampered_journal", "boot_check_failed"),
+])
+def test_service_start_starts_the_agent_and_records_a_failed_boot_check(tree, damage, reason):
+    run(tree, "prepare")
+    # Only a rollback authenticates the journal; a trial boot keeps it untouched.
+    (tree[0] / "backup/pending.trial-boot").write_text(LATER_BOOT + "\n")
+    reboot(tree, FURTHER_BOOT)
+    assert service_start(tree, damage)
+    assert (tree[0] / "backup/pending").is_dir()
+    assert (tree[0] / "backup/boot-check-failed").read_text() == reason + "\n"
+
+
+def test_a_passing_service_start_clears_an_old_boot_check_mark(tree):
+    run(tree, "prepare")
+    (tree[0] / "backup/boot-check-failed").write_text("payload_unavailable\n")
+    reboot(tree)
+    assert service_start(tree)
+    assert not (tree[0] / "backup/boot-check-failed").exists()
+    assert (tree[0] / "backup/pending.trial-boot").exists()
+
+
+@pytest.mark.parametrize("mode", ["challenge", "ready", "idle"])
+def test_native_response_parser_rejects_ambiguous_or_unbounded_input(activation_binary, mode):
+    generation, probe = "a" * 64, "b" * 32
+    body = {"ok": True, "gui_ready": True, "idle": True, "generation": generation, "probe": probe}
+    arguments = [str(activation_binary), "--c100x-gui-response", mode, generation, probe]
+    for value, success in [(json.dumps(body), True), ("{}", False), (json.dumps({**body, "ok": "true"}), False),
+                           (json.dumps(body)[:-1] + ', "ok":false}', False),
+                           (json.dumps(body) + "garbage", False), (json.dumps(body) + " " * 512, False),
+                           (json.dumps(body) + "\0", False)]:
+        result = subprocess.run(arguments, input=value, capture_output=True, text=True, timeout=3)
+        assert (result.returncode == 0) == success, result.stderr
+
+
+@pytest.fixture(scope="module")
+def quick_activation_binary(tmp_path_factory):
+    return build_agent(tmp_path_factory, "-DC100X_ACTIVATION_SETTLE_MS=300 -DC100X_ACTIVATION_CONFIRM_RETRY_MS=1000")
+
+
+def wait_for(condition, seconds=15):
+    deadline = time.monotonic() + seconds
+    while not condition():
+        assert time.monotonic() < deadline
+        time.sleep(0.05)
+
+
+def test_agent_confirms_its_trial_boot_once_the_trial_display_holds_its_lease(tree, quick_activation_binary):
+    run(tree, "prepare")
+    reboot(tree)
+    run(tree, "boot")
+    backup = tree[0] / "backup"
+    bundle = f"exec sh {shlex.quote(str(ROOT / 'native_agent/scripts/c100x_display.sh'))} \"$1\"\n"
+    with agent_lab(quick_activation_binary, tree, bundle) as port:
+        # Without the display's lease the agent never checks.
+        time.sleep(1)
+        assert (backup / "pending").is_dir()
+        with gui_peer(port, generation(tree)):
+            wait_for(lambda: (backup / "confirmed-release").exists())
+    assert (backup / "confirmed-release").read_text() == ".c100x-" + generation(tree) + "\n"
+    assert not (backup / "pending").exists()
+
+
+def test_agent_never_checks_a_trial_outside_its_trial_boot(tree, quick_activation_binary):
+    run(tree, "prepare")
+    backup = tree[0] / "backup"
+    bundle = f"exec sh {shlex.quote(str(ROOT / 'native_agent/scripts/c100x_display.sh'))} \"$1\"\n"
+    with agent_lab(quick_activation_binary, tree, bundle) as port, gui_peer(port, generation(tree)):
+        time.sleep(2)
+    assert (backup / "pending").is_dir()
+    assert not (backup / "confirmed-release").exists()
+
+
+def api(tree, method, path, body=None, maintenance=True):
+    headers = {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"}
+    if maintenance:
+        headers["X-Bticino-C300X-Maintenance-Token"] = "test-admin"
+    connection = HTTPConnection("127.0.0.1", int(tree[3]["C100X_TEST_API_PORT"]), timeout=5)
+    connection.request(method, path, None if body is None else json.dumps(body), headers)
+    response = connection.getresponse()
+    data = json.loads(response.read())
+    connection.close()
+    return response.status, data
+
+
+def display_status(tree):
+    status, data = api(tree, "GET", "/api/v1/maintenance/c100x-display")
+    assert status == 200, data
+    return data["c100x_display"]
+
+
+ROUTE = "/api/v1/maintenance/c100x-display"
+
+
+def test_maintenance_api_reports_refuses_and_restores_the_c100x_display(tree, quick_activation_binary):
+    run(tree, "apply")
+    bundle = f"exec sh {shlex.quote(str(ROOT / 'native_agent/scripts/c100x_display.sh'))} \"$1\"\n"
+    with agent_lab(quick_activation_binary, tree, bundle, maintenance=True):
+        wait_for(lambda: display_status(tree)["status_known"])
+        status = display_status(tree)
+        assert status["phase"] == "installed" and status["confirmed"] is False
+        assert status["restore"] is True and status["alert_sound"] is False
+        capabilities = api(tree, "GET", "/api/v1/capabilities")[1]["capabilities"]
+        assert capabilities["c100x_display"]["phase"] == "installed"
+        assert api(tree, "GET", ROUTE, maintenance=False)[0] == 403
+        assert api(tree, "POST", ROUTE + "/actions/activate", {"confirm": "restore_c100x_display"})[0] == 400
+        # The adapter reaches the agent on port 8090 only.
+        assert api(tree, "POST", ROUTE + "/actions/activate", {"confirm": "activate_c100x_display"}) == (
+            409, {"ok": False, "error": "c100x_display_ui_port_unsupported"})
+        assert api(tree, "POST", ROUTE + "/actions/restore", {"confirm": "restore_c100x_display"}) == (
+            202, {"ok": True, "action": "restore", "scheduled": True})
+        wait_for(lambda: display_status(tree)["phase"] == "stock" and not display_status(tree)["busy"])
+        status = display_status(tree)
+        assert status["last_result"] == "restored" and status["reboot_pending"] is True
+        # No door events in the lab: the reboot waits and says why.
+        assert status["reboot_blocked"] == "call_state_unknown"
+        assert api(tree, "POST", ROUTE + "/actions/restore", {"confirm": "restore_c100x_display"}) == (
+            200, {"ok": True, "action": "restore", "changed": False})
+    assert_original(tree)
+
+
+def test_maintenance_api_needs_the_maintenance_reboot(tree, quick_activation_binary):
+    bundle = f"exec sh {shlex.quote(str(ROOT / 'native_agent/scripts/c100x_display.sh'))} \"$1\"\n"
+    with agent_lab(quick_activation_binary, tree, bundle, maintenance="no_reboot"):
+        assert api(tree, "POST", ROUTE + "/actions/activate", {"confirm": "activate_c100x_display"}) == (
+            404, {"ok": False, "error": "maintenance_disabled"})

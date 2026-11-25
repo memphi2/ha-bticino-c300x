@@ -14,7 +14,7 @@ from .const import (
     DEFAULT_AGENT_PORT,
     DOMAIN,
 )
-from .discovery import discovery_matches_entry
+from .discovery import discovery_matches_entry, discovery_model_conflicts
 from .entry_config import entry_config_value
 from .entry_types import BticinoC300XConfigEntry
 
@@ -109,6 +109,8 @@ async def async_existing_manual_discovery(
     connection: dict[str, Any],
     matches: Callable[[str | None, str | None], bool],
     read_setup: Callable[..., Awaitable[dict[str, Any]]],
+    *,
+    model: str = "",
 ) -> dict[str, Any] | None:
     """Deduplicate discovery and adopt only identity read from the saved endpoint."""
     if discovered_unique_id is None:
@@ -123,6 +125,8 @@ async def async_existing_manual_discovery(
         if not entry_uses_manual_setup_unique_id(entry):
             continue
         if not entry_connection_matches_discovery(entry, connection):
+            continue
+        if discovery_model_conflicts(entry, model):
             continue
         runtime = getattr(entry, "runtime_data", None)
         resources = getattr(runtime, "resources", None)

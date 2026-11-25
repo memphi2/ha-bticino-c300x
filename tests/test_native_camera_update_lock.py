@@ -29,7 +29,7 @@ HARNESS = r"""
 #include <string.h>
 #include <unistd.h>
 
-int c300x_device_display_is_qt5(void) { return 0; }
+int c300x_device_camera_resolution_fixed(void) { return 0; }
 int __real_c300x_camera_update(int low, const struct c300x_camera_values *before,
     const struct c300x_camera_values *after, int g0, int g1,
     const char *settings, const char *crop, int *ro, const char **error);

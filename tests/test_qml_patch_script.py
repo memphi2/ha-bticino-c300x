@@ -1850,6 +1850,44 @@ def test_qml_patch_restore_refuses_to_delete_stock_files_without_backups(
     assert (gui_dir / "MemoPage.qml").read_text() == ORIGINAL_MEMO_PAGE
 
 
+
+@pytest.mark.parametrize(
+    ("marker", "action"),
+    [
+        ("C300X_QML_C100X_MARKER", action)
+        for action in ("apply", "core-apply", "media-user-label-apply", "restore", "core-restore",
+                       "media-user-label-restore", "restore-all", "reload")
+    ],
+)
+def test_qml_patch_leaves_a_c100x_display_alone(
+    tmp_path: Path, marker: str, action: str
+) -> None:
+    gui_dir = tmp_path / "gui"
+    backup_dir = tmp_path / "backups"
+    gui_dir.mkdir()
+    _write_original_gui(gui_dir)
+    before = {path: path.read_bytes() for path in gui_dir.rglob("*") if path.is_file()}
+    present = tmp_path / "marker"
+    present.write_bytes(b"")
+    started = tmp_path / "started"
+    wrapper = tmp_path / "BtClass_qws"
+    wrapper.write_text(f"touch {started}\n")
+    env = {marker: str(present), "C300X_QML_RELOAD_GUI": "1",
+           "C300X_QML_GUI_WRAPPER": str(wrapper), "C300X_QML_GUI_RELOAD_DELAY_SECONDS": "0"}
+
+    result = _run_qml_patch_raw(tmp_path, gui_dir, backup_dir, action, env_overrides=env)
+
+    assert result.returncode == 3
+    assert json.loads(result.stdout) == {
+        "ok": False, "available": False, "state": "unsupported_display",
+    }
+    assert {path: path.read_bytes() for path in gui_dir.rglob("*") if path.is_file()} == before
+    assert not backup_dir.exists()
+    assert not started.exists()
+    status = _run_qml_patch(tmp_path, gui_dir, backup_dir, "status", env_overrides=env)
+    assert status["state"] == "original"
+
+
 def _run_qml_patch(
     tmp_path: Path,
     gui_dir: Path,

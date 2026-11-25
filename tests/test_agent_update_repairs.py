@@ -3279,7 +3279,8 @@ def test_display_restore_follows_the_new_agent_capabilities(monkeypatch, mainten
     assert "apply_firewall" in api.calls
 
 
-def test_ssh_install_uses_the_factory_login_and_asks_only_after_a_refusal(monkeypatch) -> None:
+@pytest.mark.parametrize("model", ["", "C100X", "C300X"])
+def test_ssh_install_uses_the_factory_login_and_asks_only_after_a_refusal(monkeypatch, model) -> None:
     import custom_components.bticino_c300x.repairs as repairs
     from custom_components.bticino_c300x.device_installer import C300XDeviceInstallError
     from custom_components.bticino_c300x.factory_login import factory_ssh_login
@@ -3289,6 +3290,7 @@ def test_ssh_install_uses_the_factory_login_and_asks_only_after_a_refusal(monkey
         data={"agent_host": "192.0.2.60", "agent_token": "t", "maintenance_token": "m"},
     )
     entry.runtime_data.agent_update_state = FakeAgentUpdateState()
+    entry.runtime_data.agent_info = {"device": {"model": model}}
     flow = DeviceAgentUpdateRepairFlow(FakeHass(entry), "entry-1")  # type: ignore[arg-type]
     logins: list[tuple[str, str]] = []
 
@@ -3307,7 +3309,7 @@ def test_ssh_install_uses_the_factory_login_and_asks_only_after_a_refusal(monkey
     first = asyncio.run(flow.async_step_ssh_install(None))
     assert first["data_schema"].schema == {}
     refused = asyncio.run(flow.async_step_ssh_install({}))
-    assert logins == [factory_ssh_login()]
+    assert logins == [factory_ssh_login(model)]
     assert refused["errors"] == {"base": "ssh_login_refused"}
     asked = refused["data_schema"]({})
     assert set(asked) == {"bootstrap_ssh_username", "bootstrap_ssh_password"}

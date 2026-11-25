@@ -25,6 +25,7 @@ class AgentDiagnosticsStatus(AgentContract):
     open_fd_count: int | None
     agent_init_script_present: bool | None
     agent_init_link_ok: bool | None
+    agent_started_after_boot_seconds: int | None
     subscription_count: int | None
     recent_event_count: int | None
     recent_event_capacity: int | None

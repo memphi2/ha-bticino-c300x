@@ -78,11 +78,8 @@ static void replies(int *fds)
         "To: <sip:door@example.test>;tag=remote\r\nCall-ID: call-id\r\nCSeq: 111 BYE\r\n"
         "User-Agent: VctLinphoneService/1.17.3\r\nContent-Length: 0\r\n\r\n");
     c300x_media_sip_send_ring_bye(fds[0], invite, "local-tag", NULL);
-    expect(fds[1], "BYE sip:c300x@127.0.0.1:5060 SIP/2.0\r\n"
-        "Via: SIP/2.0/TCP 127.0.0.1:5060;branch=z9hG4bKringbye1700000000;rport\r\n"
-        "Max-Forwards: 70\r\nFrom: <sip:local@example.test>;tag=local-tag\r\n"
-        "To: <sip:door@example.test>;tag=remote\r\nCall-ID: call-id\r\nCSeq: 111 BYE\r\n"
-        "User-Agent: VctLinphoneService/1.17.3\r\nContent-Length: 0\r\n\r\n");
+    c300x_media_sip_send_ring_bye(fds[0], invite, "local-tag", "");
+    empty(fds[1]);
 }
 
 static void rejected(int *fds)

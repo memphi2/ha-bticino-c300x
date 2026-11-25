@@ -205,7 +205,7 @@ def test_validate_setup_uses_native_agent_version() -> None:
         '{"api_version": "1", '
         '"agent": {"implementation": "native-c", "version": "0.2.0"}, '
         '"device": {"id": "c300x-aabbcc001122", '
-        '"model": "C300X", "firmware": "1.7.19"}, '
+        '"model": "C100X", "display_kind": "qt5_ondisk", "firmware": "1.5.8"}, '
         '"capabilities": {"doorbell_events": true}}'
     )
     api = C300XAgentApi(
@@ -221,7 +221,7 @@ def test_validate_setup_uses_native_agent_version() -> None:
     assert setup["implementation"] == "native-c"
     assert setup["api_version"] == "1"
     assert setup["device_id"] == "c300x-aabbcc001122"
-    assert setup["model"] == "C300X"
+    assert (setup["model"], setup["display_kind"]) == ("C100X", "qt5_ondisk")
     assert setup["capabilities"] == {"doorbell_events": True}
     assert session.requests[0]["kwargs"]["timeout"] == 2.0
 
@@ -3410,6 +3410,7 @@ def test_normalize_agent_diagnostics_removes_unusable_values() -> None:
             "open_fd_count": "9",
             "agent_init_script_present": True,
             "agent_init_link_ok": False,
+            "agent_started_after_boot_seconds": "21",
             "subscription_count": "1",
             "recent_event_count": "4",
             "recent_event_capacity": "16",
@@ -3458,6 +3459,7 @@ def test_normalize_agent_diagnostics_removes_unusable_values() -> None:
     assert normalized["open_fd_count"] == 9
     assert normalized["agent_init_script_present"] is True
     assert normalized["agent_init_link_ok"] is False
+    assert normalized["agent_started_after_boot_seconds"] == 21
     assert normalized["subscription_count"] == 1
     assert normalized["recent_event_count"] == 4
     assert normalized["recent_event_capacity"] == 16

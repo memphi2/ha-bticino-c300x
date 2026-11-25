@@ -1,5 +1,16 @@
 # Support Policy
 
+## Supported Models
+
+- **Classe 300X (C300X):** the release lines below.
+- **Classe 100X (C100X), firmware 1.5.8:** in test in
+  [issue #51](https://github.com/memphi2/ha-bticino-c300x/issues/51), from the
+  C100X test package handed out there; it has no Marketplace, HACS or GitHub
+  release channel yet. The package installs on a C100X only, and a C300X
+  package must not be installed over a C100X agent. Features per model:
+  [Models and Features](docs/feature-reference.md#models-and-features);
+  C100X notes: [Classe 100X](docs/c100x-experimental.md).
+
 ## Supported Release Line
 
 - `2.10.x`: current stable (2.10.0); adds firmware 3.0.6 (display pages checked on a station at start, the other pages offline only)
@@ -16,6 +27,7 @@
 - CI tests the fixed minimum and resolves the latest stable Home Assistant on every run.
 - Python: `3.14`
 - C300X firmware: `1.7.x, 2.0.2 or 3.0.6`
+- C100X firmware: `1.5.8` (in test, issue #51)
 
 ## Maintenance Scope
 
@@ -35,3 +47,5 @@ A native-agent rebuild is required when any of these paths change:
 - `custom_components/bticino_c300x/device_agent/init`
 - `scripts/stage_device_agent_bundle.py`
 - `scripts/device_file_strip.py`
+- `scripts/c100x_bundle_builder.py`
+- `scripts/c100x_qml_builder.py`

@@ -1,0 +1,2 @@
+module BtClass100
+singleton Screenshot 1.0 Screenshot.qml

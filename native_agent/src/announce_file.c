@@ -5,6 +5,7 @@
 #endif
 #include "announce_file.h"
 #include "announce.h"
+#include "device_detect.h"
 
 #include <fcntl.h>
 #include <stdint.h>
@@ -139,7 +140,7 @@ int c300x_announce_plain_base64(const char *text)
 
 int c300x_announce_supported(const struct c300x_announce *announce)
 {
-    return announce->door_events
+    return c300x_device_model() == C300X_DEVICE_MODEL_C300X && announce->door_events
         && access(c300x_announce_path("C300X_AMIXER", "/usr/bin/amixer"), X_OK) == 0
         && access(c300x_announce_path("C300X_APLAY", "/usr/bin/aplay"), X_OK) == 0
         && access(c300x_announce_path("C300X_ZL_TOOL", "/bin/zl38005_ioctl-v2"), X_OK) == 0

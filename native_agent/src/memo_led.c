@@ -1,6 +1,7 @@
 #include "memo_led.h"
 #include "memo_led_claim.h"
 #include "memo_led_scan.h"
+#include "device_detect.h"
 #include "json_util.h"
 #include <fcntl.h>
 #include <limits.h>
@@ -89,7 +90,7 @@ void c300x_memo_led_init(struct c300x_memo_led *led, const char *text, const cha
     *led = (struct c300x_memo_led){.text_root = text, .voice_root = voice, .claim_dir = -1,
                                    .scan_fd = -1, .watch_fd = -1};
     enum memo_claim_state state = MEMO_UNCLAIMED;
-    if (c300x_memo_led_present()) led->claim_dir = c300x_memo_claim_open(&state);
+    if (c300x_device_memo_led_known() && c300x_memo_led_present()) led->claim_dir = c300x_memo_claim_open(&state);
     led->claimed = state == MEMO_ACTIVE;
     led->release_pending = state == MEMO_RELEASING;
     if (led->release_pending) c300x_memo_led_update(led, 0);

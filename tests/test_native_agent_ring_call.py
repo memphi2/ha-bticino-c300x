@@ -1265,3 +1265,16 @@ def test_native_agent_rtsp_answers_instead_of_closing_on_missing_client_slot() -
     )
     assert 'rtsp_note_reject_reason(&g_bridge, "setup_client_slot_lost");' in client_body
     assert 'rtsp_note_play_failure(&g_bridge, "play_client_slot_lost");' in client_body
+
+
+def test_native_agent_ring_bye_falls_back_to_the_device_sip_user_of_the_model() -> None:
+    media_bridge = _read_media_bridge()
+    dialog = (ROOT / "native_agent/src/media_sip_dialog.c").read_text()
+    invite = media_bridge[
+        media_bridge.index("static void handle_ring_invite") :
+    ]
+    contact = invite[: invite.index("pthread_mutex_lock(&bridge->mutex);")]
+
+    assert '"sip:%s@127.0.0.1:5060", c300x_device_sip_user()' in contact
+    assert "c300x@" not in media_bridge
+    assert "c300x@" not in dialog

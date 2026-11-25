@@ -1,7 +1,9 @@
 # Quick Start
 
-This page takes a rooted or SSH-enabled C300X to a working doorbell card. No
-YAML or manual card setup is needed.
+This page takes a rooted or SSH-enabled Classe 300X (C300X) or Classe 100X
+(C100X) to a working doorbell card. No YAML or manual card setup is needed.
+Where the two models differ, the step says so; the full list is in
+[Models and Features](feature-reference.md#models-and-features).
 
 ```text
 Install integration -> add the station -> install the device agent -> choose options
@@ -13,6 +15,10 @@ Install integration -> add the station -> install the device agent -> choose opt
 - Home Assistant `2026.10.0` or newer.
 - A BTicino Classe 300X / C300X on firmware `1.7.x`, `2.0.2` or `3.0.6`
   ([Firmware 3.0.6](#firmware-306)).
+- Or a BTicino Classe 100X / C100X on firmware `1.5.8`, **in test** in
+  [issue #51](https://github.com/memphi2/ha-bticino-c300x/issues/51): stock
+  firmware with only the changes needed for root or SSH access, set up in the
+  BTicino Door Entry app, not running alongside BTicino Companion.
 - Root or SSH access on the station for the first agent installation.
 - A trusted local network between Home Assistant and the station.
 
@@ -23,8 +29,9 @@ vendor files. Rooting is described by the community project
 third-party project that is not part of this project and is used at your own
 risk; flashing a station can brick it. If a separate rooting or SSH-enablement
 workflow asks for a firmware target, use `1.7.19`. A station on `2.0.2` or
-`3.0.6` needs a workflow made for that firmware. Everything is used at your own
-risk and without warranty.
+`3.0.6` needs a workflow made for that firmware. A C100X needs a working
+privileged SSH login before the first installation. Everything is used at your
+own risk and without warranty.
 
 ### Firmware 3.0.6
 
@@ -71,6 +78,17 @@ only.
 Both ways install the same release archive. Moving from HACS to Marketplace
 keeps existing entries and cards.
 
+### Classe 100X: Test Package
+
+The C100X uses the C100X test package from issue #51 instead of Marketplace or
+HACS. Install it by hand on a separate Home Assistant test instance, after the
+private backup the [tester guide](c100x-test-release.md#private-pre-test-backup)
+describes; its [manual installation](c100x-test-release.md#manual-ha-installation)
+replaces the two ways above. The package installs on a C100X only: on a C300X
+the SSH installation stops before any write, and setup with a C300X agent ends
+with "This test package is for the Classe 100X only". The integration keeps its
+name **BTicino C300X**.
+
 ### Add the Station
 
 Go to **Settings > Devices & services > Add integration > BTicino C300X** and
@@ -87,10 +105,13 @@ fill in:
 The device agent is a small program on the station that Home Assistant talks
 to. What happens next depends on what Home Assistant finds:
 
-- **No agent:** setup offers **Install native agent on the C300X**. Use it only
-  on a rooted or SSH-enabled station. Home Assistant logs in over SSH with the
-  station's factory root login and asks for an SSH user and password only if
-  the station refuses it. It installs the agent, a configuration with generated
+- **No agent:** setup offers **Install native agent on the C300X**, also for a
+  C100X. Use it only on a rooted or SSH-enabled station. Home Assistant logs in
+  over SSH with the station's factory root login and asks for an SSH user and
+  password only if the station refuses it. While the model is still unknown it
+  tries the C300X factory login first and the C100X one only after the station
+  refused the first; a connection failure is not retried. A login you enter
+  always takes priority. It installs the agent, a configuration with generated
   keys, the startup script and the display support files, then keeps the keys
   itself. SSH credentials are used for this step only and are not stored in the
   entry, diagnostics or logs.
@@ -103,6 +124,8 @@ After installation, apply the **core media hook** when Repairs asks for it,
 then reload the station display with the **Reload device display** button. The
 hook lets Home Assistant see when the station display closes a media session
 and keeps ringer mute in sync. It is separate from the optional display pages.
+A C100X has neither: skip this step. Its ringer mute arrives with the
+[display activation](display.md#classe-100x-activation-by-reboot).
 
 ## Choose Options
 
@@ -127,7 +150,7 @@ Setup then walks through the settings areas one after the other. Later,
 | **Visitor Snapshot** (only with video on) | The defaults: 800x480, 3 seconds, 14 days, date and time in the image. |
 | **Additional device activations** | Empty, unless you already know the activation addresses you want as buttons. |
 | **Alarm (Alarmo)** | Empty, unless you want the Alarmo page on the station display. |
-| **Home Assistant pages on the display** | Off for now. Set them up later with [Station Display Pages](display.md). |
+| **Home Assistant pages on the display** | Off for now. Set them up later with [Station Display Pages](display.md). A C100X shows this field only after the [display activation](display.md#classe-100x-activation-by-reboot). |
 
 Change **Connection paths for the live picture** only when the live picture
 does not connect. [All four choices and their exceptions](media-troubleshooting.md#connection-paths-for-the-live-picture)
@@ -156,7 +179,7 @@ Details: [Media Readiness](media-troubleshooting.md#media-readiness).
 ### Add It to a Dashboard
 
 1. Open the dashboard where the card should go and add a card.
-2. Select **C300X Doorbell Call Card**.
+2. Select **BTicino Doorbell Call Card**.
 3. Choose the C300X camera entity.
 
 Keep the mode **Doorstation + Home Call** (`mode: auto`): one card handles
@@ -166,7 +189,10 @@ default; turn it off in the card editor if you want a cleaner dashboard.
 
 ## First Media Tests
 
-Test in this order:
+Test in this order. On a C100X, first press **Stair light** and **Door unlock**
+once each on the device page and follow the
+[test plan](c100x-test-release.md#test-plan-at-a-glance); report the results
+in issue #51.
 
 1. **Live video:** press **Stream** in the card.
 2. **Home Call:** start and stop a Home Call from the card.
@@ -204,6 +230,10 @@ existing ones stay until they expire. See
 
 Keep the existing integration entry. The release archive contains the agent,
 its display files and the card; no separate card repository is needed.
+
+A C100X is updated only from a newer C100X test package, installed by hand as
+before. Home Assistant refuses to put a C300X package on a C100X, or the C100X
+package on a C300X, before anything is written.
 
 ### Beta Versions
 

@@ -52,6 +52,7 @@ from custom_components.bticino_c300x.config_flow import (  # noqa: E402
     _weather_entity_id,
 )
 from custom_components.bticino_c300x import config_flow as config_flow_module  # noqa: E402
+from custom_components.bticino_c300x import config_flow_agent  # noqa: E402
 from custom_components.bticino_c300x import config_schemas  # noqa: E402
 from custom_components.bticino_c300x.api import C300XAgentApiConnectionError  # noqa: E402
 from custom_components.bticino_c300x.config_flow_dashboard import (  # noqa: E402
@@ -165,7 +166,7 @@ def test_probe_agent_requires_event_subscription_endpoint(
             calls.append("subscriptions")
             raise C300XAgentApiConnectionError("device agent returned HTTP 404")
 
-    monkeypatch.setattr(config_flow_module, "C300XAgentApi", FakeApi)
+    monkeypatch.setattr(config_flow_agent, "C300XAgentApi", FakeApi)
 
     result = asyncio.run(
         _async_probe_agent(
@@ -1278,6 +1279,7 @@ def test_bootstrap_install_success_continues_to_feature_step(
         migrate_legacy,
     )
     async def agent_stable_unique_id(*_args: object, **_kwargs: object) -> None:
+        flow._setup_agent_info = {"device": {"model": "C300X"}}
         return None
 
     monkeypatch.setattr(
@@ -1838,6 +1840,7 @@ def test_installer_adopts_agent_mdns_id_and_aborts_parallel_discovery(
         connection: dict[str, object],
         *,
         api_token: str = "",
+        setup_data_target: dict[str, object] | None = None,
     ) -> str:
         calls.append(f"agent_id:{connection[CONF_AGENT_HOST]}:{api_token}")
         return "c300xaabbcc001122"

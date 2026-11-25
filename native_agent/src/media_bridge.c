@@ -1,6 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include "audio_codec.h"
+#include "device_detect.h"
 #include "device_user.h"
 #include "media_audio.h"
 #include "talkback_g711.h"
@@ -2428,6 +2429,9 @@ static void handle_ring_invite(
     snprintf(to_tag, sizeof(to_tag), "ha-ring%ld", random_sip_id());
     c300x_media_sip_header_value(invite, "Contact:", remote_contact, sizeof(remote_contact));
     c300x_media_sip_uri_from_header(remote_contact, remote_contact_uri, sizeof(remote_contact_uri));
+    if (remote_contact_uri[0] == '\0') {
+        snprintf(remote_contact_uri, sizeof(remote_contact_uri), "sip:%s@127.0.0.1:5060", c300x_device_sip_user());
+    }
 
     pthread_mutex_lock(&bridge->mutex);
     close_ring_media_fds_locked(bridge);

@@ -77,3 +77,31 @@ def test_discovery_unique_id_of_separators_only_is_no_identity() -> None:
     assert discovery_unique_id({"id": b"-:-"}) is None
     # The next identity key still counts.
     assert discovery_unique_id({"id": "::", "mac": "AA:BB:CC:00:11:22"}) == "aabbcc001122"
+
+
+def test_each_model_has_its_own_zeroconf_type() -> None:
+    import json
+    from pathlib import Path
+
+    from custom_components.bticino_c300x.discovery import (
+        C100X_ZEROCONF_TYPE,
+        C300X_ZEROCONF_TYPE,
+        discovery_model,
+    )
+
+    assert C100X_ZEROCONF_TYPE == "_bticino-c100x-agent._tcp.local."
+    assert C300X_ZEROCONF_TYPE == "_bticino-c300x-agent._tcp.local."
+    manifest = json.loads((Path(__file__).resolve().parents[1]
+                           / "custom_components/bticino_c300x/manifest.json").read_text())
+    assert manifest["zeroconf"] == [C100X_ZEROCONF_TYPE, C300X_ZEROCONF_TYPE]
+    assert discovery_model(C100X_ZEROCONF_TYPE) == "C100X"
+    assert discovery_model(C300X_ZEROCONF_TYPE) == "C300X"
+    assert discovery_model(None, "Door._bticino-c100x-agent._tcp.local.") == "C100X"
+    assert discovery_model("", "Door._bticino-c300x-agent._tcp.local.") == "C300X"
+    assert discovery_model("_other._tcp.local.", "Door") == ""
+
+
+def test_discovery_display_name_strips_the_c100x_suffix() -> None:
+    assert discovery_display_name({}, "Front door 334455._bticino-c100x-agent._tcp.local.") == (
+        "Front door 334455"
+    )

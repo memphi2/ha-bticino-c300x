@@ -11,8 +11,8 @@ ROOT = Path(__file__).resolve().parents[1]
 FIRMWARE_ROOT = Path(os.environ.get(
     "C300X_FIRMWARE_WORK", ROOT.parent / "c300x-fwpatch/work"
 ))
-FIRMWARES = ("1.7.19", "2.0.2", "3.0.6")
-PATCH_OFFSETS = dict(zip(FIRMWARES, (0x282F8, 0x28300, 0x27014), strict=True))
+FIRMWARES = ("c100x-1.5.8", "1.7.19", "2.0.2", "3.0.6")
+PATCH_OFFSETS = dict(zip(FIRMWARES, (0x27958, 0x282F8, 0x28300, 0x27014), strict=True))
 
 
 def original(firmware):
@@ -75,7 +75,7 @@ def test_verified_roundtrip(routing_binary, tmp_path, firmware, recovery):
 
 
 def test_restore_ignores_predictable_temp_symlink(routing_binary, tmp_path):
-    target, backup = prepare(tmp_path, "1.7.19")
+    target, backup = prepare(tmp_path, "c100x-1.5.8")
     assert routing_run(routing_binary, target, backup, "apply").returncode == 0
     sentinel = tmp_path / "sentinel"
     sentinel.write_bytes(b"untouched")
@@ -88,7 +88,7 @@ def test_restore_ignores_predictable_temp_symlink(routing_binary, tmp_path):
 
 @pytest.mark.parametrize("firmware", FIRMWARES)
 @pytest.mark.parametrize("fault", [
-    "corrupt_backup", "patched_backup", "truncated_backup", "foreign_backup", "foreign_model",
+    "corrupt_backup", "patched_backup", "truncated_backup", "foreign_backup",
     "corrupt_target", "unknown_target", "missing_target", "missing_backup",
     "target_symlink", "backup_symlink", "rename",
 ])
@@ -102,8 +102,8 @@ def test_invalid_restore_retains_recovery_material(routing_binary, tmp_path, fir
         backup.write_bytes(target.read_bytes())
     elif fault == "truncated_backup":
         backup.write_bytes(backup.read_bytes()[:-1])
-    elif fault in ("foreign_backup", "foreign_model"):
-        other = "c100x-1.5.8" if fault == "foreign_model" else FIRMWARES[(FIRMWARES.index(firmware) + 1) % len(FIRMWARES)]
+    elif fault == "foreign_backup":
+        other = FIRMWARES[(FIRMWARES.index(firmware) + 1) % len(FIRMWARES)]
         shutil.copy2(original(other), backup)
         data = bytearray(target.read_bytes())
         data[PATCH_OFFSETS[firmware]] ^= 1

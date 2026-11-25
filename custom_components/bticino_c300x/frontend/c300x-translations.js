@@ -198,6 +198,10 @@ export function c300xLocalize(hass, key) {
   return c300xLabel(c300xLanguage(hass), key);
 }
 
+export function c300xModelLabel(label, model) {
+  return model === "C100X" ? label.replace("C300X", "C100X") : label;
+}
+
 export function c300xLabel(language, key) {
   return (C300X_TRANSLATIONS[language] || C300X_TRANSLATIONS.en)[key]
     || C300X_TRANSLATIONS.en[key]

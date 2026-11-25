@@ -1,5 +1,6 @@
 """Real legacy required-file preflight followed by the current updater."""
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -68,6 +69,7 @@ def test_real_legacy_bootstrap_then_new_source_cleanup(tmp_path, monkeypatch, sa
         result = subprocess.run(
             [str(updater), str(agent), str(manifest), str(int(expected))],
             capture_output=True, text=True, timeout=10,
+            env={**os.environ, "C100X_TEST_MODEL": "1"},
         )
         assert result.returncode == 0, result.stderr
 

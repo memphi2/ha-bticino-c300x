@@ -129,6 +129,12 @@ export function c300xRelatedEntity(hass, config, domain, baseObjectId, configKey
   ));
 }
 
+// The device page names a C100X "Classe 100X"; every other device keeps the C300X texts.
+export function c300xDeviceModel(hass, entityId) {
+  const deviceId = hass?.entities?.[entityId]?.device_id;
+  return hass?.devices?.[deviceId]?.model === "Classe 100X" ? "C100X" : "C300X";
+}
+
 export function c300xEntryId(hass, config, entityId) {
   const registryEntry = hass?.entities?.[entityId || config?.entity];
   if (registryEntry?.platform !== C300X_PLATFORM) {

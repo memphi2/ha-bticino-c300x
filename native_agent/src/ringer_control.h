@@ -29,6 +29,11 @@ struct c300x_ringer_control {
     struct c300x_ringer_command command;
     struct picture_command picture;
     int picture_supported;
+    /* The GUI's own mute flag as last seen: -1 unknown. */
+    int gui_muted;
+    int sync_wanted;
+    char sync_id[33];
+    long long sync_deadline_ms;
 };
 
 void c300x_gui_picture_request(struct c300x_ringer_control *control, int fd, struct picture_command command);
@@ -49,6 +54,9 @@ void c300x_ringer_control_expire(struct c300x_ringer_control *control);
 int c300x_ringer_control_confirm(
     struct c300x_ringer_control *control, int muted
 );
+/* A device mute state no command asked for. The vendor GUI follows a mute on
+ * the bus but never an unmute; with sync set, an unmute is pushed to it. */
+void c300x_ringer_control_observe(struct c300x_ringer_control *control, int muted, int sync);
 int c300x_ringer_control_pollfds(const struct c300x_ringer_control *control, struct pollfd *fds);
 void c300x_ringer_control_handle_pollfds(struct c300x_ringer_control *control, const struct pollfd *fds, int count);
 void c300x_ringer_control_close(struct c300x_ringer_control *control);

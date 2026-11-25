@@ -10,6 +10,12 @@ from homeassistant.helpers import issue_registry as ir
 
 from .action import ActionValidationError, validate_action_map
 from .agent_update import agent_update_repair_placeholders
+from .c100x_display_activation import (
+    BOOT_CHECK_ISSUE as C100X_DISPLAY_BOOT_CHECK_ISSUE,
+)
+from .c100x_display_activation import (
+    ROLLED_BACK_ISSUE as C100X_DISPLAY_ROLLED_BACK_ISSUE,
+)
 from .callback_target import callback_target_is_supported
 from .capabilities import capability_is_supported, maintenance_action_is_advertised
 from .const import (
@@ -37,6 +43,7 @@ from .media_setup import (
     media_setup_has_only_device_user_failures,
     summarize_self_test_failures,
 )
+from .model_names import MODEL, entry_model
 
 er: Any
 try:
@@ -49,6 +56,8 @@ MISSING_ALARM_ENTITY_ISSUE = "missing_alarm_entity"
 FRONTEND_CARD_SETUP_HINT_ISSUE = "frontend_card_setup_hint"
 AGENT_CAPABILITY_MISMATCH_ISSUE = "agent_capability_mismatch"
 DEVICE_AGENT_UPDATE_REQUIRED_ISSUE = "device_agent_update_required"
+# Same issue, other text: a C300X entry met the C100X-only test package.
+DEVICE_AGENT_UPDATE_REGULAR_PACKAGE_ISSUE = "device_agent_update_regular_package"
 DEVICE_AGENT_STARTUP_DISABLED_ISSUE = "device_agent_startup_disabled"
 DEVICE_AGENT_SELF_TEST_FAILED_ISSUE = "device_agent_self_test_failed"
 DEVICE_AGENT_UI_EVENT_WATCHDOG_ISSUE = "device_agent_ui_event_watchdog"
@@ -78,6 +87,8 @@ ALL_REPAIR_ISSUES = frozenset(
         DEVICE_USER_REQUIRED_ISSUE,
         MEDIA_SETUP_REPAIR_REQUIRED_ISSUE,
         MEDIA_WATCHDOG_TIMEOUT_ISSUE,
+        C100X_DISPLAY_ROLLED_BACK_ISSUE,
+        C100X_DISPLAY_BOOT_CHECK_ISSUE,
     }
 )
 
@@ -257,6 +268,11 @@ def _sync_device_agent_update_issue(hass: HomeAssistant, entry: BticinoC300XConf
         DEVICE_AGENT_UPDATE_REQUIRED_ISSUE,
         severity=ir.IssueSeverity.WARNING,
         is_fixable=getattr(update_state, "repair_fixable", False),
+        translation_key=(
+            DEVICE_AGENT_UPDATE_REGULAR_PACKAGE_ISSUE
+            if getattr(update_state, "needs_regular_package", False) is True
+            else None
+        ),
         placeholders=agent_update_repair_placeholders(update_state, entry.runtime_data),
     )
 
@@ -676,6 +692,8 @@ def _create_issue(
 ) -> None:
     translation_placeholders = {
         "entry_title": str(getattr(entry, "title", "") or entry.entry_id),
+        # Titles, texts and fix flows name the entry's model.
+        MODEL: entry_model(entry),
     }
     if placeholders:
         translation_placeholders.update(placeholders)

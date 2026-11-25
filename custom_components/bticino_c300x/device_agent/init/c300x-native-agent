@@ -55,6 +55,22 @@ case "$1" in
         if [ ! -x "$AGENT_BIN" ] || [ ! -f "$AGENT_CONFIG" ]; then
             exit 1
         fi
+        C100X_BACKUP_DIR="${C100X_BACKUP_DIR:-$C300X_BACKUP_ROOT/c100x-display}"
+        export C100X_BACKUP_DIR
+        rm -f "$C100X_BACKUP_DIR/boot-check-failed"
+        if [ -e "$C100X_BACKUP_DIR/pending" ] || [ -L "$C100X_BACKUP_DIR/pending" ]; then
+            payload="$AGENT_DIR/qml/c100x_bundle.sh"
+            check=
+            if [ ! -f "$payload" ] || [ -L "$payload" ] || [ "$(stat -c %h "$payload")" != 1 ]; then
+                check=payload_unavailable
+            elif ! sh "$payload" boot; then
+                check=boot_check_failed
+            fi
+            if [ -n "$check" ]; then
+                echo "C100X display boot check failed ($check); agent starts, activation stays off, backups retained" >&2
+                printf '%s\n' "$check" > "$C100X_BACKUP_DIR/boot-check-failed" || true
+            fi
+        fi
         start-stop-daemon --start --quiet --oknodo --background \
             --make-pidfile --pidfile "$AGENT_PID" \
             --exec "$AGENT_BIN" -- --config "$AGENT_CONFIG"

@@ -46,11 +46,11 @@ Public CI runners do not have that proprietary sysroot: they compile ARMHF and
 run `armhf-stack-check`, and local release builds must run the ABI check against
 the real sysroot. One binary serves every supported firmware: it is built
 against the oldest (`1.7.19`), and the check also runs against each newer root
-file system named in `C300X_ABI_SYSROOTS` (by default the extracted `3.0.6` one,
-when present). For each it requires the libraries the agent links against, every
-versioned C library symbol it imports, and every function it loads at run time
-from `libcurl`, `libsrtp` and `libspeex`. `armhf-stack-check` rejects oversized
-or dynamic stack usage records.
+file system named in `C300X_ABI_SYSROOTS` (by default the extracted `3.0.6` and
+C100X `1.5.8` ones, when present). For each it requires the libraries the agent
+links against, every versioned C library symbol it imports, and every function
+it loads at run time from `libcurl`, `libsrtp` and `libspeex`.
+`armhf-stack-check` rejects oversized or dynamic stack usage records.
 
 ### Developer Checks
 
@@ -175,8 +175,12 @@ Token-based maintenance keeps working when noAuth maintenance is off.
 ## Discovery and Address Changes
 
 The optional mDNS responder (`mdns.enabled`, HA mDNS maintenance switch)
-advertises `_bticino-c300x-agent._tcp.local` with a per-device TXT `id` and host
-name derived from the MAC address, falling back to the host name.
+advertises `_bticino-c300x-agent._tcp.local` (C300X) or
+`_bticino-c100x-agent._tcp.local` (C100X) with a per-device TXT `id` and host
+name derived from the MAC address, falling back to the host name. It answers
+queries only for its own type. HA lists both types in `manifest.json`; an
+announcement of one model never matches, renews or moves an entry whose agent
+reported the other model (`model_mismatch`).
 
 - It stays quiet while Home Assistant is present: HA has reached the agent in
   this run (a successful callback) and an authenticated API request arrived
@@ -385,6 +389,8 @@ for the current source. The lock covers these native and bundle inputs:
 - `custom_components/bticino_c300x/device_agent/init`
 - `scripts/stage_device_agent_bundle.py`
 - `scripts/device_file_strip.py`
+- `scripts/c100x_bundle_builder.py`
+- `scripts/c100x_qml_builder.py`
 - `scripts/build_hacs_release.py`
 - `scripts/check_agent_abi.py`
 - `scripts/native_build_lock.py`
@@ -403,6 +409,13 @@ independent compiler/sysroot provenance. Procedure:
 [Release Validation](release-validation.md#reviewed-local-native-build).
 
 ## Supported Firmware Versions
+
+The `c100x_1.5.8` branch adds the C100X 1.5.8 (in test, issue #51):
+detection, routing, package compatibility gates and the display activation by
+reboot. The [model matrix](../feature-reference.md#models-and-features) and
+the [C100X notes](../c100x-experimental.md) separate what is offered from what
+is confirmed on a device; the C300X statements below do not imply the same
+display, audio or credential support on C100X.
 
 The agent is built and ABI-checked against the firmware `1.7.19` root file
 system. Firmware `2.0.2` uses the same binary and display files because

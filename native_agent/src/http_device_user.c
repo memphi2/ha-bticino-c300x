@@ -1,5 +1,6 @@
 #include "http_device_user.h"
 #include "c300x_agent.h"
+#include "device_detect.h"
 #include "device_routing.h"
 #include "device_user.h"
 #include "device_user_label.h"
@@ -161,7 +162,8 @@ static int start_status(struct c300x_http_maintenance *owner, int fd,
     memset(&state->routing, 0, sizeof(state->routing));
     (void)c300x_device_routing_read_status(&state->routing);
     state->routing.root_writable = root_writable;
-    if (access(state->config->maintenance_qml_patch_script, X_OK) == 0
+    if (c300x_device_display_files_patchable()
+        && access(state->config->maintenance_qml_patch_script, X_OK) == 0
         && c300x_command_job_start_capture(&owner->job,
             state->config->maintenance_qml_patch_script, "status", state->output, 4096, 10000)) {
         return 1;
@@ -246,12 +248,17 @@ static int ensure_user(struct c300x_http_maintenance *owner, int fd,
         return 0;
     }
     /* The label is written into the display files; on the Qt 5 display of
-     * firmware 3.0.x into the agent's resource overlay. */
-    if (start_label(owner, state, 0)) {
-        return 1;
+     * firmware 3.0.x into the agent's resource overlay. A C100X has no
+     * Display patch: user and routing are set up, only the label is not shown. */
+    if (c300x_device_display_files_patchable()) {
+        if (start_label(owner, state, 0)) {
+            return 1;
+        }
+        send_error(fd, "media_user_label_setup_failed", NULL);
+        return 0;
     }
-    send_error(fd, "media_user_label_setup_failed", NULL);
-    return 0;
+    owner->record_write(owner->write_context, "device_user", "ensure_homeassistant_user");
+    return start_status(owner, fd, state);
 }
 
 int c300x_http_device_user_route(struct c300x_http_maintenance *owner, int client_fd,
@@ -295,7 +302,8 @@ int c300x_http_device_user_route(struct c300x_http_maintenance *owner, int clien
         pending = start_status(owner, client_fd, state);
     } else if (phase == USER_ENSURE) {
         pending = ensure_user(owner, client_fd, state, request);
-    } else if (access(config->maintenance_qml_patch_script, X_OK) != 0) {
+    } else if (!c300x_device_display_files_patchable()
+        || access(config->maintenance_qml_patch_script, X_OK) != 0) {
         pending = restore_routing(owner, client_fd, state);
     } else if (!(pending = start_label(owner, state, 1))) {
         send_error(client_fd, "media_user_label_restore_failed", NULL);

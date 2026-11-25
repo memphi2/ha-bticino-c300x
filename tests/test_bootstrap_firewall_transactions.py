@@ -13,11 +13,11 @@ SCRIPT = Path(__file__).resolve().parents[1] / "native_agent/scripts/bootstrap_f
 ORIGINAL = "#!/bin/sh\n# Firmware rules\niptables -P INPUT DROP\n"
 
 
-def _run(tmp_path: Path, fault: str = "") -> subprocess.CompletedProcess[str]:
+def _run(tmp_path: Path, fault: str = "", **env: str) -> subprocess.CompletedProcess[str]:
     # Shell functions intercept every privileged operation, even with a fixed PATH.
     harness = """
 mount() { printf '%s\\n' "$*" >> "$MOUNT_LOG"; }
-iptables() { return 0; }
+iptables() { printf '%s\n' "$*" >> "$IPTABLES_LOG"; [ "$1" = "-A" ]; }
 """
     return subprocess.run(
         ["/bin/sh"],
@@ -31,6 +31,9 @@ iptables() { return 0; }
             "C300X_IPTABLES_BACKUP": str(tmp_path / "backup"),
             "C300X_API_PORT": "8089",
             "MOUNT_LOG": str(tmp_path / "mount.log"),
+            "IPTABLES_LOG": str(tmp_path / "iptables.log"),
+            "C300X_QML_C100X_MARKER": str(tmp_path / "BtClass100"),
+            **env,
         },
     )
 
@@ -40,6 +43,26 @@ def _live(tmp_path: Path) -> Path:
     path.write_text(ORIGINAL, encoding="utf-8")
     path.chmod(0o750)
     return path
+
+
+@pytest.mark.parametrize(("c100x", "enabled", "want_media"), [
+    (True, None, True), (True, "0", False), (True, "1", True), (False, None, True),
+])
+def test_bootstrap_media_policy_matches_live_and_persistent_rules(
+    tmp_path, c100x, enabled, want_media,
+):
+    path = _live(tmp_path)
+    if c100x:
+        (tmp_path / "BtClass100").touch()
+    env = {"C300X_RTSP_PORT": "7654"}
+    if enabled is not None:
+        env["C300X_VIDEO_ENABLED"] = enabled
+    result = _run(tmp_path, **env)
+    assert result.returncode == 0, result.stderr
+    for rules in (path.read_text(), (tmp_path / "iptables.log").read_text()):
+        assert "-A INPUT -p tcp --dport 8089" in rules
+        for port in ("tcp --dport 7654", "udp --dport 40004"):
+            assert (port in rules) is want_media
 
 
 @pytest.mark.parametrize("failure", ["write", "rename", "metadata"])
@@ -171,4 +194,29 @@ def test_existing_backup_symlink_fails_closed(tmp_path: Path) -> None:
 
     assert result.returncode != 0
     assert live.read_text() == ORIGINAL
+    assert not (tmp_path / "mount.log").exists()
+
+
+@pytest.mark.parametrize("video", ["0", "1"])
+def test_missing_hook_opens_the_live_ports_and_writes_nothing(tmp_path: Path, video: str) -> None:
+    # Some rooted stations have no boot hook at all (moved away by other tools).
+    result = _run(tmp_path, C300X_VIDEO_ENABLED=video)
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "changed_files=0\n"
+    assert not (tmp_path / "iptables").exists()
+    assert not (tmp_path / "backup").exists()
+    assert not (tmp_path / "mount.log").exists()
+    rules = (tmp_path / "iptables.log").read_text()
+    assert "-A INPUT -p tcp --dport 8089 -j ACCEPT" in rules
+    assert ("--dport 6554" in rules) is (video == "1")
+
+
+def test_a_hook_that_is_no_regular_file_still_fails_closed(tmp_path: Path) -> None:
+    (tmp_path / "iptables").mkdir()
+
+    result = _run(tmp_path)
+
+    assert result.returncode != 0
+    assert not (tmp_path / "iptables.log").exists()
     assert not (tmp_path / "mount.log").exists()

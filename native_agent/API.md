@@ -46,7 +46,10 @@ The agent has two HTTP listeners:
   the Display patch writes the port into the patched `MainApp.qml` and
   `EventManager.qml`, and all other pages take it from there. After a port
   change, restart the agent and reapply the Display patch; until then the patch
-  is reported as partially patched.
+  is reported as partially patched. The C100X display adapter is the
+  exception: it uses the default UI port only, so its activation is refused
+  while `listen.uiPort` is changed (see
+  [C100X display activation](#c100x-display-activation)).
 
 Public UI listener endpoints are documented separately under
 [Loopback UI API](#loopback-ui-api).
@@ -242,6 +245,9 @@ for example `config_error`, `api_token_missing`, `api_bind_failed`,
 | `POST` | `/api/v1/maintenance/ssh/actions/start` | maintenance | Starts SSH after confirmation. |
 | `POST` | `/api/v1/maintenance/ssh/actions/stop` | maintenance | Stops SSH after confirmation. |
 | `POST` | `/api/v1/maintenance/reboot` | maintenance | Schedules reboot after confirmation. |
+| `GET` | `/api/v1/maintenance/c100x-display` | maintenance | C100X only: reads the display activation state. |
+| `POST` | `/api/v1/maintenance/c100x-display/actions/activate` | maintenance | C100X only: prepares the display pages and reboots once idle. |
+| `POST` | `/api/v1/maintenance/c100x-display/actions/restore` | maintenance | C100X only: restores the original display and reboots once idle. |
 | `POST` | `/api/v1/maintenance/agent/actions/remove` | maintenance | Schedules agent removal after confirmation. |
 | `POST` | `/api/v1/maintenance/agent/actions/restart` | maintenance | Restarts the native agent after confirmation. |
 | `GET` | `/api/v1/maintenance/update/status` | maintenance | Reads staged update state. |
@@ -329,9 +335,17 @@ Important top-level fields:
 - `agent.version`
 - `agent.implementation`
 - `device.id`
-- `device.model`
+- `device.model`: `C300X` or `C100X`, detected on the device from the display
+  program (`BtClass100` on the C100X), not taken from the agent config
+- `device.display_kind`: `qt4_ondisk` (C300X 1.7.x/2.0.x), `qt5_rcc` (C300X
+  3.0.x, display files built into the program) or `qt5_ondisk` (C100X)
 - `device.firmware`
-- `capabilities`
+- `capabilities`. `touch_tone`, `display_alerts`, `display_bridge` and
+  `ringer.mute` are reported on every C300X as before; on the C100X only once
+  the display adapter was confirmed in its trial boot (see
+  [C100X display activation](#c100x-display-activation)).
+  `maintenance.gui_reload` is not offered on the C100X, whose display program
+  the agent does not restart.
 
 ### `GET /api/v1/state`
 
@@ -566,7 +580,8 @@ Request fields:
 For `display_bridge.state` and `notifications`, an optional boolean `unread`
 also synchronizes HA's memo LED claim, even without a display listener. The
 agent advertises `memo_led` only when it finds the LED and a usable, trusted
-volatile claim store at startup. An empty private directory on tmpfs records
+volatile claim store at startup. On a C100X it never advertises or drives
+`memo_led`: no memo LED is proven on that hardware. An empty private directory on tmpfs records
 ownership across agent crashes, not device reboots. Releasing the claim
 respects the firmware LED trigger and any unread native memos. An accepted
 event is not a hardware delivery receipt.
@@ -851,6 +866,14 @@ Authentication: normal API token.
 
 Side effects: reads answering-machine state.
 
+A C100X has no answering machine: its HAL reports none for the SHARK board and
+the vendor recorder forces it off. There, capabilities report
+`answering_machine.supported: false` and `memos` with `voice`, `media` and
+`delete` false (text memos keep reading and `write_text`). Every
+`/api/v1/answering-machine` route, `GET /api/v1/memos/voice/{id}/audio` and
+`POST /api/v1/memos/actions/delete` answer `409` with
+`answering_machine_unsupported_model` before any device I/O.
+
 ### `POST /api/v1/answering-machine`
 
 Authentication: normal API token.
@@ -1045,9 +1068,11 @@ Side effects: POST changes one picture control of the active video source.
 A connected GUI advertising `picture=1` provides the legacy ring-only path.
 An eligible C300X (firmware 1.7.19; 2.0.2 with a bound ADV7180 video decoder,
 HW rev 2/3, or TVP5150, HW rev 1/4; 3.0.6 with its bound TVP5150, as the 3.0.6
-package requires HW rev 4) can also report
+package requires HW rev 4), or a C100X on firmware 1.5.8 with its bound
+TVP5150 (the HW rev 4 capture path), can also report
 `bridge.picture_controls_scope: "ring_and_on_demand"` with
-`bridge.picture_controls_supported: true`. Model and firmware alone do not
+`bridge.picture_controls_supported: true`. The model is the station's own
+(the agent detects it at runtime), not the configured one. Model and firmware alone do not
 enable it: an authenticated status or capability request during owned media
 checks the capture source on the bounded media worker. The read result is
 cached for that media session; no source is opened while idle.
@@ -1063,16 +1088,27 @@ The source must be character device 81:0 bound to `mxc_v4l2_capture` with
 driver is refused. The stock capture driver has no V4L2 control descriptors
 (`VIDIOC_QUERYCTRL` fails with `EINVAL`). The agent accepts that only by its
 exact signature (version `0x10b`, capabilities `0x05000005`, `device_caps` 0,
-empty card and bus) and uses the stock firmware's fixed raw ranges
-(brightness 30-180, contrast 59-209, saturation 64-244, eleven steps). Any
-other `mxc_v4l2` device must expose integer descriptors that cover these
-ranges; raw control reads alone do not make it supported.
+empty card and bus) and uses the stock firmware's fixed raw steps (eleven per
+control, one per 10 %). C300X: brightness 30-180, contrast 59-209, saturation
+64-244, in equal steps. C100X 1.5.8: the station's day ranges, brightness
+30-220, contrast 80-255, saturation 80-255, each step
+`trunc(min + percent * (max - min) / 100)` as in its `stack_open.xml`, so a
+percent in HA is the station's own day percent. Any other `mxc_v4l2` device
+must expose integer descriptors that cover these steps; raw control reads
+alone do not make it supported.
 The decoder is told by its bound I2C driver
 (`/sys/bus/i2c/drivers/adv7180/<bus>-<address>` or `.../tvp5150/...`). The
 stock ADV7180 driver writes brightness XOR `0x80` but reads the register back
 raw, so the agent undoes that XOR on read. The TVP5150 reads back plain; its
 contrast is a driver cache that stays 0 until the first write after boot.
-Such a 0, like any read off the eleven steps, fails the whole read: all three
+On the C100X, `bt_av_media` re-applies its night ranges (brightness 30-180,
+contrast 50-120, saturation 80-190) once per session when it detects a dark
+picture, and the station's own menu uses steps off the 10 % grid. A C100X read
+inside the day and night ranges together therefore reads as the nearest day
+step (a tie goes to the lower one), clamped to 0-100 %; a write still writes
+the day step and is verified against that exact raw value.
+On a C300X, a read off the eleven steps, and on both models a read outside
+those ranges (such as that contrast 0), fails the whole read: all three
 controls are unavailable, and the agent refuses direct control for the rest
 of that media session (a Ring Call falls back to the GUI path). Once a
 TVP5150 contrast write ioctl succeeds, its read-back always matches, because
@@ -1086,8 +1122,8 @@ The TVP5150 driver queues its I2C write and returns at once, so when the
 read-back differs the agent reads again up to five times, 10 ms apart,
 before it reports the setting as not applied.
 Changes last for the current media session; the station applies its own
-values again when the next session starts. 3.0.6 and the 2.0.2 path are
-checked offline only; 1.7.19 is tested on a device.
+values again when the next session starts. 3.0.6, the 2.0.2 path and the
+C100X are checked offline only; 1.7.19 is tested on a device.
 Direct operations check media ownership and session identity during execution.
 A failed direct write returns an error; it is not retried through the GUI.
 When the write or its read-back fails, the agent writes the previous value
@@ -1527,7 +1563,45 @@ can fall between the stop and the start of the GUI, so the script repeats the
 restart once and exits 131. The request stays open until the script has ended
 and is then answered with the same `502 reload_failed`, up to 25 seconds after
 it was sent; `gui_running` of `GET /api/v1/maintenance/qml-patch` says whether
-the display is up.
+the display is up. Not offered on the C100X: its display
+program cannot be restarted.
+
+### C100X Display Activation
+
+C100X only; the routes exist when the agent runs on a C100X and need the
+maintenance token and the reboot permission (`404 maintenance_disabled`
+otherwise).
+
+`GET /api/v1/maintenance/c100x-display` returns `{"ok":true,"c100x_display":{...}}`
+with `status_known`, `busy`, `phase` (`unknown`, `stock`, `installed`,
+`prepared`, `trial`, `stale`), `trial_switched`, `confirmed`, `generation`,
+`available`, `last_result`, `last_error`, `reboot_pending`, `reboot_blocked`,
+`activate`, `restore`, `alert_sound` (always false) and `boot_check`. The same
+object is the `c100x_display` capability.
+
+`POST /api/v1/maintenance/c100x-display/actions/activate`
+
+```json
+{"confirm": "activate_c100x_display"}
+```
+
+`POST /api/v1/maintenance/c100x-display/actions/restore`
+
+```json
+{"confirm": "restore_c100x_display"}
+```
+
+Both answer `202` with `{"ok":true,"action":"...","scheduled":true}`. The agent
+switches the files, then reboots the station once it has been idle;
+`reboot_blocked` names what it waits for (`waiting_for_idle`, `call_active`,
+`call_recent`, `station_busy`, `display_busy`, `starting`, `reboot_disabled`,
+`call_state_unknown`). The trial boot confirms the pages; otherwise the next
+start rolls back. Restore of an already stock station answers `200` with
+`"changed":false`. Errors: `409` `c100x_display_busy`,
+`c100x_display_trial_pending` (activate), `c100x_display_boot_check_failed`
+(activate), `c100x_display_ui_port_unsupported` (activate with a UI port other
+than 8090); `503` `c100x_display_status_unknown`. The whole sequence is in
+[C100X display parity](../docs/dev/c100x-display-parity.md#activation-by-reboot).
 
 ### Agent Self-Update
 
@@ -1592,6 +1666,7 @@ Errors:
 | `400` | `invalid_update_metadata` | `bundle_hash` is missing or does not start with `sha256:`. |
 | `400` | `update_manifest_missing` | The staged `device_agent/bundle.json` is missing, empty or only line breaks, unreadable or 8 KiB or larger. |
 | `400` | `update_bundle_hash_mismatch` | `bundle_hash` differs from the hash in the staged manifest. |
+| `400` | `update_model_incompatible` | The staged manifest does not fit this station: a C100X-only package on another model, or a package on a C100X that does not declare itself C100X-compatible. |
 | `403` | `maintenance_unauthorized` | Maintenance is disabled, or the maintenance token is missing or wrong. |
 | `409` | `update_root_already_writable` | `/` was already writable before the update (by someone else, or left so by the agent and still busy); the agent refuses to install and leaves the mount as it is. |
 | `409` | `qt5_recovery_required` | Firmware 3.0.x: the staged agent has no Qt 5 display recovery while overlay files, a quarantine or an unverified display start script remain. The installed agent and its recovery stay untouched. |
@@ -2012,6 +2087,7 @@ requests to Home Assistant require an active display bridge.
 | `POST` | `/ui/maintenance/remove` | Schedule the existing agent removal and restoration script with `{"confirm":"remove_agent"}`. |
 | `GET` | `/ui/touch-tone/next` | One sleeping GUI command connection; initial `enabled=0/1`, then matching `completed` ID and actual state acknowledge a command. |
 | `POST` | `/ui/touch-tone/state` | Reports changes to the original GUI setting as `{"enabled":true}`. |
+| `GET` | `/ui/c100x/presence/next`, `/status`, `/probe` | C100X display adapter only, loopback: the adapter's sleeping presence lease, its status and the readiness challenge the trial boot checks. |
 | `GET` | `/ui/state` | Display bridge state. |
 | `GET` | `/ui/alarm/status` | Alarm status alias. |
 | `GET` | `/homeassistant` | Render Home Assistant dashboard payload for QML. |
@@ -2128,7 +2204,7 @@ request has a monotonic five-second deadline. Diagnostics expose
 ## Compatibility
 
 Agent `2.10.0` retains self-test contract `api_version: "1.1"` for firmware families
-`1.7.x`, `2.0.x` and `3.0.x`. `firmware_family` is derived from `device.firmware` of
+`1.7.x`, `2.0.x` and `3.0.x`; a C100X firmware reads `1.5.x`. `firmware_family` is derived from `device.firmware` of
 the agent config, or from the station's firmware info when that is empty, which
 is what the installer writes; it is `unknown` only when neither is readable. Of
 the `2.0.x` family only `2.0.2` is supported, of `3.0.x` only `3.0.6`.

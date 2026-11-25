@@ -12,6 +12,8 @@ GUI_WRAPPER="${C300X_QML_GUI_WRAPPER:-/home/bticino/bin/BtClass_qws}"
 GUI_RELOAD_DELAY_SECONDS="${C300X_QML_GUI_RELOAD_DELAY_SECONDS:-2}"
 GUI_STOP_SECONDS="${C300X_QML_GUI_STOP_SECONDS:-10}"
 PROC_DIR="${C300X_QML_PROC_DIR:-/proc}"
+QT5_MARKER="${C300X_QML_QT5_MARKER:-/usr/lib/libQt5Core.so.5}"
+C100X_MARKER="${C300X_QML_C100X_MARKER:-/home/bticino/bin/gui/BtClass100}"
 AGENT_BIN="${C300X_QML_AGENT_BIN:-${C300X_AGENT_DIR:-/home/bticino/cfg/extra/c300x-native-agent}/c300x-agent-native}"
 # 1: stock layout, 0: side by side, unset: keep the layout on the device.
 HOME_BUTTONS_REQUEST="${C300X_QML_DYNAMIC_HOME_PAGE:-}"
@@ -26,9 +28,10 @@ QT5_VENDOR_FILES="EventManager.qml HomePage.qml MainApp.qml MemoPage.qml Setting
 # Firmware 3.0.x has a Qt 5 display whose files are resources inside BtClass.
 # The patch then works on a copy here; the changed files reach the display as
 # a resource file that c300x-qrc-overlay.so, preloaded by the start script,
-# registers ahead of the program's own.
+# registers ahead of the program's own. A C100X has the Qt 5 library too, but
+# another display program and no such overlay.
 QT5_DISPLAY=0
-if [ -e "${C300X_QML_QT5_MARKER:-/usr/lib/libQt5Core.so.5}" ]; then
+if [ -e "$QT5_MARKER" ] && [ ! -e "$C100X_MARKER" ]; then
     QT5_DISPLAY=1
     QT5_AGENT_DIR="${C300X_AGENT_DIR:-/home/bticino/cfg/extra/c300x-native-agent}"
     QT5_BACKUP_ROOT="${C300X_BACKUP_ROOT:-/home/bticino/cfg/extra/c300x-device-file-backups}"
@@ -3126,6 +3129,18 @@ restore_all_patch_files() {
     restore_core_patch_files
     restore_media_user_label_files
 }
+
+# A C100X has no Display patch and its display program cannot be restarted:
+# everything but the status is refused there. Status stays readable everywhere.
+action_refused() {
+    [ "$ACTION" = "status" ] && return 1
+    [ -e "$C100X_MARKER" ]
+}
+
+if action_refused; then
+    printf '{"ok":false,"available":false,"state":"unsupported_display"}\n'
+    exit 3
+fi
 
 case "$ACTION" in
     status)

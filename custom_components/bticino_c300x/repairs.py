@@ -74,9 +74,10 @@ from .device_installer import (
 )
 from .device_user import homeassistant_account_label
 from .display_activation import display_is_qt5, display_unsupported
+from .display_support import setup_is_c100x
 from .entry_config import entry_config_value
 from .error_text import compact_error_text
-from .factory_login import LOGIN_REFUSED, ssh_login
+from .factory_login import LOGIN_REFUSED, login_model, ssh_login, uses_factory_login
 from .media_readiness import media_readiness
 from .mqtt_migration import async_migrate_legacy_mqtt_if_available
 from .qml_patch import (
@@ -578,6 +579,8 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
             return self.async_abort(reason="entry_not_loaded")
         update_state = getattr(entry.runtime_data, "agent_update_state", None)
         placeholders = agent_update_repair_placeholders(update_state, entry.runtime_data)
+        if getattr(update_state, "reason", None) == "device_model_incompatible":
+            return self.async_abort(reason="device_model_incompatible")
         if not getattr(update_state, "self_update_repair_supported", False):
             # Whatever was submitted here was the empty confirm form, not SSH
             # credentials: show the SSH form, do not run an install with it.
@@ -695,6 +698,8 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
             return self.async_abort(reason="entry_not_loaded")
         update_state = getattr(entry.runtime_data, "agent_update_state", None)
         placeholders = agent_update_repair_placeholders(update_state, entry.runtime_data)
+        if getattr(update_state, "reason", None) == "device_model_incompatible":
+            return self.async_abort(reason="device_model_incompatible")
         if user_input is None:
             return self.async_show_form(
                 step_id="ssh_install",
@@ -702,7 +707,8 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
                 description_placeholders=placeholders,
             )
         ssh_username, ssh_password = ssh_login(
-            user_input, CONF_BOOTSTRAP_SSH_USERNAME, CONF_BOOTSTRAP_SSH_PASSWORD
+            user_input, CONF_BOOTSTRAP_SSH_USERNAME, CONF_BOOTSTRAP_SSH_PASSWORD,
+            login_model(getattr(entry.runtime_data, "agent_info", None)),
         )
 
         try:
@@ -716,6 +722,10 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
                         host=str(entry_config_value(entry, CONF_AGENT_HOST, "")).strip(),
                         ssh_username=ssh_username,
                         ssh_password=ssh_password,
+                        factory_login=uses_factory_login(
+                            user_input, CONF_BOOTSTRAP_SSH_USERNAME, CONF_BOOTSTRAP_SSH_PASSWORD
+                        ),
+                        device_model=login_model(getattr(entry.runtime_data, "agent_info", None)),
                         agent_port=int(
                             entry_config_value(entry, CONF_AGENT_PORT, DEFAULT_AGENT_PORT)
                         ),
@@ -913,6 +923,7 @@ async def _async_apply_repaired_agent_setup(
     entry.runtime_data.capabilities = gate_capabilities(
         capabilities,
         doorbell_video_enabled=bool(entry_config_value(entry, CONF_VIDEO_ENABLED, False)),
+        c100x=setup_is_c100x(setup_data),
     )
     entry.runtime_data.agent_update_state = compare_agent_bundle(
         setup_data,

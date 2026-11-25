@@ -232,6 +232,7 @@ class C300XRuntimeResources:
     answering_machine_messages_refresh_task: Task[None] | None = None
     startup_sync_task: Task[None] | None = None
     memos_refresh_task: Task[None] | None = None
+    c100x_display_task: Task[None] | None = None
     pending_message_refreshes: set[str] = field(default_factory=set)
 
     def close(self) -> None:
@@ -252,6 +253,7 @@ class C300XRuntimeResources:
             self.answering_machine_messages_refresh_task,
             self.startup_sync_task,
             self.agent_cpu_watchdog_task,
+            self.c100x_display_task,
         )
         self.unregister_event_registration = None
         self.close_display_notifications = None
@@ -273,6 +275,7 @@ class C300XRuntimeResources:
         self.answering_machine_messages_refresh_task = None
         self.startup_sync_task = None
         self.agent_cpu_watchdog_task = None
+        self.c100x_display_task = None
         errors: list[Exception] = []
         for cancel in callbacks:
             if cancel is not None:

@@ -53,4 +53,3 @@ void c300x_signal_wakeup_notify(void)
     }
     errno = saved_errno;
 }
-

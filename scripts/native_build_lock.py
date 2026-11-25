@@ -42,8 +42,10 @@ INPUT_DIRS = (
 INPUT_FILES = (
     "native_agent/Makefile", "native_agent/VERSION", "native_agent/config.example.json",
     "scripts/stage_device_agent_bundle.py", "scripts/device_file_strip.py",
+    "scripts/c100x_bundle_builder.py", "scripts/c100x_qml_builder.py",
     "scripts/build_hacs_release.py", "scripts/check_agent_abi.py",
     "scripts/native_build_lock.py",
+    "c100x-test-policy.json",
 )
 
 

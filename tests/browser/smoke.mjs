@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { resolve, dirname, sep } from "node:path";
 import puppeteer from "puppeteer-core";
 import { checkSnapshotLayout } from "./snapshot_layout.mjs";
+import { checkC100xControls } from "./c100x_controls.mjs";
 import { checkMatchingPictureLayout } from "./matching_picture_layout.mjs";
 import { checkMediaAvailability } from "./media_availability.mjs";
 import { checkPendingMicrophone } from "./pending_microphone.mjs";
@@ -59,6 +60,7 @@ try {
   await page.goto(origin);
   await page.waitForFunction(() => !!window.lab);
   await checkMediaAvailability(page, artifacts);
+  await checkC100xControls(page, artifacts);
   await checkPendingMicrophone(page);
   await checkRingEndStart(page);
   await checkAnsweredRing(page);

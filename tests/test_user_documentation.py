@@ -101,8 +101,10 @@ def test_quickstart_names_where_rooting_is_described_as_a_third_party_project():
     requirements = " ".join(section("quickstart.md", "Requirements").split())
     assert "This project provides no firmware images" in requirements
     assert "rooting instructions" in requirements
-    # The one link out of the requirements goes to a rooting guide of others.
-    links = re.findall(r"\]\((https?://[^)]+)\)", requirements)
+    # The one link out of the project goes to a rooting guide of others; the
+    # C100X line links this project's own test issue.
+    links = [link for link in re.findall(r"\]\((https?://[^)]+)\)", requirements)
+             if "/ha-bticino-c300x/" not in link]
     assert len(links) == 1
     assert links[0].startswith("https://github.com/") and "ha-bticino-c300x" not in links[0]
     sentence = next(part for part in requirements.split(". ") if links[0] in part)
@@ -429,7 +431,15 @@ def test_every_display_call_follows_the_ui_port_as_the_api_says():
     assert set(ports) <= {"$feature_port", "$core_port", '" port "'}, ports
     # Device files keep 8090 only as the libraries' default until a page hands
     # them the configured base URL, and never open a fixed URL.
-    sources = sorted((ROOT / "device_qml").rglob("*.qml")) + sorted((ROOT / "device_qml").rglob("*.js"))
+    adapter = ROOT / "device_qml/c100x"
+    sources = [path for path in sorted((ROOT / "device_qml").rglob("*.qml"))
+               + sorted((ROOT / "device_qml").rglob("*.js")) if adapter not in path.parents]
+    # The C100X adapter reaches the agent on the default port only; its
+    # activation refuses another UI port, as the listeners section says.
+    assert "The C100X display adapter is the exception" in " ".join(listeners.split())
+    activation = (ROOT / "native_agent/src/http_c100x_display_api.c").read_text()
+    assert "config->ui_port != 8090" in activation
+    assert "c100x_display_ui_port_unsupported" in activation
     defaults = []
     opened = []
     for path in sources:

@@ -22,6 +22,10 @@ declares the minimum required set. Set `2` includes `C300XRingerControl.qml`,
 set `3` adds `C300XEnergy.qml`, and set `4` is the retired 2.4.1 energy-view set.
 Set `5` adds the 2.5 display navigation, optional-page, Consumers and alert
 components. Set `6` adds the shared checks/optional-page views and Situations.
+Set `7` adds the display adapter of the Classe 100X (`qml/c100x_bundle.sh`). It
+is mandatory on a C100X only: a C300X checks it with the rest of a package,
+never installs it, and also takes a package without it. A change of the adapter
+alone is neither a display-patch nor a script change.
 The matching native agent and complete display bundle are required;
 updating the HA integration alone does not install these GUI components.
 When the installed self-updater cannot install the target file set, Home
@@ -335,10 +339,24 @@ Important top-level fields:
 - `agent.version`
 - `agent.implementation`
 - `device.id`
-- `device.model`: `C300X` or `C100X`, detected on the device from the display
-  program (`BtClass100` on the C100X), not taken from the agent config
+- `device.model`: `C300X` or `C100X`, read on the device, not taken from the
+  agent config. The station names it in `<webserver_type>` of
+  `/home/bticino/sp/dbfiles_ws.xml`; the display program (`BtClass100` on the
+  C100X) is the cross-check and decides where that name is missing or
+  disagrees.
+- `device.model_check`: `ok` (both sources agree), `unread` (the station names
+  no model; the display program decided) or `mismatch` (they disagree; the
+  display program decided, and neither the Display patch nor the C100X display
+  activation is written).
 - `device.display_kind`: `qt4_ondisk` (C300X 1.7.x/2.0.x), `qt5_rcc` (C300X
   3.0.x, display files built into the program) or `qt5_ondisk` (C100X)
+- `device.camera`: `high_res` when the camera resolution can be switched,
+  `fixed` otherwise
+- `device.board`: the board as the kernel names it (the `Hardware` line of
+  `/proc/cpuinfo`, else the device-tree model), for example
+  `BTicino ZIA board HW Rev 3`; empty when it cannot be read
+- `device.article`: the article number from `/var/tmp/flags/codename` without
+  its padding, for example `344642`; empty where the station has none (C100X)
 - `device.firmware`
 - `capabilities`. `touch_tone`, `display_alerts`, `display_bridge` and
   `ringer.mute` are reported on every C300X as before; on the C100X only once
@@ -371,6 +389,11 @@ write counters such as:
 - `last_write_class`
 - `last_write_reason`
 - `qml_patch_last_action`
+
+`agent_init_script_present` and `agent_init_link_ok` tell whether the start
+script and its boot link are in place. `agent_started_after_boot_seconds` is
+the station's uptime at the moment the agent started: a small value means the
+boot link started it, a value near the station's uptime a later start by hand.
 
 Media diagnostic fields describe ownership and bridge state without exposing
 tokens, callback URLs, or raw packet data.

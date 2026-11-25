@@ -72,7 +72,7 @@ The station used WLAN and root2 SSH; HA was Container 2026.11.2 with Python
   `disableState(RingtoneMute)` clears it. Two-way mute is therefore advertised
   only on a confirmed display adapter, which writes both directions through
   AudioState, and the agent pushes an outside unmute to the GUI. Both still
-  need the device test in the test-release guide.
+  need the device test in the Classe 100X notes.
   The reporter identified a ZL38067 DSP; that is not audio-path validation.
 - Discovery did not find this station; **manual setup by host succeeded**.
   There was no agent before SSH installation, the responder closes while HA
@@ -177,7 +177,7 @@ This narrow transformation test is not proof of complete Companion coexistence.
 Tool PATH, stock OWN service, Flexisip process naming and the three specific
 binary identities are cleared offline, not outstanding questions. Preserve
 provisioned accounts/routes. GUI/wrapper/QML identity and the
-[display activation by reboot](../c100x-test-release.md#display-activation-by-reboot-device-test)
+[display activation by reboot](../c100x-experimental.md#display-activation-by-reboot-device-test)
 remain hardware acceptance checks. Display capabilities stay false until that
 activation is confirmed in its trial boot; the matching hashes are not
 permission to activate a device.

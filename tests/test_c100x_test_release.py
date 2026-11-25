@@ -117,7 +117,7 @@ def test_test_instructions_ship_with_the_local_package(monkeypatch, tmp_path):
     monkeypatch.setattr(builder, "PACKAGE_ROOT", tmp_path)
     builder._copy_package_metadata()
     for relative in (
-        "docs/c100x-test-release.md", "docs/c100x-experimental.md",
+        "docs/c100x-experimental.md",
         "docs/dev/c100x-display-parity.md", "docs/dev/c100x-field-report.md",
         "docs/dev/c100x-audio-analysis.md",
     ):
@@ -146,7 +146,8 @@ def test_complete_archive_contains_current_card_and_device_assets(monkeypatch, t
             assert zipped.read(name) == (builder.COMPONENT_SRC / name).read_bytes()
         assert zipped.read("device_agent/armhf/c300x-agent-native") == binary.read_bytes()
         assert zipped.read("device_agent/qml/c100x_bundle.sh")
-        assert zipped.read("docs/c100x-test-release.md") == (ROOT / "docs/c100x-test-release.md").read_bytes()
+        assert zipped.read("docs/c100x-experimental.md") == (ROOT / "docs/c100x-experimental.md").read_bytes()
+        assert "docs/c100x-test-release.md" not in zipped.namelist()
         assert zipped.read("docs/dev/c100x-audio-analysis.md") == (ROOT / "docs/dev/c100x-audio-analysis.md").read_bytes()
         manifest = json.loads(zipped.read("device_agent/bundle.json"))
         assert "c100x_only" not in manifest and manifest["c100x_compatible"] is True

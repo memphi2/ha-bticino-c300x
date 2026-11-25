@@ -249,8 +249,8 @@ What differs on the Classe 100X:
 - There is no message LED and no speech; see
   [Models and Features](feature-reference.md#models-and-features).
 
-Every step is in test on a Classe 100X; the tester guide is
-[Classe 100X test package](c100x-test-release.md#display-activation-by-reboot-device-test).
+Every step is in test on a Classe 100X; the test steps are in
+[Testing a Classe 100X](c100x-experimental.md#display-activation-by-reboot-device-test).
 
 ## Pages and Positions
 

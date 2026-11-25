@@ -29,7 +29,6 @@ PACKAGE_METADATA = (
     "PRIVACY.md",
     "SECURITY.md",
     "docs/legal.md",
-    "docs/c100x-test-release.md",
     "docs/c100x-experimental.md",
     "docs/dev/c100x-display-parity.md",
     "docs/dev/c100x-field-report.md",

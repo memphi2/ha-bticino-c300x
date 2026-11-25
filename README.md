@@ -92,7 +92,7 @@ and without warranty.
 
 **Classe 100X:** the same package serves the C100X as an experiment. Setup
 recognises the station and asks for an explicit confirmation before anything is
-installed; the [tester guide](docs/c100x-test-release.md) has the details.
+installed; the [Classe 100X notes](docs/c100x-experimental.md#testing-a-classe-100x) have the details.
 Use stock firmware 1.5.8 with only the changes needed for root or SSH access;
 running alongside BTicino Companion is not supported.
 
@@ -168,7 +168,7 @@ enabled options.
 6. [Maintenance and Removal](docs/advanced-maintenance.md): agent, tokens,
    recovery, removal.
 7. [Classe 100X](docs/c100x-experimental.md): model notes; the
-   [tester guide](docs/c100x-test-release.md) for issue #51.
+   [tester notes](docs/c100x-experimental.md#testing-a-classe-100x) for issue #51.
 
 Also: [Security](SECURITY.md), [Privacy](PRIVACY.md), [Support](SUPPORT.md),
 [Legal notes](docs/legal.md), [Changelog](CHANGELOG.md).

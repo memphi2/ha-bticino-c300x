@@ -289,7 +289,7 @@ Do not delete recovery files or force the operation past the error. Follow
 The Classe 100X on firmware 1.5.8 is in test in
 [issue #51](https://github.com/memphi2/ha-bticino-c300x/issues/51). Report
 what you see there, with the details in [What to Attach](#what-to-attach) and
-the [tester guide](c100x-test-release.md#diagnostics-for-issue-51).
+the [Classe 100X notes](c100x-experimental.md#how-to-report).
 
 ### Setup or Update Names the Wrong Model
 

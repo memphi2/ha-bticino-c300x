@@ -84,7 +84,7 @@ keeps existing entries and cards.
 ### Classe 100X: Experimental
 
 The same package serves the C100X as an experiment. Make the private backup the
-[tester guide](c100x-test-release.md#private-pre-test-backup) describes first.
+[Classe 100X notes](c100x-experimental.md#private-backup-before-the-first-installation) describes first.
 Setup recognises the station and shows **Classe 100X: experimental support**;
 nothing is installed on the station until you tick the box there. A C300X is
 never asked. The integration keeps its name **BTicino C300X**.
@@ -191,7 +191,7 @@ default; turn it off in the card editor if you want a cleaner dashboard.
 
 Test in this order. On a C100X, first press **Stair light** and **Door unlock**
 once each on the device page and follow the
-[test plan](c100x-test-release.md#test-plan-at-a-glance); report the results
+[test plan](c100x-experimental.md#test-plan); report the results
 in issue #51.
 
 1. **Live video:** press **Stream** in the card.

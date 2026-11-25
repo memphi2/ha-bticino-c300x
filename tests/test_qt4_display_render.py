@@ -45,6 +45,15 @@ def test_energy_views_raise_no_qml_warning_on_qt4(station):
     assert qt4_render.warnings(energy_page(station)) == []
 
 
+@pytest.mark.parametrize("host", ["HomeAssistant", "Alarm"])
+def test_page_opens_without_qml_warning_on_qt4(station, host):
+    """A page that opens before any data arrived assigns no missing value to a property."""
+    source = (ROOT / "tests/qml/page_load_qt4.qml").read_text().replace("@HOST@", host)
+    output = station.show("ProbePage" + host, source, 1500)
+    assert "C300X_PAGE_QT4_SHOWN " + host in output, output[-800:]
+    assert qt4_render.warnings(output) == []
+
+
 def delegate_anchor_faults(text: str) -> list[str]:
     """Anchors of a Repeater delegate that name another item than its parent.
 

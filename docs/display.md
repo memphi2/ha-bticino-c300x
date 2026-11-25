@@ -5,14 +5,10 @@ tiles for your entities, an energy page, an agenda, departure checks, an Alarmo
 page and notices from automations. They are native station pages, not the
 Lovelace card or an embedded Home Assistant dashboard. Display pages run on
 firmware 1.7.x, 2.0.2 and 3.0.6
-([Display Patch on Firmware 3.0.6](#display-patch-on-firmware-306)).
-
-<table>
-  <tr>
-    <td align="center"><strong>Home page buttons: Stock</strong><br><img src="images/readme/display-home-stock-en.webp" alt="C300X home page in the Stock layout: the Alarm and Home Assistant buttons among the station's own buttons, wrapped into two rows" width="360"></td>
-    <td align="center"><strong>Home page buttons: Fixed side by side</strong><br><img src="images/readme/display-c300x-dashboard-en.webp" alt="C300X home page with the Alarm and Home Assistant buttons in fixed places next to each other after Settings" width="360"></td>
-  </tr>
-</table>
+([Display Patch on Firmware 3.0.6](#display-patch-on-firmware-306)). Two
+buttons on the station's home page, **Alarm** and **Home Assistant**, open
+them; where they sit is set with **Home page buttons**
+([Enable the Display Pages](#enable-the-display-pages)).
 
 Page and tile settings are stored in Home Assistant, and the display asks for
 them, so changing them writes nothing to the station. Entity changes reach the
@@ -527,12 +523,7 @@ station's **Settings** menu, below **Configuration**. **Status messages**,
 Display options need it and are greyed out while it cannot be reached. Only
 maintenance operations the agent has enabled are offered.
 
-<table>
-  <tr>
-    <td align="center"><strong>Integration tab</strong><br><img src="images/readme/display-settings-home-assistant-en.webp" alt="Station Settings, Integration tab: status block with Home Assistant, Address, Last contact, Integration and Agent, then the Display switches Status messages, Keep page open in standby and Page change; the Station section with SSH, Reboot station and Remove agent follows when scrolling" width="360"></td>
-    <td align="center"><strong>Generals: Tone buttons</strong><br><img src="images/readme/display-settings-tone-buttons-en.webp" alt="Station Settings, Generals tab with the Tone buttons switch; the tab list ends with Integration" width="360"></td>
-  </tr>
-</table>
+<p align="center"><img src="images/readme/display-settings-home-assistant-en.webp" alt="Content of the Integration tab: status block with Home Assistant, Address, Last contact, Integration and Agent, then the Display switches Status messages, Keep page open in standby and Page change; the Station section with SSH, Reboot station and Remove agent follows when scrolling" width="360"></p>
 
 The tab starts with a short status block:
 

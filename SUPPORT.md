@@ -2,10 +2,10 @@
 
 ## Supported Release Line
 
-- `2.10.x`: next stable (2.10.0): adds firmware 3.0.6 (display pages checked on a station at start, the other pages offline only); includes 2.9.2
-- `2.9.x`: current stable (2.9.2)
-- `2.8.x`: previous stable; upgrade to 2.9.x for maintenance fixes
-- `2.7.x`: no longer maintained; upgrade to 2.9.x
+- `2.10.x`: current stable (2.10.0); adds firmware 3.0.6 (display pages checked on a station at start, the other pages offline only)
+- `2.9.x`: previous stable; upgrade to 2.10.x for maintenance fixes
+- `2.8.x`: no longer maintained; upgrade to 2.10.x
+- `2.7.x`: no longer maintained; upgrade to 2.10.x
 - `2.6.0`: withdrawn because the energy page did not load on the display
 - `2.2.0`: withdrawn because its display update can cause repeated device restarts
 

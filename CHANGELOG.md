@@ -1,6 +1,6 @@
 # Changelog
 
-## v2.10.0 - Unreleased
+## v2.10.0 - 2026-11-25
 
 2.10.0 adds firmware 3.0.6 (Classe 300X hardware revision 4) to 1.7.x and
 2.0.2. Everything below is new against 2.9.2. On a 3.0.6 station a tester

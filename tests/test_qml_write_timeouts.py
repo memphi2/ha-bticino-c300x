@@ -5,7 +5,10 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from custom_components.bticino_c300x._api_maintenance import _QML_WRITE_JOB_TIMEOUT
+from custom_components.bticino_c300x._api_maintenance import (
+    _GUI_RELOAD_JOB_TIMEOUT,
+    _QML_WRITE_JOB_TIMEOUT,
+)
 from custom_components.bticino_c300x.agent_update import MAINTENANCE_BUSY_WAIT_SECONDS
 
 SRC = Path(__file__).resolve().parents[1] / "native_agent" / "src"
@@ -31,5 +34,7 @@ def test_home_assistant_outwaits_a_qml_write_and_its_rollback() -> None:
     recovery = (SRC / "qml_recovery.c").read_text(encoding="utf-8")
     assert "C300X_QML_WRITE_TIMEOUT_MS : 10000" in maintenance
     assert "records_write || gui_reload ? C300X_QML_WRITE_TERM_GRACE_MS : 0" in maintenance
+    # A GUI reload: 10 s, then the same grace; its request waits for the answer.
+    assert 10 + grace_ms / 1000 + 5 <= _GUI_RELOAD_JOB_TIMEOUT < MAINTENANCE_BUSY_WAIT_SECONDS
     assert '"recover", -1, C300X_QML_WRITE_TIMEOUT_MS' in recovery
     assert "term_grace_ms = C300X_QML_WRITE_TERM_GRACE_MS" in recovery

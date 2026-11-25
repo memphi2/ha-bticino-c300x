@@ -924,7 +924,7 @@ def test_every_flow_error_message_belongs_to_an_error_the_flows_report() -> None
 
 
 def test_the_home_page_buttons_name_the_vendor_layout_stock() -> None:
-    names = {"en": "Stock", "de": "Werkseinstellung", "it": "Di fabbrica", "fr": "D'usine"}
+    names = {"en": "Stock view", "de": "Werksansicht", "it": "Vista di fabbrica", "fr": "Vue d'usine"}
     old = ("Like the original", "Wie das Original", "Come l'originale", "Comme l'original")
     for language, name in names.items():
         data = _load_json(TRANSLATIONS / f"{language}.json")
@@ -935,7 +935,7 @@ def test_the_home_page_buttons_name_the_vendor_layout_stock() -> None:
             assert re.search(re.escape(name) + r"\s?:", help_text), (language, step)
             assert not any(text in help_text for text in old), (language, step)
     strings = _load_json(INTEGRATION / "strings.json")
-    assert strings["selector"]["dashboard_dynamic_homepage"]["options"]["stock"].startswith("Stock (")
+    assert strings["selector"]["dashboard_dynamic_homepage"]["options"]["stock"].startswith("Stock view (")
 
 
 def test_the_busy_station_message_is_plain_in_every_language() -> None:

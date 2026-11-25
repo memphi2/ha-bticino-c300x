@@ -130,7 +130,7 @@
           "actions_json": "Actions que l'écran et ses notifications peuvent exécuter, en JSON : une entrée par action avec domain et service, éventuellement target et data. Laissez vide si vous n'en utilisez pas.",
           "dashboard_prevent_return": "Activé : les pages Home Assistant et Alarme restent ouvertes quand l'écran passe en veille. Désactivé : l'écran revient alors à la page d'accueil.",
           "dashboard_navigation": "Manière dont l'écran change de page. La barre de favoris affiche les quatre premières pages sous forme de boutons en bas de l'écran. Au-delà de quatre pages, le quatrième bouton devient « Plus » et ouvre la liste des autres pages. L'ordre suit les positions des pages.",
-          "dashboard_dynamic_homepage": "Où se placent les boutons Alarme et Home Assistant sur la page d'accueil du C300X. D'usine : chaque bouton n'apparaît que s'il a quelque chose à ouvrir et prend sa place parmi les boutons d'origine, aussi en dessous quand la rangée est pleine. Côte à côte, fixes : les deux gardent deux places fixes l'une à côté de l'autre ; un bouton sans rien à ouvrir laisse sa place vide. Un changement réapplique le patch display et redémarre l'écran une fois."
+          "dashboard_dynamic_homepage": "Où se placent les boutons Alarme et Home Assistant sur la page d'accueil du C300X. Vue d'usine : chaque bouton n'apparaît que s'il a quelque chose à ouvrir et prend sa place parmi les boutons d'origine, aussi en dessous quand la rangée est pleine. Côte à côte, fixes : les deux gardent deux places fixes l'une à côté de l'autre ; un bouton sans rien à ouvrir laisse sa place vide. Un changement réapplique le patch display et redémarre l'écran une fois."
         }
       },
       "user_dashboard_entity_display": {
@@ -243,7 +243,7 @@
           "actions_json": "Actions que l'écran et ses notifications peuvent exécuter, en JSON : une entrée par action avec domain et service, éventuellement target et data. Laissez vide si vous n'en utilisez pas.",
           "dashboard_prevent_return": "Activé : les pages Home Assistant et Alarme restent ouvertes quand l'écran passe en veille. Désactivé : l'écran revient alors à la page d'accueil.",
           "dashboard_navigation": "Manière dont l'écran change de page. La barre de favoris affiche les quatre premières pages sous forme de boutons en bas de l'écran. Au-delà de quatre pages, le quatrième bouton devient « Plus » et ouvre la liste des autres pages. L'ordre suit les positions des pages.",
-          "dashboard_dynamic_homepage": "Où se placent les boutons Alarme et Home Assistant sur la page d'accueil du C300X. D'usine : chaque bouton n'apparaît que s'il a quelque chose à ouvrir et prend sa place parmi les boutons d'origine, aussi en dessous quand la rangée est pleine. Côte à côte, fixes : les deux gardent deux places fixes l'une à côté de l'autre ; un bouton sans rien à ouvrir laisse sa place vide. Un changement réapplique le patch display et redémarre l'écran une fois."
+          "dashboard_dynamic_homepage": "Où se placent les boutons Alarme et Home Assistant sur la page d'accueil du C300X. Vue d'usine : chaque bouton n'apparaît que s'il a quelque chose à ouvrir et prend sa place parmi les boutons d'origine, aussi en dessous quand la rangée est pleine. Côte à côte, fixes : les deux gardent deux places fixes l'une à côté de l'autre ; un bouton sans rien à ouvrir laisse sa place vide. Un changement réapplique le patch display et redémarre l'écran une fois."
         }
       },
       "reconfigure_dashboard_entity_display": {
@@ -843,7 +843,7 @@
           "actions_json": "Actions que l'écran et ses notifications peuvent exécuter, en JSON : une entrée par action avec domain et service, éventuellement target et data. Laissez vide si vous n'en utilisez pas.",
           "dashboard_prevent_return": "Activé : les pages Home Assistant et Alarme restent ouvertes quand l'écran passe en veille. Désactivé : l'écran revient alors à la page d'accueil.",
           "dashboard_navigation": "Manière dont l'écran change de page. La barre de favoris affiche les quatre premières pages sous forme de boutons en bas de l'écran. Au-delà de quatre pages, le quatrième bouton devient « Plus » et ouvre la liste des autres pages. L'ordre suit les positions des pages.",
-          "dashboard_dynamic_homepage": "Où se placent les boutons Alarme et Home Assistant sur la page d'accueil du C300X. D'usine : chaque bouton n'apparaît que s'il a quelque chose à ouvrir et prend sa place parmi les boutons d'origine, aussi en dessous quand la rangée est pleine. Côte à côte, fixes : les deux gardent deux places fixes l'une à côté de l'autre ; un bouton sans rien à ouvrir laisse sa place vide. Un changement réapplique le patch display et redémarre l'écran une fois."
+          "dashboard_dynamic_homepage": "Où se placent les boutons Alarme et Home Assistant sur la page d'accueil du C300X. Vue d'usine : chaque bouton n'apparaît que s'il a quelque chose à ouvrir et prend sa place parmi les boutons d'origine, aussi en dessous quand la rangée est pleine. Côte à côte, fixes : les deux gardent deux places fixes l'une à côté de l'autre ; un bouton sans rien à ouvrir laisse sa place vide. Un changement réapplique le patch display et redémarre l'écran une fois."
         }
       },
       "dashboard_entity_display": {
@@ -1784,7 +1784,7 @@
     },
     "dashboard_dynamic_homepage": {
       "options": {
-        "stock": "D'usine (si nécessaire, aussi empilés)",
+        "stock": "Vue d'usine (si nécessaire, aussi empilés)",
         "side_by_side": "Côte à côte, fixes"
       }
     },

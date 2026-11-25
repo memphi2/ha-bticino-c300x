@@ -846,7 +846,12 @@ def test_integration_tab_status_lines_fit_long_values():
     """
     source = (ROOT / "device_qml/C300XSettings.qml").read_text(encoding="utf-8")
     assert "                model: 5\n" in source
-    assert "wrapMode" not in source[source.index("                model: 5\n"):source.index('objectName: "bridgeReason"')]
+    values = source[source.index("                model: 5\n"):source.index('objectName: "bridgeReason"')]
+    assert "wrapMode" not in values
+    # Qt 4.8 does not elide a single line once a line limit is set, whatever its value:
+    # "erreichbar (Mein sehr langer Instanzname hier)" is 373 px and ran off the screen.
+    assert "maximumLineCount" not in values and "elide: Text.ElideRight\n" in values
+    assert "anchors.right: parent.right\n" in values, "the value ends with its column"
     assert "height: Math.max(26, statusValue.paintedHeight + 4)" in source
     assert 'row === 3 ? "Integration" : row === 4 ? "Agent"' in source
     assert '(agentVersion || "-") + " \\u00b7 Firmware " + (firmwareVersion || "-")' in source

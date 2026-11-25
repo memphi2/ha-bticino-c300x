@@ -128,6 +128,42 @@ def test_integration_tab_address_keeps_its_start_and_its_port_on_qt4(tab):
     assert "\u2026" in shown[ADDRESSES[2]], "the host without a dot is longer than two lines"
 
 
+def display_text(language: str, key: str) -> str:
+    texts = (ROOT / "device_qml/js/c300x_i18n.js").read_text()
+    table = texts[texts.index(f"var {language.upper()} = {{"):]
+    return json.loads(re.search(rf'^    "{key}": (".*"),?$', table, re.M).group(1))
+
+
+@pytest.mark.parametrize("reachable", [True, False], ids=["reachable", "not_reachable"])
+@pytest.mark.parametrize("language", ["de", "en", "it", "fr"])
+def test_integration_tab_texts_stay_in_their_column_on_qt4(tab, language, reachable):
+    """Every text of the tab ends inside the column; the values and the reason keep its 12 px inset.
+
+    Qt 4.8 does not elide a single line that has a line limit. The instance
+    name "Mein sehr langer Instanzname hier" made the first value 373 px
+    wide in a 306 px column: it ran out of the panel and off the screen.
+    """
+    stages = tab(language, reachable)
+    for stage, report in stages.items():
+        if stage == "output":
+            continue
+        left, right = report["column"]
+        assert 0 <= left < right <= 800
+        for text in report["texts"]:
+            inset = 12 if text["name"] else 0
+            assert left + inset - 0.5 <= text["left"] and text["right"] <= right - inset + 0.5, (stage, text)
+    first = stages["first"]
+    assert first["reachable"] is reachable
+    state = tab_text(first, "statusValue0")
+    assert state["lines"] == 1 and state["text"].startswith(display_text(language, "status_ok" if reachable else "status_down"))
+    if reachable:
+        assert state["text"].endswith(f"({LONG_NAME})"), "the name is long enough to need the elision"
+    else:
+        reason = tab_text(first, "bridgeReason")
+        assert reason["text"] == display_text(language, "bridge_unreachable") and reason["lines"] >= 2
+        assert reason["bottom"] <= first["view"][1], "the reason shows without scrolling"
+
+
 def test_integration_tab_raises_no_qml_warning_on_qt4(tab):
     """Of our files only: the vendor page reports types its own program provides, which the probe lacks."""
     for reachable in (True, False):

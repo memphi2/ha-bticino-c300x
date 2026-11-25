@@ -247,7 +247,6 @@ Item {
                                 y: 2
                                 color: index > 0 ? "white" : panel.reachable ? "#58d68d" : panel.problem ? "#f1c40f" : "white"
                                 font.pixelSize: 18
-                                maximumLineCount: 2
                                 elide: Text.ElideRight
                                 text: panel.statusValue(index)
                             }

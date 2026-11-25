@@ -18,7 +18,7 @@ The Classe 100X on firmware 1.5.8 is **in test** in
 [Supported Devices](#supported-devices).
 
 <p align="center">
-  <img src="custom_components/bticino_c300x/brand/logo.png" alt="BTicino C300X integration logo" width="140">
+  <img src="custom_components/bticino_c300x/brand/icon.png" alt="BTicino C300X integration logo" width="140">
 </p>
 
 [Quick Start](docs/quickstart.md) | [User guide](docs/user-guide.md) |

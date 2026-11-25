@@ -130,7 +130,6 @@ REQUIRED_PATHS = [
     "project-versions.json",
     "custom_components/bticino_c300x/manifest.json",
     "custom_components/bticino_c300x/brand/icon.png",
-    "custom_components/bticino_c300x/brand/logo.png",
     "custom_components/bticino_c300x/quality_scale.yaml",
     "custom_components/bticino_c300x/config_flow.py",
     "custom_components/bticino_c300x/discovery.py",

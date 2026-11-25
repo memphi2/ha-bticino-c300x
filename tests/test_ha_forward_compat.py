@@ -45,8 +45,10 @@ def test_marketplace_metadata_and_package_assets() -> None:
     assert keys[2:] == sorted(keys[2:])
     assert manifest["categories"] == ["security_safety.doorbells_intercoms"]
     assert manifest["domain"] == "bticino_c300x"
-    for name in ("brand/icon.png", "brand/logo.png", "translations/en.json"):
+    for name in ("brand/icon.png", "translations/en.json"):
         assert (COMPONENT / name).is_file()
+    # A logo identical to the icon is a hassfest warning: the icon serves as both.
+    assert not (COMPONENT / "brand/logo.png").exists()
     hacs = json.loads((ROOT / "hacs.json").read_text())
     assert hacs["zip_release"] is True
     assert hacs["filename"] == "ha-bticino-c300x.zip"

@@ -62,8 +62,10 @@ stops new reads. Nothing is stored on the C300X. `dashboard_energy_updates.py`
 owns subscriptions and the five-minute refresh; Now and Consumers share live
 power subscriptions, throttled to ten seconds. Unloading releases them.
 `C300XEnergy.qml` draws the page only while open and creates curve segments only
-for the visible Power view; `C300XEnergyConsumers.qml` is loaded only for the
-visible Consumers view.
+for the visible Power view; `C300XEnergyConsumers.qml` is loaded when the
+Consumers view is first shown and kept while that view stays selected, also
+while the page hides it under one of its own lists, so its rows and scales
+survive; selecting another view unloads it.
 
 Each config entry keeps its live state in `BticinoC300XRuntimeData`, with a typed
 agent API. `resources` owns its tasks, subscriptions and media preparation

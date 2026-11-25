@@ -45,6 +45,11 @@ C100X; everything else is in the main documentation:
 | Display | A separate Qt 5 adapter activated by one reboot, confirmed in its first boot and otherwise rolled back; entered through the items **Home Assistant** and **Alarmo** of the station's main menu and operated like the station's own menus (Up/Down, Return, EXIT as the last entry). No Display patch, no home page buttons, no display reload ([details](dev/c100x-display-parity.md#activation-by-reboot)). |
 | Ringer mute, touch tone, display notifications | Only after the display activation; notifications without a tone. **Ringer volume** works without it. |
 
+<p align="center"><img src="images/readme/c100x-display-start-en.webp" alt="Classe 100X page Home Assistant: status fields, weather with two forecasts, page dots at the bottom" width="360"> <img src="images/readme/c100x-display-alarmo-en.webp" alt="Classe 100X Alarmo page while arming: state line, modes, number pad and the Leaving Home action" width="360"></p>
+
+More pictures of the display pages:
+[Classe 100X: Activation by Reboot](display.md#classe-100x-activation-by-reboot).
+
 ## Package Protection
 
 The C100X test package declares itself C100X-only in its device bundle. The

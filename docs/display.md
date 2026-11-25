@@ -150,6 +150,28 @@ when the station starts, Repairs shows **C100X display check failed at the
 station start**; see
 [Troubleshooting](media-troubleshooting.md#classe-100x-display-pages).
 
+<table>
+  <tr>
+    <td align="center"><strong>Home Assistant</strong><br><img src="images/readme/c100x-display-start-en.webp" alt="Classe 100X page Home Assistant: status fields, weather with two forecasts, page dots at the bottom" width="360"></td>
+    <td align="center"><strong>Lights</strong><br><img src="images/readme/c100x-display-lights-en.webp" alt="Classe 100X page Lights: eight light tiles with switches, the selected tile marked with a white line" width="360"></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Light detail</strong><br><img src="images/readme/c100x-display-light-detail-en.webp" alt="Classe 100X detail page of a light: brightness value, switch and a brightness bar set with the keys" width="360"></td>
+    <td align="center"><strong>Energy: Now</strong><br><img src="images/readme/c100x-display-energy-flow-en.webp" alt="Classe 100X Energy page, Now view: flows between grid, solar, battery and home, the view row below with Now selected" width="360"></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Energy: Today</strong><br><img src="images/readme/c100x-display-energy-today-en.webp" alt="Classe 100X Energy page, Today view: hourly bars with the sums below" width="360"></td>
+    <td align="center"><strong>Agenda</strong><br><img src="images/readme/c100x-display-appointments-en.webp" alt="Classe 100X Agenda page: four appointments, an arrow marks more below" width="360"></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Alarmo</strong><br><img src="images/readme/c100x-display-alarmo-en.webp" alt="Classe 100X Alarmo page while arming: state line, the modes Off, Away and Night, the number pad and the Leaving Home action" width="360"></td>
+    <td></td>
+  </tr>
+</table>
+
+The pictures are renders of the Classe 100X pages with example values on a
+plain background of our own; on the station the pages lie on its wallpaper.
+
 What differs on the Classe 100X:
 
 - The station's main menu gets two items of its own directly after the ringtone

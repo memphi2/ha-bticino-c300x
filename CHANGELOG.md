@@ -1,9 +1,11 @@
 # Changelog
 
-## v3.0.0 - Unreleased
+## v3.0.0b1 - 2026-11-25
 
-One package now serves the Classe 300X and, as an experiment, the Classe 100X.
-On a Classe 300X everything works as in 2.10.0, with these visible changes:
+Beta. One package now serves the Classe 300X and, as an experiment, the Classe
+100X. The Classe 100X side is checked against the original 1.5.8 firmware
+files offline only and is not yet confirmed on a device. On a Classe 300X
+everything works as in 2.10.0, with these visible changes:
 
 - **Names without the model.** The card picker lists the card as **BTicino
   Doorbell Call Card** (before: C300X Doorbell Call Card). The blueprints are
@@ -31,6 +33,12 @@ On a Classe 300X everything works as in 2.10.0, with these visible changes:
 - **Classe 100X (experimental).** Setup recognises a Classe 100X on firmware
   1.5.8 and asks for an explicit confirmation before it installs anything
   ([Classe 100X](docs/c100x-experimental.md)). A Classe 300X is never asked.
+- On a Classe 100X with active display pages, the agent update Repair renews
+  the pages when the update brings newer ones: the station reboots once, after
+  it has been idle for about two minutes, never during a call and only while
+  the maintenance reboot is allowed. A station with the original display is
+  not rebooted.
+- The native agent is rebuilt as 3.0.0b1; an agent update is required.
 
 ## v2.10.0 - 2026-11-25
 

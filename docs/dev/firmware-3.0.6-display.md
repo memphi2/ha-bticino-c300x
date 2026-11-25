@@ -1,7 +1,8 @@
 # Firmware 3.0.6 Display Audit
 
-Offline audit of beta `2.9.0b1`, 2026-11-22, kept current up to `2.10.0b2`
-(which includes stable 2.9.2). The comparison firmware is 1.7.19. No device, HA instance, vendor executable or hardware plugin was
+Offline audit of beta `2.9.0b1`, 2026-11-22, kept current up to the
+unreleased stable `2.10.0` (which includes 2.9.2 and the internal base
+`work/2.9.3`). The comparison firmware is 1.7.19. No device, HA instance, vendor executable or hardware plugin was
 started. Model detection is deliberately outside this beta.
 
 ## Evidence Levels
@@ -184,9 +185,9 @@ The first restart (`3876e2b4`) grew by patching and kept drawing findings: a
 during the wrapper's `sleep 3` armed the vendor SIGTERM trap, which fired only
 after that sleep and killed the next display, and back-to-back restarts left a
 quarantine mark behind. It is replaced as a whole. Firmware 1.7.19 and 2.0.2
-keep the restart of the stable release unchanged: `reload_gui` keeps 2.9.2's
-`RELOAD_GUI` check and calls `reload_gui_qt4`, which is the rest of 2.9.2's
-`reload_gui` line for line.
+keep the restart of the base unchanged: `reload_gui` keeps the base's
+`RELOAD_GUI` check and calls `reload_gui_qt4`, which is the rest of the
+base's `reload_gui` line for line.
 
 **One restart worker.** Every Qt 5 restart (`reload`, a write's restart, the
 rollback restart, `recover`) only files a request and waits for its answer.
@@ -273,10 +274,23 @@ answer says `"gui_restart":"pending"`. Every status read reports
 status every 2 s until it is `idle`, at most 180 s (a cycle with a retry and
 the stock fallback takes about three minutes at worst), and judge the
 display then; one still pending after that counts as not confirmed. The
-agent's media-user label write accepts a pending restart: the label is
-written and a failed restart shows in the display status. Only a cycle that
-ended without any display program fails the restart (and rolls a write
-back).
+agent's media-user label write is the same asynchronous job as on 1.7.19
+and 2.0.2 (write limit, SIGTERM, grace, 504 `media_user_label_timeout`);
+its result check (`c300x_label_result_ok`) accepts a pending restart on an
+active overlay: the label is written and a failed restart shows in the
+display status. Only a cycle that ended without any display program fails
+the restart (and rolls a write back).
+
+**Deadline signal.** The agent signals the job's process group; the worker
+runs in its own session and is not hit. A cut write's rollback, a cut
+recovery pass (`abort_recovery`, repeated once) and a cut reload
+(`abort_reload`) never file a second restart on Qt 5: the repeat waits at
+most 5 s for the request already filed (`FINISH_SIGNALLED`,
+`FINISH_STEP_REPEAT`), and the reload only exits, as the worker serves its
+request. The resource stage (`display-qt5/rcc-stage.<pid>`) lies on the
+station's storage: the signal clean-up removes it with the staging
+directory, and a stage of a script killed past its grace goes with the
+next pack.
 
 **Install and update.** The agent and the display are separate: a display
 step that ran on the Qt 5 display and failed (not confirmed, answered 502 or
@@ -623,23 +637,30 @@ unchanged recovery artifacts on failed restoration, not merely a diagnostic.
 
 ## Shared Code On 1.7.19 And 2.0.2
 
-The branch takes the stable release over completely; on 1.7.19 and 2.0.2 it
-must behave like it (2.10.0b2: like 2.9.2). Every wait or tolerance the Qt 5
+The branch takes the release work over completely (its base is the internal
+`work/2.9.3`, released together with 3.0.6 as 2.10.0); on 1.7.19 and 2.0.2
+it must behave like that base. Every wait or tolerance the Qt 5
 restart needs is therefore behind the firmware check, in the agent
 `c300x_device_display_is_qt5()` and in Home Assistant the cached display
 status (`qt5_overlay`, sent by `qml_patch.sh` only on the Qt 5 display):
 
 | Where | Qt 5 display | 1.7.19 / 2.0.2 (as stable) |
 | --- | --- | --- |
-| Agent job limit of a GUI reload (`http_maintenance.c`) | 30 s (display write limit) | 10 s |
-| HA wait for the GUI reload answer (`display_restart` keyword) | 50 s | 15 s |
-| SSH command limit of the HA installer | 60 s from the Qt 5 probe on | 30 s |
+| Agent job limit of a GUI reload (`http_maintenance.c`) | 30 s (display write limit), then SIGTERM and 15 s | 10 s, then SIGTERM and 15 s |
+| `abort_reload` on that SIGTERM (`qml_patch.sh`) | exits; the worker serves the request | repeats the restart, exits 131 |
+| `abort_recovery` repeat of a cut recovery | waits at most 5 s for the request filed | repeats the pass |
+| HA wait for the GUI reload answer (`display_restart` keyword) | 50 s | 30 s |
 | Display after a runtime-only agent update (`repairs.py`) | display follow-up from the cached status, owed on failure | one GUI reload when the patch is required |
 | Station-launch check (`gui_peer.c`) | the start script's subshell forks are accepted | only the start script itself |
 | Updater recovery guard (`agent_update.c`, `qt5_recovery_required`) | runs | not run |
 
-Each gate has a test for both sides. Offline proofs for 2.10.0b2:
-`qml_patch.sh` from this branch and from 2.9.2 give byte-identical station
+Shared without a gate: the SSH installer runs every display step as a
+display write on both (30 s, SIGTERM, 15 s grace; a Qt 5 write answers
+"pending" after 24 s at most, which the installer polls), and the
+media-user label is the same job on both.
+
+Each gate has a test for both sides. Offline proofs for 2.10.0:
+`qml_patch.sh` from this branch and from the base give byte-identical station
 files and backups on the 1.7.19 and 2.0.2 skins, both home layouts, through
 core apply, apply, label apply, layout switch, partial restores and
 `restore-all`, which leaves the stock files. Remaining shared differences are
@@ -692,8 +713,11 @@ anything new.
    (reload, apply, core Repair, agent update, with and without the retry),
    whether `BtClass` ever shows a second PID, and the durations of the GUI
    reload job (agent limit, HA 50 s wait) and of the installer's display
-   steps (60 s SSH limit). The station must not reboot (uptime unchanged) and
-   exactly one display must run after each.
+   steps (30 s display write limit), above all the time a first `core-apply`
+   needs before it files its restart (reading the original pages from
+   `BtClass` and packing the resource file). The station must not reboot
+   (uptime unchanged) and exactly one display must run after each.
 9. Repeat the affected startup, removal, calls, ringer and touch paths on
-   1.7.19. Stable downgrade on 3.0.6 requires complete beta overlay removal
-   first; stable 2.8.2 has no Qt5 recovery support.
+   1.7.19. Going back on 3.0.6 to a release without 3.0.6 support (2.9.x or
+   older) requires complete overlay removal first; those releases have no
+   Qt 5 recovery support.

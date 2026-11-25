@@ -4,7 +4,22 @@ set -u
 AGENT_DIR="${C300X_AGENT_DIR:-/home/bticino/cfg/extra/c300x-native-agent}"
 BACKUP_ROOT="${C300X_BACKUP_ROOT:-/home/bticino/cfg/extra/c300x-device-file-backups}"
 QML_PATCH="${C300X_QML_PATCH_SCRIPT:-$AGENT_DIR/qml_patch.sh}"
+# device-profile-begin
+# The station this script runs on: model and display mechanism. The same
+# block stands in qml_patch.sh and remove_agent.sh and matches the agent's
+# device_detect.c; nothing else in the scripts reads the markers. A C100X has
+# the Qt 5 library too, so its marker decides first.
+QT5_MARKER="${C300X_QML_QT5_MARKER:-/usr/lib/libQt5Core.so.5}"
 C100X_MARKER="${C300X_QML_C100X_MARKER:-/home/bticino/bin/gui/BtClass100}"
+DEVICE_MODEL=C300X
+DEVICE_DISPLAY=qt4_ondisk
+if [ -e "$C100X_MARKER" ]; then
+    DEVICE_MODEL=C100X
+    DEVICE_DISPLAY=qt5_ondisk
+elif [ -e "$QT5_MARKER" ]; then
+    DEVICE_DISPLAY=qt5_rcc
+fi
+# device-profile-end
 INIT_SCRIPT="${C300X_INIT_SCRIPT:-/etc/init.d/c300x-native-agent}"
 INIT_LINK="${C300X_INIT_LINK:-/etc/rc5.d/S40c300x-native-agent}"
 IPTABLES="${C300X_IPTABLES:-/etc/network/if-pre-up.d/iptables}"
@@ -144,7 +159,7 @@ restore_c100x_qml() {
 }
 
 restore_qml() {
-    if [ -e "$C100X_MARKER" ]; then restore_c100x_qml; return; fi
+    if [ "$DEVICE_MODEL" = "C100X" ]; then restore_c100x_qml; return; fi
     if [ ! -x "$QML_PATCH" ]; then
         printf 'Cannot verify GUI restoration without executable patch script; keeping agent files and backups in place\n' >&2
         exit 1
@@ -412,7 +427,7 @@ restore_media_patches() {
 # Without a valid stock backup the library stays as it is (wider tap
 # tolerance); any other failure keeps the backup for another removal.
 restore_display_library() {
-    [ -e "$C100X_MARKER" ] && return 0
+    [ "$DEVICE_MODEL" = "C100X" ] && return 0
     touch_result="$("$AGENT_DIR/c300x-agent-native" --display-touch restore 2>/dev/null || true)"
     case "$touch_result" in
         *'"ok":true'*) return 0 ;;

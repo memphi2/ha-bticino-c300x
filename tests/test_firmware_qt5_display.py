@@ -124,6 +124,29 @@ def test_a_c100x_keeps_the_low_stream_whatever_its_libraries(config_probe):
     assert (answer["model"], answer["resolution_fixed"], answer["high_resolution"]) == ("C100X", 1, 0)
 
 
+def test_the_scripts_ask_one_profile_block_for_the_station():
+    scripts = {name: (NATIVE / "scripts" / name).read_text(encoding="utf-8")
+               for name in ("qml_patch.sh", "remove_agent.sh")}
+    blocks, rests = [], []
+    for text in scripts.values():
+        head, rest = text.split("# device-profile-begin\n")
+        block, tail = rest.split("# device-profile-end\n")
+        blocks.append(block)
+        rests.append(head + tail)
+    assert blocks[0] == blocks[1]
+    # Same markers and the same order as device_detect.c: the C100X first.
+    detect = (NATIVE / "src/device_detect.c").read_text(encoding="utf-8")
+    for marker in ("/usr/lib/libQt5Core.so.5", "/home/bticino/bin/gui/BtClass100"):
+        assert marker in blocks[0] and marker in detect
+    assert blocks[0].index('[ -e "$C100X_MARKER" ]') < blocks[0].index('[ -e "$QT5_MARKER" ]')
+    for rest in rests:
+        assert "QT5_MARKER" not in rest and "libQt5Core" not in rest
+        assert '-e "$C100X_MARKER"' not in rest
+    for script in (NATIVE / "scripts").glob("*.sh"):
+        if script.name not in scripts and not script.name.startswith("c100x_"):
+            assert "libQt5Core" not in script.read_text(encoding="utf-8"), script.name
+
+
 def test_the_agent_offers_the_camera_resolution_except_on_a_qt5_display():
     http = (NATIVE / "src/http.c").read_text(encoding="utf-8")
     capabilities = (NATIVE / "src/capabilities.c").read_text(encoding="utf-8")

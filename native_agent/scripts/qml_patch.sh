@@ -12,8 +12,22 @@ GUI_WRAPPER="${C300X_QML_GUI_WRAPPER:-/home/bticino/bin/BtClass_qws}"
 GUI_RELOAD_DELAY_SECONDS="${C300X_QML_GUI_RELOAD_DELAY_SECONDS:-2}"
 GUI_STOP_SECONDS="${C300X_QML_GUI_STOP_SECONDS:-10}"
 PROC_DIR="${C300X_QML_PROC_DIR:-/proc}"
+# device-profile-begin
+# The station this script runs on: model and display mechanism. The same
+# block stands in qml_patch.sh and remove_agent.sh and matches the agent's
+# device_detect.c; nothing else in the scripts reads the markers. A C100X has
+# the Qt 5 library too, so its marker decides first.
 QT5_MARKER="${C300X_QML_QT5_MARKER:-/usr/lib/libQt5Core.so.5}"
 C100X_MARKER="${C300X_QML_C100X_MARKER:-/home/bticino/bin/gui/BtClass100}"
+DEVICE_MODEL=C300X
+DEVICE_DISPLAY=qt4_ondisk
+if [ -e "$C100X_MARKER" ]; then
+    DEVICE_MODEL=C100X
+    DEVICE_DISPLAY=qt5_ondisk
+elif [ -e "$QT5_MARKER" ]; then
+    DEVICE_DISPLAY=qt5_rcc
+fi
+# device-profile-end
 AGENT_BIN="${C300X_QML_AGENT_BIN:-${C300X_AGENT_DIR:-/home/bticino/cfg/extra/c300x-native-agent}/c300x-agent-native}"
 # 1: stock layout, 0: side by side, unset: keep the layout on the device.
 HOME_BUTTONS_REQUEST="${C300X_QML_DYNAMIC_HOME_PAGE:-}"
@@ -31,7 +45,7 @@ QT5_VENDOR_FILES="EventManager.qml HomePage.qml MainApp.qml MemoPage.qml Setting
 # registers ahead of the program's own. A C100X has the Qt 5 library too, but
 # another display program and no such overlay.
 QT5_DISPLAY=0
-if [ -e "$QT5_MARKER" ] && [ ! -e "$C100X_MARKER" ]; then
+if [ "$DEVICE_DISPLAY" = "qt5_rcc" ]; then
     QT5_DISPLAY=1
     QT5_AGENT_DIR="${C300X_AGENT_DIR:-/home/bticino/cfg/extra/c300x-native-agent}"
     QT5_BACKUP_ROOT="${C300X_BACKUP_ROOT:-/home/bticino/cfg/extra/c300x-device-file-backups}"
@@ -3134,7 +3148,7 @@ restore_all_patch_files() {
 # everything but the status is refused there. Status stays readable everywhere.
 action_refused() {
     [ "$ACTION" = "status" ] && return 1
-    [ -e "$C100X_MARKER" ]
+    [ "$DEVICE_MODEL" = "C100X" ]
 }
 
 if action_refused; then

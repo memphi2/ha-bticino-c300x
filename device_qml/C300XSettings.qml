@@ -22,6 +22,7 @@ Item {
     property int visit: 0
     property bool reachable: answered && problem === ""
     property string address: ""
+    property string addressShown: ""
     property string contact: ""
     property string agentVersion: ""
     property string firmwareVersion: ""
@@ -76,10 +77,32 @@ Item {
     function statusValue(row) {
         if (row === 0) return label(reachable ? "status_ok" : problem ? "status_down" : "status_checking")
             + (reachable && instanceName ? " (" + instanceName + ")" : "")
-        if (row === 1) return address ? address.replace(/([.:])(?=[^\/])/g, "$1\u200b") : "-"
+        if (row === 1) return addressShown || "-"
         if (row === 2) return contact || "-"
         if (row === 3) return reachable && integrationVersion ? integrationVersion : "-"
         return (agentVersion || "-") + " \u00b7 Firmware " + (firmwareVersion || "-")
+    }
+    function fits(text) {
+        gauge.text = text
+        return gauge.paintedWidth <= statusRows.width - 150
+    }
+    function longest(text, end) {
+        var low = 0, high = text.length
+        while (low < high) {
+            var middle = Math.ceil((low + high) / 2)
+            if (fits(end ? "\u2026" + text.slice(-middle) : text.slice(0, middle))) low = middle
+            else high = middle - 1
+        }
+        return low
+    }
+    function fitAddress() {
+        var first = longest(address, false)
+        if (first === address.length) { addressShown = address; return }
+        var head = address.slice(0, first)
+        var stop = Math.max(head.lastIndexOf("."), head.lastIndexOf(":"), head.lastIndexOf("-")) + 1
+        if (stop > address.indexOf("//") + 2 && fits(address.slice(stop))) first = stop
+        var rest = address.slice(first)
+        addressShown = address.slice(0, first) + "\n" + (fits(rest) ? rest : "\u2026" + rest.slice(-longest(rest, true)))
     }
     function rowText(row) {
         if (row === 0) return label("section_display")
@@ -164,6 +187,7 @@ Item {
         saving = false
     }
     onVisibleChanged: if (visible) readStatus(); else hidden()
+    onAddressChanged: fitAddress()
     Component.onDestruction: hidden()
     Timer {
         id: deadline
@@ -174,6 +198,11 @@ Item {
         }
     }
 
+    UbuntuLightText {
+        id: gauge
+        visible: false
+        font.pixelSize: 18
+    }
     Flickable {
         id: scroller
         anchors.fill: parent
@@ -218,8 +247,6 @@ Item {
                                 y: 2
                                 color: index > 0 ? "white" : panel.reachable ? "#58d68d" : panel.problem ? "#f1c40f" : "white"
                                 font.pixelSize: 18
-                                wrapMode: index === 1 ? Text.Wrap : Text.NoWrap
-                                maximumLineCount: 2
                                 elide: Text.ElideRight
                                 text: panel.statusValue(index)
                             }

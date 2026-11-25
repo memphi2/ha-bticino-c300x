@@ -449,3 +449,55 @@ def test_a_visitor_image_save_that_runs_out_of_time_is_not_blamed_on_the_agent(t
         manager.close()
 
     asyncio.run(run())
+
+
+def test_a_slow_visit_link_after_the_image_is_stored_is_no_failure(tmp_path, monkeypatch):
+    from custom_components.bticino_c300x import snapshot_capture
+
+    async def run():
+        manager = setup(tmp_path, monkeypatch)
+        api = manager.entry.runtime_data.api.async_doorbell_snapshot
+        api.return_value = (bmp(), "image/bmp")
+        monkeypatch.setattr(snapshot_capture, "CAPTURE_TIMEOUT", 0.3)
+        journal = SimpleNamespace()
+
+        attached = []
+
+        async def slow_attach(*args, **kwargs):
+            attached.append(args[1])
+            await asyncio.sleep(5)
+
+        journal.attach_snapshot = slow_attach
+        journal.close = journal.invalidate = lambda: None
+        manager.journal = journal
+        event(manager, "doorbell_pressed", "one")
+        await drain(manager)
+        assert manager.latest is not None and attached == [manager.latest.name]
+        assert manager.capture.last_failure is None
+        manager.close()
+
+    asyncio.run(run())
+
+
+def test_a_conversion_that_runs_out_of_time_is_not_blamed_on_the_agent(tmp_path, monkeypatch):
+    from custom_components.bticino_c300x import snapshot_capture
+
+    async def run():
+        manager = setup(tmp_path, monkeypatch)
+        api = manager.entry.runtime_data.api.async_doorbell_snapshot
+        api.return_value = (bmp(), "image/bmp")
+        monkeypatch.setattr(snapshot_capture, "CAPTURE_TIMEOUT", 0.2)
+        original = manager.disk_job
+
+        async def slow_job(function, *args):
+            if function is snapshot_capture.framebuffer_jpeg:
+                await asyncio.sleep(5)
+            return await original(function, *args)
+
+        monkeypatch.setattr(manager, "disk_job", slow_job)
+        event(manager, "doorbell_pressed", "one")
+        await drain(manager)
+        assert manager.capture.last_failure == "save_failed"
+        manager.close()
+
+    asyncio.run(run())

@@ -473,7 +473,7 @@ maintenance operations the agent has enabled are offered.
 
 <table>
   <tr>
-    <td align="center"><strong>Integration tab</strong><br><img src="images/readme/display-settings-home-assistant-en.webp" alt="Station Settings, Integration tab: connection status block, the switches Status messages, Keep page open in standby, Page change and SSH, and the buttons Reboot station and Remove agent" width="360"></td>
+    <td align="center"><strong>Integration tab</strong><br><img src="images/readme/display-settings-home-assistant-en.webp" alt="Station Settings, Integration tab: status block with Home Assistant, Address, Last contact, Integration and Agent, then the Display switches Status messages, Keep page open in standby and Page change; the Station section with SSH, Reboot station and Remove agent follows when scrolling" width="360"></td>
     <td align="center"><strong>Generals: Tone buttons</strong><br><img src="images/readme/display-settings-tone-buttons-en.webp" alt="Station Settings, Generals tab with the Tone buttons switch; the tab list ends with Integration" width="360"></td>
   </tr>
 </table>

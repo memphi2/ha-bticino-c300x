@@ -1414,8 +1414,8 @@
               "snapshot_throttled": "Richiesta troppo presto dopo l'immagine precedente",
               "invalid_snapshot_size": "Il dispositivo ha rifiutato la dimensione dell'immagine",
               "invalid_image": "Il dispositivo ha fornito un'immagine non valida",
-              "agent_unreachable": "Agente del dispositivo non raggiungibile",
-              "agent_error": "L'agente del dispositivo ha segnalato un errore",
+              "agent_unreachable": "Device agent non raggiungibile",
+              "agent_error": "Il device agent ha segnalato un errore",
               "save_failed": "Home Assistant non ha potuto salvare l'immagine"
             }
           }

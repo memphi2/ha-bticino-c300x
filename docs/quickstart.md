@@ -105,8 +105,8 @@ fill in:
 The device agent is a small program on the station that Home Assistant talks
 to. What happens next depends on what Home Assistant finds:
 
-- **No agent:** setup offers **Install native agent on the C300X**, also for a
-  C100X. Use it only on a rooted or SSH-enabled station. Home Assistant logs in
+- **No agent:** setup offers **Install native agent on the C300X/C100X**; the
+  model is not known yet. Use it only on a rooted or SSH-enabled station. Home Assistant logs in
   over SSH with the station's factory root login and asks for an SSH user and
   password only if the station refuses it. While the model is still unknown it
   tries the C300X factory login first and the C100X one only after the station
@@ -231,8 +231,10 @@ existing ones stay until they expire. See
 Keep the existing integration entry. The release archive contains the agent,
 its display files and the card; no separate card repository is needed.
 
-A C100X is updated the same way. Home Assistant refuses to put a release from
-before the joint package on a C100X, before anything is written.
+A C100X is updated the same way. Do not go back to a release from before the
+joint package on a C100X: the C100X agent's own updater refuses such a package,
+and a refused upload can leave staging files, but the SSH installer of an older
+release does not check the model and must not be used on a C100X.
 
 ### Beta Versions
 

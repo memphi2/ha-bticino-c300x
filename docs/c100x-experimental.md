@@ -29,13 +29,15 @@ C100X; everything else is in the main documentation:
   custom SIP, media or display changes is not supported.
 - **The package.** One package serves the C300X and the C100X. Keep a copy of
   the one you installed for recovery. A release from before the joint package
-  is no substitute: a C100X refuses it.
+  is no substitute: the C100X agent's own updater refuses it (a refused upload
+  can leave staging files), and the SSH installer of such a release does not
+  check the model, so never use it on a C100X.
 
 ## What Is Different on the C100X
 
 | Area | On the C100X |
 | --- | --- |
-| Model detection | The agent detects the C100X from its display program and announces `_bticino-c100x-agent._tcp`; an announcement of one model never matches or moves an entry of the other. |
+| Model detection | The agent reads the model from the station's own `<webserver_type>` (`/home/bticino/sp/dbfiles_ws.xml`); the display program (`BtClass100` on a C100X) is the cross-check and decides where that name is missing or disagrees. A disagreement is reported and blocks the display activation. The agent announces `_bticino-c100x-agent._tcp`; an announcement of one model never matches or moves an entry of the other. |
 | Camera | Only the low stream; no **Camera resolution** select and no 960x576. Picture controls use the station's day ranges (brightness 30-220, contrast 80-255, saturation 80-255); at night and on off-grid menu steps the sliders show the nearest 10 % step. |
 | Audio | The firmware codec stays Speex/8000: the station's audio runs at 16 kHz, the firmware's PCMU path accepts only 8 kHz, and the audio chip clocks every profile at 16 kHz. The agent therefore refuses a firmware PCMU switch, and Home Assistant offers no **Audio codec** select. HA and the browser still get PCMU through the agent ([audio analysis](dev/c100x-audio-analysis.md)). |
 | Speaker and TTS | Not offered. The station's own sound paths have no safe owner or cancellation for a door call, so the agent blocks the C300X playback path on a C100X. |

@@ -73,8 +73,7 @@ The **Forwarding** select decides where a Ring Call goes:
 | Blocked | `blocked` | HA still receives the ring event but cannot answer. |
 
 Automations use the option values and can answer with
-`bticino_c300x.answer_doorbell_call` or end the call with
-`bticino_c300x.hangup_doorbell_call`. Several browsers can show the ring
+`bticino_c300x.answer_call` or end the call with `bticino_c300x.hangup_call`. Several browsers can show the ring
 preview; after the call is answered, only the answering browser shows the call
 controls. Media Readiness reports another forwarding choice as a warning; a
 Repair never changes it.
@@ -142,7 +141,7 @@ controls under it; they return when the panel closes.
 Automations use `bticino_c300x.camera_picture` in an active session: omit
 `control` and `value` to read, or send both (for example `control: contrast`,
 `value: 60`). The response holds `brightness`, `contrast` and `saturation`.
-Add `entry_id` with more than one station.
+With more than one station, target the station or one of its entities.
 
 ### Stream Settings
 
@@ -357,8 +356,9 @@ usually through the **BTicino Ring capture** blueprint.
 
 ```yaml
 - action: bticino_c300x.capture_doorbell_call
+  target:
+    device_id: YOUR_STATION_DEVICE_ID
   data:
-    entry_id: YOUR_C300X_ENTRY_ID
     capture_mode: on_demand
     duration_seconds: 5
     include_audio: true
@@ -593,9 +593,13 @@ match a known original. If one is missing, restart Home Assistant once, or use
 | BTicino strict phrase decision | `strict_phrase_decision.yaml` | Checks a transcription for an exact phrase; optional unlock. |
 | BTicino Calendar display reminder | `calendar_display_reminder.yaml` | Reminder on the station's HA page before a calendar event. |
 
-The device-based blueprints find the camera, forwarding select and Media
-Readiness sensor of the selected C300X and match its ring events, so no entry
-ID is needed. Phone alerts and captures run only while readiness is `ready` or
+The ring blueprints start from the **Doorbell ring event** of the outdoor unit
+you select and act on that unit's call. They find the forwarding select and
+the Media Readiness sensor on the station the unit belongs to. For the fastest
+reaction, without the unit's name, select the station's **Station ring**
+event instead: it fires at once with every ring, the unit's event as soon as
+the station names the caller (about 0.3 s, at most 1 s; at once with a single
+unit). Phone alerts and captures run only while readiness is `ready` or
 `warning`.
 
 ### Phone Alerts
@@ -604,19 +608,20 @@ Both phone alerts need **Forwarding** set to **Home Assistant** and the Companio
 App notify service of the phone, for example `notify.mobile_app_your_phone`.
 
 - **Android:** a high-priority notification. **Answer** calls
-  `bticino_c300x.answer_doorbell_call`, swaps the ringing notification for a
+  `bticino_c300x.answer_call` for this call, swaps the ringing notification for a
   quiet in-call one with **Hang Up**, and opens the dashboard with a temporary
   `c300x_ring_answer` URL marker so the card attaches to the answered call.
   **Open** alone does not answer. Set the ringtone in the Companion App for the
   blueprint's notification channel. Opening uses the `command_webview` command;
   the app may ask once to display over other apps.
 - **iOS:** a critical notification. **Answer** opens the dashboard with the same
-  marker and calls `bticino_c300x.answer_doorbell_call`.
+  marker and calls `bticino_c300x.answer_call` for this call.
 
 ### Doorbell Notification
 
 This blueprint leaves the action to you (mobile app, persistent notification or
-script). The action can use `camera_entity`, `dashboard_path` and `entry_id`:
+script). The action can use `camera_entity`, `dashboard_path`, `call_id`,
+`unit_name` and `entry_id`:
 
 ```yaml
 action: notify.mobile_app_your_phone

@@ -10,12 +10,12 @@ blueprint:
       selector:
         entity:
           domain: input_button
-    entry_id:
-      name: Entry ID
-      description: Optional BTicino C300X config entry ID. Required for unlock only when more than one entry exists.
-      default: ""
+    door:
+      name: Door
+      description: The door station or the outdoor unit whose door opens on a match. A station opens the door of the unit that called.
       selector:
-        text:
+        device:
+          integration: bticino_c300x
     expected_phrase:
       name: Expected phrase
       description: Exact phrase that must match the transcription.
@@ -42,12 +42,6 @@ blueprint:
       default: false
       selector:
         boolean:
-    lock_id:
-      name: Lock ID
-      description: Optional lock ID of the station. Defaults to default.
-      default: default
-      selector:
-        text:
 
 mode: single
 max_exceeded: silent
@@ -58,11 +52,11 @@ trigger:
 
 action:
   - service: bticino_c300x.evaluate_ring_analysis
+    target:
+      device_id: !input door
     data:
-      entry_id: !input entry_id
       result_path: !input result_path
       decision_path: !input decision_path
       capture_path: !input capture_path
       expected_phrase: !input expected_phrase
       unlock_on_match: !input unlock_on_match
-      lock_id: !input lock_id

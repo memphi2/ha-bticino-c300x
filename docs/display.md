@@ -592,7 +592,8 @@ data:
 | `priority` | `normal` (default), `important` or `urgent`. |
 | `expires_in` | Seconds, 1 to 604800 (7 days); default 3600. |
 | `actions` | Up to two `{action_id: ..., label: ...}` entries from the allowed actions. |
-| `entry_id` | Needed with more than one C300X entry. |
+
+With more than one station, add a `target` with the station's device.
 
 `bticino_c300x.dismiss_display_notification` with the same `notification_id`
 removes a notice.

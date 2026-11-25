@@ -1,7 +1,15 @@
-"""Event entities for BTicino C300X device-agent callbacks."""
+"""Ring events: the station ringing, and the outdoor unit a visitor rang at.
+
+The station's ``ring`` fires at once with every new call. The unit's
+``doorbell`` fires when the call's unit is known, with the same call id: at
+once when the station has one unit, else on ``call.caller_identified``
+(docs/dev/multi-outdoor-units.md).
+"""
 
 from __future__ import annotations
 
+from collections import deque
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.event import (
@@ -9,28 +17,23 @@ from homeassistant.components.event import (
     EventDeviceClass,
     EventEntity,
 )
-from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .capabilities import event_label, ha_event_types_for_capabilities
-from .const import (
-    EVENT_ACTION_RECEIVED,
-    EVENT_AGENT_EVENT_RECEIVED,
-)
+from .agent_contracts import OutdoorUnit
+from .const import EVENT_AGENT_EVENT_RECEIVED
 from .entity import C300XEntity, supports_capability
 from .entry_types import BticinoC300XConfigEntry
-from .event_payload import (
-    action_event_display_data,
-    agent_event_display_data,
-    agent_event_key,
-    agent_event_name,
-)
+from .event_payload import agent_event_key
+from .unit_entity import C300XUnitEntity, async_track_outdoor_units
+from .video import resolve_doorbell_camera_entity_id
 
 if TYPE_CHECKING:
     from homeassistant.core import Event
 
 PARALLEL_UPDATES = 0
+# A call fires once; the agent keeps at most eight calls.
+_FIRED_CALLS = 8
 
 
 async def async_setup_entry(
@@ -38,197 +41,104 @@ async def async_setup_entry(
     entry: BticinoC300XConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the C300X device-agent event entity."""
+    """Set up the station ring and one doorbell event per outdoor unit."""
 
-    entities: list[EventEntity] = []
-    if supports_capability(entry, "doorbell_events"):
-        entities.append(C300XDoorbellEventEntity(entry))
-    event_types = ha_event_types_for_capabilities(entry.runtime_data.capabilities)
-    if event_types:
-        entities.append(C300XDeviceAgentEventEntity(entry, event_types))
-    if entities:
-        async_add_entities(entities)
+    if not supports_capability(entry, "doorbell_events"):
+        return
+    async_add_entities([C300XStationRingEventEntity(entry)])
+
+    def build(unit: OutdoorUnit) -> list[C300XUnitDoorbellEventEntity]:
+        return [C300XUnitDoorbellEventEntity(entry, unit)]
+
+    async_track_outdoor_units(hass, entry, async_add_entities, build)
 
 
-class C300XDoorbellEventEntity(C300XEntity, EventEntity):
-    """Expose doorbell presses through Home Assistant's standard ring event."""
+class _RingEvent(EventEntity):
+    """One ring per call id, from the agent events on the bus."""
 
     _attr_device_class = EventDeviceClass.DOORBELL
     _attr_event_types = [DoorbellEventType.RING]
     _attr_should_poll = False
-    _attr_translation_key = "doorbell_event"
+    _entry: BticinoC300XConfigEntry
+
+    def _init_ring(self) -> None:
+        self._fired: deque[str] = deque(maxlen=_FIRED_CALLS)
+        self._last_ring_at: str | None = None
+        self._last_call_id: str | None = None
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.async_on_remove(self.hass.bus.async_listen(EVENT_AGENT_EVENT_RECEIVED, self._agent_event))
+
+    @callback
+    def _agent_event(self, event: Event) -> None:
+        data = event.data
+        if data.get("entry_id") != self._entry.entry_id:
+            return
+        call_id = data.get("call_id")
+        if not isinstance(call_id, str) or call_id in self._fired:
+            return
+        attributes = self._ring_attributes(agent_event_key(data), data)
+        if attributes is None:
+            return
+        self._fired.append(call_id)
+        self._last_call_id = call_id
+        self._last_ring_at = data.get("event_at")
+        self._trigger_event(DoorbellEventType.RING, {"call_id": call_id, **attributes})
+        self.async_write_ha_state()
+
+    def _ring_attributes(self, key: str | None, data: Mapping[str, Any]) -> dict[str, Any] | None:
+        raise NotImplementedError
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        hass = getattr(self, "hass", None)
+        return {
+            "call_id": self._last_call_id,
+            "last_ring_at": self._last_ring_at,
+            "camera_entity_id": resolve_doorbell_camera_entity_id(hass, self._entry) if hass else None,
+        }
+
+
+class C300XStationRingEventEntity(_RingEvent, C300XEntity):
+    """The indoor station rings: the fastest trigger, without the unit's name."""
+
+    _attr_translation_key = "ring"
 
     def __init__(self, entry: BticinoC300XConfigEntry) -> None:
-        C300XEntity.__init__(self, entry, "doorbell_event")
-        self._last_ring_at: str | None = None
-        self._last_ring_data: dict[str, Any] = {}
+        C300XEntity.__init__(self, entry, "ring")
+        self._init_ring()
 
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        """Return safe metadata for the latest standard doorbell event."""
+    def _ring_attributes(self, key: str | None, data: Mapping[str, Any]) -> dict[str, Any] | None:
+        if key != "doorbell_pressed":
+            return None
+        return {"unit": data.get("unit_id")}
 
+
+class C300XUnitDoorbellEventEntity(_RingEvent, C300XUnitEntity):
+    """A visitor rang at this outdoor unit."""
+
+    _attr_translation_key = "doorbell_event"
+
+    def __init__(self, entry: BticinoC300XConfigEntry, unit: OutdoorUnit) -> None:
+        C300XUnitEntity.__init__(self, entry, unit, "doorbell")
+        self._init_ring()
+
+    def _ring_attributes(self, key: str | None, data: Mapping[str, Any]) -> dict[str, Any] | None:
+        unit = data.get("unit_id")
+        registry = self._calls
+        if key == "doorbell_pressed" and unit is None:
+            # One unit: it is the caller, no need to wait for the caller frame.
+            if registry is None or list(registry.units) != [self.unit_id]:
+                return None
+            unit = self.unit_id
+        elif key not in {"doorbell_pressed", "call_caller_identified"}:
+            return None
+        if unit != self.unit_id:
+            return None
+        call = registry.call(data["call_id"]) if registry is not None else None
         return {
-            "last_ring_at": self._last_ring_at,
-            "event_key": self._last_ring_data.get("event_key"),
-            "event": self._last_ring_data.get("event"),
-            "camera_entity_id": self._last_ring_data.get("camera_entity_id"),
-            "video_available": self._last_ring_data.get("video_available"),
+            "unit": self.unit_id,
+            "unit_name": self._unit.name or None,
+            "attribution": call.attribution if call is not None else None,
         }
-
-    async def async_added_to_hass(self) -> None:
-        """Subscribe to device-agent doorbell push events."""
-
-        await super().async_added_to_hass()
-        self.async_on_remove(
-            self.hass.bus.async_listen(
-                EVENT_AGENT_EVENT_RECEIVED,
-                self._handle_agent_event,
-            )
-        )
-
-    @callback
-    def _handle_agent_event(self, event: Event) -> None:
-        if event.data.get("entry_id") != self._entry.entry_id:
-            return
-        if agent_event_key(event.data) != "doorbell_pressed":
-            return
-        event_at = event.data.get("event_at")
-        if event_at and event_at == self._last_ring_at:
-            return
-        self._last_ring_at = event_at
-        self._last_ring_data = agent_event_display_data(
-            dict(event.data),
-            _language(getattr(self, "hass", None)),
-        )
-        attributes = self._last_ring_data.copy()
-        attributes.pop("event_type", None)
-        self._trigger_event(DoorbellEventType.RING, attributes)
-        self.async_write_ha_state()
-
-
-class C300XDeviceAgentEventEntity(C300XEntity, EventEntity):
-    """Expose device-agent push callbacks as Home Assistant events."""
-
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
-    _attr_should_poll = False
-    _attr_translation_key = "agent_event"
-
-    def __init__(self, entry: BticinoC300XConfigEntry, event_types: list[str]) -> None:
-        C300XEntity.__init__(self, entry, "agent_event")
-        self._event_keys = event_types
-        self._attr_event_types = event_types
-        self._last_event_at: str | None = None
-        self._last_event_data: dict[str, Any] = {}
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        """Expose the last device-agent event for diagnostics."""
-
-        data = self._last_event_data
-        event_key = agent_event_key(data)
-        language = _language(getattr(self, "hass", None))
-        label = agent_event_name(data, language) or event_label(event_key, language)
-        return {
-            "event": label,
-            "event_value": label,
-            "event_key": event_key,
-            "last_event": label,
-            "last_event_key": event_key,
-            "last_event_label": data.get("event_label"),
-            "last_event_label_en": data.get("event_label_en"),
-            "last_event_label_de": data.get("event_label_de"),
-            "last_event_label_it": data.get("event_label_it"),
-            "last_event_label_fr": data.get("event_label_fr"),
-            "last_event_at": data.get("event_at"),
-            "camera_entity_id": data.get("camera_entity_id"),
-            "video_available": data.get("video_available"),
-            "smartphone_forwarding_mode": data.get("mode"),
-            "ringer_muted": data.get("muted"),
-            "ringer_volume": data.get("volume"),
-            "voicemail_total": data.get("voicemail_total")
-            if data.get("voicemail_total") is not None
-            else _nested_dict_value(data, "voicemail", "total"),
-            "voicemail_unread": data.get("voicemail_unread")
-            if data.get("voicemail_unread") is not None
-            else _nested_dict_value(data, "voicemail", "unread"),
-            "memos_total": data.get("memos_total")
-            if data.get("memos_total") is not None
-            else _nested_dict_value(data, "memos", "total"),
-            "memos_text_total": data.get("memos_text_total")
-            if data.get("memos_text_total") is not None
-            else _nested_dict_value(data, "memos", "text_total"),
-            "memos_voice_total": data.get("memos_voice_total")
-            if data.get("memos_voice_total") is not None
-            else _nested_dict_value(data, "memos", "voice_total"),
-        }
-
-    async def async_added_to_hass(self) -> None:
-        """Subscribe to device-agent events."""
-
-        await super().async_added_to_hass()
-        self.async_on_remove(
-            self.hass.bus.async_listen(
-                EVENT_AGENT_EVENT_RECEIVED,
-                self._handle_agent_event,
-            )
-        )
-        self.async_on_remove(
-            self.hass.bus.async_listen(
-                EVENT_ACTION_RECEIVED,
-                self._handle_action_event,
-            )
-        )
-
-    @callback
-    def _handle_agent_event(self, event: Event) -> None:
-        if event.data.get("entry_id") != self._entry.entry_id:
-            return
-        self._write_event_data(dict(event.data))
-
-    @callback
-    def _handle_action_event(self, event: Event) -> None:
-        if event.data.get("entry_id") != self._entry.entry_id:
-            return
-        event_data = action_event_display_data(
-            event.data,
-            _language(getattr(self, "hass", None)),
-        )
-        if event_data:
-            self._write_event_data(event_data)
-
-    @callback
-    def _write_event_data(self, event_data: dict[str, Any]) -> None:
-        event_at = event_data.get("event_at")
-        if event_at == self._last_event_at:
-            return
-        event_key = agent_event_key(event_data)
-        if event_key not in self._event_keys:
-            return
-        self._last_event_at = event_at
-        if event_key:
-            language = _language(getattr(self, "hass", None))
-            self._last_event_data = agent_event_display_data(
-                event_data,
-                language,
-            )
-            attributes = self._last_event_data.copy()
-            attributes.pop("event_type", None)
-            self._trigger_event(event_key, attributes)
-        self.async_write_ha_state()
-
-
-def _language(hass: HomeAssistant | None) -> str | None:
-    """Return the HA language if the entity is attached to Home Assistant."""
-
-    return getattr(getattr(hass, "config", None), "language", None)
-
-
-def _nested_dict_value(
-    data: dict[str, Any],
-    parent_key: str,
-    child_key: str,
-) -> Any:
-    parent = data.get(parent_key)
-    if not isinstance(parent, dict):
-        return None
-    return parent.get(child_key)

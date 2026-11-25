@@ -27,17 +27,19 @@ def setup_hass(tmp_path, monkeypatch, *, allowed=(), admin=False):
         ),
     )
     hass.auth = SimpleNamespace(async_get_user=AsyncMock(return_value=user))
-    api = SimpleNamespace(async_unlock_door=AsyncMock(), async_reboot=AsyncMock())
+    api = SimpleNamespace(
+        async_answer_doorbell_call=AsyncMock(), async_create_text_memo=AsyncMock(),
+        async_doorbell_video_status=AsyncMock(return_value={}),
+    )
     entry = SimpleNamespace(
         entry_id="test",
-        data={"maintenance_token": "test"},
+        data={"video_enabled": True},
         options={},
         state=ConfigEntryState.LOADED,
         runtime_data=SimpleNamespace(
             api=api,
-            capabilities={
-                "maintenance": {"supported": True, "reboot": True},
-            },
+            capabilities={"doorbell_call": {"supported": True}, "memos": {"supported": True, "text_write": True}},
+            resources=SimpleNamespace(),
         ),
     )
     hass.config_entries = SimpleNamespace(
@@ -52,9 +54,7 @@ def setup_hass(tmp_path, monkeypatch, *, allowed=(), admin=False):
     return hass, entry
 
 
-@pytest.mark.parametrize(
-    "service", ["unlock_door", "reboot", "reload_gui", "write_text_memo"]
-)
+@pytest.mark.parametrize("service", ["answer_call", "write_text_memo"])
 def test_read_only_caller_cannot_control_device(tmp_path, monkeypatch, service):
     async def run():
         hass, entry = setup_hass(tmp_path, monkeypatch)
@@ -63,46 +63,38 @@ def test_read_only_caller_cannot_control_device(tmp_path, monkeypatch, service):
             await hass.services.async_call(
                 DOMAIN, service, data, blocking=True, context=Context(user_id="reader")
             )
-        entry.runtime_data.api.async_unlock_door.assert_not_awaited()
-        entry.runtime_data.api.async_reboot.assert_not_awaited()
+        entry.runtime_data.api.async_answer_doorbell_call.assert_not_awaited()
+        entry.runtime_data.api.async_create_text_memo.assert_not_awaited()
 
     asyncio.run(run())
 
 
-def test_control_permission_is_for_the_selected_lock(tmp_path, monkeypatch):
+def test_call_control_needs_control_of_the_media_camera(tmp_path, monkeypatch):
     async def run():
-        hass, entry = setup_hass(
-            tmp_path, monkeypatch, allowed={"button.test_door_unlock"}
-        )
+        hass, entry = setup_hass(tmp_path, monkeypatch, allowed={"camera.test_doorbell_camera"})
         context = Context(user_id="controller")
         await hass.services.async_call(
-            DOMAIN, "unlock_door", {}, blocking=True, context=context
+            DOMAIN, "answer_call", {"call_id": "0badc0de-3"}, blocking=True, context=context
         )
-        for data in ({"lock_id": "other"},):
-            with pytest.raises(Unauthorized):
-                await hass.services.async_call(
-                    DOMAIN, "unlock_door", data, blocking=True, context=context
-                )
+        # Memos have no control entity: owners only.
         with pytest.raises(Unauthorized):
             await hass.services.async_call(
-                DOMAIN, "reboot", {}, blocking=True, context=context
+                DOMAIN, "write_text_memo", {"text": "hi"}, blocking=True, context=context
             )
-        entry.runtime_data.api.async_unlock_door.assert_awaited_once_with("default")
-        entry.runtime_data.api.async_reboot.assert_not_awaited()
+        entry.runtime_data.api.async_answer_doorbell_call.assert_awaited_once_with("0badc0de-3")
+        entry.runtime_data.api.async_create_text_memo.assert_not_awaited()
 
     asyncio.run(run())
 
 
 @pytest.mark.parametrize("user_id,admin", [(None, False), ("owner", True)])
-def test_owner_and_trusted_automation_can_maintain(
-    tmp_path, monkeypatch, user_id, admin
-):
+def test_owner_and_trusted_automation_can_control_calls(tmp_path, monkeypatch, user_id, admin):
     async def run():
         hass, entry = setup_hass(tmp_path, monkeypatch, admin=admin)
         await hass.services.async_call(
-            DOMAIN, "reboot", {}, blocking=True, context=Context(user_id=user_id)
+            DOMAIN, "answer_call", {}, blocking=True, context=Context(user_id=user_id)
         )
-        entry.runtime_data.api.async_reboot.assert_awaited_once()
+        entry.runtime_data.api.async_answer_doorbell_call.assert_awaited_once_with(None)
 
     asyncio.run(run())
 
@@ -150,9 +142,9 @@ def test_unknown_user_cannot_fall_back_to_trusted_automation(tmp_path, monkeypat
         hass.auth.async_get_user.return_value = None
         with pytest.raises(UnknownUser):
             await hass.services.async_call(
-                DOMAIN, "unlock_door", {}, blocking=True, context=Context(user_id="removed")
+                DOMAIN, "answer_call", {}, blocking=True, context=Context(user_id="removed")
             )
-        entry.runtime_data.api.async_unlock_door.assert_not_awaited()
+        entry.runtime_data.api.async_answer_doorbell_call.assert_not_awaited()
 
     asyncio.run(run())
 
@@ -160,13 +152,13 @@ def test_unknown_user_cannot_fall_back_to_trusted_automation(tmp_path, monkeypat
 @pytest.mark.parametrize("disabled", [True, False])
 def test_missing_or_disabled_control_entity_denies_service(tmp_path, monkeypatch, disabled):
     async def run():
-        hass, entry = setup_hass(tmp_path, monkeypatch, allowed={"button.test_door_unlock"})
+        hass, entry = setup_hass(tmp_path, monkeypatch, allowed={"camera.test_doorbell_camera"})
         registry = service_authorization.er.async_get(hass)
         registry.async_get = lambda _id: SimpleNamespace(disabled_by="user") if disabled else None
         with pytest.raises(Unauthorized):
             await hass.services.async_call(
-                DOMAIN, "unlock_door", {}, blocking=True, context=Context(user_id="controller")
+                DOMAIN, "answer_call", {}, blocking=True, context=Context(user_id="controller")
             )
-        entry.runtime_data.api.async_unlock_door.assert_not_awaited()
+        entry.runtime_data.api.async_answer_doorbell_call.assert_not_awaited()
 
     asyncio.run(run())

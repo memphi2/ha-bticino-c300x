@@ -11,7 +11,6 @@ from ..exceptions import service_validation_error
 from ..executor import (
     async_execute_action,
     async_execute_alarm_command,
-    async_trigger_stair_light,
     async_unlock_door,
 )
 from .common import raise_agent_command_failed
@@ -40,14 +39,6 @@ class DeviceActionsUseCase:
                 "unknown_action",
                 {"action_id": str(err.args[0])},
             ) from err
-
-    async def run_device_activation(self, activation_id: str) -> None:
-        """Run one configured C300X device activation."""
-
-        await raise_agent_command_failed(
-            self._entry.runtime_data.api.async_run_device_activation(activation_id),
-            entry=self._entry,
-        )
 
     async def alarm_command(
         self,
@@ -83,18 +74,10 @@ class DeviceActionsUseCase:
             }.get(str(result.get("error") or ""), "alarm_command_rejected")
             raise service_validation_error(error_key)
 
-    async def stair_light(self, address: str | None) -> None:
-        """Trigger the configured stair-light command."""
+    async def unlock(self, unit_id: str = "current", call_id: str | None = None) -> None:
+        """Open an outdoor unit's lock (``current``: the calling unit)."""
 
         await raise_agent_command_failed(
-            async_trigger_stair_light(self._hass, self._entry, address),
-            entry=self._entry,
-        )
-
-    async def unlock(self, lock_id: str = "default") -> None:
-        """Trigger the configured door-unlock command."""
-
-        await raise_agent_command_failed(
-            async_unlock_door(self._hass, self._entry, lock_id),
+            async_unlock_door(self._hass, self._entry, unit_id, call_id),
             entry=self._entry,
         )

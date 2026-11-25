@@ -43,7 +43,13 @@ function fakeCard(overrides = {}) {
       return false;
     },
     _serviceData() {
-      return { entry_id: "entry-1" };
+      return { entity_id: "camera.door" };
+    },
+    _callData() {
+      return { ...this._serviceData(), call_id: "0badc0de-1" };
+    },
+    _stopVideoData() {
+      return { entity_id: "button.stop_video" };
     },
     async _startAnsweredDoorbellStream() {
       calls.push(["answered_stream"]);
@@ -82,7 +88,7 @@ test("action controller answers a ring call before promoting the answered stream
   await actions.handlePrimaryAction();
 
   assert.deepEqual(calls, [
-    ["service", "bticino_c300x", "answer_doorbell_call", { entry_id: "entry-1" }],
+    ["service", "bticino_c300x", "answer_call", { entity_id: "camera.door", call_id: "0badc0de-1" }],
     ["answered_stream"],
     ["update_state"],
   ]);
@@ -106,7 +112,7 @@ test("an answered call stays answered when its stream does not start", async () 
   });
   await new C300XCardActions(card).handlePrimaryAction();
   assert.deepEqual(calls.slice(0, 2), [
-    ["service", "bticino_c300x", "answer_doorbell_call", { entry_id: "entry-1" }],
+    ["service", "bticino_c300x", "answer_call", { entity_id: "camera.door", call_id: "0badc0de-1" }],
     ["talkback"],
   ]);
   // Hang up must stay possible for the call that is answered on the device.
@@ -182,8 +188,8 @@ test("action controller stops doorstation media before closing the local peer", 
   await actions.handlePrimaryAction();
 
   assert.deepEqual(calls, [
-    ["service", "bticino_c300x", "hangup_doorbell_call", { entry_id: "entry-1" }],
-    ["service", "bticino_c300x", "stop_doorbell_video", { entry_id: "entry-1" }],
+    ["service", "bticino_c300x", "hangup_call", { entity_id: "camera.door", call_id: "0badc0de-1" }],
+    ["service", "button", "press", { entity_id: "button.stop_video" }],
     ["close_peer", true],
   ]);
 });
@@ -196,7 +202,7 @@ test("action controller keeps ring-call hangup failures visible after video stop
     _hass: {
       async callService(domain, service, data) {
         calls.push(["service", domain, service, data]);
-        if (service === "hangup_doorbell_call") {
+        if (service === "hangup_call") {
           throw new Error("ring hangup failed");
         }
       },
@@ -215,8 +221,8 @@ test("action controller keeps ring-call hangup failures visible after video stop
   await actions.handlePrimaryAction();
 
   assert.deepEqual(calls, [
-    ["service", "bticino_c300x", "hangup_doorbell_call", { entry_id: "entry-1" }],
-    ["service", "bticino_c300x", "stop_doorbell_video", { entry_id: "entry-1" }],
+    ["service", "bticino_c300x", "hangup_call", { entity_id: "camera.door", call_id: "0badc0de-1" }],
+    ["service", "button", "press", { entity_id: "button.stop_video" }],
     ["close_peer", false],
   ]);
   assert.equal(card._error, "ring hangup failed");
@@ -295,4 +301,33 @@ test("missing or unavailable device buttons do not execute commands", async () =
   card._hass.states = { "button.door": { state: "unavailable" } };
   await actions.handleDeviceAction("door_unlock");
   assert.deepEqual(calls, []);
+});
+
+test("hanging up a call that already ended is not an error", async () => {
+  const { calls, card } = fakeCard({
+    _doorstationView: () => ({ action: "hang_up" }),
+    _hass: {
+      async callService(domain, service, data) {
+        calls.push(["service", domain, service, data]);
+        if (service === "hangup_call") {
+          throw { code: "service_validation_error", translation_key: "call_not_current", message: "gone" };
+        }
+      },
+    },
+    _lifecycle: {
+      activeHomeCallSession: false,
+      answeringDoorbell: false,
+      doorbellAnswered: true,
+      hangupInProgress: false,
+      ringPreviewActive: false,
+      startingCall: false,
+    },
+  });
+  await new C300XCardActions(card).handlePrimaryAction();
+  assert.deepEqual(calls, [
+    ["service", "bticino_c300x", "hangup_call", { entity_id: "camera.door", call_id: "0badc0de-1" }],
+    ["service", "button", "press", { entity_id: "button.stop_video" }],
+    ["close_peer", true],
+  ]);
+  assert.equal(card._error, "");
 });

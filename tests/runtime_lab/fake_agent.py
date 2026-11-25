@@ -13,6 +13,7 @@ from custom_components.bticino_c300x.events import event_token_fingerprint
 
 TOKEN = "synthetic-agent-token"
 EVENT_TOKEN = "synthetic-event-token"
+UNIT = "20"
 
 
 class FakeAgent:
@@ -65,7 +66,7 @@ class FakeAgent:
         if key == ("GET", "/api/v1/capabilities"):
             return web.json_response(
                 {
-                    "api_version": "1",
+                    "api_version": "2",
                     "agent": {"version": "2.0.0", "implementation": "native-c"},
                     "device": {"model": "C300X", "firmware": "synthetic"},
                     "capabilities": {
@@ -73,6 +74,8 @@ class FakeAgent:
                         "ringer": True,
                         "stair_light": True,
                         "locks": {"supported": True, "default_id": "default"},
+                        "calls": True,
+                        "outdoor_units": True,
                         "system_metrics": {
                             "supported": True,
                             "cpu": True,
@@ -123,6 +126,17 @@ class FakeAgent:
                     "bridge": {"media_owner": "idle", "available": True},
                 }
             )
+        if key == ("GET", "/api/v1/outdoor-units"):
+            return web.json_response(
+                {
+                    "units": [
+                        {"id": UNIT, "where": UNIT, "name": "Front door", "default": True}
+                    ],
+                    "default_unit": UNIT,
+                }
+            )
+        if key == ("GET", "/api/v1/calls"):
+            return web.json_response({"calls": [], "boot_id": "synthetic"})
         if key == ("GET", "/api/v1/self-test"):
             return web.json_response({"ok": True, "checks": {}})
         if key == ("GET", "/api/v1/diagnostics"):
@@ -156,7 +170,7 @@ class FakeAgent:
             )
         if key in {
             ("POST", "/api/v1/video/doorbell/actions/stop"),
-            ("POST", "/api/v1/locks/default/actions/unlock"),
+            ("POST", f"/api/v1/outdoor-units/{UNIT}/actions/unlock"),
             ("POST", "/api/v1/stair-light/actions/activate"),
         }:
             return web.json_response({"ok": True})

@@ -102,6 +102,7 @@ from .camera_media.webrtc_session import (
     webrtc_message_is_error as _webrtc_message_is_error,
 )
 from .camera_picture_scope import track_picture_scope
+from .camera_units import MediaCameraUnit, async_add_unit_cameras
 from .const import (
     CONF_AGENT_HOST,
     CONF_NATIVE_TWO_WAY_AUDIO,
@@ -191,9 +192,10 @@ async def async_setup_entry(
 
     if supports_capability(entry, "doorbell_video"):
         async_add_entities([C300XDoorbellCamera(entry)])
+        async_add_unit_cameras(hass, entry, async_add_entities)
 
 
-class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
+class C300XDoorbellCamera(MediaCameraUnit, WebRTCDebugMixin, C300XEntity, Camera):
     """Camera that exposes the agent media bridge through native WebRTC."""
 
     _attr_icon = "mdi:cctv"
@@ -273,7 +275,7 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
         picture_supported = self._bridge_status.get("picture_controls_supported") is True
         shared_picture = self._bridge_status.get("picture_controls_scope") == "ring_and_on_demand"
         return {
-            **snapshot_attributes(self.hass, self._entry),
+            **snapshot_attributes(self.hass, self._entry), **self._call_attributes(),
             "media_state": self._last_media_state.value,
             "media_primary_action": self._last_media_decision.primary_action.value,
             "video_window_available": self._video_window_available,

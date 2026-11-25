@@ -9,7 +9,7 @@ import pytest
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 
-from custom_components.bticino_c300x import events, services
+from custom_components.bticino_c300x import events
 from custom_components.bticino_c300x.api_errors import (
     C300XAgentApiAuthError,
     C300XAgentApiConnectionError,
@@ -22,12 +22,15 @@ from custom_components.bticino_c300x.data import (
     C300XEventState,
 )
 from custom_components.bticino_c300x.use_cases import common
+from custom_components.bticino_c300x.use_cases.device_actions import (
+    DeviceActionsUseCase,
+)
 
 
 def setup(monkeypatch):
     api = SimpleNamespace(
         async_reload_gui=AsyncMock(), async_reboot=AsyncMock(),
-        async_unlock_door=AsyncMock(), async_run_device_activation=AsyncMock(),
+        async_unlock_outdoor_unit=AsyncMock(return_value={"ok": True}),
         async_validate_maintenance_auth=AsyncMock(return_value={"maintenance_enabled": False}),
     )
     runtime = BticinoC300XRuntimeData(
@@ -52,7 +55,13 @@ def setup(monkeypatch):
     return hass, entry, api, get_hass, send
 
 
-@pytest.mark.parametrize("operation", ["reload_gui", "reboot", "unlock_door", "run_device_activation"])
+def _operation(hass, entry, operation):
+    """The door the display and the ring analysis open."""
+
+    return DeviceActionsUseCase(hass, entry).unlock()
+
+
+@pytest.mark.parametrize("operation", ["unlock_outdoor_unit"])
 @pytest.mark.parametrize("rejection", ["bearer", "maintenance", "policy", "probe_offline"])
 def test_service_rejection_requests_reauth_only_for_confirmed_credentials(monkeypatch, operation, rejection):
     hass, entry, api, get_hass, send = setup(monkeypatch)
@@ -64,10 +73,8 @@ def test_service_rejection_requests_reauth_only_for_confirmed_credentials(monkey
         api.async_validate_maintenance_auth.side_effect = C300XAgentApiConnectionError("offline")
     cancel_grace = entry.runtime_data.connection_state.expire_unavailable = Mock()
     unregister = entry.runtime_data.resources.unregister_event_registration = Mock()
-    handler = getattr(services._C300XServiceHandlers(hass), f"async_{operation}")
-    call = SimpleNamespace(data={"entry_id": "entry", "activation_id": "gate"})
     with pytest.raises(HomeAssistantError) as error:
-        asyncio.run(handler(call))
+        asyncio.run(_operation(hass, entry, operation))
     assert error.value.translation_key == "agent_command_failed"
     # A rejected key or an unreachable agent is not invalid input.
     assert not isinstance(error.value, ServiceValidationError)
@@ -110,18 +117,17 @@ def test_service_rejection_requests_reauth_only_for_confirmed_credentials(monkey
 def test_non_auth_service_results_do_not_probe_or_start_reauth(monkeypatch, result):
     hass, entry, api, get_hass, send = setup(monkeypatch)
     if result != "success":
-        api.async_reload_gui.side_effect = (
+        api.async_unlock_outdoor_unit.side_effect = (
             C300XAgentApiConnectionError("offline") if result == "offline"
             else C300XAgentApiResponseError("busy")
         )
-    handler = services._C300XServiceHandlers(hass).async_reload_gui
     if result == "success":
-        assert asyncio.run(handler(SimpleNamespace(data={}))) is None
+        assert asyncio.run(DeviceActionsUseCase(hass, entry).unlock()) is None
     else:
         with pytest.raises(HomeAssistantError) as error:
-            asyncio.run(handler(SimpleNamespace(data={})))
+            asyncio.run(DeviceActionsUseCase(hass, entry).unlock())
         assert not isinstance(error.value, ServiceValidationError)
-    api.async_reload_gui.assert_awaited_once()
+    api.async_unlock_outdoor_unit.assert_awaited_once()
     api.async_validate_maintenance_auth.assert_not_called()
     entry.async_start_reauth.assert_not_called()
     get_hass.assert_not_called()
@@ -141,11 +147,11 @@ def test_service_auth_recovery_cannot_cross_runtime_boundary(monkeypatch, stage,
             await release.wait()
             raise C300XAgentApiAuthError(maintenance=True)
 
-        api.async_reload_gui.side_effect = C300XAgentApiAuthError(maintenance=True)
+        api.async_unlock_outdoor_unit.side_effect = C300XAgentApiAuthError(maintenance=True)
         api.async_validate_maintenance_auth.side_effect = C300XAgentApiAuthError(maintenance=True)
-        target = api.async_reload_gui if stage == "command" else api.async_validate_maintenance_auth
+        target = api.async_unlock_outdoor_unit if stage == "command" else api.async_validate_maintenance_auth
         target.side_effect = blocked
-        task = asyncio.create_task(services._C300XServiceHandlers(hass).async_reload_gui(SimpleNamespace(data={})))
+        task = asyncio.create_task(DeviceActionsUseCase(hass, entry).unlock())
         try:
             await asyncio.wait_for(entered.wait(), 1)
             if transition == "closed":
@@ -162,7 +168,7 @@ def test_service_auth_recovery_cannot_cross_runtime_boundary(monkeypatch, stage,
             release.set()
             with pytest.raises(asyncio.CancelledError if transition == "cancelled" else ServiceValidationError):
                 await asyncio.wait_for(task, 1)
-            api.async_reload_gui.assert_awaited_once()
+            api.async_unlock_outdoor_unit.assert_awaited_once()
             assert api.async_validate_maintenance_auth.await_count == (1 if stage == "probe" else 0)
             entry.async_start_reauth.assert_not_called()
             get_hass.assert_not_called()
@@ -192,7 +198,7 @@ def test_confirmed_maintenance_rejection_leaves_event_registration_running(monke
 
         api.async_list_event_subscriptions = AsyncMock(side_effect=list_subscriptions)
         api.async_register_event_subscription = AsyncMock()
-        api.async_reload_gui.side_effect = C300XAgentApiAuthError(maintenance=True)
+        api.async_unlock_outdoor_unit.side_effect = C300XAgentApiAuthError(maintenance=True)
         api.async_validate_maintenance_auth.side_effect = C300XAgentApiAuthError(maintenance=True)
         monkeypatch.setattr(events, "async_generate_agent_callback_url", AsyncMock(return_value="http://ha/events"))
         monkeypatch.setattr(events, "_active_events_for_capabilities", lambda *_: ["doorbell.pressed"])
@@ -202,13 +208,13 @@ def test_confirmed_maintenance_rejection_leaves_event_registration_running(monke
         try:
             await asyncio.wait_for(entered.wait(), 1)
             with pytest.raises(HomeAssistantError):
-                await services._C300XServiceHandlers(hass).async_reload_gui(SimpleNamespace(data={}))
+                await DeviceActionsUseCase(hass, entry).unlock()
             assert not renewal.done()
             assert not entry.runtime_data.connection_state.authentication_failed
             assert entry.runtime_data.connection_state.available
             assert entry.runtime_data.resources.unregister_event_registration == worker.unregister
             entry.async_start_reauth.assert_called_once_with(hass, data={"maintenance_key_rejected": True})
-            api.async_reload_gui.assert_awaited_once()
+            api.async_unlock_outdoor_unit.assert_awaited_once()
             api.async_validate_maintenance_auth.assert_awaited_once()
             api.async_register_event_subscription.assert_not_called()
         finally:

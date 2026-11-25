@@ -4,12 +4,15 @@ blueprint:
   domain: automation
   source_url: https://github.com/memphi2/ha-bticino-c300x/blob/main/blueprints/automation/bticino_c300x/ring_capture.yaml
   input:
-    c300x_device:
-      name: Door station
-      description: Select the door station. The blueprint derives the media-readiness sensor from this device.
+    doorbell_event:
+      name: Doorbell
+      description: The doorbell event of the outdoor unit to react to. For the fastest reaction pick the station's ring event instead; it fires at once, without the outdoor unit's name.
       selector:
-        device:
-          integration: bticino_c300x
+        entity:
+          filter:
+            - integration: bticino_c300x
+              domain: event
+              device_class: doorbell
     duration_seconds:
       name: Duration
       description: Capture duration in seconds.
@@ -36,14 +39,21 @@ mode: single
 max_exceeded: silent
 
 trigger:
-  - platform: event
-    event_type: bticino_c300x_agent_event_received
-    event_data:
-      event_key: doorbell_pressed
+  - platform: state
+    entity_id: !input doorbell_event
+    not_from:
+      - unavailable
+    not_to:
+      - unavailable
+      - unknown
 
 variables:
-  c300x_device: !input c300x_device
+  doorbell_event: !input doorbell_event
+  # An outdoor unit's device hangs below the station, which has the sensors.
+  doorbell_device: "{{ device_id(doorbell_event) }}"
+  c300x_device: "{{ device_attr(doorbell_device, 'via_device_id') or doorbell_device }}"
   c300x_entities: "{{ device_entities(c300x_device) | list }}"
+  call_id: "{{ trigger.to_state.attributes.call_id | default('', true) }}"
   media_readiness_entity: >-
     {% set ns = namespace(entity='') %}
     {% for entity_id in c300x_entities %}
@@ -55,21 +65,21 @@ variables:
       {% endif %}
     {% endfor %}
     {{ ns.entity }}
-  entry_id: "{{ trigger.event.data.entry_id | default('', true) }}"
-  event_camera_entity: "{{ trigger.event.data.camera_entity_id | default('', true) }}"
+  entry_id: "{{ config_entry_id(doorbell_event) or '' }}"
   capture_file_dir: !input capture_file_dir
 
 condition:
   - condition: template
     value_template: >-
-      {{ entry_id and event_camera_entity in c300x_entities }}
+      {{ entry_id and call_id }}
   - condition: template
     value_template: "{{ states(media_readiness_entity) in ['ready', 'warning'] }}"
 
 action:
   - service: bticino_c300x.capture_doorbell_call
+    target:
+      entity_id: "{{ doorbell_event }}"
     data:
-      entry_id: "{{ entry_id }}"
       duration_seconds: !input duration_seconds
       include_audio: !input include_audio
       wav_output_dir: "{{ capture_file_dir }}"

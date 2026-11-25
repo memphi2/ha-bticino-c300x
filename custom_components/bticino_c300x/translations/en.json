@@ -1307,9 +1307,6 @@
       "delete_latest_text_memo": {
         "name": "Delete latest text memo"
       },
-      "door_unlock": {
-        "name": "Door unlock"
-      },
       "activate_display_pages": {
         "name": "Activate display pages"
       },
@@ -1336,11 +1333,17 @@
       },
       "delete_latest_voice_memo": {
         "name": "Delete latest voice memo"
+      },
+      "door": {
+        "name": "Door unlock"
       }
     },
     "camera": {
       "doorbell_camera": {
         "name": "Doorbell camera"
+      },
+      "unit_camera": {
+        "name": "Camera"
       }
     },
     "event": {
@@ -1354,37 +1357,12 @@
           }
         }
       },
-      "agent_event": {
-        "name": "Device event",
+      "ring": {
+        "name": "Station ring",
         "state_attributes": {
           "event_type": {
             "state": {
-              "agent_restarted": "Agent restarted",
-              "answering_machine_messages_changed": "Video messages changed",
-              "call_ended": "Call ended",
-              "door_unlock_ended": "Door unlock ended",
-              "door_unlock_started": "Door unlock started",
-              "doorbell_media_closed": "Doorbell camera stream ended",
-              "doorbell_pressed": "Doorbell pressed",
-              "doorbell_view_requested": "Doorbell view requested",
-              "home_call_answered": "Home call answered",
-              "home_call_ended": "Home call ended",
-              "home_call_started": "Home call started",
-              "memos_changed": "Memos changed",
-              "display_touch_tone_changed": "Touch tone changed",
-              "ringer_muted": "Ringer muted",
-              "ringer_unmuted": "Ringer unmuted",
-              "ringer_volume_changed": "Ringer volume changed",
-              "smartphone_forwarding_changed": "Smartphone forwarding changed",
-              "stair_light_activated": "Stair light activated",
-              "stair_light_released": "Stair light released",
-              "system_metrics_changed": "System metrics updated",
-              "agent_diagnostics_changed": "Agent write diagnostics updated",
-              "activation_executed": "Device activation executed",
-              "call_caller_identified": "Caller identified",
-              "call_answered": "Call answered",
-              "call_view_started": "Camera view started",
-              "outdoor_units_changed": "Outdoor units changed"
+              "ring": "Ring"
             }
           }
         }
@@ -1507,12 +1485,13 @@
       "voice_memos": {
         "name": "Voice memos"
       },
-      "doorbell_state": {
-        "name": "Doorbell state",
+      "call": {
+        "name": "Call",
         "state": {
           "idle": "Idle",
           "ringing": "Ringing",
-          "view_requested": "Camera view active"
+          "answered": "Answered",
+          "viewing": "Viewing"
         }
       }
     },
@@ -1572,6 +1551,11 @@
             }
           }
         }
+      }
+    },
+    "image": {
+      "last_visitor": {
+        "name": "Last visitor"
       }
     }
   },
@@ -1668,6 +1652,15 @@
     },
     "alarm_command_rejected": {
       "message": "The alarm command was rejected. Check the alarm state and its integration for details."
+    },
+    "call_not_current": {
+      "message": "That call is over or is not the current call. Nothing was sent to the station."
+    },
+    "unknown_unit": {
+      "message": "The station has no such outdoor unit."
+    },
+    "unit_video_unsupported": {
+      "message": "On-demand video is available for the default outdoor unit only."
     }
   },
   "issues": {
@@ -1873,6 +1866,10 @@
           "entry_not_loaded": "The BTicino C300X entry is not loaded."
         }
       }
+    },
+    "outdoor_units_breaking_change": {
+      "title": "Doorbell entities moved to outdoor unit devices",
+      "description": "{entry_title} now shows every outdoor unit as its own device below the station. The doorbell camera, the doorbell ring event and the door button moved to the device of the default outdoor unit; their entity IDs and history stay. Please redo these steps:\n\n- Blueprint automations: select the outdoor unit (its doorbell event) again.\n- answer_doorbell_call and hangup_doorbell_call are now answer_call and hangup_call. Every service takes a target (the station or an outdoor unit) instead of entry_id.\n- The services unlock_door, stair_light, stop_doorbell_video, reboot, reload_gui, run_device_activation and delete_latest_* are gone: press the matching buttons instead (button.press).\n- The doorbell state sensor and the agent event entity are gone: use the call sensor and the event entities of the outdoor unit.\n\nIgnore this message when you are done."
     }
   },
   "selector": {
@@ -1973,9 +1970,6 @@
       "name": "Adjust camera picture",
       "description": "Read all three live picture settings, or supply a control and a value (0 to 100% in steps of 10) to change one. Requires the updated device agent and an active Ring Call video or on-demand video with verified source values and ranges. Saved media is unchanged.",
       "fields": {
-        "entry_id": {
-          "name": "Integration entry"
-        },
         "control": {
           "name": "Control"
         },
@@ -1993,6 +1987,11 @@
           "description": "Ring records an incoming call. On-demand records without ringing when no other media session is active."
         }
       }
+    }
+  },
+  "device": {
+    "outdoor_unit": {
+      "name": "Outdoor unit {unit}"
     }
   }
 }

@@ -84,7 +84,7 @@ const check = test => { if (!test) throw Error("picture control check failed"); 
 el.configure(hass,"entry","ring");
 check(!sent.length);
 el.button.click();
-check(sent.length === 1 && sent[0].service === "camera_picture" && sent[0].service_data.entry_id === "entry");
+check(sent.length === 1 && sent[0].service === "camera_picture" && sent[0].service_data.entity_id === "entry");
 reply({response:{brightness:30,contrast:40,saturation:50}});
 await Promise.resolve();
 const range = el.shadowRoot.querySelector("[data-key=contrast]");
@@ -167,7 +167,7 @@ let attributes = {{media_state: "{state}", picture_controls_supported: true,
   picture_controls_scope: "ring_and_on_demand"}};
 const card = {{shadowRoot: root, _config: {{}}, _lifecycle: {{}}, _webrtc: {{remoteStream: stream}},
   _hass: {{language: "en", callWS: async () => ({{response: {{brightness: 50, contrast: 50, saturation: 50}}}})}},
-  _entryId: () => "entry", _isHomeCallMode: () => false, _scheduleUpdate() {{}},
+  _entryId: () => "entry", _resolvedCameraEntityId: () => "camera.door", _isHomeCallMode: () => false, _scheduleUpdate() {{}},
   _cameraEntity: () => ({{state: "streaming", attributes}})}};
 const media = new C300XCardMedia(card);
 media.configure();

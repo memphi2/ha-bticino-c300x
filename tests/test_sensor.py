@@ -36,7 +36,6 @@ from custom_components.bticino_c300x.sensor import (
     C300XDeviceLoadSensor,
     C300XDeviceMemorySensor,
     C300XDeviceTemperatureSensor,
-    C300XDoorbellStateSensor,
     C300XMediaReadinessSensor,
     C300XTextMemosSensor,
     C300XVoicemailMessagesSensor,
@@ -1489,41 +1488,9 @@ def test_non_connection_sensor_goes_unavailable_when_agent_disconnected() -> Non
             )
         )
     )
-    entity = C300XDoorbellStateSensor(entry)  # type: ignore[arg-type]
+    entity = C300XDeviceLoadSensor(entry)  # type: ignore[arg-type]
 
     assert entity.available is False
-
-
-def test_doorbell_state_sensor_requires_doorbell_video_events() -> None:
-    async def _run() -> None:
-        entry = _FakeEntry(
-            runtime_data=_FakeRuntimeData(capabilities={"doorbell_events": True})
-        )
-        entities: list[Any] = []
-
-        await async_setup_sensor_entry(_FakeHass(), entry, entities.extend)  # type: ignore[arg-type]
-
-        assert not any(
-            isinstance(entity, C300XDoorbellStateSensor) for entity in entities
-        )
-
-    asyncio.run(_run())
-
-
-def test_doorbell_state_sensor_is_created_for_doorbell_video_events() -> None:
-    async def _run() -> None:
-        entry = _FakeEntry(
-            runtime_data=_FakeRuntimeData(
-                capabilities={"doorbell_video": {"supported": True}}
-            )
-        )
-        entities: list[Any] = []
-
-        await async_setup_sensor_entry(_FakeHass(), entry, entities.extend)  # type: ignore[arg-type]
-
-        assert any(isinstance(entity, C300XDoorbellStateSensor) for entity in entities)
-
-    asyncio.run(_run())
 
 
 def test_sensor_setup_creates_all_capability_backed_sensors() -> None:
@@ -1554,7 +1521,8 @@ def test_sensor_setup_creates_all_capability_backed_sensors() -> None:
 
         assert any(isinstance(entity, C300XAgentStatusSensor) for entity in entities)
         assert any(isinstance(entity, C300XMediaReadinessSensor) for entity in entities)
-        assert any(isinstance(entity, C300XDoorbellStateSensor) for entity in entities)
+        # The call state is per outdoor unit now (tests/test_outdoor_unit_entities.py).
+        assert not any("doorbell_state" in str(entity.unique_id) for entity in entities)
         assert any(isinstance(entity, C300XDeviceCpuSensor) for entity in entities)
         assert any(isinstance(entity, C300XDeviceTemperatureSensor) for entity in entities)
         assert any(isinstance(entity, C300XDeviceLoadSensor) for entity in entities)
@@ -1715,224 +1683,6 @@ def test_memory_metric_sensor_uses_pushed_memory_percent() -> None:
         "memory_available_kb": 196608,
         "memory_used_kb": 65536,
     }
-
-
-def test_doorbell_state_sensor_keeps_raw_agent_state_for_translation() -> None:
-    entry = _FakeEntry()
-    entity = C300XDoorbellStateSensor(entry)  # type: ignore[arg-type]
-    entity.hass = _FakeHass()
-    event = types.SimpleNamespace(
-        data={
-            "entry_id": entry.entry_id,
-            "event_key": "doorbell_view_requested",
-            "doorbell": "view_requested",
-            "event_at": "2026-06-01T10:00:00Z",
-        }
-    )
-
-    entity._handle_agent_event(event)
-
-    assert entity.native_value == "view_requested"
-    assert entity._attr_options == ["idle", "ringing", "view_requested"]
-    assert entity.extra_state_attributes == {
-        "last_event_at": "2026-06-01T10:00:00Z"
-    }
-    assert entity.wrote_state is True
-
-
-def test_doorbell_state_sensor_keeps_view_until_agent_close_event() -> None:
-    entry = _FakeEntry()
-    entity = C300XDoorbellStateSensor(entry)  # type: ignore[arg-type]
-    entity.hass = _FakeHass()
-    event = types.SimpleNamespace(
-        data={
-            "entry_id": entry.entry_id,
-            "event_key": "doorbell_view_requested",
-            "doorbell": "view_requested",
-            "event_at": "2026-06-01T10:00:00Z",
-        }
-    )
-
-    entity._handle_agent_event(event)
-
-    assert entity.native_value == "view_requested"
-    assert entity.available is True
-
-
-def test_doorbell_state_sensor_uses_agent_event_key_when_doorbell_field_is_missing() -> None:
-    entry = _FakeEntry()
-    entity = C300XDoorbellStateSensor(entry)  # type: ignore[arg-type]
-    entity.hass = _FakeHass()
-    event = types.SimpleNamespace(
-        data={
-            "entry_id": entry.entry_id,
-            "event_key": "doorbell_pressed",
-            "event_at": "2026-06-01T10:00:00Z",
-        }
-    )
-
-    entity._handle_agent_event(event)
-
-    assert entity.native_value == "ringing"
-
-
-def test_doorbell_state_sensor_does_not_synthesize_idle_without_close_event() -> None:
-    entry = _FakeEntry()
-    entity = C300XDoorbellStateSensor(entry)  # type: ignore[arg-type]
-    entity.hass = _FakeHass()
-    event = types.SimpleNamespace(
-        data={
-            "entry_id": entry.entry_id,
-            "event_key": "doorbell_view_requested",
-            "event_at": "2026-06-01T10:00:00Z",
-        }
-    )
-
-    entity._handle_agent_event(event)
-
-    assert entity.native_value == "view_requested"
-    assert entity.available is True
-    assert entity.wrote_state is True
-
-
-def test_doorbell_state_sensor_clears_on_media_closed() -> None:
-    entry = _FakeEntry()
-    entity = C300XDoorbellStateSensor(entry)  # type: ignore[arg-type]
-
-    entity._state = "view_requested"
-    event = types.SimpleNamespace(
-        data={
-            "entry_id": entry.entry_id,
-            "event_key": "doorbell_media_closed",
-            "doorbell": "idle",
-            "event_at": "2026-06-01T10:00:30Z",
-        }
-    )
-
-    entity._handle_agent_event(event)
-
-    assert entity.native_value == "idle"
-    assert entity.extra_state_attributes == {
-        "last_event_at": "2026-06-01T10:00:30Z"
-    }
-    assert entity.available is True
-    assert entity.wrote_state is True
-
-
-def test_doorbell_state_sensor_does_not_infer_state_from_runtime_video_window() -> None:
-    entry = _FakeEntry(
-        runtime_data=_FakeRuntimeData(
-            event_state=types.SimpleNamespace(
-                video_available=True,
-            )
-        )
-    )
-    entity = C300XDoorbellStateSensor(entry)  # type: ignore[arg-type]
-    entity._state = "idle"
-
-    assert entity.native_value == "idle"
-
-
-def test_doorbell_state_sensor_initializes_idle_from_agent_media_state() -> None:
-    entry = _FakeEntry()
-    entity = C300XDoorbellStateSensor(entry)  # type: ignore[arg-type]
-
-    asyncio.run(entity.async_update())
-
-    assert entity.native_value == "idle"
-    assert entry.runtime_data.api.doorbell_video_status_calls == 1
-    assert entity.available is True
-
-
-def test_doorbell_state_sensor_writes_initial_idle_when_added_to_hass() -> None:
-    entry = _FakeEntry()
-    entity = C300XDoorbellStateSensor(entry)  # type: ignore[arg-type]
-    entity.hass = _FakeHass()
-
-    asyncio.run(entity.async_added_to_hass())
-
-    assert entity.native_value == "idle"
-    assert entity.wrote_state is True
-    assert entry.runtime_data.api.doorbell_video_status_calls == 1
-
-
-def test_doorbell_state_sensor_keeps_existing_idle_without_extra_write() -> None:
-    entry = _FakeEntry()
-    entity = C300XDoorbellStateSensor(entry)  # type: ignore[arg-type]
-    entity.hass = _FakeHass()
-    entity._state = "idle"
-    entity.wrote_state = False
-
-    asyncio.run(entity.async_added_to_hass())
-
-    assert entity.native_value == "idle"
-    assert entity.available is True
-    assert entity.wrote_state is False
-    assert entry.runtime_data.api.doorbell_video_status_calls == 1
-
-
-def test_doorbell_state_sensor_goes_unavailable_on_status_error() -> None:
-    api = _FakeApi()
-    api.doorbell_video_status_error = C300XAgentApiError("offline")
-    entry = _FakeEntry(runtime_data=_FakeRuntimeData(api=api))
-    entity = C300XDoorbellStateSensor(entry)  # type: ignore[arg-type]
-
-    asyncio.run(entity.async_update())
-
-    assert entity.native_value is None
-    assert entity.available is False
-    assert api.doorbell_video_status_calls == 1
-
-
-def test_doorbell_state_sensor_ignores_wrong_entry_and_unknown_events() -> None:
-    entry = _FakeEntry()
-    entity = C300XDoorbellStateSensor(entry)  # type: ignore[arg-type]
-    entity._state = "idle"
-    entity.wrote_state = False
-
-    entity._handle_agent_event(
-        types.SimpleNamespace(
-            data={
-                "entry_id": "other",
-                "event_key": "doorbell_pressed",
-                "event_at": "2026-06-01T10:00:00Z",
-            }
-        )
-    )
-    entity._handle_agent_event(
-        types.SimpleNamespace(
-            data={
-                "entry_id": entry.entry_id,
-                "event_key": "unknown_event",
-                "event_at": "2026-06-01T10:00:00Z",
-            }
-        )
-    )
-
-    assert entity.native_value == "idle"
-    assert entity.wrote_state is False
-
-
-def test_doorbell_state_sensor_does_not_clear_active_ring_from_status_refresh() -> None:
-    api = _FakeApi()
-    api.doorbell_video_status = {
-        "available": True,
-        "media_owner": "ring",
-        "window_available": True,
-        "bridge": {
-            "ring_call_active": True,
-            "ring_media_active": True,
-            "unanswered_ring_call": True,
-        },
-    }
-    entry = _FakeEntry(runtime_data=_FakeRuntimeData(api=api))
-    entity = C300XDoorbellStateSensor(entry)  # type: ignore[arg-type]
-    entity._state = "ringing"
-
-    asyncio.run(entity.async_update())
-
-    assert entity.native_value == "ringing"
-    assert entry.runtime_data.api.doorbell_video_status_calls == 1
 
 
 def test_system_metric_sensor_does_not_refresh_while_reconnecting() -> None:

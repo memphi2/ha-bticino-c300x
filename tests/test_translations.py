@@ -6,9 +6,6 @@ import re
 from pathlib import Path
 from typing import Any
 
-from custom_components.bticino_c300x.doorbell_state import DOORBELL_STATES
-from custom_components.bticino_c300x.event_types import HA_EVENT_TYPES
-
 ROOT = Path(__file__).resolve().parents[1]
 INTEGRATION = ROOT / "custom_components" / "bticino_c300x"
 TRANSLATIONS = INTEGRATION / "translations"
@@ -235,24 +232,6 @@ def test_the_home_page_buttons_name_the_home_page_like_the_rest_of_german() -> N
             assert "Hauptseite" not in text, (step, text)
 
 
-def test_doorbell_state_translations_cover_all_raw_agent_values() -> None:
-    for path in (
-        INTEGRATION / "strings.json",
-        TRANSLATIONS / "en.json",
-        TRANSLATIONS / "de.json",
-        TRANSLATIONS / "it.json",
-        TRANSLATIONS / "fr.json",
-    ):
-        translated_states = _path_value(
-            _load_json(path),
-            "entity",
-            "sensor",
-            "doorbell_state",
-            "state",
-        )
-        assert set(DOORBELL_STATES) <= set(translated_states)
-
-
 def test_smartphone_forwarding_select_translates_internal_options() -> None:
     for path in (
         INTEGRATION / "strings.json",
@@ -271,36 +250,14 @@ def test_smartphone_forwarding_select_translates_internal_options() -> None:
         assert set(translated_states) == {"enabled", "homeassistant", "blocked"}
 
 
-def test_agent_event_translations_cover_all_mapped_event_types() -> None:
-    expected = set(HA_EVENT_TYPES.values())
-
-    for path in (
-        INTEGRATION / "strings.json",
-        TRANSLATIONS / "en.json",
-        TRANSLATIONS / "de.json",
-        TRANSLATIONS / "it.json",
-        TRANSLATIONS / "fr.json",
-    ):
-        translated_states = _path_value(
-            _load_json(path),
-            "entity",
-            "event",
-            "agent_event",
-            "state_attributes",
-            "event_type",
-            "state",
-        )
-        assert expected <= set(translated_states)
-        assert all(translated_states[key].strip() and translated_states[key] != key for key in expected)
-
-
 def test_event_labels_translate_the_attribute_not_the_timestamp_state() -> None:
     for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
         events = _load_json(path)["entity"]["event"]
-        for key in ("doorbell_event", "agent_event"):
+        assert "agent_event" not in events
+        for key in ("doorbell_event", "ring"):
             assert "state" not in events[key], (path.name, key)
-        ring = events["doorbell_event"]["state_attributes"]["event_type"]["state"]["ring"]
-        assert ring.strip() and ring != "ring", path.name
+            ring = events[key]["state_attributes"]["event_type"]["state"]["ring"]
+            assert ring.strip() and ring != "ring", path.name
 
 
 def test_localized_translation_placeholders_match_base_strings() -> None:

@@ -1,11 +1,12 @@
 show_display_notification:
   name: Show display notification
   description: Create or replace a temporary native-display notification. Messages are cleared on HA restart or integration reload; this does not wake the display.
+  target:
+    device:
+      integration: bticino_c300x
+    entity:
+      integration: bticino_c300x
   fields:
-    entry_id:
-      name: Entry ID
-      selector:
-        text:
     notification_id:
       name: Notification ID
       required: true
@@ -53,11 +54,12 @@ show_display_notification:
 dismiss_display_notification:
   name: Dismiss display notification
   description: Remove a notification by its stable ID. This does not resolve the underlying physical condition.
+  target:
+    device:
+      integration: bticino_c300x
+    entity:
+      integration: bticino_c300x
   fields:
-    entry_id:
-      name: Entry ID
-      selector:
-        text:
     notification_id:
       name: Notification ID
       required: true
@@ -67,13 +69,12 @@ dismiss_display_notification:
 run_action:
   name: Run action
   description: Run one configured action by its allowlisted action id.
+  target:
+    device:
+      integration: bticino_c300x
+    entity:
+      integration: bticino_c300x
   fields:
-    entry_id:
-      name: Entry ID
-      description: Optional config entry id when more than one entry exists.
-      required: false
-      selector:
-        text:
     action_id:
       name: Action ID
       description: Configured action id to run.
@@ -81,33 +82,15 @@ run_action:
       selector:
         text:
 
-run_device_activation:
-  name: Run device activation
-  description: Run one configured original Quick Action or activation of the station through the local device agent.
-  fields:
-    entry_id:
-      name: Entry ID
-      description: Optional config entry id when more than one entry exists.
-      required: false
-      selector:
-        text:
-    activation_id:
-      name: Activation ID
-      description: Configured activation id reported by the device agent.
-      required: true
-      selector:
-        text:
-
 alarm_command:
   name: Send alarm command
   description: Send an alarm command to the configured alarm control panel entity.
+  target:
+    device:
+      integration: bticino_c300x
+    entity:
+      integration: bticino_c300x
   fields:
-    entry_id:
-      name: Entry ID
-      description: Optional config entry id when more than one entry exists.
-      required: false
-      selector:
-        text:
     command:
       name: Command
       description: Alarm command to execute.
@@ -135,47 +118,15 @@ alarm_command:
       selector:
         boolean:
 
-stair_light:
-  name: Activate stair light
-  description: Activate the staircase light through the configured device agent.
-  fields:
-    entry_id:
-      name: Entry ID
-      description: Optional config entry id when more than one entry exists.
-      required: false
-      selector:
-        text:
-    address:
-      name: Stair light address
-      description: Optional OpenWebNet staircase-light address. Defaults to the configured integration address.
-      required: false
-      selector:
-        text:
-
-unlock_door:
-  name: Unlock door
-  description: Unlock a configured door through the local device agent.
-  fields:
-    entry_id:
-      name: Entry ID
-      description: Optional config entry id when more than one entry exists.
-      required: false
-      selector:
-        text:
-    lock_id:
-      name: Lock ID
-      description: Optional lock id reported by the device agent. Defaults to default.
-      required: false
-      selector:
-        text:
-
 camera_picture:
   name: Adjust camera picture
   description: Read all three live picture settings, or supply a control and a value (0 to 100% in steps of 10) to change one. Requires the updated device agent and an active Ring Call video or on-demand video with verified source values and ranges. Saved media is unchanged.
+  target:
+    device:
+      integration: bticino_c300x
+    entity:
+      integration: bticino_c300x
   fields:
-    entry_id:
-      selector:
-        text:
     control:
       selector:
         select:
@@ -191,13 +142,12 @@ camera_picture:
 activate_doorbell_video:
   name: Activate doorbell video
   description: Start or renew the doorbell video session through the local device agent. Use this from automations to pre-warm the camera when the doorbell rings.
+  target:
+    device:
+      integration: bticino_c300x
+    entity:
+      integration: bticino_c300x
   fields:
-    entry_id:
-      name: Entry ID
-      description: Optional config entry id when more than one entry exists.
-      required: false
-      selector:
-        text:
     audio:
       name: Enable audio
       description: Request the station audio path together with video. Required for browser or Home Assistant mobile frontend talkback.
@@ -206,35 +156,34 @@ activate_doorbell_video:
       selector:
         boolean:
 
-stop_doorbell_video:
-  name: Stop doorbell video
-  description: Stop the active doorbell video session through the local device agent. Use this from cards and ring automations as the call-end action.
+answer_call:
+  name: Answer call
+  description: Answer a call at the station through the local device agent. Without a call ID it answers the current call. Media playback still needs a browser, recorder or other media consumer.
+  target:
+    device:
+      integration: bticino_c300x
+    entity:
+      integration: bticino_c300x
   fields:
-    entry_id:
-      name: Entry ID
-      description: Optional config entry id when more than one entry exists.
+    call_id:
+      name: Call ID
+      description: The call to answer, from the call_id attribute of a ring event or call sensor. Fails when that call is no longer current.
       required: false
       selector:
         text:
 
-answer_doorbell_call:
-  name: Answer doorbell call
-  description: Request local media answering of the active doorbell ring call through the local device agent. Media playback still needs a browser, recorder, or future headless capture consumer.
+hangup_call:
+  name: Hang up call
+  description: Hang up a call at the station through the local device agent. Without a call ID it hangs up the current call.
+  target:
+    device:
+      integration: bticino_c300x
+    entity:
+      integration: bticino_c300x
   fields:
-    entry_id:
-      name: Entry ID
-      description: Optional config entry id when more than one entry exists.
-      required: false
-      selector:
-        text:
-
-hangup_doorbell_call:
-  name: Hang up doorbell call
-  description: Hang up the active doorbell ring call through the local device agent.
-  fields:
-    entry_id:
-      name: Entry ID
-      description: Optional config entry id when more than one entry exists.
+    call_id:
+      name: Call ID
+      description: The call to hang up, from the call_id attribute of a ring event or call sensor. Fails when that call is no longer current.
       required: false
       selector:
         text:
@@ -242,6 +191,11 @@ hangup_doorbell_call:
 capture_doorbell_call:
   name: Capture doorbell video
   description: Record a short MP4 on Home Assistant. Ring mode requires an incoming doorbell call; on-demand mode records without ringing when media is idle. The MP4 defaults to /media/c300x/; optional WAV and JPEG files default to /config/c300x/.
+  target:
+    device:
+      integration: bticino_c300x
+    entity:
+      integration: bticino_c300x
   fields:
     capture_mode:
       name: Capture mode
@@ -254,12 +208,6 @@ capture_doorbell_call:
             - ring
             - on_demand
           translation_key: capture_mode
-    entry_id:
-      name: Entry ID
-      description: Optional config entry id when more than one entry exists.
-      required: false
-      selector:
-        text:
     output_path:
       name: Output path
       description: Absolute MP4 path below /media/c300x/, /config/c300x/, or /config/www/c300x/. Defaults to a unique timestamped file below /media/c300x/. Concurrent writes to the same explicit path are rejected.
@@ -349,14 +297,13 @@ run_ring_wyoming_analysis:
 
 evaluate_ring_analysis:
   name: Evaluate ring analysis
-  description: Evaluate a local ring transcription JSON result and optionally unlock the door only on a strict phrase match. This service does not run AI itself.
+  description: Evaluate a local ring transcription JSON result and optionally open the door only on a strict phrase match. This service does not run AI itself.
+  target:
+    device:
+      integration: bticino_c300x
+    entity:
+      integration: bticino_c300x
   fields:
-    entry_id:
-      name: Entry ID
-      description: Optional config entry id when more than one entry exists. Required only when unlock on match is enabled and more than one entry exists.
-      required: false
-      selector:
-        text:
     result_path:
       name: Result path
       description: JSON result path below /media/c300x/, /config/c300x/, or /config/www/c300x/. Defaults to /config/c300x/analysis/result.json.
@@ -383,28 +330,21 @@ evaluate_ring_analysis:
         text:
     unlock_on_match:
       name: Unlock on match
-      description: Unlock the configured door only when the phrase matches. Defaults to false.
+      description: Open the door only when the phrase matches. A unit target opens that outdoor unit, otherwise the unit of the current call. Defaults to false.
       required: false
       default: false
       selector:
         boolean:
-    lock_id:
-      name: Lock ID
-      description: Optional lock id reported by the device agent. Defaults to default.
-      required: false
-      selector:
-        text:
 
 start_home_call:
   name: Start home call
   description: Start a local audio Home Call to the station through the local device agent.
+  target:
+    device:
+      integration: bticino_c300x
+    entity:
+      integration: bticino_c300x
   fields:
-    entry_id:
-      name: Entry ID
-      description: Optional config entry id when more than one entry exists.
-      required: false
-      selector:
-        text:
     duration_seconds:
       name: Duration seconds
       description: Optional maximum call duration. Set 0 or leave empty to keep the call active until stopped or ended remotely.
@@ -418,46 +358,21 @@ start_home_call:
 stop_home_call:
   name: Stop home call
   description: Stop the active local Home Call through the local device agent.
-  fields:
-    entry_id:
-      name: Entry ID
-      description: Optional config entry id when more than one entry exists.
-      required: false
-      selector:
-        text:
-
-reboot:
-  name: Reboot station
-  description: Schedule a station reboot through the local device-agent maintenance API.
-  fields:
-    entry_id:
-      name: Entry ID
-      description: Optional config entry id when more than one entry exists.
-      required: false
-      selector:
-        text:
-
-reload_gui:
-  name: Reload station GUI
-  description: Reload the station graphical interface through the local device-agent maintenance API.
-  fields:
-    entry_id:
-      name: Entry ID
-      description: Optional config entry id when more than one entry exists.
-      required: false
-      selector:
-        text:
+  target:
+    device:
+      integration: bticino_c300x
+    entity:
+      integration: bticino_c300x
 
 play_latest_video_message:
   name: Play latest video message
   description: Play the latest stored answering-machine video message on a media player.
+  target:
+    device:
+      integration: bticino_c300x
+    entity:
+      integration: bticino_c300x
   fields:
-    entry_id:
-      name: Entry ID
-      description: Optional config entry id when more than one entry exists.
-      required: false
-      selector:
-        text:
     media_player_entity_id:
       name: Media player
       description: Media player entity that should play the latest video message.
@@ -469,13 +384,12 @@ play_latest_video_message:
 play_latest_voice_memo:
   name: Play latest voice memo
   description: Play the latest stored manual voice memo on a media player.
+  target:
+    device:
+      integration: bticino_c300x
+    entity:
+      integration: bticino_c300x
   fields:
-    entry_id:
-      name: Entry ID
-      description: Optional config entry id when more than one entry exists.
-      required: false
-      selector:
-        text:
     media_player_entity_id:
       name: Media player
       description: Media player entity that should play the latest voice memo.
@@ -487,13 +401,12 @@ play_latest_voice_memo:
 write_text_memo:
   name: Write text memo
   description: Create a local manual text memo on the station. The memo is written only when this service is called.
+  target:
+    device:
+      integration: bticino_c300x
+    entity:
+      integration: bticino_c300x
   fields:
-    entry_id:
-      name: Entry ID
-      description: Optional config entry id when more than one entry exists.
-      required: false
-      selector:
-        text:
     text:
       name: Text
       description: Memo text to store on the station. Maximum 512 UTF-8 bytes.
@@ -508,36 +421,3 @@ write_text_memo:
       default: false
       selector:
         boolean:
-
-delete_latest_video_message:
-  name: Delete latest video message
-  description: Delete the latest stored answering-machine video message. Requires the Home Assistant pages on the station display.
-  fields:
-    entry_id:
-      name: Entry ID
-      description: Optional config entry id when more than one entry exists.
-      required: false
-      selector:
-        text:
-
-delete_latest_text_memo:
-  name: Delete latest text memo
-  description: Delete the latest stored manual text memo. Requires the Home Assistant pages on the station display.
-  fields:
-    entry_id:
-      name: Entry ID
-      description: Optional config entry id when more than one entry exists.
-      required: false
-      selector:
-        text:
-
-delete_latest_voice_memo:
-  name: Delete latest voice memo
-  description: Delete the latest stored manual voice memo. Requires the Home Assistant pages on the station display.
-  fields:
-    entry_id:
-      name: Entry ID
-      description: Optional config entry id when more than one entry exists.
-      required: false
-      selector:
-        text:

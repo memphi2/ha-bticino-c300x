@@ -13,14 +13,13 @@ from homeassistant.helpers import entity_registry as er
 
 from .const import DOMAIN
 from .dashboard_config import configured_alarm_entity_id
-from .entity import entry_entity_unique_id
+from .identity import media_camera_unique_id
 
 _CAMERA_SERVICES = {
     "camera_picture",
     "activate_doorbell_video",
-    "stop_doorbell_video",
-    "answer_doorbell_call",
-    "hangup_doorbell_call",
+    "answer_call",
+    "hangup_call",
     "start_home_call",
     "stop_home_call",
 }
@@ -60,24 +59,12 @@ def _control_entity(
 ) -> str | None:
     if name == "alarm_command":
         return configured_alarm_entity_id(resolve_entry(call))
-    domain = "button"
-    if name == "unlock_door":
-        lock_id = call.data.get("lock_id", "default")
-        key = "door_unlock" if lock_id == "default" else f"door_unlock_{lock_id}"
-    elif name == "stair_light" and not call.data.get("address"):
-        key = "stair_light"
-    elif name == "run_device_activation":
-        key = f"device_activation_{call.data['activation_id']}"
-    elif name in _CAMERA_SERVICES:
-        domain, key = "camera", "doorbell_camera"
-    else:
+    if name not in _CAMERA_SERVICES:
         # Maintenance, file analysis, notifications and stored-message operations
         # have no equivalent control entity with matching authority.
         return None
     entry = resolve_entry(call)
     registry = er.async_get(hass)
-    entity_id = registry.async_get_entity_id(
-        domain, DOMAIN, entry_entity_unique_id(entry, key)
-    )
+    entity_id = registry.async_get_entity_id("camera", DOMAIN, media_camera_unique_id(entry))
     registered = registry.async_get(entity_id) if entity_id else None
     return entity_id if registered is not None and not registered.disabled_by else None

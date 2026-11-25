@@ -3,7 +3,6 @@
 from typing import Any
 
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import config_validation as cv
 
 from .api_errors import C300XAgentApiError
 from .schema_compat import vol
@@ -18,7 +17,6 @@ def picture_value(value: Any) -> int:
 
 
 PICTURE_SCHEMA = vol.Schema({
-    vol.Optional("entry_id"): cv.string,
     vol.Inclusive("control", "setting"): vol.In(CONTROLS),
     vol.Inclusive("value", "setting"): picture_value,
 })

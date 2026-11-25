@@ -58,7 +58,6 @@ def _shortened_text(limit: int) -> Callable[[Any], str]:
 
 SHOW_SCHEMA = vol.Schema(
     {
-        vol.Optional("entry_id"): str,
         vol.Required("notification_id"): notification_id,
         vol.Required("title"): _text(80),
         vol.Required("message"): _shortened_text(500),
@@ -82,7 +81,6 @@ SHOW_SCHEMA = vol.Schema(
 )
 DISMISS_SCHEMA = vol.Schema(
     {
-        vol.Optional("entry_id"): str,
         vol.Required("notification_id"): notification_id,
     }
 )

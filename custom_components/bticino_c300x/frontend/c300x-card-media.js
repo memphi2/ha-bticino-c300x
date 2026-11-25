@@ -1,6 +1,6 @@
-import { c300xMediaState } from "./c300x-state-model.js?v=ba002e0c693501b4";
-import "./c300x-media-controls.js?v=ba002e0c693501b4";
-import "./c300x-picture-controls.js?v=ba002e0c693501b4";
+import { c300xMediaState } from "./c300x-state-model.js?v=f9a619f891bd4df8";
+import "./c300x-media-controls.js?v=f9a619f891bd4df8";
+import "./c300x-picture-controls.js?v=f9a619f891bd4df8";
 
 // Archive playback never owns a device session. Only the existing card actions
 // may start/answer/hang up; this adapter gives those sessions visual priority.
@@ -98,7 +98,7 @@ export class C300XCardMedia {
     const state = c300xMediaState(entity);
     const lifecycle = card._lifecycle;
     const live = !!card._webrtc?.remoteStream;
-    this.picture?.configure?.(card._hass, card._entryId(), this.pictureSession(entity));
+    this.picture?.configure?.(card._hass, card._entryId() && card._resolvedCameraEntityId(), this.pictureSession(entity));
     // The panel is see-through only over a live picture; over the empty text
     // or a still it stays opaque.
     this.picture?.toggleAttribute?.("live", !this.browsing

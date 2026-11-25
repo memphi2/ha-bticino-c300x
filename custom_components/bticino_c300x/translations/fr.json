@@ -1307,9 +1307,6 @@
       "delete_latest_text_memo": {
         "name": "Supprimer le dernier mémo texte"
       },
-      "door_unlock": {
-        "name": "Ouvrir la porte"
-      },
       "activate_display_pages": {
         "name": "Activer les pages de l'écran"
       },
@@ -1336,11 +1333,17 @@
       },
       "delete_latest_voice_memo": {
         "name": "Supprimer le dernier mémo vocal"
+      },
+      "door": {
+        "name": "Ouvrir la porte"
       }
     },
     "camera": {
       "doorbell_camera": {
         "name": "Caméra de sonnette"
+      },
+      "unit_camera": {
+        "name": "Caméra"
       }
     },
     "event": {
@@ -1354,37 +1357,12 @@
           }
         }
       },
-      "agent_event": {
-        "name": "Événement appareil",
+      "ring": {
+        "name": "Sonnerie du poste intérieur",
         "state_attributes": {
           "event_type": {
             "state": {
-              "agent_restarted": "Agent appareil redémarré",
-              "answering_machine_messages_changed": "Messages vidéo mis a jour",
-              "call_ended": "Appel terminé",
-              "door_unlock_ended": "Ouverture porte terminée",
-              "door_unlock_started": "Ouverture porte démarrée",
-              "doorbell_media_closed": "Flux caméra de sonnette terminé",
-              "doorbell_pressed": "Sonnette appuyée",
-              "doorbell_view_requested": "Vue caméra de sonnette demandée",
-              "home_call_answered": "Appel domicile répondu",
-              "home_call_ended": "Appel domicile terminé",
-              "home_call_started": "Appel domicile démarré",
-              "memos_changed": "Mémos mis a jour",
-              "display_touch_tone_changed": "Son des touches modifié",
-              "ringer_muted": "Sonnerie coupée",
-              "ringer_unmuted": "Sonnerie activée",
-              "ringer_volume_changed": "Volume sonnerie modifié",
-              "smartphone_forwarding_changed": "Renvoi smartphone modifié",
-              "stair_light_activated": "Lumière d'escalier activée",
-              "stair_light_released": "Lumière d'escalier relâchée",
-              "system_metrics_changed": "Métriques système mises a jour",
-              "agent_diagnostics_changed": "Diagnostics écritures agent mis a jour",
-              "activation_executed": "Activation appareil exécutée",
-              "call_caller_identified": "Appelant identifié",
-              "call_answered": "Appel répondu",
-              "call_view_started": "Vue caméra démarrée",
-              "outdoor_units_changed": "Platines de rue modifiées"
+              "ring": "Sonnerie"
             }
           }
         }
@@ -1507,12 +1485,13 @@
       "voice_memos": {
         "name": "Mémos vocaux"
       },
-      "doorbell_state": {
-        "name": "État sonnette",
+      "call": {
+        "name": "Appel",
         "state": {
           "idle": "Inactif",
           "ringing": "Sonne",
-          "view_requested": "Vue caméra active"
+          "answered": "Décroché",
+          "viewing": "Vue"
         }
       }
     },
@@ -1572,6 +1551,11 @@
             }
           }
         }
+      }
+    },
+    "image": {
+      "last_visitor": {
+        "name": "Dernier visiteur"
       }
     }
   },
@@ -1668,6 +1652,15 @@
     },
     "alarm_command_rejected": {
       "message": "La commande de l'alarme a été refusée. Vérifiez son état et son intégration pour plus de détails."
+    },
+    "call_not_current": {
+      "message": "Cet appel est terminé ou n'est pas l'appel en cours. Rien n'a été envoyé à la station."
+    },
+    "unknown_unit": {
+      "message": "La station n'a pas cette platine de rue."
+    },
+    "unit_video_unsupported": {
+      "message": "La vidéo à la demande n'est disponible que pour la platine de rue par défaut."
     }
   },
   "issues": {
@@ -1873,6 +1866,10 @@
           "entry_not_loaded": "L'entrée BTicino C300X n'est pas chargée."
         }
       }
+    },
+    "outdoor_units_breaking_change": {
+      "title": "Entités de sonnette déplacées vers les platines de rue",
+      "description": "{entry_title} affiche désormais chaque platine de rue comme appareil propre sous la station. La caméra de sonnette, l'événement de sonnette et le bouton de porte sont passés à l'appareil de la platine de rue par défaut ; leurs identifiants d'entité et leur historique restent. Merci de refaire ces étapes :\n\n- Automatisations de blueprint : sélectionner à nouveau la platine de rue (son événement de sonnette).\n- answer_doorbell_call et hangup_doorbell_call s'appellent désormais answer_call et hangup_call. Chaque service prend une cible (la station ou une platine de rue) au lieu de entry_id.\n- Les services unlock_door, stair_light, stop_doorbell_video, reboot, reload_gui, run_device_activation et delete_latest_* n'existent plus : appuyer plutôt sur les boutons correspondants (button.press).\n- Le capteur d'état de sonnette et l'entité d'événements de l'agent n'existent plus : utiliser le capteur d'appel et les entités d'événement de la platine de rue.\n\nIgnorez ce message une fois terminé."
     }
   },
   "selector": {
@@ -1973,9 +1970,6 @@
       "name": "Régler l’image",
       "description": "Lit les trois réglages de l’image en direct. Pour en modifier un, indiquez le réglage et sa valeur (de 0 à 100 % par pas de 10). Nécessite l’agent à jour et un appel vidéo de la platine en cours ou une vidéo à la demande active dont les valeurs et les plages de réglage ont été vérifiées à la source. Les médias enregistrés restent inchangés.",
       "fields": {
-        "entry_id": {
-          "name": "Entrée"
-        },
         "control": {
           "name": "Réglage"
         },
@@ -1993,6 +1987,11 @@
           "description": "Le mode sonnette enregistre un appel entrant. Le mode à la demande enregistre sans sonnerie si aucune autre session média n’est active."
         }
       }
+    }
+  },
+  "device": {
+    "outdoor_unit": {
+      "name": "Platine de rue {unit}"
     }
   }
 }

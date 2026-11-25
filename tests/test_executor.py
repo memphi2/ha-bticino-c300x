@@ -182,9 +182,9 @@ class FakeApi:
         self.last_stair_light_address = address
         return {"ok": True}
 
-    async def async_unlock_door(self, lock_id: str) -> dict[str, bool]:
-        self.unlock_calls.append(lock_id)
-        return {"ok": True}
+    async def async_unlock_outdoor_unit(self, unit_id: str, call_id: str | None = None) -> dict[str, Any]:
+        self.unlock_calls.append(unit_id)
+        return {"ok": True, "unit": "21" if unit_id == "current" else unit_id}
 
     async def async_answering_machine_status(self) -> dict[str, bool]:
         return {"enabled": self.answering_machine_enabled}
@@ -2179,25 +2179,23 @@ def test_async_trigger_stair_light_accepts_override_address() -> None:
     assert entry.runtime_data.api.last_stair_light_address == "31"
 
 
-def test_async_unlock_door_calls_agent_api() -> None:
+def test_async_unlock_door_opens_the_calling_outdoor_unit() -> None:
     hass = FakeHass()
     entry = FakeEntry()
 
-    result = run(async_unlock_door(hass, entry, "default"))
+    result = run(async_unlock_door(hass, entry))
 
-    assert result == {
-        "ok": True,
-        "action_id": DASHBOARD_ENTITY_DOOR_UNLOCK,
-        "lock_id": "default",
-    }
-    assert entry.runtime_data.api.unlock_calls == ["default"]
+    # "current": the agent opens the unit of the current call and names it.
+    assert result == {"ok": True, "action_id": DASHBOARD_ENTITY_DOOR_UNLOCK, "unit_id": "21"}
+    assert entry.runtime_data.api.unlock_calls == ["current"]
     assert hass.bus.events == [
         (
             "bticino_c300x_action_received",
             {
                 "entry_id": "entry-1",
                 "action_id": DASHBOARD_ENTITY_DOOR_UNLOCK,
-                "lock_id": "default",
+                "unit_id": "21",
+                "call_id": None,
             },
         )
     ]

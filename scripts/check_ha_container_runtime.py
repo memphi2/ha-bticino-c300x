@@ -64,11 +64,11 @@ def check_events() -> None:
 async def _async_check_events() -> None:
     from homeassistant.helpers import translation
 
+    from custom_components.bticino_c300x.agent_contracts import OutdoorUnit
     from custom_components.bticino_c300x.const import DOMAIN
     from custom_components.bticino_c300x.event import (
-        C300XDeviceAgentEventEntity,
-        C300XDoorbellEventEntity,
-        async_setup_entry,
+        C300XStationRingEventEntity,
+        C300XUnitDoorbellEventEntity,
     )
 
     integration = ROOT / "custom_components" / DOMAIN
@@ -77,6 +77,8 @@ async def _async_check_events() -> None:
                             runtime_data=SimpleNamespace(agent_info={}, capabilities={
                                 "doorbell_events": True, "locks": True, "touch_tone": True,
                             }))
+    unit = OutdoorUnit(id="21", where="21", action_where="21", lock_where="21",
+                       name="Front gate", source="config", default=True)
     for language in ("en", "de", "fr", "it"):
         hass = Mock(
             spec=["data", "config", "async_add_executor_job"],
@@ -88,24 +90,25 @@ async def _async_check_events() -> None:
                           AsyncMock(return_value={DOMAIN: metadata})):
             await translation.async_get_translations(hass, language, "entity", {DOMAIN})
         catalog = json.loads((integration / "translations" / f"{language}.json").read_text())
-        entities = []
-        await async_setup_entry(hass, entry, entities.extend)
-        for index, (cls, expected, key) in enumerate((
-            (C300XDoorbellEventEntity, "ring", "doorbell_pressed"),
-            (C300XDeviceAgentEventEntity, "door_unlock_started", "door_unlock_started"),
-            (C300XDeviceAgentEventEntity, "display_touch_tone_changed", "display_touch_tone_changed"),
+        # The station rings at once; the unit rings once the caller is known.
+        for index, (entity, key) in enumerate((
+            (C300XStationRingEventEntity(entry), "doorbell_pressed"),
+            (C300XUnitDoorbellEventEntity(entry, unit), "call_caller_identified"),
         )):
-            entity = next(entity for entity in entities if isinstance(entity, cls))
+            cls, expected = type(entity), "ring"
             entity.hass = hass
             if expected not in entity.event_types:
                 raise RuntimeError(f"{cls.__name__}: event type {expected} not advertised")
-            payload = {"entry_id": entry.entry_id, "event_key": key,
+            payload = {"entry_id": entry.entry_id, "event_key": key, "call_id": f"boot-{index}",
+                       "unit_id": None if index == 0 else unit.id,
                        "event_type": "Display label", "event_at": f"2026-01-01T00:00:0{index}Z"}
             # Only state publication is replaced; HA's event processing stays real.
             with patch.object(entity, "async_write_ha_state"):
-                entity._handle_agent_event(SimpleNamespace(data=payload))
+                entity._agent_event(SimpleNamespace(data=payload))
             if entity.state_attributes["event_type"] != expected:
                 raise RuntimeError(f"{cls.__name__}: technical event type overwritten")
+            if entity.state_attributes.get("call_id") != payload["call_id"]:
+                raise RuntimeError(f"{cls.__name__}: call id lost")
             label = translation.async_translate_state_attr(
                 hass, entity.state_attributes["event_type"], "event", DOMAIN,
                 entity.translation_key, entity.device_class, "event_type",

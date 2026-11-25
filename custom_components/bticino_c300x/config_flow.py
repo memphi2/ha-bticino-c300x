@@ -261,7 +261,7 @@ _CREATE_HOMEASSISTANT_USER_DEFAULT = True
 class BticinoC300XConfigFlow(ModelTextConfigFlow, config_flow_auth.AuthFlowSteps, SnapshotWizardSteps, config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for BTicino C300X."""
 
-    VERSION = 1
+    VERSION = 2
     MINOR_VERSION = 3
 
     def __init__(self) -> None:

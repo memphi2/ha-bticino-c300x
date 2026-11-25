@@ -198,7 +198,8 @@ export class C300XCardActions {
       try {
         // Finish this hangup on its original device even if the editor replaces
         // the card configuration while the ring-call service is pending.
-        const target = card._hass ? { hass: card._hass, data: card._serviceData() } : null;
+        const target = card._hass
+          ? { hass: card._hass, data: card._callData(), stop: card._stopVideoData() } : null;
         if (hadDoorbellRingCallSession) {
           try {
             ok = await this.hangupDoorbellCall({ closePeer: false, target }) && ok;
@@ -218,7 +219,7 @@ export class C300XCardActions {
           } catch (_error) {
             return ok;
           }
-          if (currentTarget.entry_id === target?.data.entry_id) return ok;
+          if (currentTarget.entity_id === target?.data.entity_id) return ok;
         }
         await this.stopDoorbellVideo(target);
       } catch (err) {
@@ -263,7 +264,7 @@ export class C300XCardActions {
     if (!hass) {
       return;
     }
-    await hass.callService("bticino_c300x", "stop_doorbell_video", target?.data || card._serviceData());
+    await hass.callService("button", "press", target?.stop || card._stopVideoData());
   }
 
   async answerDoorbellCall() {
@@ -271,11 +272,7 @@ export class C300XCardActions {
     if (!card._hass) {
       return;
     }
-    await card._hass.callService(
-      "bticino_c300x",
-      "answer_doorbell_call",
-      card._serviceData(),
-    );
+    await card._hass.callService("bticino_c300x", "answer_call", card._callData());
   }
 
   async hangupDoorbellCall({ closePeer = true, target } = {}) {
@@ -287,8 +284,10 @@ export class C300XCardActions {
     }
     let ok = true;
     try {
-      await hass.callService("bticino_c300x", "hangup_doorbell_call", target?.data || card._serviceData());
+      await hass.callService("bticino_c300x", "hangup_call", target?.data || card._callData());
     } catch (err) {
+      // The call ended meanwhile: nothing left to hang up.
+      if (err?.translation_key === "call_not_current") return ok;
       console.error("C300X ring-call hangup failed", err);
       if (isCurrent()) card._error = err?.message || `${err}`;
       ok = false;

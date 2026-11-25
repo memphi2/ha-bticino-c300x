@@ -2,7 +2,7 @@ import {
   C300X_TRANSLATIONS,
   c300xLocalize,
   c300xModelLabel,
-} from "./c300x-translations.js?v=ba002e0c693501b4";
+} from "./c300x-translations.js?v=f9a619f891bd4df8";
 import {
   C300X_AUDIO_CODEC_OBJECT_ID,
   C300X_CAMERA_OBJECT_ID,
@@ -17,18 +17,18 @@ import {
   c300xObjectSuffix,
   c300xRelatedEntity,
   c300xResolveEntity,
-} from "./c300x-entity-resolver.js?v=ba002e0c693501b4";
+} from "./c300x-entity-resolver.js?v=f9a619f891bd4df8";
 import {
   C300X_CARD_EDITOR_TAG,
   c300xDoorbellCardStubConfig,
-} from "./c300x-card-editor.js?v=ba002e0c693501b4";
-import { C300XCardActions } from "./c300x-card-actions.js?v=ba002e0c693501b4";
+} from "./c300x-card-editor.js?v=f9a619f891bd4df8";
+import { C300XCardActions } from "./c300x-card-actions.js?v=f9a619f891bd4df8";
 import {
   C300XCardLifecycleState,
   c300xAnsweredRingKey,
-} from "./c300x-card-lifecycle.js?v=ba002e0c693501b4";
-import { c300xRingLifecycleActive } from "./c300x-ring-preview-state.js?v=ba002e0c693501b4";
-import { C300X_DOORBELL_CARD_TEMPLATE } from "./c300x-card-template.js?v=ba002e0c693501b4";
+} from "./c300x-card-lifecycle.js?v=f9a619f891bd4df8";
+import { c300xRingLifecycleActive } from "./c300x-ring-preview-state.js?v=f9a619f891bd4df8";
+import { C300X_DOORBELL_CARD_TEMPLATE } from "./c300x-card-template.js?v=f9a619f891bd4df8";
 import {
   c300xCardViewModel,
   c300xIsHomeCallActive,
@@ -36,13 +36,13 @@ import {
   c300xMediaReadinessHasRepair,
   c300xMediaReadinessLabelKey,
   c300xMediaState,
-} from "./c300x-state-model.js?v=ba002e0c693501b4";
-import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=ba002e0c693501b4";
-import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=ba002e0c693501b4";
-import { C300XStreamSnapshots } from "./c300x-stream-snapshots.js?v=ba002e0c693501b4";
-import { C300XCardMedia } from "./c300x-card-media.js?v=ba002e0c693501b4";
-import { c300xFollowPictureSize } from "./c300x-picture-frame.js?v=ba002e0c693501b4";
-import { mediaStamp } from "./c300x-media-translations.js?v=ba002e0c693501b4";
+} from "./c300x-state-model.js?v=f9a619f891bd4df8";
+import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=f9a619f891bd4df8";
+import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=f9a619f891bd4df8";
+import { C300XStreamSnapshots } from "./c300x-stream-snapshots.js?v=f9a619f891bd4df8";
+import { C300XCardMedia } from "./c300x-card-media.js?v=f9a619f891bd4df8";
+import { c300xFollowPictureSize } from "./c300x-picture-frame.js?v=f9a619f891bd4df8";
+import { mediaStamp } from "./c300x-media-translations.js?v=f9a619f891bd4df8";
 
 const C300X_NOTICE_TIMEOUT_MS = 2000;
 const C300X_RING_ANSWER_LAUNCH_PARAM = "c300x_ring_answer";
@@ -447,6 +447,7 @@ class C300XDoorbellCallCard extends HTMLElement {
       externalMediaActive: attributes.external_media_active === true,
       externalOwner: attributes.external_owner || "",
       friendlyName: attributes.friendly_name || "",
+      call: [attributes.call_id || "", attributes.call_state || "", attributes.call_unit_name || ""],
       hasMicrophone: this._hasMicrophoneTrack(),
       hasRemoteStream: !!this._webrtc?.remoteStream,
       hasRemoteAudio: !!this._webrtc?.remoteStream?.getAudioTracks?.().length,
@@ -614,7 +615,10 @@ class C300XDoorbellCallCard extends HTMLElement {
     });
     const actionLabel = this._label(view.actionLabelKey);
 
-    this._titleEl.textContent = name;
+    // The calling outdoor unit's name while a doorbell call rings or is answered.
+    const unitName = !homeCallMode && /^(ringing|answered)$/.test(entity?.attributes?.call_state || "")
+      ? entity.attributes.call_unit_name : "";
+    this._titleEl.textContent = unitName ? `${name} · ${unitName}` : name;
     this._emptyEl.textContent = this._label(homeCallMode ? "no_active_home_call" : "no_active_door_call");
     this._bodyEl.classList.toggle("doorstation", !homeCallMode);
     this._actionIconEl.setAttribute("icon", view.actionIcon);
@@ -1432,11 +1436,27 @@ class C300XDoorbellCallCard extends HTMLElement {
   }
 
   _serviceData() {
-    const entryId = this._entryId();
-    if (!entryId) {
+    const entityId = this._resolvedCameraEntityId();
+    if (!this._entryId() || !entityId) {
       throw new Error(this._label("device_unresolved"));
     }
-    return { entry_id: entryId };
+    return { entity_id: entityId };
+  }
+
+  // The call the card shows; the agent refuses a call that is no longer current.
+  _callData() {
+    const callId = this._cameraEntity()?.attributes?.call_id;
+    return callId ? { ...this._serviceData(), call_id: callId } : this._serviceData();
+  }
+
+  _stopVideoData() {
+    const entityId = c300xRelatedEntity(
+      this._hass, this._config, "button", "bticino_c300x_stop_doorbell_video", "stop_video_entity",
+    );
+    if (!this._entryId() || !entityId) {
+      throw new Error(this._label("device_unresolved"));
+    }
+    return { entity_id: entityId };
   }
 
   _isConfiguredCallActive() {

@@ -46,14 +46,13 @@ def test_container_gate_preserves_and_translates_real_ha_event_attributes(capsys
     output = capsys.readouterr().out
     for language in ("en", "de", "fr", "it"):
         for cls, key in (
-            ("C300XDoorbellEventEntity", "ring"),
-            ("C300XDeviceAgentEventEntity", "door_unlock_started"),
-            ("C300XDeviceAgentEventEntity", "display_touch_tone_changed"),
+            ("C300XStationRingEventEntity", "ring"),
+            ("C300XUnitDoorbellEventEntity", "ring"),
         ):
             assert f"{language}/{cls}: event_type={key}, label=" in output
 
 
-@pytest.mark.parametrize("entity_key", ["doorbell_event", "agent_event"])
+@pytest.mark.parametrize("entity_key", ["doorbell_event", "ring"])
 def test_container_gate_rejects_old_event_translation_layout(tmp_path, monkeypatch, entity_key):
     translations = tmp_path / "custom_components" / "bticino_c300x" / "translations"
     translations.mkdir(parents=True)

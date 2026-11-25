@@ -54,8 +54,7 @@ class RingAnalysisUseCase:
         expected_phrase: str | None = None,
         unlock_on_match: bool = False,
         unlock_entry: Any | None = None,
-        unlock_entry_provider: Callable[[], Any] | None = None,
-        lock_id: str = "default",
+        unlock_target_provider: Callable[[], tuple[Any, str | None]] | None = None,
     ) -> None:
         """Evaluate a ring-analysis result and optionally unlock."""
 
@@ -69,9 +68,9 @@ class RingAnalysisUseCase:
         )
         if not (decision.matched and unlock_on_match):
             return
-        entry = unlock_entry
-        if entry is None and unlock_entry_provider is not None:
-            entry = unlock_entry_provider()
+        entry, unit_id = unlock_entry, None
+        if entry is None and unlock_target_provider is not None:
+            entry, unit_id = unlock_target_provider()
         if entry is None:
             raise service_validation_error("entry_id_required")
         capture_entry_id = getattr(decision, "capture_entry_id", None)
@@ -82,4 +81,4 @@ class RingAnalysisUseCase:
             getattr(decision, "capture_id", None),
         ):
             return
-        await DeviceActionsUseCase(self._hass, entry).unlock(lock_id)
+        await DeviceActionsUseCase(self._hass, entry).unlock(unit_id or "current")

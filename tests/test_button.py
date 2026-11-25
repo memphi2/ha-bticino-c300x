@@ -17,7 +17,6 @@ from custom_components.bticino_c300x.button import (
     C300XDeleteLatestVideoMessageButton,
     C300XDeleteLatestVoiceMemoButton,
     C300XDeviceActivationButton,
-    C300XDoorUnlockButton,
     C300XRebootButton,
     C300XReloadGuiButton,
     C300XRemoveAgentButton,
@@ -365,6 +364,9 @@ class _FakeEntry:
     options: dict[str, Any] = field(default_factory=dict)
     runtime_data: _FakeRuntimeData = field(default_factory=_FakeRuntimeData)
 
+    def async_on_unload(self, _cancel: Any) -> None:
+        return None
+
 
 def test_supports_maintenance_action_requires_agent_capability_and_token() -> None:
     entry = _FakeEntry(
@@ -499,19 +501,13 @@ def test_maintenance_buttons_are_always_created_but_capability_gated() -> None:
     asyncio.run(_run())
 
 
-def test_setup_entry_adds_stair_light_and_lock_buttons_from_capabilities() -> None:
+def test_setup_entry_adds_the_stair_light_and_leaves_doors_to_the_outdoor_units() -> None:
     async def _run() -> None:
         entry = _FakeEntry(
             runtime_data=_FakeRuntimeData(
                 capabilities={
                     "stair_light": {"supported": True},
-                    "locks": {
-                        "supported": True,
-                        "locks": [
-                            {"id": "front", "name": "Front door"},
-                            {"id": "", "name": "Ignored"},
-                        ],
-                    },
+                    "locks": {"supported": True, "locks": [{"id": "default", "name": "default"}]},
                 },
             ),
         )
@@ -524,15 +520,8 @@ def test_setup_entry_adds_stair_light_and_lock_buttons_from_capabilities() -> No
         )
 
         assert any(isinstance(entity, C300XStairLightButton) for entity in entities)
-        unlock_buttons = [
-            entity for entity in entities if isinstance(entity, C300XDoorUnlockButton)
-        ]
-        assert len(unlock_buttons) == 1
-        assert unlock_buttons[0]._attr_unique_id == f"{entry.entry_id}_door_unlock_front"
-        assert unlock_buttons[0]._attr_extra_state_attributes == {
-            "lock_id": "front",
-            "lock_name": "Front door",
-        }
+        # Each outdoor unit has its own door button (tests/test_outdoor_unit_entities.py).
+        assert not any("door_unlock" in str(entity.unique_id) for entity in entities)
 
     asyncio.run(_run())
 
@@ -764,21 +753,15 @@ def test_c100x_standalone_buttons_do_not_need_video_or_actuate_on_setup(monkeypa
             }},
         ))
         hass = _FakeHass()
-        stair, unlock = AsyncMock(), AsyncMock()
+        stair = AsyncMock()
         monkeypatch.setattr(button_module, "async_trigger_stair_light", stair)
-        monkeypatch.setattr(button_module, "async_unlock_door", unlock)
         entities: list[Any] = []
         await async_setup_entry(hass, entry, entities.extend)  # type: ignore[arg-type]
         stair.assert_not_awaited()
-        unlock.assert_not_awaited()
         light_button, = [e for e in entities if isinstance(e, C300XStairLightButton)]
-        lock_button, = [e for e in entities if isinstance(e, C300XDoorUnlockButton)]
-        light_button.hass = lock_button.hass = hass
+        light_button.hass = hass
         await light_button.async_press()
         stair.assert_awaited_once_with(hass, entry)
-        unlock.assert_not_awaited()
-        await lock_button.async_press()
-        unlock.assert_awaited_once_with(hass, entry, "entry")
 
     asyncio.run(run())
 
@@ -787,7 +770,6 @@ def test_action_buttons_translate_executor_agent_errors(monkeypatch) -> None:  #
     async def _run() -> None:
         for button_class, patched_name, expected_call in [
             (C300XStairLightButton, "async_trigger_stair_light", "stair"),
-            (C300XDoorUnlockButton, "async_unlock_door", "unlock"),
         ]:
             for error in (
                 C300XAgentApiUnsupportedError("unsupported"),
@@ -811,14 +793,7 @@ def test_action_buttons_translate_executor_agent_errors(monkeypatch) -> None:  #
                     _make_failing(calls, expected_call, error),
                 )
                 entry = _FakeEntry()
-                if button_class is C300XDoorUnlockButton:
-                    button = button_class(  # type: ignore[call-arg]
-                        entry,  # type: ignore[arg-type]
-                        "default",
-                        "Front door",
-                    )
-                else:
-                    button = button_class(entry)  # type: ignore[call-arg,arg-type]
+                button = button_class(entry)  # type: ignore[call-arg,arg-type]
                 button.hass = _FakeHass()
 
                 try:

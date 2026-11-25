@@ -28,12 +28,14 @@ const hass = {
   devices: { "device-one": { config_entry_id: "entry-one" } },
   entities: {
     [camera]: key("doorbell_camera"),
-    "button.synthetic_door": key("door_unlock"),
+    "button.synthetic_door": key("door"),
     "button.synthetic_light": key("stair_light"),
+    "button.synthetic_stop_video": key("stop_doorbell_video"),
   },
   states: {
-    [camera]: { state: "idle", attributes: { friendly_name: "Synthetic door", media_state: "idle", media_primary_action: "start_stream" } },
-    "button.synthetic_door": { state: "unknown", attributes: { lock_id: "default" } },
+    [camera]: { state: "idle", attributes: { friendly_name: "Synthetic door", media_state: "idle", media_primary_action: "start_stream", door_entity_id: "button.synthetic_door" } },
+    "button.synthetic_door": { state: "unknown", attributes: {} },
+    "button.synthetic_stop_video": { state: "unknown", attributes: {} },
     "button.synthetic_light": { state: "unknown", attributes: {} },
   },
   formatEntityName: (entity) => entity.attributes.friendly_name,

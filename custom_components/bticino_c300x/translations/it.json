@@ -1307,9 +1307,6 @@
       "delete_latest_text_memo": {
         "name": "Elimina ultimo memo testuale"
       },
-      "door_unlock": {
-        "name": "Apri porta"
-      },
       "activate_display_pages": {
         "name": "Attiva pagine del display"
       },
@@ -1336,11 +1333,17 @@
       },
       "delete_latest_voice_memo": {
         "name": "Elimina ultimo memo vocale"
+      },
+      "door": {
+        "name": "Apri porta"
       }
     },
     "camera": {
       "doorbell_camera": {
         "name": "Telecamera campanello"
+      },
+      "unit_camera": {
+        "name": "Telecamera"
       }
     },
     "event": {
@@ -1354,37 +1357,12 @@
           }
         }
       },
-      "agent_event": {
-        "name": "Evento dispositivo",
+      "ring": {
+        "name": "Squillo del posto interno",
         "state_attributes": {
           "event_type": {
             "state": {
-              "agent_restarted": "Device-Agent riavviato",
-              "answering_machine_messages_changed": "Messaggi video aggiornati",
-              "call_ended": "Chiamata terminata",
-              "door_unlock_ended": "Apertura porta terminata",
-              "door_unlock_started": "Apertura porta avviata",
-              "doorbell_media_closed": "Stream videocitofono terminato",
-              "doorbell_pressed": "Campanello premuto",
-              "doorbell_view_requested": "Vista videocitofono avviata",
-              "home_call_answered": "Chiamata casa risposta",
-              "home_call_ended": "Chiamata casa terminata",
-              "home_call_started": "Chiamata casa avviata",
-              "memos_changed": "Memo aggiornati",
-              "display_touch_tone_changed": "Suono dei tasti modificato",
-              "ringer_muted": "Suoneria disattivata",
-              "ringer_unmuted": "Suoneria attivata",
-              "ringer_volume_changed": "Volume suoneria modificato",
-              "smartphone_forwarding_changed": "Inoltro smartphone modificato",
-              "stair_light_activated": "Luce scale attivata",
-              "stair_light_released": "Luce scale rilasciata",
-              "system_metrics_changed": "Metriche di sistema aggiornate",
-              "agent_diagnostics_changed": "Diagnostica scritture agent aggiornata",
-              "activation_executed": "Attivazione dispositivo eseguita",
-              "call_caller_identified": "Chiamante riconosciuto",
-              "call_answered": "Chiamata risposta",
-              "call_view_started": "Vista telecamera avviata",
-              "outdoor_units_changed": "Posti esterni modificati"
+              "ring": "Squillo"
             }
           }
         }
@@ -1507,12 +1485,13 @@
       "voice_memos": {
         "name": "Memo vocali"
       },
-      "doorbell_state": {
-        "name": "Stato campanello",
+      "call": {
+        "name": "Chiamata",
         "state": {
-          "idle": "Pronto",
-          "ringing": "Suona",
-          "view_requested": "Vista videocitofono attiva"
+          "idle": "Inattivo",
+          "ringing": "Squilla",
+          "answered": "Risposta",
+          "viewing": "Visione"
         }
       }
     },
@@ -1572,6 +1551,11 @@
             }
           }
         }
+      }
+    },
+    "image": {
+      "last_visitor": {
+        "name": "Ultimo visitatore"
       }
     }
   },
@@ -1668,6 +1652,15 @@
     },
     "alarm_command_rejected": {
       "message": "Il comando dell'allarme è stato rifiutato. Verifica lo stato e la relativa integrazione per ulteriori informazioni."
+    },
+    "call_not_current": {
+      "message": "Questa chiamata è terminata o non è la chiamata attuale. Alla stazione non è stato inviato nulla."
+    },
+    "unknown_unit": {
+      "message": "La stazione non ha questo posto esterno."
+    },
+    "unit_video_unsupported": {
+      "message": "Il video su richiesta è disponibile solo per il posto esterno predefinito."
     }
   },
   "issues": {
@@ -1873,6 +1866,10 @@
           "entry_not_loaded": "La voce BTicino C300X non e caricata."
         }
       }
+    },
+    "outdoor_units_breaking_change": {
+      "title": "Entità del campanello spostate sui posti esterni",
+      "description": "{entry_title} mostra ora ogni posto esterno come dispositivo a sé sotto la stazione. Telecamera del campanello, evento del campanello e pulsante della porta sono passati al dispositivo del posto esterno predefinito; ID delle entità e cronologia restano. Esegui questi passi:\n\n- Automazioni da blueprint: seleziona di nuovo il posto esterno (il suo evento campanello).\n- answer_doorbell_call e hangup_doorbell_call ora si chiamano answer_call e hangup_call. Ogni servizio prende un obiettivo (la stazione o un posto esterno) al posto di entry_id.\n- I servizi unlock_door, stair_light, stop_doorbell_video, reboot, reload_gui, run_device_activation e delete_latest_* non esistono più: premi invece i pulsanti corrispondenti (button.press).\n- Il sensore dello stato del campanello e l'entità eventi dell'agente non esistono più: usa il sensore chiamata e le entità evento del posto esterno.\n\nIgnora questo messaggio quando hai finito."
     }
   },
   "selector": {
@@ -1973,9 +1970,6 @@
       "name": "Regola immagine",
       "description": "Legge le tre impostazioni dell’immagine in diretta. Per modificarne una, indica il controllo e il valore (da 0 a 100% a passi di 10). Richiede l’agente aggiornato e una videochiamata in corso dal posto esterno oppure un video su richiesta attivo con valori e intervalli verificati alla sorgente. I contenuti salvati restano invariati.",
       "fields": {
-        "entry_id": {
-          "name": "Voce"
-        },
         "control": {
           "name": "Controllo"
         },
@@ -1993,6 +1987,11 @@
           "description": "Campanello registra una chiamata in arrivo. A richiesta registra senza suonare quando nessun’altra sessione multimediale è attiva."
         }
       }
+    }
+  },
+  "device": {
+    "outdoor_unit": {
+      "name": "Posto esterno {unit}"
     }
   }
 }

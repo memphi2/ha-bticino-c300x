@@ -60,7 +60,7 @@ def test_answer_reports_a_failed_status_read_as_agent_command_failed(monkeypatch
     api.async_doorbell_video_status.side_effect = (
         C300XAgentApiAuthError() if failure == "auth" else C300XAgentApiConnectionError("offline")
     )
-    handler = services._C300XServiceHandlers(hass).async_answer_doorbell_call
+    handler = services._C300XServiceHandlers(hass).async_answer_call
     with pytest.raises(HomeAssistantError) as err:
         asyncio.run(handler(SimpleNamespace(data={})))
     assert err.value.translation_key == "agent_command_failed"
@@ -72,11 +72,13 @@ def test_answer_reports_a_failed_status_read_as_agent_command_failed(monkeypatch
         entry.async_start_reauth.assert_not_called()
 
 
-@pytest.mark.parametrize("operation", ["answer_doorbell_call", "activate_doorbell_video"])
-def test_failed_gain_write_is_logged_and_the_command_still_runs(monkeypatch, caplog, operation):
+@pytest.mark.parametrize("service,operation", [
+    ("answer_call", "answer_doorbell_call"), ("activate_doorbell_video", "activate_doorbell_video"),
+])
+def test_failed_gain_write_is_logged_and_the_command_still_runs(monkeypatch, caplog, service, operation):
     hass, _entry, api = _setup(monkeypatch)
     api.async_set_doorstation_audio_gain_db.side_effect = C300XAgentApiConnectionError("offline")
-    handler = getattr(services._C300XServiceHandlers(hass), f"async_{operation}")
+    handler = getattr(services._C300XServiceHandlers(hass), f"async_{service}")
     with caplog.at_level(logging.WARNING):
         asyncio.run(handler(SimpleNamespace(data={"audio": True})))
     api.async_set_doorstation_audio_gain_db.assert_awaited_once_with(6.0)

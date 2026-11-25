@@ -267,24 +267,26 @@ async def async_trigger_stair_light(
 async def async_unlock_door(
     hass: HomeAssistant,
     entry: BticinoC300XConfigEntry,
-    lock_id: str = "default",
+    unit_id: str = "current",
+    call_id: str | None = None,
 ) -> dict[str, Any]:
-    """Unlock a configured C300X door lock through the device agent."""
+    """Open an outdoor unit's lock; ``current`` is the calling unit, else the default one.
 
-    await entry.runtime_data.api.async_unlock_door(lock_id)
+    With ``call_id`` the agent opens only while that call belongs to the unit.
+    """
+
+    result = await entry.runtime_data.api.async_unlock_outdoor_unit(unit_id, call_id)
+    unit = result.get("unit") if isinstance(result.get("unit"), str) else unit_id
     hass.bus.async_fire(
         EVENT_ACTION_RECEIVED,
         {
             "entry_id": entry.entry_id,
             "action_id": DASHBOARD_ENTITY_DOOR_UNLOCK,
-            "lock_id": str(lock_id),
+            "unit_id": unit,
+            "call_id": call_id,
         },
     )
-    return {
-        "ok": True,
-        "action_id": DASHBOARD_ENTITY_DOOR_UNLOCK,
-        "lock_id": str(lock_id),
-    }
+    return {"ok": True, "action_id": DASHBOARD_ENTITY_DOOR_UNLOCK, "unit_id": unit}
 
 
 async def async_execute_dashboard_action(

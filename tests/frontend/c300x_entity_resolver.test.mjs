@@ -46,22 +46,20 @@ test("default config stays minimal and auto mode based", () => {
   });
 });
 
-test("physical actions stay on the selected device and default door", () => {
+test("physical actions stay on the selected station and open the door the camera names", () => {
   const state = hass({
     entities: {
       "camera.front": registryEntry({ configEntryId: "entry-2" }),
       "button.bticino_c300x_stair_light": registryEntry({ configEntryId: "entry-2", translationKey: "reboot" }),
-      "button.wrong_door": registryEntry({ translationKey: "door_unlock" }),
-      "button.garage": registryEntry({ configEntryId: "entry-2", translationKey: "door_unlock" }),
-      "button.front_door": registryEntry({ configEntryId: "entry-2", translationKey: "door_unlock" }),
+      "button.wrong_door": registryEntry({ translationKey: "door" }),
+      "button.front_door": registryEntry({ configEntryId: "entry-2", translationKey: "door" }),
       "button.front_light": registryEntry({ configEntryId: "entry-2", translationKey: "stair_light" }),
     },
     states: {
-      "camera.front": {},
+      "camera.front": { attributes: { door_entity_id: "button.front_door" } },
       "button.bticino_c300x_stair_light": {},
-      "button.wrong_door": { attributes: { lock_id: "default" } },
-      "button.garage": { attributes: { lock_id: "garage" } },
-      "button.front_door": { attributes: { lock_id: "default" } },
+      "button.wrong_door": {},
+      "button.front_door": {},
       "button.front_light": {},
     },
   });
@@ -71,35 +69,46 @@ test("physical actions stay on the selected device and default door", () => {
   assert.equal(c300xDeviceActionEntity(state, { ...config, entry_id: "entry-1" }, "door_unlock"), "");
   assert.equal(c300xDeviceActionEntity(state, { entity: "camera.missing" }, "door_unlock"), "");
   assert.equal(c300xDeviceActionEntity(state, config, "reboot"), "");
+  // A door of another station is never opened, whatever the camera says.
+  state.states["camera.front"].attributes.door_entity_id = "button.wrong_door";
+  assert.equal(c300xDeviceActionEntity(state, config, "door_unlock"), "");
+  state.states["camera.front"].attributes.door_entity_id = "button.front_door";
   delete state.states["button.front_door"];
   assert.equal(c300xDeviceActionEntity(state, config, "door_unlock"), "");
   delete state.entities["camera.front"];
   assert.equal(c300xDeviceActionEntity(state, config, "stair_light"), "");
 });
 
-test("physical actions use HA display registry device IDs without full registry metadata", () => {
+test("physical actions find station buttons and other units' doors through the outdoor unit devices", () => {
   const state = hass({
     entities: {
-      "camera.front": { platform: C300X_PLATFORM, device_id: "front", translation_key: "doorbell_camera" },
-      "button.other": { platform: C300X_PLATFORM, device_id: "other", translation_key: "door_unlock" },
-      "button.door": { platform: C300X_PLATFORM, device_id: "front", translation_key: "door_unlock" },
-      "button.light": { platform: C300X_PLATFORM, device_id: "front", translation_key: "stair_light" },
+      "camera.front": { platform: C300X_PLATFORM, device_id: "unit20", translation_key: "doorbell_camera" },
+      "button.other": { platform: C300X_PLATFORM, device_id: "other", translation_key: "door" },
+      "button.gate": { platform: C300X_PLATFORM, device_id: "unit21", translation_key: "door" },
+      "button.light": { platform: C300X_PLATFORM, device_id: "station", translation_key: "stair_light" },
     },
     states: {
-      "camera.front": {},
-      "button.other": { attributes: { lock_id: "default" } },
-      "button.door": { attributes: { lock_id: "default" } },
+      "camera.front": { attributes: { door_entity_id: "button.gate" } },
+      "button.other": {},
+      "button.gate": {},
       "button.light": {},
+    },
+    devices: {
+      station: { config_entries: ["entry-1"] },
+      unit20: { config_entries: ["entry-1"], via_device_id: "station" },
+      unit21: { config_entries: ["entry-1"], via_device_id: "station" },
+      other: { config_entries: ["entry-2"] },
     },
   });
   const config = { entity: "camera.front" };
-  assert.equal(c300xDeviceActionEntity(state, config, "door_unlock"), "button.door");
+  assert.equal(c300xDeviceActionEntity(state, config, "door_unlock"), "button.gate");
   assert.equal(c300xDeviceActionEntity(state, config, "stair_light"), "button.light");
-  state.devices = { front: { config_entries: ["entry-1"] } };
-  assert.equal(c300xDeviceActionEntity(state, { ...config, entry_id: "entry-1" }, "door_unlock"), "button.door");
+  assert.equal(c300xDeviceActionEntity(state, { ...config, entry_id: "entry-1" }, "door_unlock"), "button.gate");
   assert.equal(c300xDeviceActionEntity(state, { ...config, entry_id: "entry-2" }, "door_unlock"), "");
-  delete state.entities["button.door"].device_id;
+  state.states["camera.front"].attributes.door_entity_id = "button.other";
   assert.equal(c300xDeviceActionEntity(state, config, "door_unlock"), "");
+  delete state.entities["button.light"].device_id;
+  assert.equal(c300xDeviceActionEntity(state, config, "stair_light"), "");
 });
 
 test("object suffix and entity id helpers keep multi-device suffixes stable", () => {
@@ -261,11 +270,11 @@ function displayHass(device) {
   for (const id of ["other", "front"]) {
     for (const [domain, key] of [
       ["camera", "doorbell_camera"], ["sensor", "media_readiness"],
-      ["select", "audio_codec"], ["button", "door_unlock"], ["button", "stair_light"],
+      ["select", "audio_codec"], ["button", "door"], ["button", "stair_light"],
     ]) {
       const entityId = `${domain}.${id}_${key}`;
       entities[entityId] = { platform: C300X_PLATFORM, device_id: id, translation_key: key };
-      states[entityId] = { attributes: { lock_id: "default" } };
+      states[entityId] = { attributes: domain === "camera" ? { door_entity_id: `button.${id}_door` } : {} };
     }
   }
   return hass({ entities, states, devices: { front: device, other: { config_entry_id: "other-entry" } } });
@@ -283,7 +292,7 @@ for (const [name, device] of [
     assert.equal(c300xEntryId(state, config, config.entity), "front-entry");
     assert.equal(c300xRelatedEntity(state, config, "sensor", C300X_MEDIA_READINESS_OBJECT_ID), "sensor.front_media_readiness");
     assert.equal(c300xRelatedEntity(state, config, "select", C300X_AUDIO_CODEC_OBJECT_ID), "select.front_audio_codec");
-    assert.equal(c300xDeviceActionEntity(state, config, "door_unlock"), "button.front_door_unlock");
+    assert.equal(c300xDeviceActionEntity(state, config, "door_unlock"), "button.front_door");
     assert.equal(c300xDeviceActionEntity(state, config, "stair_light"), "button.front_stair_light");
 
     const wrong = { ...config, entry_id: "other-entry" };
@@ -299,7 +308,7 @@ test("same-device lookups do not need an owner but service routing requires an u
     const config = { entity: "camera.front_doorbell_camera" };
     assert.equal(c300xEntryId(state, config, config.entity), "");
     assert.equal(c300xRelatedEntity(state, config, "select", C300X_AUDIO_CODEC_OBJECT_ID), "select.front_audio_codec");
-    assert.equal(c300xDeviceActionEntity(state, config, "door_unlock"), "button.front_door_unlock");
+    assert.equal(c300xDeviceActionEntity(state, config, "door_unlock"), "button.front_door");
     assert.equal(c300xDeviceActionEntity(state, { ...config, entry_id: "front-entry" }, "door_unlock"), "");
   }
 });
@@ -310,7 +319,7 @@ test("missing related entities never resolve to another device, even with the sa
   const config = { entity: "camera.front_doorbell_camera" };
   delete state.states["sensor.front_media_readiness"];
   delete state.states["select.front_audio_codec"];
-  delete state.states["button.front_door_unlock"];
+  delete state.states["button.front_door"];
   assert.equal(c300xRelatedEntity(state, config, "sensor", C300X_MEDIA_READINESS_OBJECT_ID), undefined);
   assert.equal(c300xRelatedEntity(state, config, "select", C300X_AUDIO_CODEC_OBJECT_ID), undefined);
   assert.equal(c300xDeviceActionEntity(state, config, "door_unlock"), "");

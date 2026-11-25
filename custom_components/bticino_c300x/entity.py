@@ -7,6 +7,7 @@ from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any, cast
 
 from homeassistant.core import callback
+from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import Entity
 
@@ -15,6 +16,7 @@ from .const import CONF_VIDEO_ENABLED, DOMAIN, SIGNAL_CONNECTION_STATE_CHANGED
 from .device_profile import entry_profile
 from .entry_config import entry_config_value as entry_config_value
 from .entry_types import BticinoC300XConfigEntry
+from .identity import station_device_identifier, station_mac, station_unique_id
 
 if TYPE_CHECKING:
     from homeassistant.helpers.device_registry import DeviceInfo
@@ -29,7 +31,7 @@ def entry_entity_unique_id(entry: BticinoC300XConfigEntry, key: str) -> str:
     diverging copy makes it report a registered entity as unregistered.
     """
 
-    return f"{entry.entry_id}_{key}"
+    return station_unique_id(entry, key)
 
 
 class C300XEntity(Entity):
@@ -142,11 +144,14 @@ def _device_info(entry: BticinoC300XConfigEntry) -> DeviceInfo:
 
     model = "Classe 100X" if entry_profile(entry).is_c100x else "Classe 300X"
     info = DeviceInfo(
-        identifiers={(DOMAIN, entry.entry_id)},
+        identifiers={station_device_identifier(entry)},
         manufacturer="BTicino",
         model=model,
         name=entry.title,
     )
+    mac = station_mac(entry)
+    if mac is not None:
+        info["connections"] = {(CONNECTION_NETWORK_MAC, mac)}
     # What the station reports about itself is shown as it is; a value it
     # does not report leaves its field out.
     firmware = _agent_info_string(entry, "firmware")

@@ -12,9 +12,6 @@
       "delete_latest_text_memo": {
         "default": "mdi:trash-can-outline"
       },
-      "door_unlock": {
-        "default": "mdi:door-open"
-      },
       "activate_display_pages": {
         "default": "mdi:monitor-arrow-down"
       },
@@ -38,10 +35,16 @@
       },
       "delete_latest_voice_memo": {
         "default": "mdi:trash-can-outline"
+      },
+      "door": {
+        "default": "mdi:door-open"
       }
     },
     "camera": {
       "doorbell_camera": {
+        "default": "mdi:cctv"
+      },
+      "unit_camera": {
         "default": "mdi:cctv"
       }
     },
@@ -49,8 +52,8 @@
       "doorbell_event": {
         "default": "mdi:doorbell-video"
       },
-      "agent_event": {
-        "default": "mdi:bell-ring-outline"
+      "ring": {
+        "default": "mdi:doorbell-video"
       }
     },
     "select": {
@@ -79,6 +82,14 @@
       },
       "voice_memos": {
         "default": "mdi:microphone-message"
+      },
+      "call": {
+        "default": "mdi:phone-ring",
+        "state": {
+          "idle": "mdi:phone-hangup",
+          "answered": "mdi:phone-in-talk",
+          "viewing": "mdi:cctv"
+        }
       }
     },
     "number": {
@@ -124,6 +135,11 @@
         "state": {
           "playing": "mdi:bullhorn"
         }
+      }
+    },
+    "image": {
+      "last_visitor": {
+        "default": "mdi:account-clock"
       }
     }
   },

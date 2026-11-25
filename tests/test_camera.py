@@ -253,6 +253,9 @@ class _FakeEntry:
     options: dict[str, Any] = field(default_factory=dict)
     runtime_data: _FakeRuntimeData = field(default_factory=_FakeRuntimeData)
 
+    def async_on_unload(self, _cancel: Any) -> None:
+        return None
+
 
 def test_doorbell_camera_sets_visible_entity_icon() -> None:
     assert C300XDoorbellCamera(_FakeEntry()).icon == "mdi:cctv"
@@ -279,12 +282,12 @@ def test_camera_setup_entry_adds_entity_only_when_capability_is_supported() -> N
         supported_entities: list[Any] = []
 
         await async_setup_entry(
-            SimpleNamespace(),  # type: ignore[arg-type]
+            SimpleNamespace(data={}),  # type: ignore[arg-type]
             unsupported,  # type: ignore[arg-type]
             unsupported_entities.extend,
         )
         await async_setup_entry(
-            SimpleNamespace(),  # type: ignore[arg-type]
+            SimpleNamespace(data={}),  # type: ignore[arg-type]
             supported,  # type: ignore[arg-type]
             supported_entities.extend,
         )
@@ -584,6 +587,12 @@ def test_doorbell_camera_exposes_only_user_facing_media_attributes() -> None:
                 "account": "homeassistant",
                 "label": "Home Assistant Test",
             },
+        # No call (and no outdoor units known): the card follows nothing.
+        "call_id": None,
+        "call_state": None,
+        "call_unit": None,
+        "call_unit_name": None,
+        "door_entity_id": None,
     }
 
 
@@ -2330,6 +2339,7 @@ def test_doorbell_camera_initial_refresh_sets_idle_stream_action() -> None:
 
     class _FakeHass:
         bus = _FakeBus()
+        data: dict[str, Any] = {}
 
     entry = _FakeEntry()
     entry.runtime_data.api = _IdleApi()
@@ -2446,7 +2456,7 @@ def test_doorbell_camera_registers_explicit_stop_hook() -> None:
 
     entry = _FakeEntry()
     camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
-    camera.hass = SimpleNamespace(bus=_Bus())
+    camera.hass = SimpleNamespace(bus=_Bus(), data={})
     camera.async_on_remove = lambda _remove: None  # type: ignore[method-assign]
     camera.async_write_ha_state = lambda: None  # type: ignore[method-assign]
 

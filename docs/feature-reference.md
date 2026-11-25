@@ -118,16 +118,28 @@ separate steps with different effects on settings, media and backups. Follow
 Entities depend on what the installed agent reports: a feature it does not
 offer creates no entity.
 
+The station is one device. Every outdoor unit (entrance panel) the station
+knows is its own device below it, also when there is only one. The station
+names its units from its own configuration; a unit that is not configured
+appears with its first ring.
+
+| Outdoor unit entity | Notes |
+| --- | --- |
+| `event` Doorbell ring event | Fires when a visitor rang at this unit; see [Events](#events). |
+| `camera` | The default unit has the doorbell camera (live picture, Ring Call and Home Call media; the latest visitor image when idle). Another unit's camera shows the latest visitor image of its calls. |
+| `button` Door | Opens this unit's door. |
+| `sensor` Call | `idle`, `ringing`, `answered` or `viewing`; attribute `call_id`. |
+| `image` Last visitor | The latest visitor image of a call of this unit. |
+
+Station entities:
+
 | Platform | Entity | Notes |
 | --- | --- | --- |
-| `camera` | Doorbell camera | Live picture, Ring Call and Home Call media; shows the latest visitor image when idle. |
 | `media_player` | Speaker | Station loudspeaker for TTS and sounds; a door call ends a sound at once. See [Speaker Announcements and TTS](user-guide.md#speaker-announcements-and-tts). Not on the C100X. |
-| `event` | Doorbell ring event | Standard doorbell event; see [Events](#events). |
-| `event` | Device event | Diagnostic; all other station events; see [Events](#events). |
+| `event` | Station ring | The station rings: fires at once with every ring, before the calling unit is known; see [Events](#events). |
 | `sensor` | Media readiness | See [Media Readiness](media-troubleshooting.md#media-readiness). |
 | `sensor` | Device agent status | Connection and health of the agent. |
 | `sensor` | Device agent diagnostics | Self-test and watcher details. Disabled by default. |
-| `sensor` | Doorbell state | Doorbell and media state from the station's events. |
 | `sensor` | Device CPU, Device temperature | Enabled by default when supported. |
 | `sensor` | Device load, Device memory | Disabled by default. |
 | `sensor` | Video messages, Text memos, Voice memos | Counters and latest metadata of the station's own messages and memos. Not on the C100X. |
@@ -144,7 +156,7 @@ offer creates no entity.
 | `switch` | SSH, Agent noAuth, Agent noAuth maintenance, Agent mDNS discovery | Maintenance controls. |
 | `switch` | Display patch, API firewall patch, IPv6 firewall patch | Device patches. No Display patch switch on the C100X. |
 | `switch` | Native MQTT bridge, Legacy MQTT bridge | Local MQTT controls. |
-| `button` | Door unlock, Stair light, one per device activation | One-shot device actions. |
+| `button` | Stair light, one per device activation | One-shot device actions. The doors are on the outdoor units. |
 | `button` | Stop doorbell video | Ends an on-demand session the agent owns. |
 | `button` | Reboot, Restart device agent, Reload device display, Remove device agent | Maintenance actions. No Reload device display on the C100X. |
 | `button` | Activate display pages, Restore original display | C100X only: switch the display pages on or off with one reboot; see [activation by reboot](display.md#classe-100x-activation-by-reboot). |
@@ -162,30 +174,30 @@ offer creates no entity.
 
 ## Services
 
-Every action accepts an optional `entry_id` when more than one C300X is set up
-(the analysis action works on files and has none).
+Actions take a target: the station or an outdoor unit, as a device or one of
+its entities. Without a target the only station serves the action; with more
+than one station a target is required (the analysis action works on files and
+has none). An outdoor unit target names that unit; a station target means the
+unit of the current call, else the default unit.
 
 | Action `bticino_c300x.` | Purpose | Main fields |
 | --- | --- | --- |
 | `activate_doorbell_video` | Starts or renews on-demand video. | `audio` (default on) |
-| `stop_doorbell_video` | Stops on-demand video the agent owns. | |
-| `answer_doorbell_call`, `hangup_doorbell_call` | Answers or hangs up the active Ring Call. | |
+| `answer_call`, `hangup_call` | Answers or hangs up the current Ring Call. With `call_id` only that call: for a call that is over or no longer current the action fails ("That call is over or is not the current call.") and nothing is sent. | `call_id` |
 | `start_home_call`, `stop_home_call` | Audio-only Home Call to the station display. | `duration_seconds` |
 | `camera_picture` | Reads brightness, contrast and saturation of the active live video, or changes one. Returns all three. | `control`, `value` (0-100 in steps of 10) |
-| `unlock_door` | Opens a configured door lock. | `lock_id` |
-| `stair_light` | Switches the stair light at the configured or a given address. | `address` |
-| `run_device_activation` | Runs one configured activation. | `activation_id` |
 | `alarm_command` | Sends a command to the configured Alarmo panel. | `command`, `code`, `force` |
 | `run_action` | Runs one allowed display action. | `action_id` |
 | `show_display_notification`, `dismiss_display_notification` | Shows, replaces or removes a notice on the display's HA page. See [Display Notifications](display.md#display-notifications). | `message`, `title`, `notification_id`, `priority`, `icon`, `expires_in`, `actions` |
 | `capture_doorbell_call` | Records a 1-15 s MP4 from a Ring Call (`ring`, default) or idle live view (`on_demand`). Returns the file paths. See [Recording Clips and Capture Modes](user-guide.md#recording-clips-and-capture-modes). | `capture_mode`, `duration_seconds`, `include_audio`, `announcement_path`, `output_path`, `wav_output_dir` |
 | `run_ring_wyoming_analysis` | Transcribes a capture's WAV with a local Wyoming Whisper service. Returns the result. | `wyoming_host`, `wyoming_port`, `language`, `expected_phrase`, paths |
-| `evaluate_ring_analysis` | Checks a transcription for the exact phrase; unlocks only on a strict match when asked. | `expected_phrase`, `unlock_on_match`, `lock_id`, paths |
+| `evaluate_ring_analysis` | Checks a transcription for the exact phrase; opens the door only on a strict match when asked: the target unit's door, with a station target the calling unit's. | `expected_phrase`, `unlock_on_match`, paths |
 | `play_latest_video_message`, `play_latest_voice_memo` | Plays the latest item on a media player. Not on the C100X. | `media_player_entity_id` |
 | `write_text_memo` | Creates a text memo on the station. The station saves none during a call. When the agent itself sees the call or stream (a Home Assistant stream, a ring answered through Home Assistant, a Home Call), the action fails with "The station is busy with a call. Try again after it ends."; a ring that is still ringing without Ring Call, a recording of the answering machine or an intercom call still give the general error. | `text`, `read` |
-| `delete_latest_video_message`, `delete_latest_text_memo`, `delete_latest_voice_memo` | Deletes the latest item. Registered only while the Display patch supports it; not on the C100X. | |
-| `reboot` | Schedules a device reboot. | |
-| `reload_gui` | Reloads the station display. Refused on the C100X. | |
+
+Door, stair light, activations, stopping on-demand video, deleting the latest
+message or memo, reboot and display reload are buttons; press them with
+`button.press`.
 
 Two standard actions complete the list: the entry's Notify action
 (`notify.bticino_c300x` for the first entry; see
@@ -193,12 +205,10 @@ Two standard actions complete the list: the entry's Notify action
 `media_player.play_media` on the **Speaker**.
 
 **Permissions.** A non-admin user needs control permission on the matching
-entity: the camera for the video, call, Home Call and picture actions; the
-door, stair-light or activation button for those; the configured alarm panel
-for `alarm_command`. `run_action` is open to every user and runs with the
-caller's identity. Everything else is admin-only: maintenance, `stair_light`
-with an explicit `address`, capture and analysis, display notices and stored
-messages. Automations without a user context keep working. See
+entity: the doorbell camera for the video, call, Home Call and picture
+actions; the configured alarm panel for `alarm_command`. `run_action` is open
+to every user and runs with the caller's identity. Everything else is
+admin-only: capture and analysis, display notices and stored messages. Automations without a user context keep working. See
 [Security](../SECURITY.md).
 
 ## Events
@@ -207,19 +217,25 @@ messages. Automations without a user context keep working. See
 
 | Entity | Fires | Attributes |
 | --- | --- | --- |
-| Doorbell ring event | Event type `ring` (device class doorbell), only for a doorbell press. | `last_ring_at`, `camera_entity_id`, `video_available` |
-| Device event | The event types below that the agent supports, except the two metrics updates. | `last_event_key`, `last_event_at`, plus values such as `smartphone_forwarding_mode`, `ringer_muted`, `ringer_volume`, `voicemail_total`, `voicemail_unread`, `memos_total` |
+| Station ring | Event type `ring` (device class doorbell) at once with every ring, before the calling unit is known. The fastest trigger. | `call_id`, `last_ring_at`, `camera_entity_id` |
+| Doorbell ring event (outdoor unit) | Event type `ring` (device class doorbell) when a visitor rang at this unit: at once when the station has one unit, else as soon as the station names the caller (about 0.3 s, at most 1 s). Same `call_id` as the station's ring. | `call_id`, `unit`, `unit_name`, `attribution`, `last_ring_at`, `camera_entity_id` |
+
+`attribution` is `caller_frame` when the station named the unit, or
+`default_fallback` when it did not within one second and the default unit was
+assumed.
 
 ### Event Types
 
 | `event_key` | When | Extra data |
 | --- | --- | --- |
-| `doorbell_pressed` | Someone rang. | `camera_entity_id`, `video_available`, `doorbell` |
+| `doorbell_pressed` | Someone rang. | `call_id`, `camera_entity_id`, `video_available`, `doorbell` |
+| `call_caller_identified` | The station named the unit that rings. | `call_id`, `unit_id`, `unit_name` |
+| `call_answered`, `call_view_started`, `call_ended` | A call was answered, a view started, a call ended. | `call_id`, `unit_id`, `unit_name` |
+| `outdoor_units_changed` | The station's outdoor units changed. | |
 | `doorbell_view_requested` | A view of the door camera was requested. | as above |
 | `doorbell_media_closed` | The doorbell camera stream ended. | as above |
-| `call_started`, `call_ended` | A call on the station started or ended. | |
 | `home_call_started`, `home_call_answered`, `home_call_ended` | Home Call steps. | |
-| `door_unlock_started`, `door_unlock_ended` | Door unlock. | `address` |
+| `door_unlock_started`, `door_unlock_ended` | Door unlock. | `address`; `unit_id` and `call_id` when the door belongs to an outdoor unit |
 | `stair_light_activated`, `stair_light_released` | Stair light. | `address` |
 | `activation_executed` | A device activation ran. | |
 | `ringer_muted`, `ringer_unmuted` | Ringer mute changed. | `muted` |
@@ -246,27 +262,34 @@ messages. Automations without a user context keep working. See
 
 ### Events for Automations
 
-The integration fires two Home Assistant events; the bundled blueprints use
-them.
+For a ring, trigger on the event entities: the outdoor unit's Doorbell ring
+event to know which unit rang, the Station ring for the fastest reaction. The
+bundled blueprints use the outdoor unit's event.
+
+```yaml
+triggers:
+  - trigger: state
+    entity_id: event.front_gate_doorbell
+    not_from: unavailable
+    not_to: [unavailable, unknown]
+actions:
+  - action: bticino_c300x.answer_call
+    target:
+      entity_id: event.front_gate_doorbell
+    data:
+      call_id: "{{ trigger.to_state.attributes.call_id }}"
+```
+
+The integration also fires two Home Assistant events:
 
 - `bticino_c300x_agent_event_received`: every station event. Data:
   `entry_id`, `event_key`, `event_at`, `event` (label in the HA language),
   `data` (the agent's raw event data), `source_event_id` when the agent sends
   one, and the extra data from the table above.
 - `bticino_c300x_action_received`: Home Assistant itself ran an action. Data:
-  `entry_id`, `action_id`; for `unlock_door` the `action_id` is `door_unlock`
-  with `lock_id`. Fired by `run_action`, `unlock_door` and display tile
-  commands (`action_id` is then the entity ID). An unlock from HA also appears
-  on the Device event entity as `door_unlock_started`.
-
-```yaml
-triggers:
-  - trigger: event
-    event_type: bticino_c300x_agent_event_received
-    event_data:
-      event_key: doorbell_pressed
-      entry_id: YOUR_C300X_ENTRY_ID
-```
+  `entry_id`, `action_id`; for a door the `action_id` is `door_unlock` with
+  `unit_id` and `call_id`. Fired by `run_action`, the door buttons and display
+  tile commands (`action_id` is then the entity ID).
 
 ## Media Transport
 

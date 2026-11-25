@@ -105,6 +105,7 @@ BASE_PLATFORMS = (
     "binary_sensor",
     "button",
     "event",
+    "image",
     "number",
     "sensor",
     "select",
@@ -363,11 +364,29 @@ class C300XRuntimeManager:
             calls_supported,
             load_stored_units,
         )
+        from .identity_migration import (
+            async_migrate_identity,
+            identity_migration_needed,
+        )
+        from .repair_issues import async_create_breaking_change_issue
 
-        load_stored_units(self.entry, self.entry.runtime_data.calls)
-        if self.connection_state.available and calls_supported(self.capabilities):
-            await async_refresh_units(self.hass, self.entry)
-            await async_refresh_calls(self.hass, self.entry)
+        registry = self.entry.runtime_data.calls
+        load_stored_units(self.entry, registry)
+        if not (self.connection_state.available and calls_supported(self.capabilities)):
+            return
+        await async_refresh_units(self.hass, self.entry)
+        await async_refresh_calls(self.hass, self.entry)
+        agent_station_id = self.setup_data.get("device_id")
+        if registry.default_unit is not None and identity_migration_needed(
+            self.entry, agent_station_id if isinstance(agent_station_id, str) else None,
+        ):
+            # Before the platforms build any entity: they take the new ids.
+            default_unit = registry.unit(registry.default_unit)
+            if default_unit is not None:
+                moved = async_migrate_identity(self.hass, self.entry, str(agent_station_id), default_unit)
+                if moved["moved"] or moved["removed"]:
+                    # Only an entry from 2.x has something to redo.
+                    async_create_breaking_change_issue(self.hass, self.entry)
 
     async def async_sync_activation_state(self) -> None:
         """Synchronize device activations before platform entity creation."""

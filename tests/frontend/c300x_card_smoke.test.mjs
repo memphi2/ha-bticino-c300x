@@ -172,8 +172,14 @@ function fakeHass({ cameraEntity, connection } = {}) {
         platform: "bticino_c300x",
         translation_key: "media_readiness",
       },
+      "button.bticino_c300x_stop_doorbell_video": {
+        device_id: "device-1",
+        platform: "bticino_c300x",
+        translation_key: "stop_doorbell_video",
+      },
     },
     states: {
+      "button.bticino_c300x_stop_doorbell_video": { state: "unknown", attributes: {} },
       "camera.bticino_c300x_doorbell_camera": cameraEntity || {
         attributes: {
           friendly_name: "Door",
@@ -534,12 +540,13 @@ test("footer device buttons follow HA state, localize and dispatch existing acti
     device_id: "device-1", platform: "bticino_c300x", translation_key: "doorbell_camera",
   };
   hass.callService = async (...args) => calls.push(args);
-  for (const key of ["door_unlock", "stair_light"]) {
+  for (const [key, translationKey] of [["door_unlock", "door"], ["stair_light", "stair_light"]]) {
     hass.entities[`button.${key}`] = {
-      device_id: "device-1", platform: "bticino_c300x", translation_key: key,
+      device_id: "device-1", platform: "bticino_c300x", translation_key: translationKey,
     };
-    hass.states[`button.${key}`] = { state: "unknown", attributes: { lock_id: "default" } };
+    hass.states[`button.${key}`] = { state: "unknown", attributes: {} };
   }
+  hass.states["camera.bticino_c300x_doorbell_camera"].attributes.door_entity_id = "button.door_unlock";
   card.hass = hass;
   const door = card.shadowRoot.querySelector(".door-action");
   const light = card.shadowRoot.querySelector(".light-action");
@@ -583,9 +590,13 @@ test("call services use the camera device owner and reject missing or ambiguous 
   hass.callService = async (...args) => calls.push(args);
   card.hass = hass;
   await card._actions.answerDoorbellCall();
-  assert.deepEqual(calls, [["bticino_c300x", "answer_doorbell_call", { entry_id: "entry-1" }]]);
+  assert.deepEqual(calls, [["bticino_c300x", "answer_call", { entity_id: "camera.bticino_c300x_doorbell_camera" }]]);
   hass.devices = { "device-1": { config_entries: ["entry-1"] } };
-  assert.deepEqual(card._serviceData(), { entry_id: "entry-1" });
+  assert.deepEqual(card._serviceData(), { entity_id: "camera.bticino_c300x_doorbell_camera" });
+  // The card answers the call it shows.
+  hass.states["camera.bticino_c300x_doorbell_camera"].attributes.call_id = "0badc0de-7";
+  assert.deepEqual(card._callData(), { entity_id: "camera.bticino_c300x_doorbell_camera", call_id: "0badc0de-7" });
+  delete hass.states["camera.bticino_c300x_doorbell_camera"].attributes.call_id;
   for (const device of [undefined, { config_entries: ["entry-1", "entry-2"] }]) {
     hass.devices = { "device-1": device };
     await assert.rejects(card._actions.answerDoorbellCall(), /Camera device assignment unavailable/);
@@ -1213,7 +1224,7 @@ test("a pending ring answer cannot start media on a reconfigured camera", async 
   let answer;
   const calls = [];
   hass.callService = (domain, service, data) => {
-    calls.push([service, data.entry_id]);
+    calls.push([service, data.entity_id]);
     return new Promise((resolve) => { answer = resolve; });
   };
   card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera" });
@@ -1225,7 +1236,7 @@ test("a pending ring answer cannot start media on a reconfigured camera", async 
   answer();
   await answering;
 
-  assert.deepEqual(calls, [["answer_doorbell_call", "entry-1"]]);
+  assert.deepEqual(calls, [["answer_call", "camera.bticino_c300x_doorbell_camera"]]);
   assert.deepEqual(starts, []);
   assert.equal(card._lifecycle.doorbellAnswered, false);
   card.disconnectedCallback();
@@ -1243,8 +1254,8 @@ test("a pending ring hangup cannot stop or close a reconfigured camera", async (
   let hangup;
   const calls = [];
   hass.callService = async (domain, service, data) => {
-    calls.push([service, data.entry_id]);
-    if (service === "hangup_doorbell_call") await new Promise((resolve) => { hangup = resolve; });
+    calls.push([service, data.entity_id]);
+    if (service === "hangup_call") await new Promise((resolve) => { hangup = resolve; });
   };
   card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera" });
   card.hass = hass;
@@ -1257,7 +1268,7 @@ test("a pending ring hangup cannot stop or close a reconfigured camera", async (
   await hangingUp;
 
   assert.deepEqual(calls, [
-    ["hangup_doorbell_call", "entry-1"], ["stop_doorbell_video", "entry-1"],
+    ["hangup_call", "camera.bticino_c300x_doorbell_camera"], ["press", "button.bticino_c300x_stop_doorbell_video"],
   ]);
   assert.equal(closes, 0);
   card.disconnectedCallback();
@@ -1274,7 +1285,7 @@ test("a delayed ring hangup cannot stop a replacement session on the same camera
     const calls = [];
     hass.callService = async (domain, service) => {
       calls.push(service);
-      if (service === "hangup_doorbell_call") await new Promise((resolve) => { hangup = resolve; });
+      if (service === "hangup_call") await new Promise((resolve) => { hangup = resolve; });
     };
     const config = { entity: "camera.bticino_c300x_doorbell_camera" };
     card.setConfig(config);
@@ -1289,7 +1300,7 @@ test("a delayed ring hangup cannot stop a replacement session on the same camera
     card._webrtc.close = () => { closes++; };
     hangup();
     await oldHangup;
-    assert.deepEqual(calls, ["hangup_doorbell_call"]);
+    assert.deepEqual(calls, ["hangup_call"]);
     assert.equal(closes, 0);
     card.disconnectedCallback();
   }
@@ -1751,7 +1762,7 @@ test("the ring_active state arriving before the answer result keeps the answerin
   try {
     const { card, clients } = answerRaceCard(registry.get("c300x-doorbell-call-card"));
     let answered;
-    const callService = (_domain, service) => (service === "answer_doorbell_call"
+    const callService = (_domain, service) => (service === "answer_call"
       ? new Promise((resolve) => { answered = resolve; }) : Promise.resolve());
     card.hass = ringHass("ring_preview_active", "answer_ring", callService);
     const action = card._actions.handlePrimaryAction();
@@ -1996,10 +2007,10 @@ test("primary hangup remains available while ring answer waits for microphone pe
     const calls = [];
     hass.callService = async (_domain, service) => {
       calls.push(service);
-      if (service === "answer_doorbell_call") {
+      if (service === "answer_call") {
         await new Promise((resolve) => { acknowledge = resolve; });
       }
-      if (service === "hangup_doorbell_call") {
+      if (service === "hangup_call") {
         await new Promise((resolve) => { finishHangup = resolve; });
       }
     };
@@ -2008,7 +2019,7 @@ test("primary hangup remains available while ring answer waits for microphone pe
 
     answering = card._actions.handlePrimaryAction();
     await card._actions.handlePrimaryAction();
-    assert.deepEqual(calls, ["answer_doorbell_call"], "answer taps remain coalesced");
+    assert.deepEqual(calls, ["answer_call"], "answer taps remain coalesced");
     acknowledge();
     await new Promise(setImmediate);
     assert.equal(typeof grant, "function");
@@ -2020,7 +2031,7 @@ test("primary hangup remains available while ring answer waits for microphone pe
     assert.equal(card._doorstationView().action, "hang_up");
     assert.equal(card._actionButtonEl.disabled, false);
     hangingUp = card._actionButtonEl.dispatch("click");
-    assert.deepEqual(calls, ["answer_doorbell_call", "hangup_doorbell_call"]);
+    assert.deepEqual(calls, ["answer_call", "hangup_call"]);
     grant({ getTracks: () => [{ stop() { stops++; } }], getAudioTracks: () => [] });
     await answering;
     assert.equal(starts, 0);
@@ -2028,7 +2039,7 @@ test("primary hangup remains available while ring answer waits for microphone pe
     finishHangup();
     await hangingUp;
     assert.deepEqual(calls, [
-      "answer_doorbell_call", "hangup_doorbell_call", "stop_doorbell_video",
+      "answer_call", "hangup_call", "press",
     ]);
     assert.equal(card._lifecycle.answeringDoorbell, false);
   } finally {
@@ -2272,4 +2283,27 @@ test("the card picker names no model", async () => {
   const [entry] = globalThis.window.customCards;
   assert.equal(entry.name, "BTicino Doorbell Call Card");
   assert.doesNotMatch(`${entry.name} ${entry.description}`, /C[13]00X/);
+});
+
+test("the title names the calling outdoor unit while its call rings or is answered", async () => {
+  const registry = installFakeDom();
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?calling-unit-title");
+  const card = new (registry.get("c300x-doorbell-call-card"))();
+  card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera" });
+  const hass = fakeHass();
+  const camera = hass.states["camera.bticino_c300x_doorbell_camera"];
+  Object.assign(camera.attributes, { call_id: "0badc0de-1", call_state: "ringing", call_unit_name: "Garage" });
+  card.hass = hass;
+  assert.equal(card._titleEl.textContent, "Door · Garage");
+  hass.states["camera.bticino_c300x_doorbell_camera"] = {
+    ...camera, attributes: { ...camera.attributes, call_state: "answered" },
+  };
+  card.hass = { ...hass };
+  assert.equal(card._titleEl.textContent, "Door · Garage");
+  hass.states["camera.bticino_c300x_doorbell_camera"] = {
+    ...camera, attributes: { ...camera.attributes, call_state: "viewing" },
+  };
+  card.hass = { ...hass };
+  assert.equal(card._titleEl.textContent, "Door");
+  card.disconnectedCallback();
 });

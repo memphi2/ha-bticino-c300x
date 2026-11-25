@@ -27,9 +27,9 @@ class DoorbellVideoUseCase:
 
     async def activate(
         self, *, audio: bool = True, status: Mapping[str, Any] | None = None,
-        before_activate: Callable[[], None] | None = None,
+        before_activate: Callable[[], None] | None = None, unit: str | None = None,
     ) -> None:
-        """Activate or renew the C300X doorbell video session."""
+        """Activate or renew the doorbell video (``unit``: that outdoor unit's)."""
 
         ensure_doorbell_video_supported(self._entry)
         runtime = self._entry.runtime_data
@@ -40,7 +40,7 @@ class DoorbellVideoUseCase:
         if before_activate is not None:
             before_activate()
         await raise_agent_command_failed(
-            runtime.api.async_activate_doorbell_video(audio=audio), entry=self._entry,
+            runtime.api.async_activate_doorbell_video(audio=audio, unit=unit), entry=self._entry,
         )
 
     async def stop(self) -> None:

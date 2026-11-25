@@ -349,8 +349,8 @@ def collect_code_checks(mode: str, root: Path = ROOT) -> list[Check]:
         Check("code.api.hangup_action", CALL_ACTION_ROUTE in api and '_call_action(call_id, "hangup")' in api),
         Check("code.state_model.ring_pending_answerable", 'mediaState === "ring_pending"' in state_model),
         Check("code.state_model.preview_answerable", 'mediaState === "ring_preview_active"' in state_model),
-        Check("code.card.answer_service", '"answer_doorbell_call"' in card_actions),
-        Check("code.card.hangup_service", '"hangup_doorbell_call"' in card_actions),
+        Check("code.card.answer_service", '"answer_call"' in card_actions),
+        Check("code.card.hangup_service", '"hangup_call"' in card_actions),
     ])
     return checks
 

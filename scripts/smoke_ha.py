@@ -57,15 +57,14 @@ EXPECTED_PYTHON_PREFIXES = tuple(
 REQUIRED_SERVICES = {
     "activate_doorbell_video",
     "alarm_command",
-    "reboot",
+    "answer_call",
+    "hangup_call",
     "run_action",
-    "stair_light",
     "start_home_call",
-    "stop_doorbell_video",
     "stop_home_call",
-    "unlock_door",
 }
-FORBIDDEN_SERVICES = {"start_ssh"}
+# Removed in 3.1.0 for the buttons; start_ssh never was a service.
+FORBIDDEN_SERVICES = {"start_ssh", "unlock_door", "stair_light", "stop_doorbell_video", "reboot", "reload_gui"}
 REQUIRED_ENTITIES = {
     "binary_sensor.bticino_c300x_home_call_active",
     "button.bticino_c300x_reboot",
@@ -73,7 +72,6 @@ REQUIRED_ENTITIES = {
     "camera.bticino_c300x_doorbell_camera",
     "event.bticino_c300x_doorbell_ring_event",
     "sensor.bticino_c300x_device_agent_status",
-    "sensor.bticino_c300x_doorbell_state",
 }
 FORBIDDEN_ENTITIES = {
     "button.bticino_c300x_start_ssh",

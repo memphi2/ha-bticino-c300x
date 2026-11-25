@@ -87,7 +87,7 @@ def test_idle_capture_activates_normal_rtsp_path_without_ring_or_talkback(
         output_path=str(tmp_path / "media/c300x/recording.mp4"),
     ))
 
-    entry.runtime_data.api.async_activate_doorbell_video.assert_awaited_once_with(audio=include_audio)
+    entry.runtime_data.api.async_activate_doorbell_video.assert_awaited_once_with(audio=include_audio, unit=None)
     assert ready.await_args.args[0].endswith(expected_path)
     assert ffmpeg.await_args.args[0].endswith(expected_path)
     assert result["capture_mode"] == "on_demand"

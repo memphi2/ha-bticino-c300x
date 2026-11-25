@@ -40,7 +40,7 @@ test("picture sliders preserve ring eligibility and require explicit scope plus 
   const entity = {state: "streaming", attributes};
   const tracks = [];
   const card = {shadowRoot: new Node(), _config: {}, _lifecycle: {}, _cameraEntity: () => entity,
-    _isHomeCallMode: () => false, _entryId: () => "entry",
+    _isHomeCallMode: () => false, _entryId: () => "entry", _resolvedCameraEntityId: () => "camera.door",
     _webrtc: {remoteStream: {getVideoTracks: () => tracks}}};
   const media = new C300XCardMedia(card);
   let enabled;

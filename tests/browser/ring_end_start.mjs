@@ -77,7 +77,7 @@ export async function checkRingEndStart(page) {
             microphones: mode === "answer_http" ? 0 : 1,
             offers: 0, peers: 0, microphone: false, stopped: true,
             answered: false, pending: false, error: "",
-            services: mode.startsWith("notification") ? [] : ["answer_doorbell_call"],
+            services: mode.startsWith("notification") ? [] : ["answer_call"],
           }, JSON.stringify({ mode, delivery, reject, nextRing }));
           cases++;
         }

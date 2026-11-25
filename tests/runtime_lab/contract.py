@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from fake_agent import UNIT
 from harness import RuntimeLab
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
@@ -19,6 +20,7 @@ ATTRIBUTES = {
     "failed_checks",
     "status",
     "options",
+    "door_entity_id",
 }
 
 
@@ -29,13 +31,14 @@ async def run(root: Path):
         for label in ("alpha", "bravo"):
             entry = await lab.add_entry(name=label)
             ids = {}
-            for domain, key in (
-                ("camera", "doorbell_camera"),
-                ("button", "door_unlock"),
-                ("button", "stair_light"),
-                ("sensor", "media_readiness"),
+            # 3.1.0: camera and door button belong to the outdoor unit's device.
+            for domain, key, unique_key in (
+                ("camera", "doorbell_camera", f"unit_{UNIT}_camera"),
+                ("button", "door_unlock", f"unit_{UNIT}_door"),
+                ("button", "stair_light", "stair_light"),
+                ("sensor", "media_readiness", "media_readiness"),
             ):
-                old_id = lab.entity(key, domain)
+                old_id = lab.entity(unique_key, domain)
                 entity_id = f"{domain}.renamed_{label}_{key}"
                 registry.async_update_entity(old_id, new_entity_id=entity_id)
                 ids[key] = entity_id
@@ -70,6 +73,7 @@ async def run(root: Path):
                     devices[device.id] = {
                         "config_entries": sorted(device.config_entries)
                     }
+                devices[device.id]["via_device_id"] = device.via_device_id
                 state = lab.hass.states.get(item.entity_id)
                 if state is not None:
                     states[item.entity_id] = {
@@ -92,6 +96,6 @@ async def run(root: Path):
         await lab.settle()
         disabled = export()
         assert disabled_id not in disabled["states"]
-        assert lab.agent.requests["POST", "/api/v1/locks/default/actions/unlock"] == 2
+        assert lab.agent.requests["POST", f"/api/v1/outdoor-units/{UNIT}/actions/unlock"] == 2
         assert lab.agent.requests["POST", "/api/v1/stair-light/actions/activate"] == 2
         return {"enabled": enabled, "disabled": disabled, "expected": expected}

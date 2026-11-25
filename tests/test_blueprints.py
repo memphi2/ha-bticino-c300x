@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
-from unittest.mock import patch
 
 import yaml
 
@@ -43,6 +41,16 @@ def _blueprint(filename: str) -> dict[str, Any]:
         (BLUEPRINT_DIR / filename).read_text(encoding="utf-8"),
         Loader=BlueprintLoader,
     )
+
+
+# Call actions name the unit and the call they belong to (docs/dev/multi-outdoor-units.md).
+CALL_TARGET = {"entity_id": "{{ doorbell_event }}"}
+CALL_DATA = {"call_id": "{{ call_id }}"}
+# A hang-up after the call ended has nothing to do and must not fail the run.
+HANGUP = {
+    "service": "bticino_c300x.hangup_call", "continue_on_error": True,
+    "target": CALL_TARGET, "data": CALL_DATA,
+}
 
 
 def test_blueprints_are_valid_automation_blueprints() -> None:
@@ -88,7 +96,7 @@ def test_calendar_blueprint_ha_schema_inputs_and_templates(tmp_path: Path) -> No
         source = ha_yaml.load_yaml(str(BLUEPRINT_DIR / "calendar_display_reminder.yaml"))
         validated = BLUEPRINT_SCHEMA(source)
         inputs = {key: item["default"] for key, item in validated["blueprint"]["input"].items() if "default" in item}
-        inputs.update(calendar="calendar.home", entry_id="entry")
+        inputs.update(calendar="calendar.home", station="device")
         rendered = ha_yaml.substitute(source, inputs)
         assert cv.time_period(rendered["trigger"][0]["offset"]).total_seconds() == -900
         assert rendered["mode"] == "queued"
@@ -96,6 +104,7 @@ def test_calendar_blueprint_ha_schema_inputs_and_templates(tmp_path: Path) -> No
         variables = {"trigger": {"entity_id": "calendar.home", "calendar_event": {"summary": "Visit", "start": "2026-11-10T12:00:00+00:00"}}}
         for key, value in rendered["variables"].items():
             variables[key] = Template(value, hass).async_render(variables)
+        assert rendered["action"][0]["target"] == {"device_id": "device"}
         data = {key: Template(value, hass).async_render(variables) if isinstance(value, str) else value for key, value in rendered["action"][0]["data"].items()}
         from custom_components.bticino_c300x.display_notifications import SHOW_SCHEMA
         checked = SHOW_SCHEMA(data)
@@ -106,118 +115,78 @@ def test_calendar_blueprint_ha_schema_inputs_and_templates(tmp_path: Path) -> No
     asyncio.run(run())
 
 
-def test_doorbell_blueprints_trigger_on_doorbell_event() -> None:
-    for filename in {
-        "doorbell_notification.yaml",
-        "doorbell_call_android.yaml",
-        "doorbell_call_ios.yaml",
-        "ring_capture.yaml",
-        "ring_capture_wyoming.yaml",
-    }:
-        trigger = _blueprint(filename)["trigger"][0]
-        assert trigger == {
-            "platform": "event",
-            "event_type": "bticino_c300x_agent_event_received",
-            "event_data": {"event_key": "doorbell_pressed"},
-        }
+DOORBELL_BLUEPRINTS = (
+    "doorbell_notification.yaml",
+    "doorbell_call_android.yaml",
+    "doorbell_call_ios.yaml",
+    "ring_capture.yaml",
+    "ring_capture_wyoming.yaml",
+)
 
 
-def test_doorbell_blueprints_use_event_entry_and_selected_device() -> None:
-    for filename in {
-        "doorbell_call_android.yaml",
-        "doorbell_call_ios.yaml",
-        "ring_capture.yaml",
-        "ring_capture_wyoming.yaml",
-    }:
+def test_doorbell_blueprints_trigger_on_a_doorbell_event_entity() -> None:
+    """A ring blueprint reacts to the doorbell event of one outdoor unit.
+
+    The unit's event fires once per call, with its call id; the station's ring
+    event has the same shape and is the faster choice (docs/blueprints.md).
+    """
+
+    for filename in DOORBELL_BLUEPRINTS:
         data = _blueprint(filename)
-        inputs = data["blueprint"]["input"]
-        first_condition = data["condition"][0]
+        selector = data["blueprint"]["input"]["doorbell_event"]["selector"]
+        assert selector == {"entity": {"filter": [{
+            "integration": "bticino_c300x", "domain": "event", "device_class": "doorbell",
+        }]}}, filename
+        assert "c300x_device" not in data["blueprint"]["input"], filename
+        assert "entry_id" not in data["blueprint"]["input"], filename
+        # Restoring the entity after a restart is no ring.
+        assert data["trigger"] == [{
+            "platform": "state", "entity_id": "doorbell_event",
+            "not_from": ["unavailable"], "not_to": ["unavailable", "unknown"],
+        }], filename
+        variables = data["variables"]
+        assert variables["call_id"] == "{{ trigger.to_state.attributes.call_id | default('', true) }}"
+        assert variables["entry_id"] == "{{ config_entry_id(doorbell_event) or '' }}"
+        if "capture" not in filename:
+            assert variables["camera_entity"] == "{{ state_attr(doorbell_event, 'camera_entity_id') or '' }}"
+        assert data["condition"][0] == {
+            "condition": "template", "value_template": "{{ entry_id and call_id }}",
+        }, filename
+        assert "event_camera_entity" not in str(data), filename
+        assert "bticino_c300x_agent_event_received" not in str(data["trigger"]), filename
 
-        assert "entry_id" not in inputs
-        assert (
-            data["variables"]["entry_id"]
-            == "{{ trigger.event.data.entry_id | default('', true) }}"
-        )
-        assert (
-            data["variables"]["event_camera_entity"]
-            == "{{ trigger.event.data.camera_entity_id | default('', true) }}"
-        )
-        assert first_condition == {
-            "condition": "template",
-            "value_template": (
-                "{{ entry_id and event_camera_entity in c300x_entities }}"
-            ),
-        }
+
+def test_doorbell_blueprints_find_the_station_sensors_through_the_unit() -> None:
+    for filename in ("doorbell_call_android.yaml", "doorbell_call_ios.yaml",
+                     "ring_capture.yaml", "ring_capture_wyoming.yaml"):
+        variables = _blueprint(filename)["variables"]
+        assert variables["doorbell_device"] == "{{ device_id(doorbell_event) }}"
+        assert variables["c300x_device"] == "{{ device_attr(doorbell_device, 'via_device_id') or doorbell_device }}"
+        assert "device_entities(c300x_device)" in variables["c300x_entities"]
 
 
-def test_doorbell_notification_allows_camera_less_events() -> None:
+def test_doorbell_blueprint_condition_needs_a_station_and_a_call(tmp_path: Path) -> None:
     import asyncio
 
     from homeassistant.core import HomeAssistant
-    from homeassistant.helpers import frame
-    from homeassistant.helpers.device_registry import DeviceEntry
     from homeassistant.helpers.template import Template
 
-    data = _blueprint("doorbell_notification.yaml")
-    assert "entry_id" not in data["blueprint"]["input"]
-
     async def run() -> None:
-        hass = HomeAssistant(str(ROOT))
-        selected = DeviceEntry(config_entry_id="entry_a", id="device_a")
-        composite = DeviceEntry(
-            config_entry_id="entry_a", id="composite",
-            composite_subentries={"entry_a": {None}, "entry_b": {None}},
-        )
-        devices = {selected.id: selected, composite.id: composite}
-        registry = SimpleNamespace(async_get=devices.get)
-        template = Template(data["condition"][0]["value_template"], hass)
-        # DeviceEntry compatibility properties use HA's frame reporting helper.
-        # Restore its global HA reference when this isolated event loop exits.
-        with (
-            patch.object(frame._hass, "hass", None),
-            patch("homeassistant.helpers.device_registry.async_get", return_value=registry),
+        hass = HomeAssistant(str(tmp_path))
+        template = Template(_blueprint("doorbell_notification.yaml")["condition"][0]["value_template"], hass)
+        for entry_id, call_id, expected in (
+            ("entry", "a1b2-7", True), ("", "a1b2-7", False), ("entry", "", False),
         ):
-            frame.async_setup(hass)
-            for entry_id, camera, device, expected in (
-                ("entry_a", "", "device_a", True),
-                ("entry_b", "", "device_a", False),
-                ("entry_a", "camera.a", "device_a", True),
-                ("entry_b", "camera.b", "device_a", False),
-                ("entry_b", "camera.a", "device_a", False),
-                ("entry_a", "camera.b", "device_a", False),
-                ("", "", "device_a", False),
-                ("entry_a", "", "removed_device", False),
-                ("entry_a", "", "composite", True),
-                ("entry_b", "", "composite", True),
-                ("entry_c", "", "composite", False),
-                ("entry_b", "camera.b", "composite", True),
-                ("entry_c", "camera.b", "composite", False),
-            ):
-                assert bool(template.async_render({
-                    "entry_id": entry_id,
-                    "event_camera_entity": camera,
-                    "c300x_device": device,
-                    "c300x_entities": ["camera.a", "camera.b"] if device == "composite" else ["camera.a"],
-                })) is expected, (entry_id, camera, device)
+            assert bool(template.async_render({"entry_id": entry_id, "call_id": call_id})) is expected
 
     asyncio.run(run())
 
 
-def test_doorbell_notification_derives_camera_from_device() -> None:
-    data = _blueprint("doorbell_notification.yaml")
-    inputs = data["blueprint"]["input"]
+def test_doorbell_notification_offers_the_call_to_the_action() -> None:
+    variables = _blueprint("doorbell_notification.yaml")["variables"]
 
-    assert inputs["c300x_device"]["selector"] == {
-        "device": {"integration": "bticino_c300x"}
-    }
-    assert "camera_entity" not in inputs
-    assert "entry_id" not in inputs
-    assert (
-        data["variables"]["entry_id"]
-        == "{{ trigger.event.data.entry_id | default('', true) }}"
-    )
-    assert "device_entities(c300x_device)" in data["variables"]["c300x_entities"]
-    assert "entity_id.startswith('camera.')" in data["variables"]["camera_entity"]
+    assert variables["unit_name"] == "{{ trigger.to_state.attributes.unit_name | default('', true) }}"
+    assert {"call_id", "camera_entity", "unit_name"} <= set(variables)
 
 
 def test_android_ring_call_blueprint_opens_dashboard_from_notification() -> None:
@@ -242,7 +211,7 @@ def test_android_ring_call_blueprint_opens_dashboard_from_notification() -> None
         if isinstance(item, dict) and "service" in item
     ]
 
-    assert "c300x_device" in inputs
+    assert "doorbell_event" in inputs
     assert "entry_id" not in inputs
     assert "forwarding_entity" not in inputs
     assert "media_readiness_entity" not in inputs
@@ -252,20 +221,10 @@ def test_android_ring_call_blueprint_opens_dashboard_from_notification() -> None
     # existing users a second channel without their sound and priority settings.
     assert inputs["active_call_channel"]["default"] == "C300X Call"
     assert inputs["notification_media_stream"]["default"] == "alarm_stream"
-    assert inputs["c300x_device"]["selector"] == {
-        "device": {"integration": "bticino_c300x"}
-    }
-    assert data["variables"]["c300x_device"] == "c300x_device"
-    assert (
-        data["variables"]["entry_id"]
-        == "{{ trigger.event.data.entry_id | default('', true) }}"
-    )
-    assert "device_entities(c300x_device)" in data["variables"]["c300x_entities"]
     assert "'Home Assistant'" not in data["variables"]["forwarding_entity"]
     assert "'homeassistant' in options and 'blocked' in options" in data["variables"]["forwarding_entity"]
     assert "media_user_ok" in data["variables"]["media_readiness_entity"]
     assert "ring_call_supported" in data["variables"]["media_readiness_entity"]
-    assert "entity_id.startswith('camera.')" in data["variables"]["camera_entity"]
     assert "this.entity_id" in data["variables"]["action_scope"]
     assert data["action"][0]["variables"]["answer_action"].startswith(
         "{{ 'C300X_ANDROID_RING_ANSWER_'"
@@ -274,7 +233,7 @@ def test_android_ring_call_blueprint_opens_dashboard_from_notification() -> None
         "{{ 'C300X_ANDROID_RING_HANGUP_'"
     )
     assert "dashboard_path.split('#', 1)" in data["variables"]["answer_dashboard_path"]
-    assert "launch_target = event_camera_entity or camera_entity" in data["variables"]["answer_dashboard_path"]
+    assert "launch_target = camera_entity" in data["variables"]["answer_dashboard_path"]
     assert "'c300x_ring_answer='" in data["variables"]["answer_dashboard_path"]
     assert "launch_target | urlencode" in data["variables"]["answer_dashboard_path"]
     assert "~ fragment" in data["variables"]["answer_dashboard_path"]
@@ -333,11 +292,12 @@ def test_android_ring_call_blueprint_opens_dashboard_from_notification() -> None
     ]
     assert services == ["notify_service", "notify_service"]
     assert answer_services[:3] == [
-        "bticino_c300x.answer_doorbell_call",
+        "bticino_c300x.answer_call",
         "notify_service",
         "notify_service",
     ]
-    assert answer_sequence[0]["data"] == {"entry_id": "{{ entry_id }}"}
+    assert answer_sequence[0]["target"] == CALL_TARGET
+    assert answer_sequence[0]["data"] == CALL_DATA
     assert answer_sequence[1]["data"]["message"] == "clear_notification"
     assert answer_sequence[1]["data"]["data"]["tag"] == "{{ ring_tag }}"
     assert answer_sequence[2]["data"]["data"]["tag"] == "{{ active_tag }}"
@@ -351,12 +311,8 @@ def test_android_ring_call_blueprint_opens_dashboard_from_notification() -> None
             "event_data": {"action": "{{ hangup_action }}"},
         }
     ]
-    assert answer_sequence[5]["then"][0] == {
-        "service": "bticino_c300x.hangup_doorbell_call",
-        "data": {"entry_id": "{{ entry_id }}"},
-    }
-    assert hangup_sequence[0]["service"] == "bticino_c300x.hangup_doorbell_call"
-    assert hangup_sequence[0]["data"] == {"entry_id": "{{ entry_id }}"}
+    assert answer_sequence[5]["then"][0] == HANGUP
+    assert hangup_sequence[0] == HANGUP
     assert "homeassistant" in templates
     assert "ready" in templates
     assert "warning" in templates
@@ -371,19 +327,10 @@ def test_ios_ring_call_blueprint_uses_unique_actions_and_event_entry_id() -> Non
     hangup_sequence = data["action"][3]["choose"][1]["sequence"]
     templates = "\n".join(condition["value_template"] for condition in data["condition"])
 
-    assert inputs["c300x_device"]["selector"] == {
-        "device": {"integration": "bticino_c300x"}
-    }
     assert "entry_id" not in inputs
     assert inputs["notify_service"]["name"] == "iOS notify service"
-    assert (
-        data["variables"]["entry_id"]
-        == "{{ trigger.event.data.entry_id | default('', true) }}"
-    )
-    assert "device_entities(c300x_device)" in data["variables"]["c300x_entities"]
     assert "'homeassistant' in options and 'blocked' in options" in data["variables"]["forwarding_entity"]
     assert "media_user_ok" in data["variables"]["media_readiness_entity"]
-    assert "entity_id.startswith('camera.')" in data["variables"]["camera_entity"]
     assert "this.entity_id" in data["variables"]["action_scope"]
     assert data["action"][0]["variables"]["answer_action"].startswith(
         "{{ 'C300X_IOS_RING_ANSWER_'"
@@ -392,7 +339,7 @@ def test_ios_ring_call_blueprint_uses_unique_actions_and_event_entry_id() -> Non
         "{{ 'C300X_IOS_RING_HANGUP_'"
     )
     assert "dashboard_path.split('#', 1)" in data["variables"]["answer_dashboard_path"]
-    assert "launch_target = event_camera_entity or camera_entity" in data["variables"]["answer_dashboard_path"]
+    assert "launch_target = camera_entity" in data["variables"]["answer_dashboard_path"]
     assert "'c300x_ring_answer='" in data["variables"]["answer_dashboard_path"]
     assert "launch_target | urlencode" in data["variables"]["answer_dashboard_path"]
     assert "~ fragment" in data["variables"]["answer_dashboard_path"]
@@ -446,8 +393,7 @@ def test_ios_ring_call_blueprint_uses_unique_actions_and_event_entry_id() -> Non
         },
     ]
     assert answer_sequence[1] == {
-        "service": "bticino_c300x.answer_doorbell_call",
-        "data": {"entry_id": "{{ entry_id }}"},
+        "service": "bticino_c300x.answer_call", "target": CALL_TARGET, "data": CALL_DATA,
     }
     assert answer_sequence[3]["wait_for_trigger"] == [
         {
@@ -456,10 +402,7 @@ def test_ios_ring_call_blueprint_uses_unique_actions_and_event_entry_id() -> Non
             "event_data": {"action": "{{ hangup_action }}"},
         }
     ]
-    assert hangup_sequence[0] == {
-        "service": "bticino_c300x.hangup_doorbell_call",
-        "data": {"entry_id": "{{ entry_id }}"},
-    }
+    assert hangup_sequence[0] == HANGUP
     assert "homeassistant" in templates
     assert "ready" in templates
     assert "warning" in templates
@@ -470,14 +413,11 @@ def test_ring_capture_blueprint_calls_capture_without_analysis() -> None:
     inputs = data["blueprint"]["input"]
     action = data["action"]
 
-    assert inputs["c300x_device"]["selector"] == {
-        "device": {"integration": "bticino_c300x"}
-    }
     assert "media_readiness_entity" not in inputs
-    assert "device_entities(c300x_device)" in data["variables"]["c300x_entities"]
     assert "media_user_ok" in data["variables"]["media_readiness_entity"]
     assert len(action) == 1
     assert action[0]["service"] == "bticino_c300x.capture_doorbell_call"
+    assert action[0]["target"] == CALL_TARGET
     assert action[0]["data"]["wav_output_dir"] == "{{ capture_file_dir }}"
     assert "output_path" not in action[0]["data"]
 
@@ -489,12 +429,9 @@ def test_wyoming_blueprint_captures_then_transcribes_latest_files() -> None:
     capture_data = data["action"][0]["data"]
     analysis_data = data["action"][1]["data"]
 
-    assert inputs["c300x_device"]["selector"] == {
-        "device": {"integration": "bticino_c300x"}
-    }
     assert "media_readiness_entity" not in inputs
-    assert "device_entities(c300x_device)" in data["variables"]["c300x_entities"]
     assert "media_user_ok" in data["variables"]["media_readiness_entity"]
+    assert data["action"][0]["target"] == CALL_TARGET
     assert services == [
         "bticino_c300x.capture_doorbell_call",
         "bticino_c300x.run_ring_wyoming_analysis",
@@ -517,6 +454,10 @@ def test_strict_phrase_blueprint_uses_existing_guardrail_service() -> None:
     assert action["data"]["result_path"] == "result_path"
     assert action["data"]["capture_path"] == "capture_path"
     assert action["data"]["unlock_on_match"] == "unlock_on_match"
+    # The station opens the door of the unit that called; a unit opens its own.
+    assert action["target"] == {"device_id": "door"}
+    assert data["blueprint"]["input"]["door"]["selector"] == {"device": {"integration": "bticino_c300x"}}
+    assert "lock_id" not in str(data) and "entry_id" not in str(data)
 
 
 def test_ring_call_blueprints_stop_the_phone_ringing_when_the_door_opens() -> None:
@@ -582,7 +523,7 @@ def test_ring_call_blueprints_stop_the_phone_ringing_when_the_door_opens() -> No
         )
         # The Ring Call keeps running: opening the door does not decide whether
         # someone still wants to talk to the visitor.
-        assert "hangup_doorbell_call" not in str(default_sequence), filename
+        assert "hangup_call" not in str(default_sequence), filename
 
 
 def test_android_ring_call_commands_are_sent_as_urgent_messages() -> None:

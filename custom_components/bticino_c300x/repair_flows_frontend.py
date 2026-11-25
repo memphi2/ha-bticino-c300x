@@ -18,6 +18,7 @@ from .const import (
     FRONTEND_CARD_SETUP_REPAIR_VERSION,
 )
 from .frontend import async_setup_frontend
+from .identity import media_camera_unique_id
 from .repair_issues import FRONTEND_CARD_SETUP_HINT_ISSUE, repair_issue_id
 from .schema_compat import vol
 
@@ -244,7 +245,7 @@ def _resolve_doorbell_camera_entity_id(hass: HomeAssistant, entry: Any) -> str |
     return _resolve_registry_entity_id(
         hass,
         "camera",
-        f"{entry.entry_id}_{_DOORBELL_CAMERA_UNIQUE_ID_SUFFIX}",
+        media_camera_unique_id(entry),
     )
 
 

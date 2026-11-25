@@ -68,6 +68,9 @@ DEVICE_QML_TRANSACTION_STUCK_ISSUE = "device_qml_transaction_stuck"
 DEVICE_USER_REQUIRED_ISSUE = "device_user_required"
 MEDIA_SETUP_REPAIR_REQUIRED_ISSUE = "media_setup_repair_required"
 MEDIA_WATCHDOG_TIMEOUT_ISSUE = "media_watchdog_timeout"
+# 3.1.0 moved the doorbell entities to outdoor unit devices and removed
+# services; what users must redo, shown once until dismissed.
+OUTDOOR_UNITS_BREAKING_CHANGE_ISSUE = "outdoor_units_breaking_change"
 ALL_REPAIR_ISSUES = frozenset(
     {
         INVALID_ACTION_MAP_ISSUE,
@@ -85,6 +88,7 @@ ALL_REPAIR_ISSUES = frozenset(
         DEVICE_USER_REQUIRED_ISSUE,
         MEDIA_SETUP_REPAIR_REQUIRED_ISSUE,
         MEDIA_WATCHDOG_TIMEOUT_ISSUE,
+        OUTDOOR_UNITS_BREAKING_CHANGE_ISSUE,
         C100X_DISPLAY_ROLLED_BACK_ISSUE,
         C100X_DISPLAY_BOOT_CHECK_ISSUE,
     }
@@ -169,6 +173,21 @@ def async_create_media_watchdog_issue(
             "cpu_percent": cpu_text,
             "duration_seconds": str(duration_seconds),
         },
+    )
+
+
+def async_create_breaking_change_issue(
+    hass: HomeAssistant,
+    entry: BticinoC300XConfigEntry,
+) -> None:
+    """Tell once what the move to outdoor unit devices asks of the user."""
+
+    _create_issue(
+        hass,
+        entry,
+        OUTDOOR_UNITS_BREAKING_CHANGE_ISSUE,
+        severity=ir.IssueSeverity.WARNING,
+        is_persistent=True,
     )
 
 
@@ -680,6 +699,7 @@ def _create_issue(
     *,
     severity: ir.IssueSeverity,
     is_fixable: bool = False,
+    is_persistent: bool = False,
     translation_key: str | None = None,
     placeholders: dict[str, str] | None = None,
 ) -> None:
@@ -695,7 +715,7 @@ def _create_issue(
         domain=DOMAIN,
         issue_id=repair_issue_id(issue_type, entry.entry_id),
         is_fixable=is_fixable,
-        is_persistent=False,
+        is_persistent=is_persistent,
         severity=severity,
         translation_key=translation_key or issue_type,
         translation_placeholders=translation_placeholders,

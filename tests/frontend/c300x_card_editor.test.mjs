@@ -174,14 +174,14 @@ function threeCameraHass() {
   const hass = { language: "en", states: {}, entities: {}, devices: {} };
   for (const id of ["a", "b", "c"]) {
     hass.devices[id] = { config_entry_id: `entry-${id}` };
-    hass.states[`camera.${id}`] = { attributes: {} };
+    hass.states[`camera.${id}`] = { attributes: { door_entity_id: `button.${id}_door_unlock` } };
     hass.entities[`camera.${id}`] = {
       platform: "bticino_c300x", translation_key: "doorbell_camera", device_id: id,
     };
     for (const key of ["door_unlock", "stair_light"]) {
-      hass.states[`button.${id}_${key}`] = { attributes: { lock_id: "default" } };
+      hass.states[`button.${id}_${key}`] = { attributes: {} };
       hass.entities[`button.${id}_${key}`] = {
-        platform: "bticino_c300x", translation_key: key, device_id: id,
+        platform: "bticino_c300x", translation_key: key === "door_unlock" ? "door" : key, device_id: id,
       };
     }
   }

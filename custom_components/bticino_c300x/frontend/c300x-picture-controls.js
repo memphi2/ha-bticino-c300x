@@ -1,4 +1,4 @@
-import { mediaLocalize } from "./c300x-media-translations.js?v=ba002e0c693501b4";
+import { mediaLocalize } from "./c300x-media-translations.js?v=f9a619f891bd4df8";
 
 const keys = ["brightness", "contrast", "saturation"];
 
@@ -37,12 +37,12 @@ export class C300XPictureControls extends HTMLElement {
     }
   }
 
-  configure(hass, entryId, session) {
-    if (entryId !== this.entryId || session !== this.session) this.close();
+  configure(hass, cameraId, session) {
+    if (cameraId !== this.cameraId || session !== this.session) this.close();
     this.session = session;
     this.hidden = !session;
     this.hass = hass;
-    this.entryId = entryId;
+    this.cameraId = cameraId;
     this.button.title = mediaLocalize(hass, "picture");
     this.button.setAttribute("aria-label", this.button.title);
     for (const input of this.inputs) input.parentElement.firstElementChild.textContent = mediaLocalize(hass, input.dataset.key);
@@ -65,7 +65,7 @@ export class C300XPictureControls extends HTMLElement {
   }
 
   async request(fields) {
-    if (this.panel.hidden || !this.entryId) return;
+    if (this.panel.hidden || !this.cameraId) return;
     const generation = ++this.generation;
     for (const input of this.inputs) {
       input.disabled = true;
@@ -74,7 +74,7 @@ export class C300XPictureControls extends HTMLElement {
     this.status.textContent = mediaLocalize(this.hass, "loading");
     try {
       const result = await this.hass.callWS({type:"call_service",domain:"bticino_c300x",
-        service:"camera_picture",service_data:{entry_id:this.entryId,...fields},return_response:true});
+        service:"camera_picture",service_data:{entity_id:this.cameraId,...fields},return_response:true});
       if (generation !== this.generation) return;
       const values = result?.response;
       if (!keys.every(k => Number.isInteger(values?.[k]) && values[k] >= 0 && values[k] <= 100)) throw Error();

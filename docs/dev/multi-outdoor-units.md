@@ -258,8 +258,8 @@ Every outdoor unit, also the only one:
 
 | Entity | Key | Notes |
 | --- | --- | --- |
-| `event` | `doorbell` | device class `doorbell`, event type `ring`; attributes `call_id`, `attribution`. |
-| `camera` | `camera` | The default unit's camera is the media camera (ring, answer, on-demand). Another unit's camera shows live video while it has the current call, else its last visitor image. |
+| `event` | `doorbell` | device class `doorbell`, event type `ring`; attributes `call_id`, `unit`, `unit_name`, `attribution`, `camera_entity_id` (the media camera). |
+| `camera` | `camera` | The default unit's camera is the media camera (ring, answer, on-demand). Another unit's camera shows a still of the live picture while it has the current call (the station switches the picture to the caller), else its last visitor image. |
 | `button` | `door` | Unlocks this unit (`outdoor-units/{unit_id}/actions/unlock`). |
 | `sensor` | `call` | `idle`, `ringing`, `answered`, `viewing`; attribute `call_id`. |
 | `image` | `last_visitor` | The latest retained image of a call of this unit. |
@@ -273,19 +273,30 @@ event; the station ring is the trigger for the fastest notification, without
 the unit's name.
 
 Event delivery to Home Assistant no longer depends on which entities are
-enabled. Only `system.metrics_changed` and `agent.diagnostics_changed` stay
-tied to their sensors.
+enabled. Only `agent.diagnostics_changed` stays tied to its sensor (large and
+frequent while writing; the sensor is disabled by default).
 
-The bus event `bticino_c300x_agent_event_received` no longer carries rings;
-the unit event entities replace it. Its other events gain `device_id` (the HA
-station device), and for unit events `unit_id`, `outdoor_unit_device_id` and
-`call_id`.
+The bus event `bticino_c300x_agent_event_received` keeps every event,
+rings included: the card, the ring preview, captures and the event entities
+listen to it. Events of a call add `call_id`, `unit_id` (`null` while not
+known) and `unit_name`. Automations should trigger on the event entities.
+`bticino_c300x_action_received` for a door carries `unit_id` and `call_id`
+instead of `lock_id`.
+
+The media camera's attributes tell the card about the current call:
+`call_id`, `call_state`, `call_unit`, `call_unit_name` and `door_entity_id`
+(the door button of the call's unit, else of the default unit).
 
 ### Card
 
-The card follows the active call: it shows the calling unit's name and uses
-the media camera as before. It has no unit selector and no per-unit video in
-3.1.0 (that comes with phase D).
+The card follows the active call: it shows the calling unit's name next to
+its title while the call rings or is answered, answers and hangs up with the
+call's `call_id` (a `call_not_current` reply to a hang-up counts as done),
+and its door button opens the calling unit (`door_entity_id`). It uses the
+media camera as before. Station buttons are found through the camera's
+device: the media camera sits on the default unit's device, whose
+`via_device_id` is the station. It has no unit selector and no per-unit video
+in 3.1.0 (that comes with phase D, later, needs a card concept).
 
 ### Services
 
@@ -296,11 +307,18 @@ call's unit, else the default unit.
 - `answer_call`, `hangup_call`: optional `call_id`; without it the target's
   current call. `409 call_not_current` becomes a translated error.
 - `activate_doorbell_video` with a unit target; `capture_doorbell_call` and
-  `evaluate_ring_analysis` act on the call's unit.
+  `evaluate_ring_analysis` act on the call's unit (`lock_id` is gone; the
+  unlock opens the target unit, with a station target the calling unit).
+- A target resolves to exactly one station: several devices, an unknown
+  device or entity, or an entity of another integration is refused. A unit
+  device is recognised by its `:unit:` identifier.
+- Renamed: `answer_doorbell_call` -> `answer_call`, `hangup_doorbell_call`
+  -> `hangup_call`.
 - Removed (use the buttons): `unlock_door`, `stair_light`,
   `stop_doorbell_video`, `reboot`, `reload_gui`, `run_device_activation`,
   `delete_latest_video_message`, `delete_latest_text_memo`,
-  `delete_latest_voice_memo`.
+  `delete_latest_voice_memo`. The buttons exist only while the agent offers
+  the action; the services' own capability checks went with them.
 - The notify `mode` field is removed; the display switches decide.
 
 ### Migration (config entry version 2)

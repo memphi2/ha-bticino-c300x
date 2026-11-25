@@ -1307,9 +1307,6 @@
       "delete_latest_text_memo": {
         "name": "Text löschen"
       },
-      "door_unlock": {
-        "name": "Tür öffnen"
-      },
       "activate_display_pages": {
         "name": "Displayseiten aktivieren"
       },
@@ -1336,11 +1333,17 @@
       },
       "delete_latest_voice_memo": {
         "name": "Audio löschen"
+      },
+      "door": {
+        "name": "Tür öffnen"
       }
     },
     "camera": {
       "doorbell_camera": {
         "name": "Türklingel-Kamera"
+      },
+      "unit_camera": {
+        "name": "Kamera"
       }
     },
     "event": {
@@ -1354,37 +1357,12 @@
           }
         }
       },
-      "agent_event": {
-        "name": "Geräteereignis",
+      "ring": {
+        "name": "Klingeln an der Innenstation",
         "state_attributes": {
           "event_type": {
             "state": {
-              "agent_restarted": "Device-Agent neu gestartet",
-              "answering_machine_messages_changed": "Video-Nachrichten aktualisiert",
-              "call_ended": "Anruf beendet",
-              "door_unlock_ended": "Türöffner beendet",
-              "door_unlock_started": "Türöffner gestartet",
-              "doorbell_media_closed": "Türkamera-Stream beendet",
-              "doorbell_pressed": "Türklingel gedrückt",
-              "doorbell_view_requested": "Türkamera-Ansicht gestartet",
-              "home_call_answered": "Zuhause-Anruf angenommen",
-              "home_call_ended": "Zuhause-Anruf beendet",
-              "home_call_started": "Zuhause-Anruf gestartet",
-              "memos_changed": "Memos aktualisiert",
-              "display_touch_tone_changed": "Tastenton geändert",
-              "ringer_muted": "Klingelton stummgeschaltet",
-              "ringer_unmuted": "Klingelton aktiviert",
-              "ringer_volume_changed": "Klingel-Lautstärke geändert",
-              "smartphone_forwarding_changed": "Smartphone-Weiterleitung geändert",
-              "stair_light_activated": "Treppenlicht aktiviert",
-              "stair_light_released": "Treppenlicht freigegeben",
-              "system_metrics_changed": "Systemwerte aktualisiert",
-              "agent_diagnostics_changed": "Agent-Schreibdiagnose aktualisiert",
-              "activation_executed": "Geräteaktion ausgeführt",
-              "call_caller_identified": "Anrufer erkannt",
-              "call_answered": "Anruf angenommen",
-              "call_view_started": "Kameraansicht gestartet",
-              "outdoor_units_changed": "Außenstellen geändert"
+              "ring": "Klingeln"
             }
           }
         }
@@ -1507,12 +1485,13 @@
       "voice_memos": {
         "name": "Sprach-Memos"
       },
-      "doorbell_state": {
-        "name": "Klingelstatus",
+      "call": {
+        "name": "Anruf",
         "state": {
-          "idle": "Bereit",
+          "idle": "Ruhe",
           "ringing": "Klingelt",
-          "view_requested": "Türkamera aktiv"
+          "answered": "Angenommen",
+          "viewing": "Ansicht"
         }
       }
     },
@@ -1572,6 +1551,11 @@
             }
           }
         }
+      }
+    },
+    "image": {
+      "last_visitor": {
+        "name": "Letzter Besucher"
       }
     }
   },
@@ -1668,6 +1652,15 @@
     },
     "alarm_command_rejected": {
       "message": "Der Alarmbefehl wurde abgelehnt. Prüfe den Alarmzustand und die zugehörige Integration für weitere Informationen."
+    },
+    "call_not_current": {
+      "message": "Dieser Anruf ist vorbei oder nicht der aktuelle Anruf. An die Station wurde nichts gesendet."
+    },
+    "unknown_unit": {
+      "message": "Die Station hat keine solche Außenstelle."
+    },
+    "unit_video_unsupported": {
+      "message": "Video auf Anfrage gibt es nur für die Standard-Außenstelle."
     }
   },
   "issues": {
@@ -1873,6 +1866,10 @@
           "entry_not_loaded": "Der BTicino-C300X-Eintrag ist nicht geladen."
         }
       }
+    },
+    "outdoor_units_breaking_change": {
+      "title": "Klingel-Entitäten sind zu den Außenstellen umgezogen",
+      "description": "{entry_title} zeigt jetzt jede Außenstelle als eigenes Gerät unter der Station. Türklingel-Kamera, Klingelereignis und Türöffner-Taste sind zum Gerät der Standard-Außenstelle umgezogen; ihre Entitäts-IDs und ihr Verlauf bleiben. Bitte erledige diese Schritte:\n\n- Blueprint-Automationen: die Außenstelle (ihr Klingelereignis) neu auswählen.\n- answer_doorbell_call und hangup_doorbell_call heißen jetzt answer_call und hangup_call. Alle Dienste nehmen statt entry_id ein Ziel (die Station oder eine Außenstelle).\n- Die Dienste unlock_door, stair_light, stop_doorbell_video, reboot, reload_gui, run_device_activation und delete_latest_* gibt es nicht mehr: stattdessen die passenden Tasten drücken (button.press).\n- Der Klingelstatus-Sensor und die Agent-Ereignis-Entität gibt es nicht mehr: Anruf-Sensor und Ereignis-Entitäten der Außenstelle verwenden.\n\nIgnoriere diese Meldung, wenn du fertig bist."
     }
   },
   "selector": {
@@ -1973,9 +1970,6 @@
       "name": "Kamerabild einstellen",
       "description": "Liest alle drei Bildwerte. Zum Ändern einen Regler und einen Wert (0 bis 100 % in Zehnerschritten) angeben. Erfordert den aktualisierten Geräteagenten und ein aktives Klingelvideo oder Livevideo auf Abruf mit bestätigten Quellwerten und Wertebereichen. Gespeicherte Medien bleiben unverändert.",
       "fields": {
-        "entry_id": {
-          "name": "Integrationseintrag"
-        },
         "control": {
           "name": "Regler"
         },
@@ -1993,6 +1987,11 @@
           "description": "Klingelruf nimmt einen eingehenden Ruf auf. Liveaufnahme startet ohne Klingeln, wenn keine andere Mediensitzung aktiv ist."
         }
       }
+    }
+  },
+  "device": {
+    "outdoor_unit": {
+      "name": "Außenstelle {unit}"
     }
   }
 }

@@ -11,7 +11,7 @@ from homeassistant.helpers import entity_registry as er
 
 from .config_snapshots import snapshot_options
 from .const import DOMAIN
-from .entity import entry_entity_unique_id
+from .identity import media_camera_unique_id
 from .media import HomeAssistantView, runtime_entry
 from .snapshots import get_snapshots
 
@@ -23,9 +23,7 @@ def authorize_snapshot_entry(hass: Any, user: Any, entry_id: str, policy: str) -
     if entry is None or manager is None or manager.closed:
         raise web.HTTPNotFound()
     registry = er.async_get(hass)
-    entity_id = registry.async_get_entity_id(
-        "camera", DOMAIN, entry_entity_unique_id(entry, "doorbell_camera")
-    )
+    entity_id = registry.async_get_entity_id("camera", DOMAIN, media_camera_unique_id(entry))
     registered = registry.async_get(entity_id) if entity_id else None
     if (registered is None or registered.disabled_by or user is None
             or not (user.is_admin or user.permissions.check_entity(entity_id, policy))):

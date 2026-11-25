@@ -23,13 +23,9 @@ from homeassistant.helpers.dispatcher import (
 )
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from .agent_contracts import OutdoorUnit
 from .agent_diagnostics import async_refresh_agent_diagnostics
 from .api import C300XAgentApiError
-from .camera_media.state_machine import (
-    MediaState,
-    derive_media_state,
-    media_state_input_from_video_status,
-)
 from .capabilities import (
     answering_machine_messages_supported,
     capability_is_supported,
@@ -44,14 +40,6 @@ from .const import (
     SIGNAL_CONNECTION_STATE_CHANGED,
     SIGNAL_FORWARDING_CHANGED,
     SIGNAL_SYSTEM_METRICS_CHANGED,
-)
-from .device_user import media_user_attributes
-from .doorbell_state import (
-    DOORBELL_STATE_IDLE,
-    DOORBELL_STATE_RINGING,
-    DOORBELL_STATE_VIEW_REQUESTED,
-    DOORBELL_STATES,
-    raw_doorbell_state_value,
 )
 from .entity import C300XEntity
 from .entry_types import BticinoC300XConfigEntry
@@ -69,6 +57,8 @@ from .system_metrics import (
     metrics_are_fresh,
     metrics_cache,
 )
+from .unit_entity import async_track_outdoor_units
+from .unit_platforms import C300XUnitCallSensor
 from .value_parsing import (
     freeze_state_value as _freeze_state_value,
 )
@@ -77,13 +67,7 @@ from .video_messages import (
 )
 
 PARALLEL_UPDATES = 1
-_DOORBELL_CLOSED_STATES = frozenset({DOORBELL_STATE_IDLE})
 _PERCENT = "%"
-_DOORBELL_EVENT_STATES = {
-    "doorbell_pressed": DOORBELL_STATE_RINGING,
-    "doorbell_view_requested": DOORBELL_STATE_VIEW_REQUESTED,
-    "doorbell_media_closed": DOORBELL_STATE_IDLE,
-}
 _EntityStateSnapshot = tuple[Any, Any, Any]
 _AGENT_RUNTIME_DIAGNOSTIC_KEYS = (
     "last_wake_reason",
@@ -225,9 +209,6 @@ async def async_setup_entry(
         C300XMediaReadinessSensor(entry),
     ]
     metrics = _system_metrics_capability(entry)
-    if capability_is_supported(entry.runtime_data.capabilities, "doorbell_video"):
-        doorbell_state_sensor = C300XDoorbellStateSensor(entry)
-        entities.append(doorbell_state_sensor)
     if metrics.get("cpu"):
         cpu_sensor = C300XDeviceCpuSensor(entry)
         entities.append(cpu_sensor)
@@ -253,6 +234,12 @@ async def async_setup_entry(
         if voice_memos_supported(entry.runtime_data.capabilities):
             entities.append(C300XVoiceMemosSensor(entry))
     async_add_entities(entities)
+    if capability_is_supported(entry.runtime_data.capabilities, "doorbell_events"):
+
+        def build(unit: OutdoorUnit) -> list[SensorEntity]:
+            return [C300XUnitCallSensor(entry, unit)]
+
+        async_track_outdoor_units(hass, entry, async_add_entities, build)
 
 
 class C300XConnectionDiagnosticSensor(C300XEntity, SensorEntity):
@@ -749,97 +736,6 @@ def _agent_diagnostics_recommended_action(status: str) -> str:
         "media_resources_open": "stop_media_and_refresh_diagnostics",
         "idle": "no_action_needed",
     }.get(status, "check_device_agent_diagnostics")
-
-
-class C300XDoorbellStateSensor(C300XEntity, SensorEntity):
-    """Doorbell runtime state from the device agent."""
-
-    _attr_device_class = SensorDeviceClass.ENUM
-    _attr_options = list(DOORBELL_STATES)
-    _attr_should_poll = False
-    _attr_translation_key = "doorbell_state"
-
-    def __init__(self, entry: BticinoC300XConfigEntry) -> None:
-        super().__init__(entry, "doorbell_state")
-        self._state: str | None = None
-        self._last_event_at: str | None = None
-
-    @property
-    def native_value(self) -> str | None:
-        """Return the latest known doorbell state."""
-
-        return self._state
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        """Return doorbell-state metadata."""
-
-        return {
-            "last_event_at": self._last_event_at,
-            **media_user_attributes(self._entry),
-        }
-
-    async def async_update(self) -> None:
-        """Initialize the doorbell state from authoritative agent media status."""
-
-        await self._async_refresh_from_agent_status(write_state=False)
-
-    async def async_added_to_hass(self) -> None:
-        """Subscribe to doorbell push events."""
-
-        await super().async_added_to_hass()
-        self.async_on_remove(
-            self.hass.bus.async_listen(
-                EVENT_AGENT_EVENT_RECEIVED,
-                self._handle_agent_event,
-            )
-        )
-        await self._async_refresh_from_agent_status(write_state=True)
-
-    async def _async_refresh_from_agent_status(self, *, write_state: bool) -> None:
-        """Apply the safe idle state from the native media state machine."""
-
-        try:
-            status = await self._entry.runtime_data.api.async_doorbell_video_status()
-        except C300XAgentApiError:
-            self._attr_available = False
-            return
-        decision = derive_media_state(media_state_input_from_video_status(status))
-        if decision.state is not MediaState.IDLE:
-            return
-        if self._state == DOORBELL_STATE_IDLE:
-            self._attr_available = True
-            return
-        self._state = DOORBELL_STATE_IDLE
-        self._last_event_at = None
-        self._attr_available = True
-        if write_state:
-            self.async_write_ha_state()
-
-    @callback
-    def _handle_agent_event(self, event: Any) -> None:
-        if event.data.get("entry_id") != self._entry.entry_id:
-            return
-        state = self._doorbell_state_from_event(event.data)
-        if state is None:
-            return
-        if state in _DOORBELL_CLOSED_STATES:
-            self._state = DOORBELL_STATE_IDLE
-            self._last_event_at = event.data.get("event_at")
-            self._attr_available = True
-            self.async_write_ha_state()
-            return
-        self._state = state
-        self._last_event_at = event.data.get("event_at")
-        self._attr_available = True
-        self.async_write_ha_state()
-
-    def _doorbell_state_from_event(self, data: dict[str, Any]) -> str | None:
-        state = raw_doorbell_state_value(data.get("doorbell"))
-        if state is not None:
-            return state
-        event_key = agent_event_key(data)
-        return _DOORBELL_EVENT_STATES.get(event_key or "")
 
 
 class C300XSystemMetricSensor(C300XEntity, SensorEntity):

@@ -307,77 +307,12 @@ def test_setup_entry_builds_runtime_and_forwards_platforms(
         "remove-stale",
         "activations",
         "media-view",
-        "forward:binary_sensor,button,event,number,sensor,select,switch,camera",
+        "forward:binary_sensor,button,event,image,number,sensor,select,switch,camera",
         # No explicit UI option or confirmed legacy patch: preserve the bridge.
         "user",
         "repair-sync",
     ]
     assert entry.added_listeners
-
-
-@pytest.mark.parametrize("patched", [True, False])
-@pytest.mark.parametrize("legacy_transient", [True, False])
-def test_setup_registers_delete_services_from_loaded_patch_status(
-    monkeypatch: pytest.MonkeyPatch,
-    snapshot_runtime_boundary,
-    patched: bool,
-    legacy_transient: bool,
-) -> None:
-    from custom_components.bticino_c300x import repair_issues, services
-
-    entry = _entry(options={} if legacy_transient else {CONF_DEVICE_UI_ENABLED: True})
-    entry.add_update_listener = lambda callback: lambda: None
-    entry.async_on_unload = lambda callback: None
-    registered: set[tuple[str, str]] = set()
-    hass = SimpleNamespace(
-        data={},
-        config_entries=SimpleNamespace(async_entries=lambda domain: [entry]),
-        services=SimpleNamespace(
-            async_register=lambda domain, name, *args, **kwargs: registered.add((domain, name)),
-            async_remove=lambda domain, name: registered.discard((domain, name)),
-        ),
-    )
-    status = {"available": True, "patched": patched}
-    reads = [api_errors.C300XAgentApiConnectionError("temporary"), status] if legacy_transient else [status]
-    api = SimpleNamespace(async_qml_patch_status=AsyncMock(side_effect=reads))
-    manager = runtime_manager.C300XRuntimeManager(hass, entry)
-    manager.capabilities = {
-        "maintenance": {"supported": True, "qml_status": True},
-        "memos": {"supported": True, "delete": True},
-        "answering_machine": {
-            "supported": True,
-            "messages": {"supported": True, "delete": True},
-        },
-    }
-    manager.unregister_webhook = lambda: None
-    manager.unregister_event_webhook = lambda: None
-    monkeypatch.setattr(manager, "_build_agent_api", lambda: api)
-    for method in (
-        "async_validate_agent", "async_register_callbacks",
-        "async_sync_activation_state", "async_forward_platforms",
-    ):
-        monkeypatch.setattr(manager, method, AsyncMock())
-    monkeypatch.setattr(manager, "async_schedule_startup_sync", lambda: None)
-    monkeypatch.setattr(runtime_manager, "_async_remove_stale_gui_dependent_entities", lambda *_: None)
-    monkeypatch.setattr(repair_issues, "async_sync_entry_repair_issues", lambda *_: None)
-    monkeypatch.setattr(services, "async_dispatcher_connect", lambda *_: lambda: None)
-
-    setup_services = services.async_setup_services
-
-    async def check_gate_then_setup(hass):
-        assert entry.runtime_data.qml_patch_status["patched"] is patched
-        await setup_services(hass)
-
-    monkeypatch.setattr(services, "async_setup_services", check_gate_then_setup)
-    assert asyncio.run(manager._async_prepare_runtime()) is True
-
-    assert api.async_qml_patch_status.await_count == len(reads)
-    assert entry.runtime_data.qml_patch_status["patched"] is patched
-    for service in (
-        "delete_latest_video_message", "delete_latest_text_memo", "delete_latest_voice_memo",
-    ):
-        # These destructive services additionally require explicit UI opt-in.
-        assert ((DOMAIN, service) in registered) is (patched and not legacy_transient)
 
 
 def test_setup_entry_rejects_missing_required_fields() -> None:

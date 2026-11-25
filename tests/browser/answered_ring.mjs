@@ -83,7 +83,7 @@ export async function checkAnsweredRing(page) {
   assert.deepEqual(afterSecondDrop, { offers: 2, running: false,
     button: await page.evaluate(() => lab.hangUp) }, "second drop");
   await page.evaluate(() => { lab.calls.length = 0; lab.card.shadowRoot.querySelector(".row-action").click(); });
-  await page.waitForFunction(() => lab.calls.some((call) => call.service === "hangup_doorbell_call"));
+  await page.waitForFunction(() => lab.calls.some((call) => call.service === "hangup_call"));
 
   // A reload within the same ring finds the answered call again.
   await setUp(page);

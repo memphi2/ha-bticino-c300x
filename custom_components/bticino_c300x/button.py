@@ -15,6 +15,7 @@ from homeassistant.helpers.dispatcher import (
 )
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from .agent_contracts import OutdoorUnit
 from .agent_diagnostics import async_refresh_agent_diagnostics
 from .api import C300XAgentApiError, C300XAgentApiUnsupportedError
 from .c100x_display_activation import async_follow_c100x_display, c100x_display_status
@@ -23,7 +24,6 @@ from .capabilities import (
     entry_device_ui_enabled_or_patch_active,
     entry_gui_function_patch_active,
     entry_maintenance_action_is_advertised,
-    locks_for_capabilities,
     memo_delete_supported,
     voice_memos_supported,
 )
@@ -36,11 +36,13 @@ from .display_support import entry_is_c100x
 from .entity import C300XEntity, entry_video_enabled, supports_capability
 from .entry_types import BticinoC300XConfigEntry
 from .event_payload import agent_event_key
-from .executor import async_trigger_stair_light, async_unlock_door
+from .executor import async_trigger_stair_light
 from .memos import latest_memo_id
 from .message_refresh import async_answering_machine_messages
 from .qml_patch import async_refresh_qml_patch_status
 from .stored_items import MEMO_ITEMS, VIDEO_MESSAGE_ITEMS, StoredItemsSpec
+from .unit_entity import async_track_outdoor_units
+from .unit_platforms import C300XUnitDoorButton
 from .use_cases.doorbell_video import DoorbellVideoUseCase
 from .video_messages import (
     latest_video_message_id,
@@ -63,14 +65,6 @@ async def async_setup_entry(
     if entry_video_enabled(entry) and supports_capability(entry, "doorbell_video"):
         entities.append(C300XStopDoorbellVideoButton(entry))
     capabilities = getattr(entry.runtime_data, "capabilities", {})
-    for lock in locks_for_capabilities(capabilities):
-        entities.append(
-            C300XDoorUnlockButton(
-                entry,
-                lock_id=lock["id"],
-                lock_name=lock["name"],
-            )
-        )
     if supports_capability(entry, "activations"):
         for activation in await _async_activation_items(entry):
             if activation.get("executable") is True:
@@ -93,6 +87,12 @@ async def async_setup_entry(
                 entities.append(C300XDeleteLatestVoiceMemoButton(entry))
     if entities:
         async_add_entities(entities)
+    if supports_capability(entry, "locks"):
+
+        def build(unit: OutdoorUnit) -> list[ButtonEntity]:
+            return [C300XUnitDoorButton(entry, unit)]
+
+        async_track_outdoor_units(hass, entry, async_add_entities, build)
 
 
 class C300XStairLightButton(C300XEntity, ButtonEntity):
@@ -111,31 +111,6 @@ class C300XStairLightButton(C300XEntity, ButtonEntity):
         except C300XAgentApiUnsupportedError as err:
             raise HomeAssistantError(
                 "The installed C300X device agent does not support stair light"
-            ) from err
-        except C300XAgentApiError as err:
-            raise HomeAssistantError("C300X device-agent command failed") from err
-
-
-class C300XDoorUnlockButton(C300XEntity, ButtonEntity):
-    """Button that unlocks a configured C300X door lock."""
-
-    _attr_translation_key = "door_unlock"
-
-    def __init__(self, entry: BticinoC300XConfigEntry, lock_id: str, lock_name: str) -> None:
-        key = "door_unlock" if lock_id == "default" else f"door_unlock_{lock_id}"
-        super().__init__(entry, key)
-        self._lock_id = lock_id
-        self._lock_name = lock_name
-        self._attr_extra_state_attributes = {"lock_id": lock_id, "lock_name": lock_name}
-
-    async def async_press(self) -> None:
-        """Unlock the configured door lock."""
-
-        try:
-            await async_unlock_door(self.hass, self._entry, self._lock_id)
-        except C300XAgentApiUnsupportedError as err:
-            raise HomeAssistantError(
-                "The installed C300X device agent does not support door unlock"
             ) from err
         except C300XAgentApiError as err:
             raise HomeAssistantError("C300X device-agent command failed") from err

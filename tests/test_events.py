@@ -276,6 +276,9 @@ async def _drain_hass_tasks(hass: _FakeHass) -> None:
         await asyncio.gather(*pending, return_exceptions=True)
 
 
+_ENTRY = types.SimpleNamespace(entry_id="entry-1", data={})
+
+
 class _FakeEntityRegistry:
     def __init__(
         self,
@@ -477,7 +480,7 @@ def test_async_start_agent_event_registration_reuses_matching_subscription_from_
 def test_filter_events_for_active_entities_skips_disabled_internal_diagnostics() -> None:
     assert _filter_events_for_active_entities(
         ["agent.diagnostics_changed", "agent.restarted"],
-        "entry-1",
+        _ENTRY,
         _FakeEntityRegistry(disabled={("sensor", "agent_diagnostics")}),
     ) == ["agent.restarted"]
 
@@ -497,17 +500,17 @@ def test_event_delivery_does_not_depend_on_enabled_entities() -> None:
         ("sensor", "device_temperature"),
     }
     assert _filter_events_for_active_entities(
-        events, "entry-1", _FakeEntityRegistry(disabled=disabled),
+        events, _ENTRY, _FakeEntityRegistry(disabled=disabled),
     ) == events
     assert _filter_events_for_active_entities(
-        events, "entry-1", _FakeEntityRegistry(missing=disabled),
+        events, _ENTRY, _FakeEntityRegistry(missing=disabled),
     ) == events
 
 
 def test_filter_events_for_active_entities_keeps_metric_event_for_active_metric_sensor() -> None:
     assert _filter_events_for_active_entities(
         ["system.metrics_changed"],
-        "entry-1",
+        _ENTRY,
         _FakeEntityRegistry(
             disabled={
                 ("sensor", "device_cpu"),
@@ -522,7 +525,7 @@ def test_filter_events_for_active_entities_keeps_metric_event_for_active_metric_
 def test_filter_events_for_active_entities_keeps_metric_event_for_active_camera_watchdog() -> None:
     assert _filter_events_for_active_entities(
         ["system.metrics_changed"],
-        "entry-1",
+        _ENTRY,
         _FakeEntityRegistry(
             disabled={
                 ("sensor", "device_cpu"),
@@ -537,7 +540,7 @@ def test_filter_events_for_active_entities_keeps_metric_event_for_active_camera_
 def test_filter_events_for_active_entities_keeps_metric_event_for_safety_watchdog() -> None:
     assert _filter_events_for_active_entities(
         ["system.metrics_changed"],
-        "entry-1",
+        _ENTRY,
         _FakeEntityRegistry(
             disabled={
                 ("camera", "doorbell_camera"),
@@ -553,7 +556,7 @@ def test_filter_events_for_active_entities_keeps_metric_event_for_safety_watchdo
 def test_filter_events_for_active_entities_keeps_missing_metrics_for_safety_watchdog() -> None:
     assert _filter_events_for_active_entities(
         ["system.metrics_changed"],
-        "entry-1",
+        _ENTRY,
         _FakeEntityRegistry(
             missing={
                 ("camera", "doorbell_camera"),
@@ -569,7 +572,7 @@ def test_filter_events_for_active_entities_keeps_missing_metrics_for_safety_watc
 def test_filter_events_for_active_entities_skips_missing_default_disabled_diagnostics() -> None:
     assert _filter_events_for_active_entities(
         ["agent.diagnostics_changed"],
-        "entry-1",
+        _ENTRY,
         _FakeEntityRegistry(missing={("sensor", "agent_diagnostics")}),
     ) == []
 
@@ -577,7 +580,7 @@ def test_filter_events_for_active_entities_skips_missing_default_disabled_diagno
 def test_filter_events_for_active_entities_keeps_visible_event_for_event_entity() -> None:
     assert _filter_events_for_active_entities(
         ["door_unlock.started"],
-        "entry-1",
+        _ENTRY,
         _FakeEntityRegistry(),
     ) == ["door_unlock.started"]
 
@@ -585,7 +588,7 @@ def test_filter_events_for_active_entities_keeps_visible_event_for_event_entity(
 def test_filter_events_for_active_entities_keeps_home_call_events_for_consumers() -> None:
     assert _filter_events_for_active_entities(
         ["home_call.started", "home_call.answered", "home_call.ended"],
-        "entry-1",
+        _ENTRY,
         _FakeEntityRegistry(disabled={("event", "agent_event")}),
     ) == ["home_call.started", "home_call.answered", "home_call.ended"]
 
@@ -593,7 +596,7 @@ def test_filter_events_for_active_entities_keeps_home_call_events_for_consumers(
 def test_filter_events_for_active_entities_keeps_doorbell_state_events_for_sensor() -> None:
     assert _filter_events_for_active_entities(
         ["doorbell.pressed", "doorbell.view_requested", "doorbell.media.closed"],
-        "entry-1",
+        _ENTRY,
         _FakeEntityRegistry(disabled={("event", "agent_event")}),
     ) == ["doorbell.pressed", "doorbell.view_requested", "doorbell.media.closed"]
 

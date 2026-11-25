@@ -43,9 +43,15 @@ function c300xRegistryEntryId(hass, registryEntry) {
     || "";
 }
 
+// Outdoor unit devices hang below their station: compare the stations.
+function c300xStationDevice(hass, deviceId) {
+  return hass?.devices?.[deviceId]?.via_device_id || deviceId;
+}
+
 function c300xSameDevice(hass, camera, candidate) {
   if (camera?.device_id) {
-    return candidate?.device_id === camera.device_id;
+    return !!candidate?.device_id
+      && c300xStationDevice(hass, candidate.device_id) === c300xStationDevice(hass, camera.device_id);
   }
   const entryId = c300xRegistryEntryId(hass, camera);
   return !!entryId && c300xRegistryEntryId(hass, candidate) === entryId;
@@ -157,14 +163,19 @@ export function c300xDeviceActionEntity(hass, config, key) {
     || (config.entry_id && !entryId)) {
     return "";
   }
+  if (key === "door_unlock") {
+    // The camera names the door of the calling outdoor unit, else of the default one.
+    const door = hass?.states?.[camera]?.attributes?.door_entity_id;
+    const entry = hass.entities?.[door];
+    return door && hass?.states?.[door] && entry?.platform === C300X_PLATFORM
+      && c300xSameDevice(hass, cameraRegistry, entry) ? door : "";
+  }
   return Object.keys(hass?.entities || {}).find((entityId) => {
-    const state = hass?.states?.[entityId];
     const entry = hass.entities[entityId];
-    return !!state
+    return !!hass?.states?.[entityId]
       && entityId.startsWith("button.")
       && entry.platform === C300X_PLATFORM
       && c300xSameDevice(hass, cameraRegistry, entry)
-      && (entry.translation_key === key || (entryId && entry.unique_id === `${entryId}_${key}`))
-      && (key !== "door_unlock" || state.attributes?.lock_id === "default");
+      && entry.translation_key === key;
   }) || "";
 }

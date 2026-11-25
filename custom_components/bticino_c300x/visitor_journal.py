@@ -13,6 +13,7 @@ from typing import Any
 from homeassistant.core import callback
 from homeassistant.helpers.storage import Store
 
+from ._api_calls import valid_call_id, valid_unit_id
 from .capture_history import CLOCK_TOLERANCE, CaptureHistory
 from .config_snapshots import snapshot_options
 from .const import DOMAIN, EVENT_AGENT_EVENT_RECEIVED
@@ -125,9 +126,21 @@ class VisitorJournal:
             self.records[key] = {
                 "id": key, "at": time.time(), "source": source, "outcome": "unknown",
                 "snapshot": None, "clip": None,
+                "call_id": valid_call_id(data.get("call_id")), "unit": valid_unit_id(data.get("unit_id")),
             }
             self.prune()
             self.changed()
+        elif kind == "call_caller_identified":
+            call_id = valid_call_id(data.get("call_id"))
+            for item in self.records.values():
+                if call_id is not None and item.get("call_id") == call_id and item.get("unit") is None:
+                    item["unit"] = valid_unit_id(data.get("unit_id"))
+                    self.changed()
+        elif kind == "call_ended" and active is not None and active in self.records and (
+            self.records[active].get("call_id") not in {None, data.get("call_id")}
+        ):
+            # Another call ended (a superseded ring, a second unit): this visit goes on.
+            return
         elif kind in {"doorbell_media_closed", "agent_restarted", "home_call_started", "call_ended"}:
             order = _source_order(data.get("source_event_id"), self.latest_source)
             if order is not None and order <= 0:
@@ -219,6 +232,13 @@ class VisitorJournal:
             self.changed()
         self._unsized = False
 
+    def latest_unit_visit(self, unit_id: str) -> dict[str, Any] | None:
+        """The newest visit at this outdoor unit that kept an image."""
+        return next(
+            (item for item in self.items() if item.get("unit") == unit_id and item.get("snapshot")),
+            None,
+        )
+
     def items(self) -> list[dict[str, Any]]:
         self.prune()
         return sorted(self.records.values(), key=lambda item: (item["at"], item["id"]), reverse=True)
@@ -281,6 +301,8 @@ def _validated_record(raw: Any) -> dict[str, Any] | None:
         "outcome": "answered" if raw.get("outcome") == "answered" else "unknown",
         "snapshot": valid_snapshot(raw.get("snapshot")),
         "clip": valid_clip(raw.get("clip")),
+        "call_id": valid_call_id(raw.get("call_id")),
+        "unit": valid_unit_id(raw.get("unit")),
     }
 
 

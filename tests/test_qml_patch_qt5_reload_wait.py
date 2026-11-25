@@ -16,8 +16,8 @@ import pytest
 
 from custom_components.bticino_c300x import media_watchdog
 from custom_components.bticino_c300x.api import C300XAgentApi
+from custom_components.bticino_c300x.button import C300XReloadGuiButton
 from custom_components.bticino_c300x.display_activation import gui_reload_kwargs
-from custom_components.bticino_c300x.use_cases import maintenance
 
 QT4_STATUSES = [None, {}, {"patched": True, "core_patched": True, "gui_running": True},
                 {"patched": True, "qt5_overlay": None}]
@@ -37,7 +37,7 @@ def _entry(status: Any) -> SimpleNamespace:
     runtime = SimpleNamespace(api=_Api())
     if status is not None:
         runtime.qml_patch_status = status
-    return SimpleNamespace(runtime_data=runtime, entry_id="entry", data={}, options={})
+    return SimpleNamespace(runtime_data=runtime, entry_id="entry", title="Door", data={}, options={})
 
 
 def _timeouts(**kwargs: Any) -> list[object]:
@@ -78,10 +78,9 @@ def test_the_keyword_from_a_cached_qt5_status(status: Any) -> None:
     *((status, {}) for status in QT4_STATUSES),
     *((status, {"display_restart": True}) for status in QT5_STATUSES),
 ])
-def test_the_service_and_the_watchdog_pass_it_on(monkeypatch, status: Any, expected: dict) -> None:
+def test_the_button_and_the_watchdog_pass_it_on(status: Any, expected: dict) -> None:
     entry = _entry(status)
-    monkeypatch.setattr(maintenance, "ensure_maintenance_action", lambda entry, action: None)
-    asyncio.run(maintenance.MaintenanceUseCase(entry).reload_gui())
+    asyncio.run(C300XReloadGuiButton(entry).async_press())  # type: ignore[arg-type]
     asyncio.run(media_watchdog._async_reload_display_gui_for_watchdog(
         entry.runtime_data.api, gui_reload_kwargs(entry)))
     assert entry.runtime_data.api.calls == [expected, expected]

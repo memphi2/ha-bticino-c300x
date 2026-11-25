@@ -70,14 +70,15 @@ def test_capture_a_b_a_is_not_reusable(tmp_path):
 def test_unlock_is_reserved_once_even_if_action_fails(tmp_path, outcome):
     async def run():
         hass = SimpleNamespace(
-            config=SimpleNamespace(path=lambda *parts: str(tmp_path.joinpath(*parts)))
+            config=SimpleNamespace(path=lambda *parts: str(tmp_path.joinpath(*parts))),
+            bus=SimpleNamespace(async_fire=lambda *_args: None),
         )
         params = analysis(tmp_path, "same")
         started, release = asyncio.Event(), asyncio.Event()
         calls = []
 
-        async def unlock(lock_id):
-            calls.append(lock_id)
+        async def unlock(unit_id, call_id=None):
+            calls.append(unit_id)
             started.set()
             await release.wait()
             if outcome == "error":
@@ -85,7 +86,7 @@ def test_unlock_is_reserved_once_even_if_action_fails(tmp_path, outcome):
 
         entry = SimpleNamespace(
             entry_id="test",
-            runtime_data=SimpleNamespace(api=SimpleNamespace(async_unlock_door=unlock)),
+            runtime_data=SimpleNamespace(api=SimpleNamespace(async_unlock_outdoor_unit=unlock)),
         )
         first = asyncio.create_task(
             RingAnalysisUseCase(hass).evaluate(
@@ -104,7 +105,8 @@ def test_unlock_is_reserved_once_even_if_action_fails(tmp_path, outcome):
         await RingAnalysisUseCase(hass).evaluate(
             **params, unlock_on_match=True, unlock_entry=entry
         )
-        assert calls == ["default"]
+        # Without a unit target the door of the calling unit opens.
+        assert calls == ["current"]
 
     asyncio.run(run())
 

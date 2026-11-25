@@ -33,6 +33,7 @@ from .data import C300XConnectionState
 from .entry_types import BticinoC300XConfigEntry
 from .error_text import compact_error_text
 from .fingerprint import fnv1a64_fingerprint
+from .identity import station_unique_id
 from .runtime_auth import async_classify_runtime_auth_error, async_request_reauth
 from .system_metrics import invalidate_system_metrics
 
@@ -522,7 +523,7 @@ def _active_events_for_capabilities(
         registry = getattr(hass, "entity_registry", None)
     if registry is None or not hasattr(registry, "async_get_entity_id"):
         return events
-    return _filter_events_for_active_entities(events, entry.entry_id, registry)
+    return _filter_events_for_active_entities(events, entry, registry)
 
 
 # Every event reaches Home Assistant whatever entities are enabled: automations
@@ -536,7 +537,7 @@ _EVENT_CONSUMERS: dict[str, tuple[tuple[str, str], ...]] = {
 
 def _filter_events_for_active_entities(
     events: list[str],
-    entry_id: str,
+    entry: Any,
     registry: Any,
 ) -> list[str]:
     """Drop only the events whose sole consumer is a disabled entity."""
@@ -545,7 +546,7 @@ def _filter_events_for_active_entities(
         event for event in events
         if event not in _EVENT_CONSUMERS
         or any(
-            _consumer_active(registry, entry_id, domain, key)
+            _consumer_active(registry, entry, domain, key)
             for domain, key in _EVENT_CONSUMERS[event]
         )
     ]
@@ -553,7 +554,7 @@ def _filter_events_for_active_entities(
 
 def _consumer_active(
     registry: Any,
-    entry_id: str,
+    entry: Any,
     domain: str,
     key: str,
 ) -> bool:
@@ -561,7 +562,7 @@ def _consumer_active(
 
     return _registry_entity_active(
         registry,
-        entry_id,
+        entry,
         domain,
         key,
         missing_active=(domain, key) not in _DEFAULT_DISABLED_EVENT_CONSUMERS,
@@ -570,13 +571,13 @@ def _consumer_active(
 
 def _registry_entity_active(
     registry: Any,
-    entry_id: str,
+    entry: Any,
     domain: str,
     key: str,
     *,
     missing_active: bool = True,
 ) -> bool:
-    unique_id = f"{entry_id}_{key}"
+    unique_id = station_unique_id(entry, key)
     entity_id = registry.async_get_entity_id(domain, DOMAIN, unique_id)
     if entity_id is None:
         return missing_active

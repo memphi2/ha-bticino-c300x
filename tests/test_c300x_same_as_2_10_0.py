@@ -392,10 +392,39 @@ async def entity_inventory(document: dict) -> dict[str, list[list[str | None]]]:
     return inventory
 
 
+# 3.1.0 (docs/dev/multi-outdoor-units.md): the station's doorbell event and
+# door button moved to the outdoor unit devices (created once the station names
+# its units, so not in this inventory), the station got the ring event, and the
+# doorbell state sensor and the agent event entity are gone.
+ADDED_IN_3_1_0 = {"event": [["C300XStationRingEventEntity", "entry_ring", "ring", None, "True", "doorbell"]]}
+REMOVED_IN_3_1_0 = {
+    "button": [["C300XDoorUnlockButton", "entry_door_unlock_front", "door_unlock", None, "True", None]],
+    "event": [["C300XDeviceAgentEventEntity", "entry_agent_event", "agent_event", "diagnostic", "True", None],
+              ["C300XDoorbellEventEntity", "entry_doorbell_event", "doorbell_event", None, "True", "doorbell"]],
+    # Only where the station offers doorbell video (not the last document).
+    "sensor": [["C300XDoorbellStateSensor", "entry_doorbell_state", "doorbell_state", None, "True", "enum"]],
+}
+
+
+def as_in_2_10_0(inventory: dict[str, list], had_doorbell_state: bool) -> dict[str, list]:
+    """The inventory with the declared 3.1.0 changes taken back."""
+
+    for platform, rows in ADDED_IN_3_1_0.items():
+        for row in rows:
+            inventory[platform].remove(row)
+    for platform, rows in REMOVED_IN_3_1_0.items():
+        for row in rows:
+            assert row not in inventory[platform]
+            if platform != "sensor" or had_doorbell_state:
+                inventory[platform].append(row)
+        inventory[platform].sort(key=json.dumps)
+    return inventory
+
+
 @pytest.mark.parametrize("display_kind", ["qt4_ondisk", "qt5_rcc"])
 def test_a_c300x_gets_the_entities_of_2_10_0(tmp_path: Path, display_kind: str) -> None:
     documents = c300x_capability_documents(tmp_path, display_kind)
     for document, pin, count in zip(documents, ENTITIES_2_10_0, ENTITY_COUNTS_2_10_0, strict=True):
-        inventory = asyncio.run(entity_inventory(document))
+        inventory = as_in_2_10_0(asyncio.run(entity_inventory(document)), count != 28)
         assert sum(len(rows) for rows in inventory.values()) == count
         assert _digest(inventory) == pin

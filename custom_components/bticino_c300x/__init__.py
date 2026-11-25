@@ -85,7 +85,8 @@ async def async_migrate_entry(
             entry,
             data=data,
             options=options,
-            version=1,
+            # The major version moves to 2 in setup, with the station's identity.
+            version=getattr(entry, "version", 1),
             minor_version=3,
         )
     return True

@@ -26,7 +26,7 @@ def setup(tmp_path, monkeypatch):
     manager.hass.data.setdefault(DOMAIN, {})["stream_snapshots"] = {"one": manager}
     manager.hass.states = SimpleNamespace(get=lambda _: None)
     monkeypatch.setattr(http, "runtime_entry", lambda hass, entry_id: manager.entry if entry_id == "one" else None)
-    monkeypatch.setattr(http, "entry_entity_unique_id", lambda *args: "unique")
+    monkeypatch.setattr(http, "media_camera_unique_id", lambda *args: "unique")
     registered = SimpleNamespace(disabled_by=None)
     monkeypatch.setattr(http.er, "async_get", lambda _: SimpleNamespace(
         async_get_entity_id=lambda *args: "camera.door", async_get=lambda _: registered,

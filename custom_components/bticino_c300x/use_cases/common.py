@@ -11,7 +11,13 @@ from homeassistant.core import HomeAssistant, async_get_hass
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from ..agent_diagnostics import async_refresh_agent_diagnostics
-from ..api_errors import C300XAgentApiAuthError, C300XStationBusyError
+from ..api_errors import (
+    C300XAgentApiAuthError,
+    C300XCallNotCurrentError,
+    C300XStationBusyError,
+    C300XUnitVideoUnsupportedError,
+    C300XUnknownUnitError,
+)
 from ..capabilities import (
     capability_is_supported,
     entry_gui_function_patch_active,
@@ -66,6 +72,13 @@ async def raise_agent_command_failed[T](awaitable: Awaitable[T], *, entry: Any) 
         raise home_assistant_error("agent_command_failed", entry=entry) from failure
     except C300XStationBusyError as err:
         raise home_assistant_error("station_busy") from err
+    except C300XCallNotCurrentError as err:
+        # Asked for a call that is over or not the current one: nothing was sent.
+        raise service_validation_error("call_not_current") from err
+    except C300XUnknownUnitError as err:
+        raise service_validation_error("unknown_unit") from err
+    except C300XUnitVideoUnsupportedError as err:
+        raise service_validation_error("unit_video_unsupported") from err
     except Exception as err:
         raise home_assistant_error("agent_command_failed", entry=entry) from err
 

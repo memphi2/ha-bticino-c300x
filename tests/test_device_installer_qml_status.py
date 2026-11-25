@@ -33,8 +33,8 @@ class FakeClient:
             if self.responses[action] is None:
                 raise installer.C300XDeviceInstallError("device_install_failed")
             return self.responses[action]
-        if installer._QT5_DISPLAY_MARKER in command:
-            return "yes\n" if self.qt5 else "no\n"
+        if "libQt5Core" in command:
+            return "qt5\nc300x\n" if self.qt5 else "qt4\nc300x\n"
         if command == f"readlink {installer.REMOTE_INIT_LINK}":
             return installer.REMOTE_INIT_SCRIPT
         return ""

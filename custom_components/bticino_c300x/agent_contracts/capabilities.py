@@ -21,3 +21,4 @@ class CapabilityPayload(AgentContract):
     firmware: str | None
     capabilities: dict[str, Any]
     display_kind: str | None = None
+    camera: str | None = None

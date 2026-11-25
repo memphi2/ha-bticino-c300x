@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from .const import CONF_DEVICE_UI_ENABLED
+from .device_profile import entry_profile, setup_profile
 
 DISPLAY_SUPPORTED = "device_display_supported"
 
@@ -41,7 +42,7 @@ def device_display_support(setup: Mapping[str, Any]) -> bool | None:
 
 
 def _c100x(setup: Mapping[str, Any]) -> bool:
-    return setup.get("model") == "C100X" or setup.get("display_kind") == "qt5_ondisk"
+    return setup_profile(setup).is_c100x
 
 
 def setup_is_c100x(setup: Any) -> bool:
@@ -53,7 +54,7 @@ def setup_is_c100x(setup: Any) -> bool:
 def entry_is_c100x(entry: Any) -> bool:
     """Return whether the loaded entry's agent reported a C100X."""
 
-    return setup_is_c100x(getattr(getattr(entry, "runtime_data", None), "agent_info", None))
+    return entry_profile(entry).is_c100x
 
 
 def entry_display_supported(entry: Any) -> bool:

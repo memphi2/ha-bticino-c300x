@@ -731,6 +731,7 @@ def _offline_setup_data(err: Exception) -> dict[str, Any]:
         "api_version": None,
         "model": None,
         "display_kind": None,
+        "camera": None,
         "firmware": None,
         "capabilities": {},
         "offline_error": compact_error_text(err),

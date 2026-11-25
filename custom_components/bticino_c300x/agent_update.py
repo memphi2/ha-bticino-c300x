@@ -15,6 +15,7 @@ from typing import Any, cast
 
 from .api_errors import C300XAgentApiConnectionError
 from .const import DOMAIN
+from .device_profile import setup_profile
 
 COMPONENT_DIR = Path(__file__).resolve().parent
 BUNDLE_MANIFEST = COMPONENT_DIR / "device_agent" / "bundle.json"
@@ -118,9 +119,9 @@ def bundle_supports_device(setup_data: Mapping[str, Any], bundle: Mapping[str, A
     """Check both compatibility and test-package isolation, never version order."""
 
     only = bundle.get("c100x_only", False)
-    if not isinstance(only, bool) or (only and setup_data.get("model") != "C100X"):
+    if not isinstance(only, bool) or (only and not setup_profile(setup_data).is_c100x):
         return False
-    return setup_data.get("model") != "C100X" or bundle.get("c100x_compatible") is True
+    return not setup_profile(setup_data).is_c100x or bundle.get("c100x_compatible") is True
 
 
 def compare_agent_bundle(

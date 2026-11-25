@@ -12,6 +12,7 @@ from homeassistant.helpers.entity import Entity
 
 from .capabilities import capability_is_supported
 from .const import CONF_VIDEO_ENABLED, DOMAIN, SIGNAL_CONNECTION_STATE_CHANGED
+from .device_profile import entry_profile
 from .entry_config import entry_config_value as entry_config_value
 from .entry_types import BticinoC300XConfigEntry
 
@@ -140,7 +141,7 @@ def _device_info(entry: BticinoC300XConfigEntry) -> DeviceInfo:
     """Return C300X device metadata without extra device reads."""
 
     firmware = _agent_info_string(entry, "firmware")
-    model = "Classe 100X" if _agent_info_string(entry, "model") == "C100X" else "Classe 300X"
+    model = "Classe 100X" if entry_profile(entry).is_c100x else "Classe 300X"
     if firmware is None:
         return DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},

@@ -1184,7 +1184,7 @@ async def _async_restore_external_patch_state(
         await busy_retry(api.async_apply_ipv6_firewall)
     if _agent_offers_no_display_patch(setup_data):
         return None
-    qt5 = display_is_qt5(getattr(entry.runtime_data, "qml_patch_status", None))
+    qt5 = display_is_qt5(entry)
     owed = CONF_DISPLAY_FOLLOWUP_PENDING in entry.data
 
     async def full_patch_due() -> bool:

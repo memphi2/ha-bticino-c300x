@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from .api_errors import C300XAgentApiConnectionError, C300XDisplayNotConfirmedError
+from .device_profile import entry_profile
 
 # The agent's answers for a display write that ran on the station and failed:
 # 502 the script failed (reload_failed, script_failed), 504 its job limit.
@@ -38,14 +39,10 @@ def display_restart_pending(status: Mapping[str, Any] | None) -> bool:
     return isinstance(status, Mapping) and status.get("gui_restart") == "pending"
 
 
-def display_is_qt5(status: Mapping[str, Any] | None) -> bool:
-    """Whether a display status comes from the Qt 5 display of firmware 3.0.x.
+def display_is_qt5(entry: Any) -> bool:
+    """Whether the entry's station has the Qt 5 display of firmware 3.0.x."""
 
-    Only qml_patch.sh on the Qt 5 display reports ``qt5_overlay``; on 1.7.x
-    and 2.0.2 it is None.
-    """
-
-    return isinstance(status, Mapping) and status.get("qt5_overlay") is not None
+    return entry_profile(entry).display_is_qt5_overlay
 
 
 def gui_reload_kwargs(entry: Any) -> dict[str, bool]:
@@ -55,8 +52,7 @@ def gui_reload_kwargs(entry: Any) -> dict[str, bool]:
     1.7.x/2.0.2 the call has no keyword.
     """
 
-    status = getattr(getattr(entry, "runtime_data", None), "qml_patch_status", None)
-    return {"display_restart": True} if display_is_qt5(status) else {}
+    return {"display_restart": True} if display_is_qt5(entry) else {}
 
 
 def display_unsupported(status: Mapping[str, Any] | None) -> str | None:

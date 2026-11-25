@@ -31,6 +31,13 @@ from .const import (
     DOMAIN,
 )
 from .device_activations import desired_activation_items
+from .device_profile import (
+    QT4_ONDISK,
+    QT5_ONDISK,
+    QT5_RCC,
+    DeviceProfile,
+    station_profile,
+)
 from .display_activation import (
     display_activation_confirmed,
     display_restart_pending,
@@ -271,10 +278,10 @@ def _install_device_agent_sync(
         config_path = f"{request.remote_dir}/{REMOTE_CONFIG_NAME}"
         existing = _read_remote_config_sync(client, config_path)
         kind = _verify_c100x_bundle_sync(client, bundle, request.remote_dir)
-        if request.apply_gui_patch and kind == "qt5_ondisk":
+        if request.apply_gui_patch and kind == QT5_ONDISK:
             raise C300XDeviceInstallError("device_install_verify_failed")
         manage_firewall = request.apply_firewall_patch and _firewall_hook_present_sync(client)
-        c100x = kind == "qt5_ondisk"
+        c100x = kind == QT5_ONDISK
         merged_config = _merge_existing_device_config(config_bytes, existing)
         merged_config = _apply_qt5_low_res_video_default(kind, merged_config)
         if request.apply_firewall_patch and not manage_firewall:
@@ -342,7 +349,7 @@ def _verify_c100x_bundle_sync(
     # This development branch is C100X-only even if package metadata is removed
     # or relabelled. A mutable policy file must not relax its target restriction.
     kind = _device_display_kind(client)
-    if kind != "qt5_ondisk":
+    if kind != QT5_ONDISK:
         raise C300XDeviceInstallError("device_model_incompatible")
     manifests = [p for p in bundle.payload_files if p.remote_path == f"{remote_dir}/bundle.json"]
     binaries = [p for p in bundle.payload_files if p.remote_path == f"{remote_dir}/{REMOTE_AGENT_NAME}"]
@@ -1071,37 +1078,22 @@ def _remove_obsolete_display_source_sync(client: _DeviceSshClient, remote_dir: s
 
 _LOGGER = logging.getLogger(__name__)
 
-# The display kinds of the agent (native_agent/src/device_detect.c), read
-# before the agent runs: qt4_ondisk on C300X 1.7.x/2.0.x, qt5_rcc on C300X
-# 3.0.x with the QML built into BtClass, qt5_ondisk on the C100X (BtClass100).
-# The Qt 5 library is the mark, not a missing QML folder: on an older device a
-# missing folder is a fault the Display patch has to report.
-_QT5_DISPLAY_MARKER = "/usr/lib/libQt5Core.so.5"
-_C100X_DISPLAY_MARKER = "/home/bticino/bin/gui/BtClass100"
-_QT4_ONDISK = "qt4_ondisk"
+def _device_profile(client: _DeviceSshClient) -> DeviceProfile:
+    """Return the station's profile, read before the agent runs."""
+
+    return station_profile(client.run, _quote)
 
 
 def _device_display_is_qt5(client: _DeviceSshClient) -> bool:
-    """Return whether the device has the Qt 5 display of C300X firmware 3.0.x.
+    """Return whether the device has the Qt 5 display of C300X firmware 3.0.x."""
 
-    A C100X has the Qt 5 library as well, but not that display.
-    """
-
-    return _device_display_kind(client) == "qt5_rcc"
+    return _device_display_kind(client) == QT5_RCC
 
 
 def _device_display_kind(client: _DeviceSshClient) -> str:
     """Return the display kind; an unreadable answer counts as the Qt 4 display."""
 
-    words = client.run(
-        f"test -e {_quote(_QT5_DISPLAY_MARKER)} && echo qt5 || echo qt4; "
-        f"test -e {_quote(_C100X_DISPLAY_MARKER)} && echo c100x || echo c300x"
-    ).split()
-    if "c100x" in words:
-        return "qt5_ondisk"
-    if "qt5" not in words:
-        return _QT4_ONDISK
-    return "qt5_rcc"
+    return _device_profile(client).display
 
 
 def _apply_qt5_low_res_video_default(
@@ -1118,7 +1110,7 @@ def _apply_qt5_low_res_video_default(
 
     # The camera keeps its low stream on every Qt 5 firmware until a C100X
     # shows otherwise, as in the agent.
-    if kind == _QT4_ONDISK:
+    if kind == QT4_ONDISK:
         return config_bytes
     try:
         config = json.loads(config_bytes)
@@ -1155,7 +1147,7 @@ def _apply_display_step_sync(
     still fails the install, as every failure does on firmware 1.7.x/2.0.x.
     """
 
-    if _device_display_kind(client) == "qt5_ondisk":
+    if _device_display_kind(client) == QT5_ONDISK:
         # A C100X has no Display patch; its pages come with its own activation.
         _LOGGER.warning("C300X: the C100X display is not patched; skipping %s", action)
         return False

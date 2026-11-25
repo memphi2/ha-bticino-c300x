@@ -27,6 +27,7 @@ from .const import (
     SIGNAL_SETTING_STATE,
     SMARTPHONE_FORWARDING_MODES,
 )
+from .device_profile import entry_profile
 from .entity import C300XEntity, supports_capability
 from .entity import (
     async_refresh_initial_states as _async_refresh_initial_states,
@@ -45,8 +46,7 @@ PARALLEL_UPDATES = 1
 def _audio_codec_select_allowed(entry: BticinoC300XConfigEntry) -> bool:
     """Keep device-codec changes outside the first C100X test scope."""
 
-    info = getattr(entry.runtime_data, "agent_info", {})
-    return not (isinstance(info, Mapping) and info.get("model") == "C100X") and (
+    return not entry_profile(entry).is_c100x and (
         entry_maintenance_action_is_advertised(entry, "audio_codec_apply")
     )
 

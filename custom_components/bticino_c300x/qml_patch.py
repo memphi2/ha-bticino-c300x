@@ -193,7 +193,7 @@ async def async_restore_qml_patches_after_update(
         answers.append(answer)
         return answer
 
-    qt5 = display_is_qt5(_qml_patch_status(entry))
+    qt5 = display_is_qt5(entry)
     async with _qml_patch_lock(entry):
         core_status = await (full_patch() if qt5 and apply_full_patch else core_patch())
         _store_qml_patch_status(entry, core_status)
@@ -202,7 +202,7 @@ async def async_restore_qml_patches_after_update(
             # Nothing to bring back: the agent runs without the display pages.
             return core_status
         require_display_activation(core_status)
-        if core_status.get("qt5_overlay") is not None and core_status.get("core_patched") is not True:
+        if display_is_qt5(entry) and core_status.get("core_patched") is not True:
             raise C300XAgentApiError("Qt 5 display core patch is not confirmed")
         if apply_full_patch and not qt5:
             await _async_run_qml_patch_action_unlocked(
@@ -223,7 +223,7 @@ async def async_restore_qml_patches_after_update(
             entry, await async_refresh_qml_patch_status(entry, wait_busy=True)
         )
         require_display_activation(status)
-        if status.get("qt5_overlay") is not None and (
+        if display_is_qt5(entry) and (
             status.get("core_patched") is not True
             or (apply_full_patch and status.get("patched") is not True)
         ):

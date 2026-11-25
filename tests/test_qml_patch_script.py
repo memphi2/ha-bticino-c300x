@@ -317,6 +317,7 @@ Item {
 ORIGINAL_SETTINGS = """import QtQuick 1.1
 Page {
     function handleScreenOff() {
+    function aboutToShow() {
         spacing: 6
     ExclusiveGroup {
                 configurationChoice
@@ -324,26 +325,26 @@ Page {
 }
 """
 PATCH_OUTPUT_SHA256 = {
-    "MainApp.qml": "f9febf12716dd3785951d941d158dea0c4d03c278c560d405f7fda6a15c318a9",
-    "Settings.qml": "d1571baa609fda82b1cba5aab5549b7caa32fc72a27f9e5f0700643726aa9a6f",
+    "MainApp.qml": "3860c9addd37ba6be61fb6eea7fa1a08d93a782ffc94c1e989341cf8ef4d53ce",
+    "Settings.qml": "403b650e32e2353ba542b4960ea7d0d211d62897dbca9e953c7253e491156447",
     "Components/Settings/GeneralsChoice.qml": "fe4241e1c5d99abb9175f36ec6a9e35ef48033af0c07ab0c46b25309f615e240",
-    "C300XSettings.qml": "a1ed088a80101fa23a79ecbd9a1b7fe05db86c130ddc14fee8422d55639476c9",
+    "C300XSettings.qml": "ad22875dee6b6e62f5915d4dea987672df0fc285a2e42f10e6a4867f361bb0a6",
     "js/c300x_maintenance.js": "7baebcd3b0b52b92c934eb9b2cfaf27b198bf0064e16db6571a04aa927557c56",
-    "HomePage.qml": "de706cdb68db1dd0d255c60cd56676904173c81ca50170a8591d9663d722b34d",
+    "HomePage.qml": "998dbd1074ab0689303d213cff46663e8b72403eb944c28a9391e35512333193",
     "MemoPage.qml": "f7fe6279108429389bc607e6c92df065d75dbbce2d9cdfc6ec1280f30f893e0f",
     "EventManager.qml": "cf68c96d9b702ce9501e70f8a511658483e1bcd5f2c9fcdff2ae214af79e3a6a",
-    "Alarm.qml": "c0884022afda5ab4c0894fa3824bc835fef009d12f0b1edf886bee2f98675e17",
-    "HomeAssistant.qml": "d2db286d2b6f82c6c58b72bec7d5bd376da1d18001d4ac3d7f1f8cb60c462a57",
-    "C300XEnergy.qml": "087d7b251d583684897f07d8aa83a6632cda709bce567bf0cbfc44580208a0c1",
+    "Alarm.qml": "65977bf521bcdca872d3c107148ddabf7b623c4af7e6707462f62ff565ab53d0",
+    "HomeAssistant.qml": "a90d61ca004be2115544dbbf14d67cfb88bccb3f0c9782dbfe931f51ac4eece2",
+    "C300XEnergy.qml": "6f106d8637158fdf789c2d3339e9bae6fcf2c557c30dbbe5734fcd1b2acb73a2",
     "C300XEnergyConsumers.qml": "f01423312e0838cd54b6ca90ef3c84f84268454fbfdaab7805d3da90f496b948",
-    "C300XAgenda.qml": "487eed57021d45cbf78e79b844bd86513351e9c005c59b2e8d3ff4988f04b51e",
-    "C300XAlerts.qml": "fef6dccf89f5087c29e149677476722e2ff15ad93ed5fe4dd5b02bfa22ab34ae",
+    "C300XAgenda.qml": "0853c9658d39414bb539712761052c0a08ec1c5522507ee02e749814e0e9ab3e",
+    "C300XAlerts.qml": "c87ed986ae53cb24594fd65d8b1c375f6494bb2147f2488fe08881d1db89c43a",
     "C300XDetailControl.qml": "07b3e761c43480d763bf0c943cfe1bb8d19de794fd095bd5478609ca3ec9c42f",
     "C300XEnergyReadout.qml": "03d300c00d5685bb095b0ddf08a8964685d6f7621a2bef0f93c59546e231560e",
     "C300XEnergySums.qml": "d69adc8a62deceaa27b7329b32827b991b1d8152476d4e2298c498558c295585",
-    "C300XLeaveHome.qml": "45e5dd16df840559815ed8c4a9cdb6fb54953895dca82335783587c62a07ef21",
+    "C300XLeaveHome.qml": "5e345c456aa7ef10f82388d55947b70501b6fe38d43c9a23cb40e14a2240682d",
     "C300XChecks.qml": "04f543caca11a04449b9cedff97e3e3b244e2ec5aec4ed004fd0a2eee2a6d399",
-    "C300XSituations.qml": "63853c3376beb17514be5d47d4dadb0741dd3bca9ac9a2974cde0f82a24baeb4",
+    "C300XSituations.qml": "c6a461eb725c588db864559b31430546387948c3f39e3de502dc23e797c4b48b",
     "C300XOptionalPages.qml": "652645890db10c3797a9f11a165c1ff10faff1bc89164864921b9c3e94444a4d",
     "C300XPageNavigation.qml": "958aee89fe169d819c3abfd94cfecac0a2fb335845303282100f35b9f52ea638",
     "C300XRingerControl.qml": "18fd4869c4041c53078619da1e846aaeb599a59fdae4154499c861da7ff6740b",
@@ -351,12 +352,12 @@ PATCH_OUTPUT_SHA256 = {
     "js/c300x_energy.js": "2c870b4e39fb41718421394f4afa35df8116e9ae247031a688f831506a823af2",
     "js/c300x_energy_consumers.js": "f4128432b1990bebb79eae88daafe54481e953ad621fcf758e685ad57f0b4377",
     "js/c300x_ringer.js": "268fed06c44704de8fbf04ec458cac7425b9fbc78f9a68514112ca751603cb71",
-    "js/c300x_ha.js": "0fcc223b5cfbec06c28cc2c3a38ddf17833f21e35fd0400d667c8ecb0b0e35c2",
-    "js/c300x_i18n.js": "c61b2534a23d93aaa893b993e1a5322ceace10119b97850a7ffd08f52ca40c35",
+    "js/c300x_ha.js": "40c83a7d5baffae75819a134657ca89ffe1e81194f5bb26a7533e13a401df0f5",
+    "js/c300x_i18n.js": "bd8c8566398a445ceba8350d7d10c3a43888b4b305ef665de9a88896c05da1c4",
     "js/c300x_memos.js": "2e922d5617dfafda1c231581ef1eff46f83f4897a11a7350926641135c46040d",
 }
 
-SIDE_BY_SIDE_HOME_PAGE_SHA256 = "e5c13b1398716d78cebe6bf1751b736d7555506a16c5aabfb413dfaeccb8ef83"
+SIDE_BY_SIDE_HOME_PAGE_SHA256 = "5dc87a9ad493adcc11e4515f139a4545f1f103cbdd9f0526ceecb3c3b4a9cdb3"
 
 
 def test_qml_patch_keeps_original_backup_across_reapply(tmp_path: Path) -> None:
@@ -626,7 +627,8 @@ def test_qml_patch_without_a_layout_flag_keeps_the_device_layout(
         [str(SCRIPT), "apply"], check=True, capture_output=True, text=True,
         env={**unset, "C300X_QML_GUI_DIR": str(gui_dir), "C300X_QML_SOURCE_DIR": str(SOURCE_DIR),
              "C300X_QML_BACKUP_DIR": str(backup_dir), "C300X_QML_NO_REMOUNT": "1",
-             "C300X_QML_RELOAD_GUI": "0", "C300X_QML_GUI_ROOT": str(tmp_path)},
+             "C300X_QML_RELOAD_GUI": "0", "C300X_QML_GUI_ROOT": str(tmp_path),
+             "PATH": _without_host_display_tools(tmp_path, os.environ["PATH"])},
     )
 
     assert json.loads(result.stdout)["changed_files"] == 0
@@ -1892,6 +1894,7 @@ def _run_qml_patch_raw(
     }
     if env_overrides:
         env.update(env_overrides)
+    env["PATH"] = _without_host_display_tools(tmp_path, env.get("PATH", os.environ["PATH"]))
     return subprocess.run(
         [str(SCRIPT), action],
         check=False,
@@ -1899,6 +1902,24 @@ def _run_qml_patch_raw(
         env=env,
         text=True,
     )
+
+
+def _without_host_display_tools(tmp_path: Path, path: str) -> str:
+    """Never let a restart reach host processes named BtClass (other tests, worktrees).
+
+    Stand-ins find no display program and stop nothing; a test's own tools
+    placed ahead of the host PATH still come first.
+    """
+
+    tools = tmp_path / "no-host-display-tools"
+    if not tools.is_dir():
+        tools.mkdir()
+        for name in ("pidof", "killall"):
+            (tools / name).write_text("#!/bin/sh\nexit 1\n")
+            (tools / name).chmod(0o755)
+    host = os.environ["PATH"]
+    own = path[: -len(host)] if path.endswith(host) else path + os.pathsep
+    return own + str(tools) + os.pathsep + host
 
 
 def _write_original_gui(gui_dir: Path) -> None:
@@ -1958,10 +1979,19 @@ def _assert_complete_gui_patch(
     assert home_page.index('objectName: "alarmButton"') < home_page.index(
         'objectName: "haButton"'
     )
-    assert 'pressedIcon: "images/keylock_icon-small_p.svg"' in home_page
-    assert 'defaultIcon: "images/keylock_icon-small.svg"' in home_page
-    assert 'pressedIcon: "images/call/icon_call-home_p.svg"' in home_page
-    assert 'defaultIcon: "images/call/icon_call-home.svg"' in home_page
+    # The skin has these two motifs only as small pictures (28 and 33 px wide;
+    # the station's own button icons are 41 to 49 px). They are drawn at button
+    # icon size, and the label gets the gap to the next button as well, so
+    # "Home Assistant" (125 px in the station font, button 123 px) is not cut.
+    for icon, size in (("keylock_icon-small", "sourceSize.width: 46"), ("call/icon_call-home", "sourceSize.height: 41")):
+        assert (
+            f'                        source: control.pressed ? "images/{icon}_p.svg" : "images/{icon}.svg"\n'
+            f"                        {size}\n"
+        ) in home_page
+    assert home_page.count("                        width: bg.width + foobar.spacing\n") == 2
+    assert home_page.count('source: control.pressed ? "images/function_btn_p.svg" : "images/function_btn.svg"') == 2
+    assert '                        text: "Home Assistant"\n' in home_page
+    assert "defaultIcon: \"images/keylock" not in home_page and "defaultIcon: \"images/call" not in home_page
     assert 'trsl.language === "de" ? "Alarmanlage"' in home_page
     assert 'trsl.language === "it" ? "Allarme"' in home_page
     assert 'trsl.language === "fr" ? "Alarme"' in home_page
@@ -2019,7 +2049,7 @@ def _assert_media_user_label_gui_patch(gui_dir: Path) -> None:
     assert "original" not in call_block_popup
     assert "Anrufe an Home Assistant weitergeleitet" in call_block_popup
     assert "Chiamate inoltrate a Home Assistant" in call_block_popup
-    assert "Appels renvoyes vers Home Assistant" in call_block_popup
+    assert "Appels renvoyés vers Home Assistant" in call_block_popup
     assert "Calls forwarded to Home Assistant" in call_block_popup
     assert "Anrufe an Home Assistant" in call_block_popup
     assert "Inoltra chiamate a Home Assistant" in call_block_popup
@@ -2190,10 +2220,15 @@ def test_only_idempotent_reads_share_a_display_round_trip() -> None:
     ]
     assert 'forwardRequest(path, callback, errorCallback, "", scope)' in plain
 
-    # Exactly the two /ui/state producers opt in: Api.status for the alarm and
-    # dashboard pages, homeButtons for the patched home page.
-    assert dashboard_js.count("getJsonShared(") == 3
-    assert dashboard_js.count('getJsonShared("/ui/state"') == 2
+    # Exactly the /ui/state producers opt in: Api.status for the alarm and
+    # dashboard pages, homeButtons for the patched home page and bridgeDetails
+    # for the Integration tab, which also reads the agent's own /ui/status.
+    assert dashboard_js.count("getJsonShared(") == 5
+    assert dashboard_js.count('getJsonShared("/ui/state"') == 3
+    assert dashboard_js.count('getJsonShared("/ui/status"') == 1
+    # Changing a display setting is a command and keeps its own round trip.
+    setting = dashboard_js[dashboard_js.index("function displaySetting("):dashboard_js.index("function dashboardNextPage(")]
+    assert "forwardRequest(" in setting and "getJsonShared(" not in setting
     for command in ("/ui/alarm/command", "/ui/action"):
         assert f'getJsonShared("{command}' not in dashboard_js
 
@@ -2223,7 +2258,9 @@ def _blocking_commands(tmp_path: Path, name: str, failing_mv: bool = False) -> d
         f'  : > "{tmp_path}/held"\n'
         '  while :; do sleep 0.02; done\n'
         'fi\n'
-        f'exec "{shutil.which(name) or "/bin/true"}" "$@"\n'
+        # Never the host's killall or pidof: they would reach display programs
+        # of other tests and worktrees.
+        f'exec "{"/bin/false" if name in ("killall", "pidof") else shutil.which(name) or "/bin/true"}" "$@"\n'
     )
     (commands / name).chmod(0o700)
     if failing_mv:
@@ -2233,7 +2270,7 @@ def _blocking_commands(tmp_path: Path, name: str, failing_mv: bool = False) -> d
         )
         (commands / "mv").chmod(0o700)
     return {
-        "PATH": str(commands) + os.pathsep + os.environ["PATH"],
+        "PATH": _without_host_display_tools(tmp_path, str(commands) + os.pathsep + os.environ["PATH"]),
         "C300X_QML_RELOAD_GUI": "1",
         "C300X_QML_GUI_RELOAD_DELAY_SECONDS": "0",
         "C300X_QML_GUI_WRAPPER": str(tmp_path / "missing-wrapper"),
@@ -2427,3 +2464,43 @@ def test_a_leftover_that_cannot_be_rolled_back_is_reported_and_blocks_writes(
     assert "An unfinished GUI write is still in place" in write.stderr
     assert (leftover / "MainApp.qml").read_bytes() == _before["MainApp.qml"]
     assert _gui_files(gui)["MainApp.qml"] == during["MainApp.qml"]
+
+
+def test_a_reload_in_these_tests_leaves_host_display_programs_alone(tmp_path: Path) -> None:
+    """A process named BtClass outside the test (another test, another worktree) survives."""
+
+    program = tmp_path / "BtClass"
+    program.write_text("#!/bin/sh\nwhile :; do sleep 0.2; done\n")
+    program.chmod(0o755)
+    other = subprocess.Popen([str(program)], start_new_session=True)
+    try:
+        gui_dir = tmp_path / "gui"
+        gui_dir.mkdir()
+        _write_original_gui(gui_dir)
+        _run_qml_patch_raw(tmp_path, gui_dir, tmp_path / "backups", "reload", env_overrides={
+            "C300X_QML_RELOAD_GUI": "1", "C300X_QML_GUI_RELOAD_DELAY_SECONDS": "0",
+            "C300X_QML_GUI_WRAPPER": str(tmp_path / "missing-wrapper"),
+        })
+        assert other.poll() is None
+    finally:
+        other.kill()
+        other.wait()
+
+
+def test_a_terminated_write_leaves_host_display_programs_alone(tmp_path: Path) -> None:
+    """The held killall and the abort's restart never reach a BtClass outside the test."""
+
+    program = tmp_path / "BtClass"
+    program.write_text("#!/bin/sh\nwhile :; do sleep 0.2; done\n")
+    program.chmod(0o755)
+    other = subprocess.Popen([str(program)], start_new_session=True)
+    try:
+        gui, backup = tmp_path / "gui", tmp_path / "backup"
+        gui.mkdir()
+        _write_original_gui(gui)
+        result = _terminate_when_held(tmp_path, gui, backup, "apply", _blocking_commands(tmp_path, "killall"))
+        assert result.returncode == 130, result.stderr
+        assert other.poll() is None
+    finally:
+        other.kill()
+        other.wait()

@@ -67,6 +67,7 @@ Page {
     function aboutToShow() {
         c300xDisplayPreferences.load()
         pageActive = true
+        status.held = false
         activeFeedbackCommand = ""
         clearCommandFeedback()
         refreshAlarmStatus(false)
@@ -156,7 +157,7 @@ Page {
         }
         commandFeedbackColor = color
         flashCommandButton(command, color)
-        Api.setStatus(status, commandFeedback, color)
+        Api.setStatus(status, commandFeedback, color, key === "checking" || key === "sending" || key === "ready_to_arm")
     }
 
     function flashCommandButton(command, color) {
@@ -325,6 +326,10 @@ Page {
 
     function modeReadyIndicatorVisible(command) {
         return alarmOnline && isArmCommand(command) && commandTargetState(command) !== alarmRawState
+    }
+
+    function statusText() {
+        return feedbackColorsEnabled || !status.optionalFeedback ? status.text : ""
     }
 
     function modeFeedbackVisible(command) {
@@ -820,16 +825,35 @@ Page {
                     property string text: ""
                     property color color: "#c7d0d9"
                     property bool optionalFeedback: false
+                    property bool held: false
+                    Timer { interval: 30000; running: status.held; onTriggered: status.held = false }
                     width: parent.width
                     height: 38
                     clip: true
-                    UbuntuLightText {
+                    Image {
                         anchors.fill: parent
-                        text: status.text
-                        textFormat: Text.PlainText
+                        visible: statusLine.text !== ""
+                        source: "images/settings/act_btn.svg"
+                        fillMode: Image.Stretch
+                    }
+                    Rectangle {
+                        x: 8; y: 8; width: 4; height: 22
+                        visible: statusLine.text !== ""
                         color: feedbackColorsEnabled || !alarmOnline ? status.color : "#c7d0d9"
+                    }
+                    UbuntuLightText {
+                        id: statusLine
+                        anchors.fill: parent
+                        anchors.leftMargin: 20
+                        anchors.rightMargin: 8
+                        text: statusText()
+                        textFormat: Text.PlainText
+                        color: "white"
                         font.pixelSize: 16
+                        verticalAlignment: Text.AlignVCenter
                         wrapMode: Text.Wrap
+                        maximumLineCount: 2
+                        elide: Text.ElideRight
                     }
                 }
             }

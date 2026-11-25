@@ -196,7 +196,7 @@ Item {
                     anchors.fill: parent
                     color: "transparent"
                     border.width: 2
-                    border.color: box.present ? box.info.color : "transparent"
+                    border.color: box.info.color ? box.info.color : "transparent"
                 }
 
                 UbuntuLightText {
@@ -206,7 +206,7 @@ Item {
                     anchors.leftMargin: 10
                     anchors.topMargin: 6
                     width: parent.width - 20
-                    text: box.present ? box.info.label : ""
+                    text: box.info.label ? box.info.label : ""
                     color: "#c7d0d9"
                     font.pixelSize: 15
                     elide: Text.ElideRight

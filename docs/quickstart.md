@@ -19,10 +19,13 @@ Install integration -> add the station -> install the device agent -> choose opt
 
 The integration cannot root a stock station. This project provides no firmware
 images, firmware extraction output, APKs, exploits, rooting instructions or
-vendor files. If a separate rooting or SSH-enablement workflow asks for a
-firmware target, use `1.7.19`. A station on `2.0.2` or `3.0.6` needs a workflow
-made for that firmware. Everything is used at your own risk and without
-warranty.
+vendor files. Rooting is described by the community project
+[fquinto/bticinoClasse300x](https://github.com/fquinto/bticinoClasse300x), a
+third-party project that is not part of this project and is used at your own
+risk; flashing a station can brick it. If a separate rooting or SSH-enablement
+workflow asks for a firmware target, use `1.7.19`. A station on `2.0.2` or
+`3.0.6` needs a workflow made for that firmware. Everything is used at your own
+risk and without warranty.
 
 ## Install the Integration
 

@@ -232,6 +232,12 @@ Turning **Save images** off stops new images and hides snapshots in the card,
 including the history. Clips and clip automations are not affected; existing
 images stay until they expire.
 
+When an image cannot be taken, the last one stays, HA logs a warning once per
+cause, and the attribute `last_failure` of **Save images** names the cause
+(for example `snapshot_unavailable` when the station's display picture cannot
+be read) until the next image succeeds. On firmware 3.0.6 reading the display
+picture is checked offline only and may fail.
+
 ### Browsing in the Card
 
 With **Browse saved images and videos** on, the arrows on the picture (**Older
@@ -424,9 +430,10 @@ The target is fixed to the entry, so do not set `target`; `title` defaults to
 | `tts_engine`, `language` | Engine and language for the speech. Only with `tts`. |
 | `mode` | Legacy; see below. |
 
-Title and message allow 80 and 500 characters; no URLs, audio files or
-executable actions. This is supplementary information, **not a fire alarm or
-other life-safety alerting system**.
+The title allows 80 characters. A longer message is cut to 500 characters
+and ends with "…". No URLs, audio files or executable actions. This is
+supplementary information, **not a fire alarm or other life-safety alerting
+system**.
 
 Each switch turns on one channel; combine them freely, at least one on:
 

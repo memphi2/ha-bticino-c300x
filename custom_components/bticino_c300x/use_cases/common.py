@@ -11,7 +11,7 @@ from homeassistant.core import HomeAssistant, async_get_hass
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from ..agent_diagnostics import async_refresh_agent_diagnostics
-from ..api_errors import C300XAgentApiAuthError
+from ..api_errors import C300XAgentApiAuthError, C300XStationBusyError
 from ..capabilities import (
     capability_is_supported,
     entry_gui_function_patch_active,
@@ -38,6 +38,7 @@ async def raise_agent_command_failed[T](awaitable: Awaitable[T], *, entry: Any) 
 
     An unreachable agent, a rejected key or a failed command is a device-side
     failure: HomeAssistantError, not ServiceValidationError (invalid input).
+    A command the station does not run during a call says so.
     """
 
     runtime = getattr(entry, "runtime_data", None)
@@ -61,6 +62,8 @@ async def raise_agent_command_failed[T](awaitable: Awaitable[T], *, entry: Any) 
             async_request_reauth(hass, entry, runtime.connection_state, failure)
             async_dispatcher_send(hass, SIGNAL_CONNECTION_STATE_CHANGED, entry.entry_id)
         raise home_assistant_error("agent_command_failed") from failure
+    except C300XStationBusyError as err:
+        raise home_assistant_error("station_busy") from err
     except Exception as err:
         raise home_assistant_error("agent_command_failed") from err
 

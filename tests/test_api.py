@@ -2121,7 +2121,24 @@ def test_ensure_homeassistant_user_sends_maintenance_confirmation() -> None:
     assert session.requests[0]["kwargs"]["json"] == {
         "confirm": "ensure_homeassistant_user"
     }
-    assert session.requests[0]["kwargs"]["timeout"] == 20.0
+    assert session.requests[0]["kwargs"]["timeout"] == 50.0
+
+
+@pytest.mark.parametrize("method", [
+    "async_ensure_homeassistant_user", "async_restore_homeassistant_media_user_setup",
+])
+def test_media_user_label_writes_wait_like_a_display_write(method: str) -> None:
+    """The agent writes the label with qml_patch.sh, GUI restart included, before it answers."""
+
+    session = _FakeSession('{"ok": true, "supported": true}')
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+        maintenance_token="maintenance-token",
+    )
+    asyncio.run(getattr(api, method)())
+    assert session.requests[0]["kwargs"]["timeout"] == 50.0
 
 
 def test_ensure_homeassistant_user_can_send_account_label() -> None:
@@ -2804,6 +2821,32 @@ def test_delete_memo_requests_authenticated_endpoint() -> None:
         "Authorization": "Bearer agent-token",
     }
     assert session.requests[0]["kwargs"]["json"] == {"id": "text/memo_1"}
+
+
+def test_create_text_memo_during_a_call_reports_the_busy_station() -> None:
+    from custom_components.bticino_c300x.api_errors import C300XStationBusyError
+
+    def create(status: int, text: str) -> None:
+        api = C300XAgentApi(
+            _FakeSession(text, response_status=status),  # type: ignore[arg-type]
+            "http://agent.local:8080",
+            "agent-token",
+        )
+        asyncio.run(api.async_create_text_memo("memo"))
+
+    with pytest.raises(C300XStationBusyError, match="station_busy"):
+        create(409, '{"ok": false, "error": "station_busy"}')
+    # Only this status with this code: any other refusal is the plain failure.
+    for status, text in (
+        (502, '{"ok": false, "error": "memo_create_refused"}'),
+        (409, '{"ok": false, "error": "media_session_active"}'),
+        (503, '{"ok": false, "error": "station_busy"}'),
+        (409, '{"ok": false, "error": "video_activate_failed", "last_error": "station_busy"}'),
+        (409, "station_busy"),
+    ):
+        with pytest.raises(C300XAgentApiConnectionError) as failure:
+            create(status, text)
+        assert type(failure.value) is C300XAgentApiConnectionError, (status, text)
 
 
 def test_create_text_memo_requests_authenticated_endpoint() -> None:

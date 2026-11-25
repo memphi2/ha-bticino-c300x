@@ -101,15 +101,12 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           object-fit: contain;
           pointer-events: none;
         }
+        /* A snapshot does not resize the card: the frame keeps the camera's known shape, else the snapshot's. */
         ha-card:not(:fullscreen) .media:has(> .snapshot-preview:not([hidden])) {
-          aspect-ratio: auto;
+          aspect-ratio: var(--c300x-picture-ratio, var(--snapshot-ratio, 5 / 3));
         }
-        ha-card:not(:fullscreen) .snapshot-preview:not([hidden]) {
-          position: relative;
-          inset: auto;
-          display: block;
-          height: auto;
-          aspect-ratio: auto var(--c300x-picture-ratio, 5 / 3);
+        dialog.window[open] ha-card:not(:fullscreen) .media:has(> .snapshot-preview:not([hidden])) {
+          aspect-ratio: var(--dialog-ratio);
         }
         [hidden] { display: none !important; }
         .body {

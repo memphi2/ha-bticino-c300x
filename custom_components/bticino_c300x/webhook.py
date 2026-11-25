@@ -51,6 +51,7 @@ from .dashboard import (
 )
 from .dashboard_response import display_json_dumps
 from .data import C300XEventState
+from .display_settings import async_set_display_setting
 from .doorbell_state import raw_doorbell_state_value
 from .entity import entry_config_value
 from .entry_types import BticinoC300XConfigEntry
@@ -303,6 +304,15 @@ async def _display_bridge_alarm_command(
     return result
 
 
+async def _display_bridge_setting(context: _DisplayBridgeContext) -> dict[str, Any]:
+    return await async_set_display_setting(
+        context.hass,
+        context.entry,
+        context.payload.get("key"),
+        context.payload.get("value"),
+    )
+
+
 _DISPLAY_BRIDGE_HANDLERS: dict[str, _DisplayBridgeHandler] = {
     "status": _display_bridge_status,
     "alarm_status": _display_bridge_status,
@@ -311,6 +321,7 @@ _DISPLAY_BRIDGE_HANDLERS: dict[str, _DisplayBridgeHandler] = {
     "dashboard_action": _display_bridge_dashboard_action,
     "stair_light": _display_bridge_stair_light,
     "alarm_command": _display_bridge_alarm_command,
+    "display_setting": _display_bridge_setting,
 }
 
 

@@ -84,10 +84,11 @@ def finish(conn: HTTPConnection, status: int = 200) -> dict:
 
 
 @pytest.mark.parametrize("ready", [False, True])
-def test_call_status_has_peer_readiness(lab: Lab, ready: bool) -> None:
+@pytest.mark.parametrize("path", ["/api/v1/calls/doorbell", "/api/v1/calls/doorbell/status"])
+def test_call_status_has_peer_readiness(lab: Lab, ready: bool, path: str) -> None:
     if ready:
         (lab.root / "talkback-ready").touch()
-    status = api_get(lab.api_port, "/api/v1/calls/doorbell/status")
+    status = api_get(lab.api_port, path)
     assert status["talkback_ready"] is ready
 
 

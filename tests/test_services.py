@@ -2513,6 +2513,50 @@ def test_write_text_memo_service_calls_agent_api_and_refreshes_memos() -> None:
     asyncio.run(_run())
 
 
+@pytest.mark.parametrize(
+    ("failure", "key"),
+    [
+        ("busy", "station_busy"),
+        ("refused", "agent_command_failed"),
+    ],
+)
+def test_write_text_memo_during_a_call_says_the_station_is_busy(failure: str, key: str) -> None:
+    from custom_components.bticino_c300x.api_errors import (
+        C300XAgentApiConnectionError,
+        C300XStationBusyError,
+    )
+
+    errors = {
+        "busy": C300XStationBusyError('HTTP 409: {"ok":false,"error":"station_busy"}'),
+        "refused": C300XAgentApiConnectionError('HTTP 502: {"ok":false,"error":"memo_create_refused"}'),
+    }
+
+    class _BusyApi(_FakeApi):
+        async def async_create_text_memo(self, text: str, *, read: bool = False) -> dict[str, Any]:
+            raise errors[failure]
+
+    async def _run() -> None:
+        entry = _FakeEntry(
+            _FakeRuntimeData(
+                api=_BusyApi(),
+                capabilities={"memos": {"supported": True, "write_text": True}},
+            )
+        )
+        hass = _FakeHass([entry])
+
+        await async_setup_services(hass)  # type: ignore[arg-type]
+        handler = hass.services.handlers[(DOMAIN, SERVICE_WRITE_TEXT_MEMO)]
+        with pytest.raises(HomeAssistantError) as raised:
+            await handler(types.SimpleNamespace(data={"text": "new memo"}))
+        # A device-side state, not invalid input.
+        assert not isinstance(raised.value, SERVICE_VALIDATION_ERROR)
+        assert _translation_key(raised.value) == key
+        assert raised.value.__cause__ is errors[failure]
+        assert entry.runtime_data.memos == {}
+
+    asyncio.run(_run())
+
+
 def test_write_text_memo_schedules_a_background_refresh_when_the_refresh_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

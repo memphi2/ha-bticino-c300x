@@ -13,6 +13,7 @@
 #include "http_camera_quality.h"
 #include "http_announce.h"
 #include "camera_quality.h"
+#include "camera_update_guard.h"
 #include "display_callback.h"
 #include "event_payload.h"
 #include "file_io.h"
@@ -23,6 +24,7 @@
 #include "http_response.h"
 #include "http_clients.h"
 #include "http_media_actions.h"
+#include "http_ring_status.h"
 #include "picture_worker.h"
 #include "openwebnet_async.h"
 #include "http_file_transfers.h"
@@ -49,6 +51,7 @@
 #include "signal_wakeup.h"
 #include "time_util.h"
 #include "ui_homeassistant.h"
+#include "ui_status.h"
 #include "ui_events.h"
 #include "touch_tone.h"
 #include "setting_state.h"
@@ -203,6 +206,7 @@ struct agent_runtime {
     int display_client_fd;
     int home_assistant_connected_this_run;
     time_t home_assistant_last_seen_at;
+    time_t home_assistant_last_seen_monotonic;
     long long home_assistant_request_ms;
     int display_bridge_registered;
     struct c300x_memo_led memo_led;
@@ -785,6 +789,7 @@ static void mark_home_assistant_callback_seen(struct agent_runtime *runtime, tim
     }
     runtime->home_assistant_connected_this_run = 1;
     runtime->home_assistant_last_seen_at = now;
+    runtime->home_assistant_last_seen_monotonic = c300x_monotonic_seconds();
 }
 
 static int address_is_valid(const char *value)
@@ -5211,6 +5216,8 @@ static void api_capabilities(
     const struct c300x_capabilities_context context = {
         .device_id = device_id,
         .memo_led_present = runtime != NULL && runtime->memo_led.claim_dir >= 0,
+        /* Firmware 3.0.x has no IPv6 firewall start script to patch. */
+        .ipv6_firewall_hook = access(config->maintenance_ipv6_firewall_path, F_OK) == 0,
         .picture_supported = picture == PICTURE_DIRECT || (runtime && c300x_gui_supports_picture(&runtime->ringer_control)),
         .device_firmware = firmware_value,
         .bundle_hash = bundle_hash,
@@ -5679,94 +5686,6 @@ static void handle_doorbell_video_get(
     );
     send_json(client_fd, 200, "OK", body);
     free(body);
-}
-
-static void handle_doorbell_call_get(
-    int client_fd,
-    const struct c300x_config *config,
-    struct agent_runtime *runtime
-)
-{
-    char body[2048];
-    struct c300x_video_status video_status;
-    int ring_receiver_running = 0;
-    int ring_registered = 0;
-    int active = 0;
-    int early_media_active = 0;
-    int audio_active = 0;
-    int answer_requested = 0;
-    int answered = 0, hangup = 0;
-    int can_answer = 0;
-    int can_hangup = 0;
-    int talkback_ready = 0;
-    int bridge_open_fds = 0;
-    int bridge_active_threads = 0;
-    char media_owner_json[C300X_JSON_QUOTED_LEN(32)];
-    char last_error_quoted[(C300X_MAX_ERROR_LEN * 6) + 3];
-    const char *last_error_json = "null";
-
-    c300x_json_string("idle", media_owner_json, sizeof(media_owner_json));
-    if (runtime != NULL && runtime->video != NULL) {
-        c300x_video_status(runtime->video, &video_status);
-        ring_receiver_running = video_status.ring_receiver_running;
-        ring_registered = video_status.ring_registered;
-        active = video_status.ring_call_active;
-        early_media_active = video_status.ring_media_active;
-        audio_active = video_status.ring_audio_active;
-        answer_requested = video_status.ring_answer_requested;
-        answered = video_status.ring_answered; hangup = video_status.ring_hangup_requested;
-        can_answer = video_status.ring_call_active && !video_status.ring_answered;
-        can_hangup = video_status.ring_call_active || video_status.ring_media_active;
-        talkback_ready = c300x_media_ring_talkback_peer_ready(runtime->video, client_fd);
-        bridge_open_fds = video_status.bridge_open_fds;
-        bridge_active_threads = video_status.bridge_active_threads;
-        c300x_json_string(video_status.media_owner, media_owner_json, sizeof(media_owner_json));
-        last_error_json = c300x_json_string_or_null(
-            video_status.last_error,
-            last_error_quoted,
-            sizeof(last_error_quoted)
-        );
-    }
-
-    snprintf(
-        body,
-        sizeof(body),
-        "{"
-        "\"ok\":true,"
-        "\"supported\":%s,"
-        "\"active\":%s,"
-        "\"early_media_active\":%s,"
-        "\"audio_active\":%s,"
-        "\"answer_requested\":%s,"
-        "\"answered\":%s,\"hangup_requested\":%s,"
-        "\"can_answer\":%s,"
-        "\"can_hangup\":%s,"
-        "\"talkback_ready\":%s,"
-        "\"media_owner\":%s,"
-        "\"ring_receiver_running\":%s,"
-        "\"ring_registered\":%s,"
-        "\"capture_supported\":false,"
-        "\"open_fds\":%d,"
-        "\"active_threads\":%d,"
-        "\"last_error\":%s"
-        "}\n",
-        config->video_enabled ? "true" : "false",
-        active ? "true" : "false",
-        early_media_active ? "true" : "false",
-        audio_active ? "true" : "false",
-        answer_requested ? "true" : "false",
-        answered ? "true" : "false", hangup ? "true" : "false",
-        can_answer ? "true" : "false",
-        can_hangup ? "true" : "false",
-        talkback_ready ? "true" : "false",
-        media_owner_json,
-        ring_receiver_running ? "true" : "false",
-        ring_registered ? "true" : "false",
-        bridge_open_fds,
-        bridge_active_threads,
-        last_error_json
-    );
-    send_json(client_fd, 200, "OK", body);
 }
 
 static void handle_doorbell_call_capture(int client_fd)
@@ -7104,6 +7023,12 @@ static void handle_text_memo_create(
     memo.text = text;
     result = c300x_memo_vendor_create_text(config, &memo, error, sizeof(error));
     if (result == C300X_MEMO_VENDOR_REFUSED) {
+        /* The station saves no memo during a call. Its refusal names no
+         * reason, so the agent's own view of calls and streams does. */
+        if (c300x_camera_update_media_busy(runtime->video)) {
+            send_json(client_fd, 409, "Conflict", "{\"ok\":false,\"error\":\"station_busy\"}\n");
+            return;
+        }
         send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"memo_create_refused\"}\n");
         return;
     }
@@ -8908,7 +8833,7 @@ static void handle_api_request(
         && (strcmp(request->path, "/api/v1/calls/doorbell") == 0
             || strcmp(request->path, "/api/v1/calls/doorbell/status") == 0)
     ) {
-        handle_doorbell_call_get(client_fd, config, runtime);
+        c300x_http_doorbell_call_get(client_fd, config->video_enabled, runtime != NULL ? runtime->video : NULL);
         return;
     }
     if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/calls/doorbell/actions/answer") == 0) {
@@ -9203,6 +9128,24 @@ static int handle_ui_request(
 
     if (strcmp(request->method, "GET") == 0 && strcmp(request->path, "/health") == 0) {
         send_json(client_fd, 200, "OK", "{\"ok\":true,\"bridge\":\"native-c\",\"version\":\"" C300X_NATIVE_AGENT_VERSION "\"}\n");
+        return 1;
+    }
+
+    if (strcmp(request->path, "/ui/status") == 0) {
+        char body[512];
+        char firmware[64];
+
+        resolve_device_firmware(config, firmware, sizeof(firmware));
+        if (!client_is_loopback(client_fd)) {
+            send_loopback_required(client_fd);
+        } else if (c300x_ui_status_json(C300X_NATIVE_AGENT_VERSION, firmware, display_bridge_webhook_url(config, runtime),
+                runtime->home_assistant_connected_this_run, runtime->display_bridge_disabled,
+                (long)runtime->home_assistant_last_seen_monotonic,
+                (long)c300x_monotonic_seconds(), body, sizeof(body))) {
+            send_json(client_fd, 200, "OK", body);
+        } else {
+            send_response_too_large(client_fd);
+        }
         return 1;
     }
 

@@ -1,7 +1,13 @@
 .pragma library
 
-function setStatus(statusItem, text, color, optionalFeedback) {
-    statusItem.optionalFeedback = optionalFeedback === true
+function setStatus(statusItem, text, color, optionalFeedback, fromRead) {
+    var routine = optionalFeedback === true
+    if (fromRead === true && routine && statusItem.held === true) return
+    if (statusItem.held !== undefined) {
+        statusItem.held = false
+        if (!routine && fromRead !== true && text) statusItem.held = true
+    }
+    statusItem.optionalFeedback = routine
     statusItem.text = text
     statusItem.color = color
 }
@@ -195,7 +201,7 @@ function status(statusItem, pageItem, alarmStateItem, activeSinceItem) {
             pageItem.preventReturnToHomepage = data.preventReturnToHomepage === true
         }
         setStatus(statusItem, uiText(pageItem, pageItem.commandPending ? "sending" : "ha_connected"),
-            pageItem.commandPending ? "#f1c40f" : "#58d68d", !pageItem.commandPending)
+            pageItem.commandPending ? "#f1c40f" : "#58d68d", true, true)
         if (data.alarm && data.alarm.state) {
             var previousState = pageItem.alarmRawState
             var previousCommand = pageItem.selectedCommand
@@ -257,7 +263,7 @@ function status(statusItem, pageItem, alarmStateItem, activeSinceItem) {
         // such as "API error: 503" in a translated interface. The code stays
         // visible because it names the cause exactly, but the sentence around
         // it is the user's language.
-        setStatus(statusItem, statusErrorText(pageItem, error), "#ff6b6b")
+        setStatus(statusItem, statusErrorText(pageItem, error), "#ff6b6b", false, true)
         if (pageItem.setAlarmDelayRemaining) {
             pageItem.setAlarmDelayRemaining(0)
         }
@@ -290,7 +296,7 @@ function dashboard(statusItem, pageItem) {
         }
         pageItem.dashboardOnline = true
         if (data && data.not_modified === true) {
-            setStatus(statusItem, uiText(pageItem, "board_loaded"), "#58d68d", true)
+            setStatus(statusItem, uiText(pageItem, "board_loaded"), "#58d68d", true, true)
             finishDashboardRefresh(statusItem, pageItem)
             return
         }
@@ -312,9 +318,9 @@ function dashboard(statusItem, pageItem) {
         if (pageItem.currentPageIndex >= pages.length) {
             pageItem.currentPageIndex = 0
         }
-        loadDashboardPage(statusItem, pageItem)
+        loadDashboardPage(statusItem, pageItem, true)
         setStatus(statusItem, uiText(pageItem, pages.length > 0 ? "board_loaded" : "no_dashboard_pages"),
-            pages.length > 0 ? "#58d68d" : "#f1c40f", pages.length > 0)
+            pages.length > 0 ? "#58d68d" : "#f1c40f", pages.length > 0, true)
         if (pageItem.refreshSelectedItem) pageItem.refreshSelectedItem()
         finishDashboardRefresh(statusItem, pageItem)
     }, function(error) {
@@ -325,7 +331,7 @@ function dashboard(statusItem, pageItem) {
         pageItem.watchFailed = true
         dashboardRevision = ""
         if (!pageItem.controlInFlight) clearPendingControl(pageItem)
-        setStatus(statusItem, uiText(pageItem, "stale_state"), "#f1c40f")
+        setStatus(statusItem, uiText(pageItem, "stale_state"), "#f1c40f", false, true)
     })
 }
 
@@ -529,21 +535,51 @@ function dashboardControl(item, control, value, statusItem, pageItem) {
     }, commandScope(pageItem, "commandGeneration"))
 }
 
-function homeButtons(callback, owner) {
+function homeButtons(callback, owner, wanted) {
     if (owner) useBaseUrl(owner.uiBaseUrl)
     getJsonShared("/ui/state", function(data) {
         if (callback) {
             callback(
                 data && data.alarm_configured === true,
                 data && data.dashboard_available === true,
-                true
+                true,
+                "",
+                !data || data.device_ui_enabled !== false
             )
         }
-    }, function() {
-        if (callback) {
-            callback(false, false, false)
+    }, function(error) {
+        if (!callback) return
+        if (error !== "API error: 404") {
+            callback(false, false, false, "bridge_unreachable", true)
+            return
         }
+        if (wanted && !wanted()) return
+        stationStatus(function(status) {
+            if (status && status.disabled === true) callback(false, false, true, "", false)
+            else callback(false, false, false, "bridge_not_registered", true)
+        }, owner)
     }, owner)
+}
+
+function stationStatus(callback, owner) {
+    if (owner) useBaseUrl(owner.uiBaseUrl)
+    getJsonShared("/ui/status", callback, function() { callback(null) }, owner)
+}
+
+function bridgeDetails(callback, owner) {
+    if (owner) useBaseUrl(owner.uiBaseUrl)
+    getJsonShared("/ui/state", function(data) {
+        callback(data || {}, "")
+    }, function(error) {
+        callback(null, error === "API error: 404" ? "bridge_not_registered" : "bridge_unreachable")
+    }, owner)
+}
+
+function displaySetting(key, value, callback, owner) {
+    if (owner) useBaseUrl(owner.uiBaseUrl)
+    forwardRequest("/homeassistant?domain=c300x&service=setting&entities=" + key + "&option=" + value, function(data) {
+        callback(data && data.ok === true ? data : null)
+    }, function() { callback(null) }, null, null, owner)
 }
 
 function dashboardNextPage(statusItem, pageItem) {
@@ -720,11 +756,7 @@ function alarmPageItem(source) {
 function alarmCommand(command, code, statusItem, pageItem, alarmStateItem, activeSinceItem, force) {
     if (pageItem.commandPending || pageItem.alarmOnline === false) return
     if (!force && !alarmCommandReady(pageItem.alarmCommandDetails, command)) {
-        if (pageItem.setCommandFeedback) {
-            pageItem.setCommandFeedback("not_ready_to_arm", command, "#ff6b6b")
-        } else {
-            setStatus(statusItem, alarmBlockingText(pageItem.alarmCommandDetails, command, pageItem), "#ff6b6b")
-        }
+        pageItem.setCommandFeedback("not_ready_to_arm", command, "#ff6b6b")
         return
     }
     var generation = pageItem.runtimeGeneration
@@ -751,11 +783,7 @@ function alarmCommand(command, code, statusItem, pageItem, alarmStateItem, activ
             var targetState = pageItem.commandTargetState ? pageItem.commandTargetState(command) : ""
             var alreadySatisfied = targetState && sentState === targetState && data.state === targetState
             if (pageItem.alarmRawState === sentState && !alreadySatisfied) pageItem.commandAwaitedState = sentState
-            if (pageItem.setCommandFeedback) {
-                pageItem.setCommandFeedback("sending", command, "#f1c40f")
-            } else {
-                setStatus(statusItem, uiText(pageItem, "sending"), "#f1c40f")
-            }
+            pageItem.setCommandFeedback("sending", command, "#f1c40f")
             pageItem.bypassOffered = false
             if (command === "disarm" && pageItem.setAlarmDelayRemaining) {
                 pageItem.setAlarmDelayRemaining(0)
@@ -799,17 +827,8 @@ function alarmCheck(command, statusItem, pageItem) {
             if (pageItem.refreshCommandReadiness) {
                 pageItem.refreshCommandReadiness()
             }
-            if (data.ready === false) {
-                if (pageItem.setCommandFeedback) {
-                    pageItem.setCommandFeedback("not_ready_to_arm", command, "#ff6b6b")
-                } else {
-                    setStatus(statusItem, uiText(pageItem, "not_ready_to_arm"), "#ff6b6b")
-                }
-            } else if (pageItem.setCommandFeedback) {
-                pageItem.setCommandFeedback("ready_to_arm", command, "#58d68d")
-            } else {
-                setStatus(statusItem, uiText(pageItem, "ready_to_arm"), "#58d68d")
-            }
+            pageItem.setCommandFeedback(data.ready === false ? "not_ready_to_arm" : "ready_to_arm", command,
+                data.ready === false ? "#ff6b6b" : "#58d68d")
             return
         }
         setErrorFeedback(command, statusItem, pageItem)
@@ -844,11 +863,7 @@ function applyAlarmCommandResult(data, command, statusItem, pageItem) {
         return true
     }
     if (data.error === "invalid_code") {
-        if (pageItem.setCommandFeedback) {
-            pageItem.setCommandFeedback("invalid_code", command, "#ff6b6b")
-        } else {
-            setStatus(statusItem, uiText(pageItem, "invalid_code"), "#ff6b6b")
-        }
+        pageItem.setCommandFeedback("invalid_code", command, "#ff6b6b")
         return true
     }
     if (data.error === "alarm_state_unchanged" || data.error === "alarm_command_rejected") {
@@ -859,11 +874,7 @@ function applyAlarmCommandResult(data, command, statusItem, pageItem) {
 }
 
 function setErrorFeedback(command, statusItem, pageItem) {
-    if (pageItem.setCommandFeedback) {
-        pageItem.setCommandFeedback("alarm_command_error", command, "#ff6b6b")
-        return
-    }
-    setStatus(statusItem, uiText(pageItem, "alarm_command_error"), "#ff6b6b")
+    pageItem.setCommandFeedback("alarm_command_error", command, "#ff6b6b")
 }
 
 function mergeAlarmCommandDetail(pageItem, command, update) {
@@ -1089,7 +1100,7 @@ function assignDashboardValue(target, key, value) {
     target[key] = value
 }
 
-function loadDashboardPage(statusItem, pageItem) {
+function loadDashboardPage(statusItem, pageItem, fromRead) {
     var pageData = currentDashboardPage(pageItem)
     var energy = pageData.energy && isList(pageData.energy.views) ? pageData.energy : null
     assignDashboardValue(pageItem, "badges", listOrEmpty(pageData.badges))
@@ -1107,7 +1118,7 @@ function loadDashboardPage(statusItem, pageItem) {
     pageItem.pageLabel = pageItem.pageCount > 1 ? uiText(pageItem, "page") + " " + (pageItem.currentPageIndex + 1) + "/" + pageItem.pageCount : ""
     if (pageItem.pageCount > 0) {
         setStatus(statusItem, uiText(pageItem, "page") + " " + (pageItem.currentPageIndex + 1)
-            + " " + uiText(pageItem, "status_loaded"), "#58d68d", true)
+            + " " + uiText(pageItem, "status_loaded"), "#58d68d", true, fromRead === true)
     }
 }
 

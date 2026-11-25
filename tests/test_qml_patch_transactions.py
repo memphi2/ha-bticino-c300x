@@ -11,6 +11,7 @@ from test_qml_patch_script import (
     SOURCE_DIR,
     SOURCE_INSTALLED_FILES,
     _run_qml_patch_raw,
+    _without_host_display_tools,
     _write_original_gui,
 )
 
@@ -154,7 +155,8 @@ def test_original_backup_ignores_preseeded_predictable_temp_symlink(tmp_path):
          "backup-test", str(sentinel), str(backup), str(SCRIPT)],
         env={**os.environ, "C300X_QML_GUI_DIR": str(gui),
              "C300X_QML_SOURCE_DIR": str(SOURCE_DIR), "C300X_QML_BACKUP_DIR": str(backup),
-             "C300X_QML_NO_REMOUNT": "1", "C300X_QML_RELOAD_GUI": "0"},
+             "C300X_QML_NO_REMOUNT": "1", "C300X_QML_RELOAD_GUI": "0",
+             "PATH": _without_host_display_tools(tmp_path, os.environ["PATH"])},
         capture_output=True, text=True, timeout=10,
     )
     assert result.returncode == 0, result.stderr

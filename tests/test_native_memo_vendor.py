@@ -25,9 +25,12 @@ import pytest
 
 from native_agent.test.smoke import (
     TOKEN,
+    api_get,
     free_tcp_ports,
+    free_udp_port,
     managed_tcp_server,
     read_frame,
+    send_udp_event,
     wait_for_health,
 )
 
@@ -105,6 +108,19 @@ class Lab:
     station: Station
     store: Path
     api_port: int
+    udp_port: int = 0
+
+    def bus(self, frame: str, *, call: bool) -> None:
+        """Send a door entry frame and wait until the agent took it in."""
+        send_udp_event(self.udp_port, frame)
+        deadline = time.monotonic() + 5
+        while self.in_call() is not call:
+            assert time.monotonic() < deadline, frame
+            time.sleep(0.05)
+
+    def in_call(self) -> bool:
+        status = api_get(self.api_port, "/api/v1/video/doorbell/status")
+        return status["bridge"]["external_media_active"]
 
     def post(self, path: str, body: dict) -> tuple[int, dict, float]:
         conn = HTTPConnection("127.0.0.1", self.api_port, timeout=15)
@@ -139,26 +155,40 @@ def write_entry(store: Path, directory: int, number: int, text: str | None = Non
 
 @pytest.fixture
 def lab(binary: Path, tmp_path: Path) -> Iterator[Lab]:
+    yield from run_lab(binary, tmp_path, video=False)
+
+
+@pytest.fixture
+def video_lab(binary: Path, tmp_path: Path) -> Iterator[Lab]:
+    """The agent with door video and bus events, as on a station with media set up."""
+    yield from run_lab(binary, tmp_path, video=True)
+
+
+def run_lab(binary: Path, tmp_path: Path, *, video: bool) -> Iterator[Lab]:
     store = tmp_path / "store"
     for folder, _prefix in DIRECTORIES.values():
         (store / folder).mkdir(parents=True)
     (store / "records").mkdir()
     with managed_tcp_server(Station(store)) as station:
-        api, ui = free_tcp_ports(2)
+        api, ui, rtsp = free_tcp_ports(3)
+        udp = free_udp_port() if video else 0
         config = {
             "listen": {"host": "127.0.0.1", "apiPort": api, "uiPort": ui},
             "api": {"token": TOKEN},
             "openwebnet": {"host": "127.0.0.1", "port": station.server_address[1], "timeoutMs": 9000},
             "maintenance": {"enabled": False},
             "activations": {"enabled": False, "autoDiscover": False},
-            "events": {"udp": {"enabled": False}},
+            "events": {"udp": {"enabled": True, "group": "239.255.76.67", "port": udp}
+                       if video else {"enabled": False}},
             "answeringMachine": {"messages": {"enabled": True, "root": str(store / "messages"),
                                               "watch": True}},
             "memos": {"enabled": True, "textRoot": str(store / "memos_text"),
                       "voiceRoot": str(store / "memos_voice"), "watch": True,
                       "recordsDir": str(store / "records")},
             "systemMetrics": {"enabled": False},
-            "video": {"enabled": False}, "displayBridge": {"enabled": False},
+            "video": {"enabled": True, "rtsp": {"port": rtsp, "rtpPortStart": 14000, "rtpPortCount": 4}}
+            if video else {"enabled": False},
+            "displayBridge": {"enabled": False},
             "mqtt": {"enabled": False}, "mdns": {"enabled": False},
         }
         config_path = tmp_path / "config.json"
@@ -168,7 +198,7 @@ def lab(binary: Path, tmp_path: Path) -> Iterator[Lab]:
                                        stdout=log, stderr=log, cwd=tmp_path)
             try:
                 wait_for_health(api)
-                yield Lab(station, store, api)
+                yield Lab(station, store, api, udp)
             finally:
                 process.terminate()
                 try:
@@ -256,6 +286,47 @@ def test_a_save_the_station_refuses_leaves_nothing_behind(lab: Lab) -> None:
     # A message.txt left there would go into the next recording the station saves.
     assert list((lab.store / "records").iterdir()) == []
     assert list((lab.store / "memos_text").iterdir()) == []
+
+
+def memo_frames(lab: Lab) -> list[str]:
+    """The memo exchange, without the state reads an agent with video sends."""
+    return [frame for frame in lab.station.frames if frame in (LIST, SAVE)]
+
+
+def test_a_save_refused_during_a_call_says_the_station_is_busy(video_lab: Lab) -> None:
+    lab = video_lab
+    lab.station.busy = True
+
+    # A ring answered on the station's display: bt_answering_machine only
+    # saves a memo in its idle state and answers the save with a plain NACK.
+    lab.bus("*8*2#1#4*21##", call=True)
+    status, body, elapsed = lab.post(CREATE, create_body("during the call"))
+
+    assert (status, body) == (409, {"ok": False, "error": "station_busy"})
+    assert elapsed < 2
+    # The station was asked and refused; the agent did not decide for it.
+    assert memo_frames(lab) == [LIST, SAVE]
+    assert list((lab.store / "records").iterdir()) == []
+    assert list((lab.store / "memos_text").iterdir()) == []
+
+    # The call ended: a refusal now has another reason and keeps its own error.
+    lab.bus("*8*3#1#4*21##", call=False)
+    status, body, _elapsed = lab.post(CREATE, create_body("after the call"))
+    assert (status, body) == (502, {"ok": False, "error": "memo_create_refused"})
+
+    lab.station.busy = False
+    status, body, _elapsed = lab.post(CREATE, create_body("after the call"))
+    assert (status, body["id"]) == (201, "text/memo_1")
+
+
+def test_a_memo_the_station_saves_during_a_call_is_created(video_lab: Lab) -> None:
+    # The agent's view of a call can outlast the call; the station decides.
+    video_lab.bus("*8*2#1#4*21##", call=True)
+
+    status, body, _elapsed = video_lab.post(CREATE, create_body("saved"))
+
+    assert (status, body["id"]) == (201, "text/memo_1")
+    assert memo_frames(video_lab) == [LIST, SAVE, LIST]
 
 
 def test_a_name_planted_in_the_records_directory_is_not_followed(lab: Lab, tmp_path: Path) -> None:

@@ -133,7 +133,7 @@ Every action accepts an optional `entry_id` when more than one C300X is set up
 | `run_ring_wyoming_analysis` | Transcribes a capture's WAV with a local Wyoming Whisper service. Returns the result. | `wyoming_host`, `wyoming_port`, `language`, `expected_phrase`, paths |
 | `evaluate_ring_analysis` | Checks a transcription for the exact phrase; unlocks only on a strict match when asked. | `expected_phrase`, `unlock_on_match`, `lock_id`, paths |
 | `play_latest_video_message`, `play_latest_voice_memo` | Plays the latest item on a media player. | `media_player_entity_id` |
-| `write_text_memo` | Creates a text memo on the station. | `text`, `read` |
+| `write_text_memo` | Creates a text memo on the station. The station saves none during a call. When the agent itself sees the call or stream (a Home Assistant stream, a ring answered through Home Assistant, a Home Call), the action fails with "The station is busy with a call. Try again after it ends."; a ring that is still ringing without Ring Call, a recording of the answering machine or an intercom call still give the general error. | `text`, `read` |
 | `delete_latest_video_message`, `delete_latest_text_memo`, `delete_latest_voice_memo` | Deletes the latest item. Registered only while the Display patch supports it. | |
 | `reboot` | Schedules a device reboot. | |
 | `reload_gui` | Reloads the station display. | |

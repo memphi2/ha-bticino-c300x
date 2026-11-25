@@ -627,7 +627,8 @@ def test_qml_patch_without_a_layout_flag_keeps_the_device_layout(
         [str(SCRIPT), "apply"], check=True, capture_output=True, text=True,
         env={**unset, "C300X_QML_GUI_DIR": str(gui_dir), "C300X_QML_SOURCE_DIR": str(SOURCE_DIR),
              "C300X_QML_BACKUP_DIR": str(backup_dir), "C300X_QML_NO_REMOUNT": "1",
-             "C300X_QML_RELOAD_GUI": "0", "C300X_QML_GUI_ROOT": str(tmp_path)},
+             "C300X_QML_RELOAD_GUI": "0", "C300X_QML_GUI_ROOT": str(tmp_path),
+             "PATH": _without_host_display_tools(tmp_path, os.environ["PATH"])},
     )
 
     assert json.loads(result.stdout)["changed_files"] == 0
@@ -1893,6 +1894,7 @@ def _run_qml_patch_raw(
     }
     if env_overrides:
         env.update(env_overrides)
+    env["PATH"] = _without_host_display_tools(tmp_path, env.get("PATH", os.environ["PATH"]))
     return subprocess.run(
         [str(SCRIPT), action],
         check=False,
@@ -1900,6 +1902,24 @@ def _run_qml_patch_raw(
         env=env,
         text=True,
     )
+
+
+def _without_host_display_tools(tmp_path: Path, path: str) -> str:
+    """Never let a restart reach host processes named BtClass (other tests, worktrees).
+
+    Stand-ins find no display program and stop nothing; a test's own tools
+    placed ahead of the host PATH still come first.
+    """
+
+    tools = tmp_path / "no-host-display-tools"
+    if not tools.is_dir():
+        tools.mkdir()
+        for name in ("pidof", "killall"):
+            (tools / name).write_text("#!/bin/sh\nexit 1\n")
+            (tools / name).chmod(0o755)
+    host = os.environ["PATH"]
+    own = path[: -len(host)] if path.endswith(host) else path + os.pathsep
+    return own + str(tools) + os.pathsep + host
 
 
 def _write_original_gui(gui_dir: Path) -> None:
@@ -2238,7 +2258,9 @@ def _blocking_commands(tmp_path: Path, name: str, failing_mv: bool = False) -> d
         f'  : > "{tmp_path}/held"\n'
         '  while :; do sleep 0.02; done\n'
         'fi\n'
-        f'exec "{shutil.which(name) or "/bin/true"}" "$@"\n'
+        # Never the host's killall or pidof: they would reach display programs
+        # of other tests and worktrees.
+        f'exec "{"/bin/false" if name in ("killall", "pidof") else shutil.which(name) or "/bin/true"}" "$@"\n'
     )
     (commands / name).chmod(0o700)
     if failing_mv:
@@ -2248,7 +2270,7 @@ def _blocking_commands(tmp_path: Path, name: str, failing_mv: bool = False) -> d
         )
         (commands / "mv").chmod(0o700)
     return {
-        "PATH": str(commands) + os.pathsep + os.environ["PATH"],
+        "PATH": _without_host_display_tools(tmp_path, str(commands) + os.pathsep + os.environ["PATH"]),
         "C300X_QML_RELOAD_GUI": "1",
         "C300X_QML_GUI_RELOAD_DELAY_SECONDS": "0",
         "C300X_QML_GUI_WRAPPER": str(tmp_path / "missing-wrapper"),
@@ -2442,3 +2464,43 @@ def test_a_leftover_that_cannot_be_rolled_back_is_reported_and_blocks_writes(
     assert "An unfinished GUI write is still in place" in write.stderr
     assert (leftover / "MainApp.qml").read_bytes() == _before["MainApp.qml"]
     assert _gui_files(gui)["MainApp.qml"] == during["MainApp.qml"]
+
+
+def test_a_reload_in_these_tests_leaves_host_display_programs_alone(tmp_path: Path) -> None:
+    """A process named BtClass outside the test (another test, another worktree) survives."""
+
+    program = tmp_path / "BtClass"
+    program.write_text("#!/bin/sh\nwhile :; do sleep 0.2; done\n")
+    program.chmod(0o755)
+    other = subprocess.Popen([str(program)], start_new_session=True)
+    try:
+        gui_dir = tmp_path / "gui"
+        gui_dir.mkdir()
+        _write_original_gui(gui_dir)
+        _run_qml_patch_raw(tmp_path, gui_dir, tmp_path / "backups", "reload", env_overrides={
+            "C300X_QML_RELOAD_GUI": "1", "C300X_QML_GUI_RELOAD_DELAY_SECONDS": "0",
+            "C300X_QML_GUI_WRAPPER": str(tmp_path / "missing-wrapper"),
+        })
+        assert other.poll() is None
+    finally:
+        other.kill()
+        other.wait()
+
+
+def test_a_terminated_write_leaves_host_display_programs_alone(tmp_path: Path) -> None:
+    """The held killall and the abort's restart never reach a BtClass outside the test."""
+
+    program = tmp_path / "BtClass"
+    program.write_text("#!/bin/sh\nwhile :; do sleep 0.2; done\n")
+    program.chmod(0o755)
+    other = subprocess.Popen([str(program)], start_new_session=True)
+    try:
+        gui, backup = tmp_path / "gui", tmp_path / "backup"
+        gui.mkdir()
+        _write_original_gui(gui)
+        result = _terminate_when_held(tmp_path, gui, backup, "apply", _blocking_commands(tmp_path, "killall"))
+        assert result.returncode == 130, result.stderr
+        assert other.poll() is None
+    finally:
+        other.kill()
+        other.wait()

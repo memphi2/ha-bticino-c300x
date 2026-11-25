@@ -21,12 +21,14 @@ from .agent_update import (
     async_retry_update_maintenance_busy,
     compare_agent_bundle,
 )
-from .api import C300XAgentApiError
-from .api_errors import (
-    C300XAgentApiConnectionError,
-    C300XAgentApiUnsupportedError,
-    C300XAgentUpdateError,
+from .agent_update_followup import (
+    async_full_patch_due,
+    clear_followup,
+    followup_mark,
+    followup_unconfirmed,
 )
+from .api import C300XAgentApiError
+from .api_errors import C300XAgentApiUnsupportedError, C300XAgentUpdateError
 from .callback_url import async_suggest_callback_base_url
 from .callback_url import (
     validated_callback_base_url as _validated_callback_base_url,
@@ -516,7 +518,8 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
         self._entry_id = entry_id
         # Patch state and changes of an SSH install whose follow-up steps
         # did not finish. A second install changes no file, so it alone
-        # would not know that the follow-up steps are still due.
+        # would not know that the firewall and config steps are still due.
+        # The display step does not rely on this: its mark is in the entry.
         self._ssh_install_followup: (
             tuple[_ExternalPatchState, _ExternalPatchChanges] | None
         ) = None
@@ -544,16 +547,22 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
 
         if user_input is None:
             return await step(None)
-        result = await self._work.async_run(lambda: step(user_input))
-        if result is not OTHER_FLOW_FINISHED:
-            return result
-        entry = self.hass.config_entries.async_get_entry(self._entry_id)
-        if entry is None or not hasattr(entry, "runtime_data"):
-            return self.async_abort(reason="entry_not_loaded")
-        update_state = getattr(entry.runtime_data, "agent_update_state", None)
-        if not getattr(update_state, "update_required", False):
+
+        def still_needed() -> bool:
+            # After another flow's work for the entry: is an update still due?
+            entry = self.hass.config_entries.async_get_entry(self._entry_id)
+            if entry is None or not hasattr(entry, "runtime_data"):
+                # The step itself reports that.
+                return True
+            update_state = getattr(entry.runtime_data, "agent_update_state", None)
+            return bool(getattr(update_state, "update_required", False))
+
+        result = await self._work.async_run(
+            lambda: step(user_input), (step.__name__, user_input), still_needed
+        )
+        if result is OTHER_FLOW_FINISHED:
             return self.async_create_entry(data={})
-        return await step(None)
+        return result
 
     async def async_step_confirm(
         self,
@@ -582,43 +591,20 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
         try:
             patch_state = await _async_capture_external_patch_state(entry, require_reliable=True)
             bootstrap = getattr(update_state, "payload_bootstrap_required", False)
-            # The station applies the update by itself once it has the files,
-            # whether or not Home Assistant lives to see the answer. An active
-            # Display patch is noted as due before that, so a start after a
-            # lost answer still offers this repair and re-applies the pages.
-            noted_now = (
-                patch_state.qml_patch_required
-                and CONF_AGENT_UPDATE_QML_PENDING not in entry.data
-            )
-            pending: dict[str, bool] = {}
-            if patch_state.qml_patch_required:
-                pending[CONF_AGENT_UPDATE_QML_PENDING] = True
+            # The follow-up of an earlier update that never finished: the
+            # answer of this run says nothing about what that one changed.
+            unconfirmed = followup_unconfirmed(entry) or bootstrap
+            pending = _followup_mark(entry, patch_state)
             if bootstrap:
                 # Between the two passes the display counts as partly
                 # patched, which no longer tells whether the patch was
                 # active.
                 pending[CONF_AGENT_UPDATE_PAYLOAD_PENDING] = True
-            if pending:
-                self.hass.config_entries.async_update_entry(
-                    entry, data={**entry.data, **pending}
-                )
-            try:
-                update_result = await async_apply_packaged_agent_update(
-                    self.hass,
-                    entry.runtime_data.api,
-                )
-            except Exception as err:
-                if noted_now and not bootstrap and not _station_answer_lost(err):
-                    # The station refused, or nothing was sent: no update, so
-                    # nothing is due. Only an answer that never came leaves
-                    # open whether the station applied the update.
-                    _clear_qml_followup(self.hass, entry)
-                raise
-            if noted_now and not bootstrap and not _update_changed_display(entry, update_result):
-                # The station's answer says it changed no display file: the
-                # note of this run is not needed. One from an earlier run stays.
-                _clear_qml_followup(self.hass, entry)
-            _remember_qml_followup(self.hass, entry, patch_state, update_result)
+            _store_entry_data(self.hass, entry, pending)
+            update_result = await async_apply_packaged_agent_update(
+                self.hass,
+                entry.runtime_data.api,
+            )
             setup_data = await _async_verify_agent_after_update(
                 self.hass,
                 entry.runtime_data.api,
@@ -635,7 +621,6 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
                 completion = await async_apply_packaged_agent_update(
                     self.hass, entry.runtime_data.api
                 )
-                _remember_qml_followup(self.hass, entry, patch_state, completion)
                 setup_data = await _async_verify_agent_after_update(
                     self.hass, entry.runtime_data.api, completion
                 )
@@ -648,6 +633,7 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
                         update_result.get(flag) is True or completion.get(flag) is True
                     )
             changes = _ExternalPatchChanges.from_update_result(update_result)
+            changes.display_unconfirmed = unconfirmed
             if changes.config_schema_changed:
                 await async_retry_update_maintenance_busy(
                     entry.runtime_data.api.async_normalize_agent_config
@@ -661,7 +647,7 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
                 setup_data,
             )
             _settle_display_followup(self.hass, entry, display, full=display_full)
-            _clear_qml_followup(self.hass, entry)
+            clear_followup(self.hass, entry)
             await _async_migrate_mqtt_after_update(entry.runtime_data.api)
             setup_data = await entry.runtime_data.api.async_validate_setup()
         except Exception as err:  # noqa: BLE001 - Repairs shows a translated failure
@@ -722,6 +708,8 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
         try:
             patch_state = await _async_capture_external_patch_state(entry)
             await async_ensure_installer_dependencies(self.hass)
+            unconfirmed = followup_unconfirmed(entry)
+            _store_entry_data(self.hass, entry, _followup_mark(entry, patch_state))
             try:
                 install_result = await async_install_device_agent(
                     C300XDeviceInstallRequest(
@@ -788,10 +776,7 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
                 patch_state = self._ssh_install_followup[0].merged(patch_state)
                 changes = self._ssh_install_followup[1].merged(changes)
             self._ssh_install_followup = (patch_state, changes)
-            _remember_qml_followup(self.hass, entry, patch_state, {
-                "qml_patch_changed": changes.qml_patch_changed,
-                "runtime_changed": changes.runtime_changed,
-            })
+            changes.display_unconfirmed = unconfirmed
             setup_data = await _async_wait_for_agent_after_update(entry.runtime_data.api)
             display_full = _display_followup_full(entry, patch_state)
             display = await _async_restore_external_patch_state(
@@ -805,7 +790,7 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
                 display = False
             _settle_display_followup(self.hass, entry, display, full=display_full)
             self._ssh_install_followup = None
-            _clear_qml_followup(self.hass, entry)
+            clear_followup(self.hass, entry)
             await _async_migrate_mqtt_after_update(entry.runtime_data.api)
             setup_data = await entry.runtime_data.api.async_validate_setup()
         except Exception as err:  # noqa: BLE001 - Repairs shows a translated failure
@@ -998,6 +983,9 @@ class _ExternalPatchChanges:
         self.firewall_patch_changed = firewall_patch_changed
         self.ipv6_firewall_patch_changed = ipv6_firewall_patch_changed
         self.config_schema_changed = config_schema_changed
+        # An update started earlier never finished its display follow-up:
+        # "no display file changed" of this run does not cover that one.
+        self.display_unconfirmed = False
 
     def merged(self, later: _ExternalPatchChanges) -> _ExternalPatchChanges:
         """Return the changes of this and a later install together."""
@@ -1057,43 +1045,21 @@ class _ExternalPatchChanges:
         )
 
 
-def _station_answer_lost(err: Exception) -> bool:
-    """Whether a request ended without the station's answer (transport, time-out)."""
+def _followup_mark(entry: Any, patch_state: _ExternalPatchState) -> dict[str, bool]:
+    """Return the follow-up mark to store before an update goes to the station."""
 
-    return isinstance(err, C300XAgentApiConnectionError) and err.__cause__ is not None
-
-
-def _update_changed_display(entry: Any, result: Mapping[str, Any]) -> bool:
-    """Whether the station's update answer says the display files changed.
-
-    On 1.7.x/2.0.2 that is the QML group (``qml_patch_changed``). On the Qt 5
-    display of firmware 3.0.x the overlay's preload library is part of the
-    agent runtime, so a runtime-only update changes the display as well.
-    """
-
-    if result.get("qml_patch_changed") is True:
-        return True
-    return result.get("runtime_changed") is True and display_is_qt5(
-        getattr(entry.runtime_data, "qml_patch_status", None)
+    return followup_mark(
+        entry,
+        display_seen_active=patch_state.qml_patch_required,
+        no_display_patch=_agent_offers_no_display_patch(
+            getattr(entry.runtime_data, "agent_info", None)
+        ),
     )
 
 
-def _remember_qml_followup(hass: HomeAssistant, entry: Any,
-                           state: _ExternalPatchState, result: dict[str, Any]) -> None:
-    if _update_changed_display(entry, result):
-        hass.config_entries.async_update_entry(entry, data={
-            **entry.data,
-            CONF_AGENT_UPDATE_QML_PENDING: (
-                state.qml_patch_required or entry.data.get(CONF_AGENT_UPDATE_QML_PENDING) is True
-            ),
-        })
-
-
-def _clear_qml_followup(hass: HomeAssistant, entry: Any) -> None:
-    if CONF_AGENT_UPDATE_QML_PENDING in entry.data:
-        data = dict(entry.data)
-        data.pop(CONF_AGENT_UPDATE_QML_PENDING)
-        hass.config_entries.async_update_entry(entry, data=data)
+def _store_entry_data(hass: HomeAssistant, entry: Any, changed: Mapping[str, Any]) -> None:
+    if any(key not in entry.data or entry.data[key] is not value for key, value in changed.items()):
+        hass.config_entries.async_update_entry(entry, data={**entry.data, **changed})
 
 
 async def _async_capture_external_patch_state(
@@ -1176,7 +1142,19 @@ async def _async_restore_external_patch_state(
     changed: _ExternalPatchChanges,
     setup_data: Mapping[str, Any] | None = None,
 ) -> bool | None:
-    """Re-apply active external patches only when their patch source changed.
+    """Run the follow-up of an update: re-apply what the station needs again.
+
+    The firewall steps run when their source changed. The display step is
+    decided here, when it runs: an answer that reports changed display files
+    re-applies the hooks, as does an update whose follow-up was never
+    confirmed (``changed.display_unconfirmed``). The second is a check first:
+    the station compares before it writes, and pages that are current are
+    neither written nor restarted. Whether the full Display patch belongs to
+    it follows the Display setting of this moment.
+
+    On the Qt 5 display of firmware 3.0.x the overlay's preload library is
+    part of the agent runtime: a runtime change re-applies the hooks, and a
+    follow-up without the update's answer restarts the display once.
 
     ``setup_data`` is the setup payload of the agent just installed. When it
     says the agent offers no Display patch, the display steps are skipped.
@@ -1195,24 +1173,33 @@ async def _async_restore_external_patch_state(
         await busy_retry(api.async_apply_ipv6_firewall)
     if _agent_offers_no_display_patch(setup_data):
         return None
-    if (
-        changed.qml_patch_changed
-        or CONF_AGENT_UPDATE_QML_PENDING in entry.data
-        or CONF_DISPLAY_FOLLOWUP_PENDING in entry.data
-    ):
-        return await async_restore_display_after_update(
-            entry, apply_full_patch=_display_followup_full(entry, patch_state),
+    qt5 = display_is_qt5(getattr(entry.runtime_data, "qml_patch_status", None))
+    owed = CONF_DISPLAY_FOLLOWUP_PENDING in entry.data
+
+    async def full_patch_due() -> bool:
+        return await async_full_patch_due(
+            entry,
+            display_seen_active=(
+                patch_state.qml_patch_required
+                or entry.data.get(CONF_DISPLAY_FOLLOWUP_PENDING) is True
+            ),
         )
-    if changed.runtime_changed:
-        # The status read just before the update (cached) tells the Qt 5
-        # display; on 1.7.x/2.0.2 this is 2.9.2's GUI reload, without a read.
-        if display_is_qt5(getattr(entry.runtime_data, "qml_patch_status", None)):
-            # The preload library is embedded in the runtime, not the QML group.
-            return await async_restore_display_after_update(
-                entry, apply_full_patch=patch_state.qml_patch_required,
-            )
-        if patch_state.qml_patch_required:
-            await busy_retry(api.async_reload_gui)
+
+    if changed.qml_patch_changed or (changed.runtime_changed and qt5):
+        return await async_restore_display_after_update(
+            entry, apply_full_patch=await full_patch_due()
+        )
+    if changed.display_unconfirmed or owed:
+        full_patch = await full_patch_due()
+        return await async_restore_display_after_update(
+            entry,
+            apply_full_patch=full_patch,
+            # Owed steps and an update answer that never came on Qt 5: whether
+            # the runtime with the preload library changed is not known.
+            reload_unchanged=qt5 or owed or (changed.runtime_changed and full_patch),
+        )
+    if changed.runtime_changed and await full_patch_due():
+        await busy_retry(api.async_reload_gui)
     return None
 
 

@@ -40,19 +40,27 @@ def validate_paths(paths: list[str]) -> None:
 
 
 def runtime_paths() -> list[str] | None:
-    """Explicit variables win and the built setup supplies the rest; a stale or broken setup fails, never skips.
+    """Explicit variables win and the built setup supplies the rest; a wrong variable or setup fails, never skips.
 
-    QEMU and ROOTFS are also the variables of the compile and render tests.
-    Set alone, without a built setup, they leave this runtime unconfigured.
+    The runtime is unconfigured, and its tests skip, only without a built
+    setup and with none of the variables set, or with just QEMU and ROOTFS,
+    both valid: those two are also the variables of the compile and render
+    tests.
     """
     explicit = [os.environ.get("C300X_QT4_" + key, "") for key in KEYS]
+    for index, (key, path) in enumerate(zip(KEYS, explicit, strict=True)):
+        target = Path(path)
+        if path and not (target.is_dir() if index in (1, 3) else target.is_file() and os.access(target, os.X_OK)):
+            kind = "a directory" if index in (1, 3) else "an executable file"
+            raise ValueError(f"C300X_QT4_{key} is not {kind}: {path}")
     if all(explicit):
         validate_paths(explicit)
         return explicit
     manifest = cache_directory() / "environment.json"
     if not manifest.exists():
-        if explicit[2] or explicit[3]:
-            missing = ", ".join("C300X_QT4_" + key for key, path in zip(KEYS, explicit, strict=True) if not path)
+        if explicit[2] or explicit[3] or bool(explicit[0]) != bool(explicit[1]):
+            missing = ", ".join("C300X_QT4_" + key for key, path in zip(KEYS, explicit, strict=True)
+                                if not path and (explicit[2] or explicit[3] or key in KEYS[:2]))
             raise ValueError(f"Qt 4 runtime: set {missing} as well, or run scripts/setup_qt4_runtime.py")
         return None
     data = json.loads(manifest.read_text())

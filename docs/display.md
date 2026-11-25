@@ -569,7 +569,7 @@ The tab starts with a short status block:
 | Line | Meaning |
 | --- | --- |
 | **Home Assistant** | **reachable** with the name of the Home Assistant instance, or **not reachable** with the reason underneath (see [Home Assistant not reachable](#home-assistant-not-reachable)). |
-| **Address** | The address the station calls Home Assistant at: `http` or `https`, host and port. A long address takes a second line. Nothing else of the address is shown. |
+| **Address** | The address the station calls Home Assistant at: `http` or `https`, host and port. A long address takes a second line; a very long one is shortened in the middle, so that its start and its port stay visible. Nothing else of the address is shown. |
 | **Last contact** | How long ago the agent and Home Assistant last exchanged a request, or **never since start**. Read when the tab opens, and once more after Home Assistant has answered. |
 | **Integration**, **Agent** | The version of the integration, and of the agent with the station firmware. The integration version is known only while Home Assistant answers. |
 
@@ -597,6 +597,11 @@ patch. While Home Assistant cannot be reached, both switches are greyed out.
 station preference, not an integration option, and survives restarts. If the
 agent cannot read or save it, the switch shows **Setting unavailable**; reopen
 the tab before trying again.
+
+What the tab cannot read when it opens shows at the rows: the switch or button
+concerned is greyed out. A line at the foot of the tab appears only as the
+result of something done there: a request the station accepted, a setting
+that could not be saved, or a request that got no answer in time.
 
 ### Home Assistant not reachable
 

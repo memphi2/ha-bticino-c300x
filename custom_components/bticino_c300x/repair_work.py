@@ -11,7 +11,7 @@ updated and Home Assistant does none of the steps that follow an update.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable, Coroutine
+from collections.abc import Callable, Coroutine, Mapping
 from typing import Any, Final
 
 from homeassistant.core import HomeAssistant
@@ -22,8 +22,8 @@ from .repair_issues import repair_issue_id
 
 _RUNNING: Final = f"{DOMAIN}_repair_work"
 
-# Another flow's work for the same entry ran and has ended: its result went to
-# that flow, this one has to look at the entry again.
+# Work of another flow for the same entry ended while this submit waited, and
+# the repair of this flow is no longer needed: there is nothing left to run.
 OTHER_FLOW_FINISHED: Final = object()
 
 
@@ -33,48 +33,88 @@ class RepairStepWork:
     def __init__(self, hass: HomeAssistant, entry_id: str) -> None:
         self._hass = hass
         self._entry_id = entry_id
-        # Running, or finished with a result that no request has received yet.
+        # Running, or finished with a result that no request has received yet,
+        # and what was submitted to start it.
         self._task: asyncio.Task[Any] | None = None
+        self._submitted: Any = None
 
-    async def async_run(self, work: Callable[[], Coroutine[Any, Any, Any]]) -> Any:
+    async def async_run(
+        self,
+        work: Callable[[], Coroutine[Any, Any, Any]],
+        submitted: Any,
+        still_needed: Callable[[], bool],
+    ) -> Any:
         """Run ``work`` to its end and return its result to whoever still waits.
 
         A request that is cancelled leaves the work running. The next submit
         of the same flow waits for that work, or gets the result it missed,
-        and starts nothing new. The submit of another flow for the same entry
-        waits as well and gets ``OTHER_FLOW_FINISHED``: two updates must never
-        write to one station at the same time.
+        and starts nothing new.
+
+        ``submitted`` is what the client sent. A result that leaves the form
+        open, a failure, is not handed to a submit with other input: that
+        submit runs its own work, so a corrected input is not answered with
+        the failure of the old one. A result that ended the flow is final.
+
+        Work for one entry never overlaps: two repairs must not write to one
+        station at the same time. A submit that finds work of another flow
+        running waits for it and then runs its own, unless ``still_needed``
+        says the repair is done; then it gets ``OTHER_FLOW_FINISHED``.
         """
 
-        task = self._task
-        if task is None:
-            running: dict[str, asyncio.Task[Any]] = self._hass.data.setdefault(_RUNNING, {})
-            other = running.get(self._entry_id)
-            if other is not None:
-                # Does not cancel the other flow's work with this request.
-                await asyncio.wait([other])
-                return OTHER_FLOW_FINISHED
-            task = self._task = self._create_task(work())
-            if not task.done():
-                running[self._entry_id] = task
+        while True:
+            task = self._task
+            if task is None:
+                task = await self._async_start(work, submitted, still_needed)
+                if task is None:
+                    return OTHER_FLOW_FINISHED
+            started_with = self._submitted
+            try:
+                result = await asyncio.shield(task)
+            except asyncio.CancelledError:
+                if task.cancelled():
+                    # Home Assistant is stopping: the work itself was ended.
+                    self._forget(task)
+                raise
+            except BaseException:
+                self._forget(task)
+                raise
+            self._forget(task)
+            if started_with == submitted or not _leaves_form_open(result):
+                return result
 
-                def finished(done: asyncio.Task[Any]) -> None:
-                    if running.get(self._entry_id) is done:
-                        del running[self._entry_id]
+    async def _async_start(
+        self,
+        work: Callable[[], Coroutine[Any, Any, Any]],
+        submitted: Any,
+        still_needed: Callable[[], bool],
+    ) -> asyncio.Task[Any] | None:
+        running: dict[str, asyncio.Task[Any]] = self._hass.data.setdefault(_RUNNING, {})
+        waited = False
+        while (other := running.get(self._entry_id)) is not None and not other.done():
+            # Does not cancel the other flow's work with this request.
+            await asyncio.wait([other])
+            waited = True
+        if self._task is not None:
+            # Another request of this flow started its work during the wait.
+            return self._task
+        if waited and not still_needed():
+            return None
+        task = self._task = self._create_task(work())
+        self._submitted = submitted
+        if not task.done():
+            running[self._entry_id] = task
 
-                task.add_done_callback(finished)
-        try:
-            result = await asyncio.shield(task)
-        except asyncio.CancelledError:
-            if task.cancelled():
-                # Home Assistant is stopping: the work itself was ended.
-                self._task = None
-            raise
-        except BaseException:
+            def finished(done: asyncio.Task[Any]) -> None:
+                if running.get(self._entry_id) is done:
+                    del running[self._entry_id]
+
+            task.add_done_callback(finished)
+        return task
+
+    def _forget(self, task: asyncio.Task[Any]) -> None:
+        if self._task is task:
             self._task = None
-            raise
-        self._task = None
-        return result
+            self._submitted = None
 
     def _create_task(self, coro: Coroutine[Any, Any, Any]) -> asyncio.Task[Any]:
         # Not a task of the config entry: the reload at the end of the work
@@ -87,6 +127,12 @@ class RepairStepWork:
         return asyncio.create_task(coro, name=name)
 
 
+def _leaves_form_open(result: Any) -> bool:
+    """Whether a step result shows its form again instead of ending the flow."""
+
+    return isinstance(result, Mapping) and result.get("type") == "form"
+
+
 async def async_run_repair_step(
     flow: Any,
     work: RepairStepWork,
@@ -97,17 +143,21 @@ async def async_run_repair_step(
     """Run a submitted repair step so that a dropped request cannot end it.
 
     ``step`` is the body of the step. Showing its form runs in the request;
-    a submit runs as work that Home Assistant owns. When another flow's work
-    for the entry ended meanwhile, the issue tells what is left: gone means
-    repaired, otherwise the form is shown again.
+    a submit runs as work that Home Assistant owns. A submit that had to wait
+    for another flow's work for the entry runs afterwards with its own input,
+    unless the issue is gone by then: that means repaired.
     """
 
     if user_input is None:
         return await step(None)
-    result = await work.async_run(lambda: step(user_input))
-    if result is not OTHER_FLOW_FINISHED:
-        return result
     issue_id = repair_issue_id(issue_type, flow._entry_id)
-    if ir.async_get(flow.hass).async_get_issue(DOMAIN, issue_id) is None:
+
+    def still_needed() -> bool:
+        return ir.async_get(flow.hass).async_get_issue(DOMAIN, issue_id) is not None
+
+    result = await work.async_run(
+        lambda: step(user_input), (step.__name__, user_input), still_needed
+    )
+    if result is OTHER_FLOW_FINISHED:
         return flow.async_create_entry(data={})
-    return await step(None)
+    return result

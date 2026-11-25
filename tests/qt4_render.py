@@ -108,10 +108,10 @@ class Station:
 class Agent:
     """Stand-in for the agent's display listener: fixed answers by path, on the loopback."""
 
-    def __init__(self, answers: dict[str, tuple[int, dict[str, object]]]):
+    def __init__(self, answers: dict[str, tuple[int, dict[str, object]]], missing: int = 404):
         class Handler(BaseHTTPRequestHandler):
             def do_GET(self) -> None:
-                status, body = answers.get(self.path.split("?")[0], (404, {"ok": False}))
+                status, body = answers.get(self.path.split("?")[0], (missing, {"ok": False}))
                 data = json.dumps(body).encode()
                 self.send_response(status)
                 self.send_header("Content-Type", "application/json")

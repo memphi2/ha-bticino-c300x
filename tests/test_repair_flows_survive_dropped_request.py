@@ -154,7 +154,7 @@ def test_second_flow_waits_for_the_running_repair(monkeypatch, issue_registry) -
     asyncio.run(scenario())
 
 
-def test_second_flow_shows_its_form_when_the_issue_is_still_open(
+def test_submit_that_waited_runs_its_own_work_when_the_issue_is_still_open(
     monkeypatch, issue_registry,
 ) -> None:
     async def scenario() -> None:
@@ -172,13 +172,73 @@ def test_second_flow_shows_its_form_when_the_issue_is_still_open(
         hass.data[repair_work._RUNNING] = {"entry-1": other}
         request = asyncio.create_task(flow.async_step_configure(URL))
         await _settle()
+        # Station writes of one entry do not overlap.
         assert not request.done()
+        assert entry.options == {}
         release.set()
 
-        result = await request
-        assert result["type"] == "form"
-        assert result["step_id"] == "configure"
-        assert hass.config_entries.reloads == []
+        # The submitted input is used, not answered with an empty form.
+        assert await request == CREATED
+        assert entry.options == URL
+        assert hass.config_entries.reloads == ["entry-1"]
+
+    asyncio.run(scenario())
+
+
+def test_another_repair_submitted_during_running_work_runs_afterwards(issue_registry) -> None:
+    async def scenario() -> None:
+        api = _GatedApi("async_apply_qml_core_patch")
+        api.qml_status = {"available": True, "core_patched": True, "core_state": "patched"}
+        runtime = FakeRuntimeData(api)
+        runtime.capabilities = {"maintenance": {"supported": True, "qml_core_patch": True}}
+        runtime.diagnostics = types.SimpleNamespace(
+            qml_patch_diagnostics=types.SimpleNamespace(
+                mark_success=lambda *_: None, mark_failure=lambda *_: None,
+            )
+        )
+        hass = FakeHass(FakeEntry(runtime_data=runtime))
+        issue_registry.update({CORE_HOOK_ISSUE, DEVICE_USER_ISSUE})
+        core_hook = _prepare(repairs.DeviceCoreQmlHookRepairFlow(hass, "entry-1"))
+        device_user = _prepare(repair_flows_device_user.DeviceUserRepairFlow(hass, "entry-1"))
+
+        first = asyncio.create_task(core_hook.async_step_confirm({}))
+        await api.started.wait()
+        second = asyncio.create_task(device_user.async_step_confirm({}))
+        await _settle()
+        # The second repair does not write while the first one does.
+        assert not second.done()
+        assert not any(call.startswith("ensure_homeassistant_user") for call in api.calls)
+        api.gate.set()
+
+        assert await first == CREATED
+        assert await second == CREATED
+        assert api.calls.index("apply_qml_core") < api.calls.index(
+            "ensure_homeassistant_user:Home Assistant HA Test"
+        )
+        assert issue_registry == set()
+
+    asyncio.run(scenario())
+
+
+def test_final_result_is_not_run_again_with_other_input(monkeypatch) -> None:
+    async def scenario() -> None:
+        entry = _callback_entry(monkeypatch)
+        hass = FakeHass(entry)
+        gate = asyncio.Event()
+        hass.config_entries = _ReloadingConfigEntries(entry, gate)
+        flow = _prepare(repairs.CallbackUrlRepairFlow(hass, "entry-1"))
+
+        request = asyncio.create_task(flow.async_step_configure(URL))
+        await hass.config_entries.reload_started.wait()
+        await _drop(request)
+        gate.set()
+        await _settle()
+
+        # The repair is done: a late submit of something else changes nothing.
+        other = {CONF_CALLBACK_BASE_URL: "http://192.0.2.10:8124"}
+        assert await flow.async_step_configure(other) == CREATED
+        assert entry.options == URL
+        assert hass.config_entries.reloads == ["entry-1"]
 
     asyncio.run(scenario())
 

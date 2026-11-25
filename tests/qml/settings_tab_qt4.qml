@@ -1,5 +1,6 @@
 import QtQuick 1.1
 import "js/c300x_i18n.js" as ProbeTexts
+import "js/c300x_ha.js" as ProbeApi
 
 Rectangle {
     id: probeRoot
@@ -9,12 +10,17 @@ Rectangle {
     QtObject { id: trsl; property string empty: ""; property string language: "@LANGUAGE@" }
     QtObject { id: homePage }
     QtObject { id: eventManager; function delayedGoToHomePage() {} }
-    QtObject {
+    Item {
         id: c300xDisplayPreferences
         property string uiBaseUrl: "@BASE@"; property string bridgeProblem: ""; property bool openIntegration: true
-        property bool bridgeShown: true; property bool feedbackEnabled: false; property bool ready: true; property bool busy: false
-        property string label: ProbeTexts.text(trsl.language, "ha_feedback_colors")
-        function load() {} function setFeedbackEnabled(value) { feedbackEnabled = value }
+        property bool bridgeShown: true; property bool feedbackEnabled: true; property bool ready: false; property bool busy: false
+        property bool stopped: false
+        property string errorKey: ""
+        property string label: ProbeTexts.text(trsl.language, errorKey || "ha_feedback_colors")
+        property alias deadline: preferencesDeadline
+        function load() { ProbeApi.loadDisplayPreferences(c300xDisplayPreferences) }
+        function setFeedbackEnabled(value) { ProbeApi.saveDisplayPreferences(c300xDisplayPreferences, value) }
+        Timer { id: preferencesDeadline; interval: 4000; onTriggered: ProbeApi.cancelDisplayPreferences(c300xDisplayPreferences) }
     }
     QtObject { id: tabView; property QtObject current: QtObject { property string _pageName: "Settings" } function activateTab(a, b) {} }
     QtObject {
@@ -64,6 +70,13 @@ Rectangle {
         for (var i = 0; kids && i < kids.length; i++) texts(kids[i], out)
         return out
     }
+    function controls(item, out) {
+        if (!item.visible) return out
+        if (item.checkable !== undefined && item.style !== undefined) out.push(item.enabled && item.opacity === 1)
+        var kids = item.children
+        for (var i = 0; kids && i < kids.length; i++) controls(kids[i], out)
+        return out
+    }
     function report(stage) {
         var column = view.contentItem.children[0]
         var origin = column.mapToItem(probeRoot, 0, 0)
@@ -72,7 +85,7 @@ Rectangle {
         console.log("C300X_TAB_QT4 " + JSON.stringify({stage: stage, column: [origin.x, origin.x + column.width],
             view: [window.y, window.y + view.height], panel: [whole.x, whole.y, whole.x + tab.width, whole.y + tab.height],
             content: view.contentHeight, scrolled: view.contentY, status: tab.status, problem: tab.problem,
-            reachable: tab.reachable, texts: texts(tab, [])}))
+            reachable: tab.reachable, controls: controls(tab, []), texts: texts(tab, [])}))
     }
     Timer {
         property int step: 0
@@ -101,13 +114,27 @@ Rectangle {
         interval: 1200
         onTriggered: {
             report("switch")
+            var message = tab.status
+            if (@END@) {
+                tab.status = ""
+                view.contentY = Math.max(0, view.contentHeight - view.height)
+                tab.status = message
+                return
+            }
             view.contentY = Math.max(0, view.contentHeight - view.height)
             report("end")
-            if (@END@) return
-            var message = tab.status
             tab.status = ""
             report("cleared")
             tab.status = message
+            report("returned")
+            tab.status = ""
+            view.contentY = view.contentY - 30
+            tab.status = message
+            report("near")
+            tab.status = ""
+            view.contentY = 40
+            tab.status = message
+            report("elsewhere")
             view.contentY = 0
             console.log("C300X_TAB_QT4_DONE")
         }

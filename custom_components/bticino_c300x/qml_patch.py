@@ -159,18 +159,32 @@ async def async_restore_qml_patches_after_update(
     entry: BticinoC300XConfigEntry,
     *,
     apply_full_patch: bool,
+    reload_unchanged: bool = True,
 ) -> dict[str, Any]:
     """Re-apply the core hook (and active full patch) after an agent update.
 
     Holds the per-entry Display-patch lock across the whole sequence so a
     concurrent switch toggle or repair-flow action cannot interleave between
     the core apply, the full-patch apply, and the GUI reload.
+
+    The station compares before it writes and restarts the display itself
+    after a write. With ``reload_unchanged`` False the restart at the end is
+    left out when every apply answered that it changed no file: a check that
+    found the pages current does not restart the display.
     """
 
     api = entry.runtime_data.api
     busy_retry = async_retry_update_maintenance_busy
+    answers: list[dict[str, Any]] = []
+
+    async def full_patch() -> dict[str, Any]:
+        answer: dict[str, Any] = await busy_retry(_apply_full_patch_action(entry))
+        answers.append(answer)
+        return answer
+
     async with _qml_patch_lock(entry):
         core_status: dict[str, Any] = await busy_retry(api.async_apply_qml_core_patch)
+        answers.append(core_status)
         _store_qml_patch_status(entry, core_status)
         core_status = await async_display_restart_settled(entry, core_status)
         if display_unsupported(core_status):
@@ -180,16 +194,16 @@ async def async_restore_qml_patches_after_update(
         if core_status.get("qt5_overlay") is not None and core_status.get("core_patched") is not True:
             raise C300XAgentApiError("Qt 5 display core patch is not confirmed")
         if apply_full_patch:
-            full_patch = _apply_full_patch_action(entry)
             await _async_run_qml_patch_action_unlocked(
                 entry,
                 status_changed=None,
                 transient_state="patching",
                 expected_patched=True,
-                action=lambda: busy_retry(full_patch),
+                action=full_patch,
                 refresh=lambda entry: async_refresh_qml_patch_status(entry, wait_busy=True),
             )
-        await busy_retry(lambda: api.async_reload_gui(**gui_reload_kwargs(entry)))
+        if reload_unchanged or not all(_wrote_no_file(answer) for answer in answers):
+            await busy_retry(lambda: api.async_reload_gui(**gui_reload_kwargs(entry)))
         status = await async_display_restart_settled(
             entry, await async_refresh_qml_patch_status(entry, wait_busy=True)
         )
@@ -206,6 +220,7 @@ async def async_restore_display_after_update(
     entry: BticinoC300XConfigEntry,
     *,
     apply_full_patch: bool,
+    reload_unchanged: bool = True,
 ) -> bool:
     """Run the display follow-up of an agent update or install.
 
@@ -220,7 +235,9 @@ async def async_restore_display_after_update(
     """
 
     try:
-        await async_restore_qml_patches_after_update(entry, apply_full_patch=apply_full_patch)
+        await async_restore_qml_patches_after_update(
+            entry, apply_full_patch=apply_full_patch, reload_unchanged=reload_unchanged
+        )
     except C300XAgentApiError as err:
         if not display_step_failed(err) or _qml_patch_status(entry).get("qt5_overlay") is None:
             raise
@@ -233,6 +250,16 @@ async def async_restore_display_after_update(
             await async_refresh_qml_patch_status(entry, wait_busy=True)
         return False
     return True
+
+
+def _wrote_no_file(answer: Any) -> bool:
+    """Whether an apply says it changed nothing; an answer without a count does not."""
+
+    if not isinstance(answer, dict):
+        return False
+    raw = answer.get("raw")
+    changed = (raw if isinstance(raw, dict) else answer).get("changed_files")
+    return type(changed) is int and changed == 0
 
 
 async def async_apply_qml_core_patch_and_confirm(

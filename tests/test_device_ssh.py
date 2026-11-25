@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import threading
+import time
 from pathlib import Path
 
 import asyncssh
@@ -129,6 +130,21 @@ def test_command_timeout_closes_channel(ssh_server, monkeypatch):
     try:
         with pytest.raises(installer.C300XDeviceInstallError, match="device_install_failed"):
             client.run("hang")
+        assert client.run("true") == ""
+    finally:
+        client.close()
+
+
+def test_a_raised_command_timeout_is_the_one_used(ssh_server, monkeypatch):
+    """The Qt 5 display steps raise it; otherwise the module's 2.9.2 timeout holds."""
+    client = installer._connect_device_client(ssh_server)
+    monkeypatch.setattr(installer, "_SSH_COMMAND_TIMEOUT", 30.0)
+    try:
+        client.command_timeout = 0.1
+        started = time.monotonic()
+        with pytest.raises(installer.C300XDeviceInstallError, match="device_install_failed"):
+            client.run("hang")
+        assert time.monotonic() - started < 5
         assert client.run("true") == ""
     finally:
         client.close()

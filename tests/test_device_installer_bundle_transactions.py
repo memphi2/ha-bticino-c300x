@@ -33,14 +33,17 @@ def transaction(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     manifest_path = f"{remote_dir}/bundle.json"
     obsolete_path = f"{remote_dir}/qml/C300XEnergyDistribution.qml"
 
-    class Client:
+    class Client(installer._DeviceSshClient):
         failure: str | None = None
         closed = False
+        qt5 = False
 
         def __init__(self) -> None:
             self.files = {manifest_path: old_manifest, obsolete_path: b"old distribution"}
             self.operations: list[str] = []
             self.writes: list[str] = []
+            # The command timeout each command ran with (None: the 2.9.2 one).
+            self.timeouts: list[tuple[str, float | None]] = []
 
         def stage(self, name: str) -> None:
             self.operations.append(name)
@@ -60,10 +63,11 @@ def transaction(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
             ))
             return self.write(path, source.read_bytes())
 
-        def run(self, command: str) -> str:
+        def run(self, command: str, input_data: bytes | None = None) -> str:
+            self.timeouts.append((command, self.command_timeout))
             if "libQt5Core" in command:
-                # A device with the Qt 4 display, which the Display patch edits.
-                return "no\n"
+                # By default a device with the Qt 4 display, which the Display patch edits.
+                return "yes\n" if self.qt5 else "no\n"
             if command.startswith("if [ -L ") and obsolete_path in command:
                 self.stage("cleanup-source")
                 self.files.pop(obsolete_path, None)
@@ -191,6 +195,20 @@ def test_source_cleanup_failure_is_not_install_success(transaction) -> None:
     assert transaction.client.closed
     assert transaction.client.files[transaction.obsolete_path] == b"old distribution"
     assert transaction.client.operations[-2:] == ["manifest", "cleanup-source"]
+
+
+@pytest.mark.parametrize("qt5", [False, True])
+def test_the_display_steps_wait_longer_only_on_the_qt5_display(transaction, qt5) -> None:
+    """1.7.x/2.0.2: every command keeps 2.9.2's SSH timeout (30 s)."""
+    transaction.client.qt5 = qt5
+    transaction.install(apply_gui_patch=True)
+    assert installer._SSH_COMMAND_TIMEOUT == 30.0
+    steps = [timeout for command, timeout in transaction.client.timeouts if "qml_patch.sh " in command]
+    assert len(steps) == 2
+    if qt5:
+        assert steps == [installer._SSH_COMMAND_TIMEOUT_QT5] * 2 == [60.0] * 2
+    else:
+        assert {timeout for _command, timeout in transaction.client.timeouts} == {None}
 
 
 def test_native_metadata_reader_observes_manifest_commit_without_restart(tmp_path) -> None:

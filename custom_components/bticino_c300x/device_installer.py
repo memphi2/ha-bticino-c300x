@@ -54,9 +54,10 @@ REMOTE_FIREWALL_BACKUP = (
     "/etc/network/if-pre-up.d/iptables"
 )
 _SSH_CONNECT_TIMEOUT = 12.0
-# A Display patch step restarts the GUI, which first waits for the old display
-# program to end and on Qt 5 watches the new start.
-_SSH_COMMAND_TIMEOUT = 60.0
+_SSH_COMMAND_TIMEOUT = 30.0
+# On the Qt 5 display of firmware 3.0.x a Display patch step restarts the GUI,
+# which first waits for the old display program to end and watches the start.
+_SSH_COMMAND_TIMEOUT_QT5 = 60.0
 _REQUIRED_ASYNCSSH_VERSION = "2.24.1"
 INSTALLER_REQUIREMENTS = (f"asyncssh=={_REQUIRED_ASYNCSSH_VERSION}",)
 # The display files the agent directory holds; qml_patch.sh installs them.
@@ -245,6 +246,8 @@ def _install_device_agent_sync(
 
         actions = ("core-apply", "apply") if request.apply_gui_patch else ("core-apply",)
         display_is_qt5 = _device_display_is_qt5(client)
+        if display_is_qt5:
+            client.command_timeout = _SSH_COMMAND_TIMEOUT_QT5
         for action in actions:
             step = _apply_display_step_sync(client, request.remote_dir, action, qt5=display_is_qt5)
             if step is None and display is not None:
@@ -572,6 +575,10 @@ def _device_activation_config(
 class _DeviceSshClient:
     """Small blocking SSH client abstraction for testable installs."""
 
+    # None: _SSH_COMMAND_TIMEOUT; _SSH_COMMAND_TIMEOUT_QT5 for the display
+    # steps on the Qt 5 display.
+    command_timeout: float | None = None
+
     def run(self, command: str, input_data: bytes | None = None) -> str:
         raise NotImplementedError
 
@@ -662,7 +669,7 @@ class _AsyncSshDeviceSshClient(_DeviceSshClient):
 
     async def _run(self, command: str, input_data: bytes | None) -> str:
         # Include channel opening in the deadline and send EOF even without input.
-        async with asyncio.timeout(_SSH_COMMAND_TIMEOUT):
+        async with asyncio.timeout(self.command_timeout or _SSH_COMMAND_TIMEOUT):
             async with self._client.create_process(
                 command, encoding=None, request_pty=False,
             ) as process:

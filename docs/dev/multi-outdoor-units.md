@@ -235,6 +235,7 @@ All carry the 2.x envelope (`event_id`, `type`, `occurred_at`, `data`).
 | `doorbell.pressed` | `call_id`, `unit` (`null` unless a second unit opened the call), `attribution`, `raw` |
 | `call.caller_identified` | `call_id`, `unit`, `where`, `action_where`, `attribution`, `raw` (`null` for the fallback) |
 | `call.answered` | `call_id`, `unit`, `answered_by` |
+| `call.view_started` | `call_id`, `unit` (a view frame `*8*1#5#4#<where>*…##` opened a view) |
 | `call.ended` | `call_id`, `unit`, `kind`, `reason` |
 | `doorbell.view_requested` | adds `call_id` and `unit` when the frame names the unit |
 | `door_unlock.started`, `door_unlock.ended` | add `unit` when the address is a unit's lock, and `call_id` of its live call |
@@ -246,7 +247,10 @@ All carry the 2.x envelope (`event_id`, `type`, `occurred_at`, `data`).
 
 Station device: display, ringer, answering machine, memos, codec, camera
 resolution, agent, maintenance, diagnostics, LED, announcements, stair light,
-activations, Home Call.
+activations, Home Call, and the station `ring` event entity (key `ring`,
+event type `ring`, attributes `call_id` and `unit: null`): the indoor station
+ringing. It fires at once on `doorbell.pressed`, on every station, also with
+one unit.
 
 Every outdoor unit, also the only one:
 
@@ -258,10 +262,13 @@ Every outdoor unit, also the only one:
 | `sensor` | `call` | `idle`, `ringing`, `answered`, `viewing`; attribute `call_id`. |
 | `image` | `last_visitor` | The latest retained image of a call of this unit. |
 
-The unit event fires when the call's unit is known: at once when the station
-has exactly one unit, else on `call.caller_identified` (~0.3 s, at most 1 s).
-Everything that does not depend on the unit (card ring view, ring preview,
-image capture) starts with `doorbell.pressed`.
+The unit event fires when the call's unit is known, with the same `call_id`
+as the station ring: at once when the station has exactly one unit, else on
+`call.caller_identified` (~0.3 s, at most 1 s). Everything that does not
+depend on the unit (station ring event, card ring view, ring preview, image
+capture) starts with `doorbell.pressed`. Blueprints default to the unit
+event; the station ring is the trigger for the fastest notification, without
+the unit's name.
 
 Event delivery to Home Assistant no longer depends on which entities are
 enabled. Only `system.metrics_changed` and `agent.diagnostics_changed` stay

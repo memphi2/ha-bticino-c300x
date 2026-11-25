@@ -68,7 +68,9 @@ const char *c300x_device_sip_user(void);
 
 /* The Display patch exists for this display: the Qt 4 files on disk, or the
  * resource overlay of the Qt 5 display of C300X 3.0.x. Not on the C100X,
- * whose pages come with its own activation. */
+ * whose pages come with its own activation, and not on a station whose own
+ * model name and display program disagree: the patch script refuses to write
+ * there, so the agent neither offers the patch nor writes the user's label. */
 int c300x_device_display_files_patchable(void);
 
 /* The key beep, the display alerts, the display bridge and the ringer mute:

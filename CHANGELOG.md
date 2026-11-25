@@ -27,9 +27,9 @@ update behaviour below is checked offline only. Includes 2.9.1; on firmware
   kept running for 8 seconds; one that never writes it within 40 seconds
   counts as failed.
 - On firmware 3.0.6 a display that fails with the pages is restarted once
-  more and then starts as shipped until the station restarts; applying the
-  Display patch, the core hook Repair or an agent update tries the pages
-  again.
+  more and then starts as shipped until the station restarts; turning the
+  **Display patch** switch on, the core hook Repair or an agent update tries
+  the pages again, saving the display settings does not.
 - On firmware 3.0.6 a display step that fails during an install from Home
   Assistant or an agent update no longer fails the install or update. The
   owed display steps stay recorded: the core hook Repair stays until it has

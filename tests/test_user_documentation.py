@@ -557,3 +557,20 @@ def test_the_way_out_of_a_restart_loop_removes_the_overlay_before_the_setting():
         assert rename < removal < pages_off, name
         for control in ("core hook Repair", "**Display patch** switch", "agent update"):
             assert control in way_out[pages_off:], (name, control)
+
+
+def test_the_quarantine_texts_name_the_controls_that_retry_the_pages():
+    """A quarantined overlay is retried by the switch, the core Repair or an update;
+    the Display setting sync never retries it (display_patch_sync._differs)."""
+
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8").split("## v2.10.0b1", 1)[1].split("\n## ", 1)[0]
+    texts = {
+        "display.md": (DOCS / "display.md").read_text(encoding="utf-8"),
+        "v2.10.0b1.md": (ROOT / ".github/release-notes/v2.10.0b1.md").read_text(encoding="utf-8"),
+        "CHANGELOG v2.10.0b1": changelog,
+    }
+    for name, text in texts.items():
+        flat = " ".join(text.split())
+        assert "pplying the Display patch" not in flat, name
+        assert "the **Display patch** switch on" in flat, name
+        assert "saving the display settings does not" in flat, name

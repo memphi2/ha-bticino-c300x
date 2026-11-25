@@ -126,8 +126,9 @@ touch fix for lost taps is not part of it; it changes a Qt 4 library that
   within a minute of a start with the pages, it is started again as shipped,
   and the Display patch status reads **applied, but the display started as
   shipped**. This holds until the station restarts; the next start tries the
-  pages again. Applying the Display patch, the core hook Repair or an agent
-  update also tries them once more without a restart; if the display fails
+  pages again. Turning the **Display patch** switch on, the core hook Repair
+  or an agent update also tries them once more without a restart (saving the
+  display settings does not); if the display fails
   again, it stays as shipped. The agent runs one display restart at a time;
   requests that arrive meanwhile share the next one. A restart waits until
   the old display and its start script have ended, and after a change it

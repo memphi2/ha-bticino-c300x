@@ -778,7 +778,10 @@ class _AsyncSshDeviceSshClient(_DeviceSshClient):
                     result = await process.wait(check=True)
             except TimeoutError:
                 # The channel stays open: the trap's messages must not kill it.
-                process.terminate()
+                # A channel that closed right at the deadline takes no signal
+                # (AsyncSSH documents OSError); it is a time-out all the same.
+                with suppress(OSError):
+                    process.terminate()
                 with suppress(TimeoutError):
                     async with asyncio.timeout(_SSH_DISPLAY_WRITE_TERM_GRACE):
                         await process.wait()
@@ -1113,9 +1116,10 @@ def _apply_qml_patch_sync(client: _DeviceSshClient, remote_dir: str, action: str
         _LOGGER.warning("C300X: %s display is not patched; skipping %s patch", kind, action)
         return
     # exec: the signal the SSH server delivers must reach the script itself.
+    # The assignment prefix reaches the exec'd script without an env binary.
     command = (
-        f"exec env C300X_QML_SOURCE_DIR={_quote(f'{remote_dir}/qml')} "
-        f"{_quote(f'{remote_dir}/qml_patch.sh')} {action}"
+        f"C300X_QML_SOURCE_DIR={_quote(f'{remote_dir}/qml')} "
+        f"exec {_quote(f'{remote_dir}/qml_patch.sh')} {action}"
     )
     run_display_write = getattr(client, "run_display_write", client.run)
     output = run_display_write(command)

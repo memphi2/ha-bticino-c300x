@@ -3167,6 +3167,49 @@ def test_ssh_install_uses_the_factory_login_and_asks_only_after_a_refusal(monkey
     assert set(asyncio.run(flow.async_step_ssh_install(None))["data_schema"]({})) == set(asked)
 
 
+def test_a_display_write_timeout_during_the_ssh_install_is_shown_on_the_form(monkeypatch) -> None:
+    """The flow itself, not only its helper: the form carries the display
+    time-out, a text of the repair exists for it in every language, and no
+    other login is asked for."""
+
+    import json
+    from pathlib import Path
+
+    import custom_components.bticino_c300x.repairs as repairs
+    from custom_components.bticino_c300x.device_installer import C300XDeviceInstallError
+
+    entry = FakeEntry(
+        runtime_data=FakeRuntimeData(FakePatchApi()),
+        data={"agent_host": "192.0.2.60", "agent_token": "t", "maintenance_token": "m"},
+    )
+    entry.runtime_data.agent_update_state = FakeAgentUpdateState()
+    flow = DeviceAgentUpdateRepairFlow(FakeHass(entry), "entry-1")  # type: ignore[arg-type]
+    installs: list[Any] = []
+
+    async def install_agent(request: Any, **_kwargs: Any) -> Any:
+        installs.append(request)
+        raise C300XDeviceInstallError("device_display_timeout")
+
+    async def ensure_installer_dependencies(_hass: Any) -> None:
+        return None
+
+    monkeypatch.setattr(repairs, "async_install_device_agent", install_agent)
+    monkeypatch.setattr(repairs, "async_ensure_installer_dependencies", ensure_installer_dependencies)
+    flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}  # type: ignore[method-assign]
+
+    result = asyncio.run(flow.async_step_ssh_install({}))
+
+    assert len(installs) == 1
+    assert result["type"] == "form" and result["step_id"] == "ssh_install"
+    assert result["errors"] == {"base": "device_display_timeout"}
+    assert result["data_schema"].schema == {}
+    integration = Path(repairs.__file__).parent
+    for path in (integration / "strings.json", *(integration / "translations").glob("*.json")):
+        texts = json.loads(path.read_text(encoding="utf-8"))
+        errors = texts["issues"]["device_agent_update_required"]["fix_flow"]["error"]
+        assert errors.get("device_display_timeout"), path.name
+
+
 def test_a_display_write_timeout_of_the_ssh_install_keeps_its_own_error() -> None:
     import json
     from pathlib import Path

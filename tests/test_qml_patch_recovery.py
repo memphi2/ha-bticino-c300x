@@ -84,6 +84,30 @@ def _kill_when_held(tmp_path: Path, gui: Path, backup: Path, action: str, env: d
     process.wait(timeout=10)
 
 
+def test_a_stale_root_mark_with_the_scripts_own_pid_still_gets_the_root_read_only(tmp_path: Path) -> None:
+    """Pids are reused: after a reboot or a wrap the mark of a killed write
+    can carry the pid the next script gets. Its own pid is never another
+    running write, so the leftover writable / is closed, not left open."""
+
+    gui, backup = tmp_path / "gui", tmp_path / "backup"
+    gui.mkdir()
+    _write_original_gui(gui)
+    mark = tmp_path / "c300x-qml-root-rw"
+    # The wrapper writes its pid into the mark and becomes the script.
+    wrapper = 'printf "%s %s\\n" "$$" "$C300X_QML_GUI_DIR" > "$1"; echo "$$" > "$1.pid"; exec "$0" recover'
+    result = subprocess.run(
+        ["/bin/sh", "-c", wrapper, str(qml.SCRIPT), str(mark)],
+        capture_output=True, text=True, timeout=60, check=False,
+        env={**os.environ, "C300X_QML_GUI_DIR": str(gui), "C300X_QML_SOURCE_DIR": str(qml.SOURCE_DIR),
+             "C300X_QML_BACKUP_DIR": str(backup), "C300X_QML_GUI_ROOT": str(tmp_path),
+             **_commands(tmp_path)})
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["ok"] is True
+    assert (tmp_path / "c300x-qml-root-rw.pid").read_text().strip().isdigit()
+    assert _calls(tmp_path, "mount") == ["mount -o remount,ro /"]
+    assert not mark.exists()
+
+
 def _as_legacy(gui: Path) -> Path:
     """A 2.9.0 write used the same directory and copies, without the format
     marker and the file list."""

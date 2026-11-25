@@ -1471,24 +1471,24 @@ deadline and SSH status a 15-second one; at the deadline the process group is
 killed with `SIGKILL`; an action then fails like a failed command and a
 status reads as not running, so a hanging script no longer holds maintenance. They discard output.
 
-Device-user native routing/user mutations and label apply/restore are
-**synchronous**. Label writes use an 8192-byte bounded-prefix capture, without
-an execution deadline, `SIGKILL` cancellation or `pthread_cancel`. Graceful agent
-shutdown waits for the script to finish commit/rollback and remount cleanup.
-This deliberately replaces the old unsafe ten-second label-write kill timeout.
-A hung script can block HTTP dispatch and graceful shutdown indefinitely; a
-client timeout or disconnect does not abort or replay a physical write. Forced
-process termination and power loss are not covered by this guarantee.
+Device-user native routing/user mutations are **synchronous**: they run inside
+the request. Label apply/restore is not: it is a QML write job with an
+8192-byte bounded-prefix capture, the 30-second deadline and the 15-second
+grace period. The agent keeps serving other requests while the script runs; a
+script still running at the deadline gets `SIGTERM` for its rollback and the
+request is answered `504` with `media_user_label_timeout` (see the device-user
+actions). A client timeout or disconnect does not abort or replay a physical
+write.
 
 Only after the write phase finishes does device-user start its asynchronous
-read-only status phase. Ensure still requires successful label-script exit and
-JSON `ok:true`; restore retains its exit-status-only interpretation. Native
-codec file mutation also remains synchronous; only its reboot tail uses jobs.
-Shutdown cancels an active asynchronous job without invoking its completion
-or advancing another phase, but cannot reach that cleanup during a synchronous
-label transaction. A QML write job gets `SIGTERM` and its grace period at its
-deadline and at shutdown (see above); one that is killed even so, or loses
-power, leaves a transaction that the next write or agent start finishes.
+read-only status phase. Ensure requires successful label-script exit and JSON
+`ok:true`; restore requires a successful exit and, when the script prints
+JSON, `ok:true`. Native codec file mutation also remains synchronous; only its
+reboot tail uses jobs. Shutdown cancels an active asynchronous job without
+invoking its completion or advancing another phase. A QML write job, label
+writes included, gets `SIGTERM` and its grace period at its deadline and at
+shutdown (see above); one that is killed even so, or loses power, leaves a
+transaction that the next write or agent start finishes.
 
 See [HTTP maintenance ownership](../docs/dev/architecture.md#http-maintenance-boundary) and the
 [remaining blocking work](../docs/dev/architecture.md#remaining-blocking-work).

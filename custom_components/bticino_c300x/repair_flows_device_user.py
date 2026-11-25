@@ -16,6 +16,7 @@ from .device_user import (
     homeassistant_account_label,
 )
 from .repair_issues import DEVICE_USER_REQUIRED_ISSUE, repair_issue_id
+from .repair_work import RepairStepWork, async_run_repair_step
 
 
 class DeviceUserRepairFlow(RepairsFlow):
@@ -26,6 +27,7 @@ class DeviceUserRepairFlow(RepairsFlow):
 
         self.hass = hass
         self._entry_id = entry_id
+        self._work = RepairStepWork(hass, entry_id)
 
     async def async_step_init(
         self,
@@ -41,6 +43,11 @@ class DeviceUserRepairFlow(RepairsFlow):
     ) -> Any:
         """Create or repair the Home Assistant Flexisip user."""
 
+        return await async_run_repair_step(
+            self, self._work, DEVICE_USER_REQUIRED_ISSUE, self._async_confirm, user_input
+        )
+
+    async def _async_confirm(self, user_input: dict[str, Any] | None) -> Any:
         entry = self.hass.config_entries.async_get_entry(self._entry_id)
         if entry is None or not hasattr(entry, "runtime_data"):
             return self.async_abort(reason="entry_not_loaded")

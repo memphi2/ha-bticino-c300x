@@ -30,7 +30,7 @@ def test_known_c100x_never_offers_incompatible_bundle_repair(flag):
     assert not state.self_update_repair_supported
     assert "blocked" in state.repair_placeholders["update_path"]
     entry = SimpleNamespace(runtime_data=SimpleNamespace(agent_update_state=state))
-    hass = SimpleNamespace(config_entries=SimpleNamespace(async_get_entry=lambda _: entry))
+    hass = SimpleNamespace(data={}, config_entries=SimpleNamespace(async_get_entry=lambda _: entry))
     flow = repairs.DeviceAgentUpdateRepairFlow(hass, "synthetic")
     flow.async_abort = lambda **kwargs: kwargs
     assert asyncio.run(flow.async_step_confirm({}))["reason"] == "device_model_incompatible"

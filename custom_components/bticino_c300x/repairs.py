@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Coroutine, Mapping
 from contextlib import suppress
 from datetime import UTC, datetime
 from typing import Any, cast
@@ -22,7 +22,11 @@ from .agent_update import (
     compare_agent_bundle,
 )
 from .api import C300XAgentApiError
-from .api_errors import C300XAgentApiUnsupportedError, C300XAgentUpdateError
+from .api_errors import (
+    C300XAgentApiConnectionError,
+    C300XAgentApiUnsupportedError,
+    C300XAgentUpdateError,
+)
 from .callback_url import async_suggest_callback_base_url
 from .callback_url import (
     validated_callback_base_url as _validated_callback_base_url,
@@ -87,6 +91,7 @@ from .repair_issues import (
     UNSUPPORTED_CALLBACK_URL_ISSUE,
     repair_issue_id,
 )
+from .repair_work import OTHER_FLOW_FINISHED, RepairStepWork, async_run_repair_step
 from .schema_compat import vol
 
 _LOGGER = logging.getLogger(__name__)
@@ -162,6 +167,7 @@ class MediaSetupRepairFlow(RepairsFlow):
 
         self.hass = hass
         self._entry_id = entry_id
+        self._work = RepairStepWork(hass, entry_id)
 
     async def async_step_init(
         self,
@@ -177,6 +183,11 @@ class MediaSetupRepairFlow(RepairsFlow):
     ) -> Any:
         """Repair explicitly confirmed media setup prerequisites."""
 
+        return await async_run_repair_step(
+            self, self._work, MEDIA_SETUP_REPAIR_REQUIRED_ISSUE, self._async_confirm, user_input
+        )
+
+    async def _async_confirm(self, user_input: dict[str, Any] | None) -> Any:
         entry = self.hass.config_entries.async_get_entry(self._entry_id)
         if entry is None or not hasattr(entry, "runtime_data"):
             return self.async_abort(reason="entry_not_loaded")
@@ -309,6 +320,7 @@ class CallbackUrlRepairFlow(RepairsFlow):
 
         self.hass = hass
         self._entry_id = entry_id
+        self._work = RepairStepWork(hass, entry_id)
 
     async def async_step_init(
         self,
@@ -324,6 +336,11 @@ class CallbackUrlRepairFlow(RepairsFlow):
     ) -> Any:
         """Store a local HTTP callback base URL override."""
 
+        return await async_run_repair_step(
+            self, self._work, UNSUPPORTED_CALLBACK_URL_ISSUE, self._async_configure, user_input
+        )
+
+    async def _async_configure(self, user_input: dict[str, Any] | None) -> Any:
         entry = self.hass.config_entries.async_get_entry(self._entry_id)
         if entry is None:
             return self.async_abort(reason="entry_not_loaded")
@@ -377,6 +394,7 @@ class DeviceCoreQmlHookRepairFlow(RepairsFlow):
 
         self.hass = hass
         self._entry_id = entry_id
+        self._work = RepairStepWork(hass, entry_id)
 
     async def async_step_init(
         self,
@@ -392,6 +410,11 @@ class DeviceCoreQmlHookRepairFlow(RepairsFlow):
     ) -> Any:
         """Apply the minimal core QML hook after explicit confirmation."""
 
+        return await async_run_repair_step(
+            self, self._work, DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE, self._async_confirm, user_input
+        )
+
+    async def _async_confirm(self, user_input: dict[str, Any] | None) -> Any:
         entry = self.hass.config_entries.async_get_entry(self._entry_id)
         if entry is None or not hasattr(entry, "runtime_data"):
             return self.async_abort(reason="entry_not_loaded")
@@ -489,6 +512,7 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
             tuple[_ExternalPatchState, _ExternalPatchChanges] | None
         ) = None
         self._ask_ssh_login = False
+        self._work = RepairStepWork(hass, entry_id)
 
     async def async_step_init(
         self,
@@ -498,12 +522,39 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
 
         return await self.async_step_confirm()
 
+    async def _async_run_step(
+        self,
+        step: Callable[[dict[str, Any] | None], Coroutine[Any, Any, Any]],
+        user_input: dict[str, Any] | None,
+    ) -> Any:
+        """Run a submitted step so that a dropped request cannot end it.
+
+        The update and the reload after it then finish whatever happens to the
+        connection of the client that confirmed the repair.
+        """
+
+        if user_input is None:
+            return await step(None)
+        result = await self._work.async_run(lambda: step(user_input))
+        if result is not OTHER_FLOW_FINISHED:
+            return result
+        entry = self.hass.config_entries.async_get_entry(self._entry_id)
+        if entry is None or not hasattr(entry, "runtime_data"):
+            return self.async_abort(reason="entry_not_loaded")
+        update_state = getattr(entry.runtime_data, "agent_update_state", None)
+        if not getattr(update_state, "update_required", False):
+            return self.async_create_entry(data={})
+        return await step(None)
+
     async def async_step_confirm(
         self,
         user_input: dict[str, Any] | None = None,
     ) -> Any:
         """Confirm and run a device-agent self-update."""
 
+        return await self._async_run_step(self._async_confirm, user_input)
+
+    async def _async_confirm(self, user_input: dict[str, Any] | None) -> Any:
         entry = self.hass.config_entries.async_get_entry(self._entry_id)
         if entry is None or not hasattr(entry, "runtime_data"):
             return self.async_abort(reason="entry_not_loaded")
@@ -523,28 +574,50 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
             )
         try:
             patch_state = await _async_capture_external_patch_state(entry, require_reliable=True)
-            if getattr(update_state, "payload_bootstrap_required", False):
+            bootstrap = getattr(update_state, "payload_bootstrap_required", False)
+            # The station applies the update by itself once it has the files,
+            # whether or not Home Assistant lives to see the answer. An active
+            # Display patch is noted as due before that, so a start after a
+            # lost answer still offers this repair and re-applies the pages.
+            noted_now = (
+                patch_state.qml_patch_required
+                and CONF_AGENT_UPDATE_QML_PENDING not in entry.data
+            )
+            pending: dict[str, bool] = {}
+            if patch_state.qml_patch_required:
+                pending[CONF_AGENT_UPDATE_QML_PENDING] = True
+            if bootstrap:
                 # Between the two passes the display counts as partly
                 # patched, which no longer tells whether the patch was
-                # active. Note that now, in case this flow does not see the
-                # first pass return.
-                pending = {CONF_AGENT_UPDATE_PAYLOAD_PENDING: True}
-                if patch_state.qml_patch_required:
-                    pending[CONF_AGENT_UPDATE_QML_PENDING] = True
+                # active.
+                pending[CONF_AGENT_UPDATE_PAYLOAD_PENDING] = True
+            if pending:
                 self.hass.config_entries.async_update_entry(
                     entry, data={**entry.data, **pending}
                 )
-            update_result = await async_apply_packaged_agent_update(
-                self.hass,
-                entry.runtime_data.api,
-            )
+            try:
+                update_result = await async_apply_packaged_agent_update(
+                    self.hass,
+                    entry.runtime_data.api,
+                )
+            except Exception as err:
+                if noted_now and not bootstrap and not _station_answer_lost(err):
+                    # The station refused, or nothing was sent: no update, so
+                    # nothing is due. Only an answer that never came leaves
+                    # open whether the station applied the update.
+                    _clear_qml_followup(self.hass, entry)
+                raise
+            if noted_now and not bootstrap and update_result.get("qml_patch_changed") is not True:
+                # The station's answer says it changed no display file: the
+                # note of this run is not needed. One from an earlier run stays.
+                _clear_qml_followup(self.hass, entry)
             _remember_qml_followup(self.hass, entry, patch_state, update_result)
             setup_data = await _async_verify_agent_after_update(
                 self.hass,
                 entry.runtime_data.api,
                 update_result,
             )
-            if getattr(update_state, "payload_bootstrap_required", False):
+            if bootstrap:
                 target_bundle = await async_load_packaged_bundle_metadata(self.hass)
                 if not target_bundle or compare_agent_bundle(
                     setup_data, target_bundle
@@ -619,6 +692,9 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
     ) -> Any:
         """Repair an older agent by reinstalling the packaged bundle over SSH."""
 
+        return await self._async_run_step(self._async_ssh_install, user_input)
+
+    async def _async_ssh_install(self, user_input: dict[str, Any] | None) -> Any:
         entry = self.hass.config_entries.async_get_entry(self._entry_id)
         if entry is None or not hasattr(entry, "runtime_data"):
             return self.async_abort(reason="entry_not_loaded")
@@ -972,6 +1048,12 @@ class _ExternalPatchChanges:
             ipv6_firewall_patch_changed=config_changed or firewall_source_changed,
             config_schema_changed=config_changed,
         )
+
+
+def _station_answer_lost(err: Exception) -> bool:
+    """Whether a request ended without the station's answer (transport, time-out)."""
+
+    return isinstance(err, C300XAgentApiConnectionError) and err.__cause__ is not None
 
 
 def _remember_qml_followup(hass: HomeAssistant, entry: Any,

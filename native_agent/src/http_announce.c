@@ -60,7 +60,8 @@ static int write_piece(struct c300x_announce *announce, int fd, const struct req
 
 int c300x_http_announce_route(struct c300x_announce *announce, int fd, const struct request *request)
 {
-    const char *action = request->path + sizeof(ROOT) - 1;
+    const size_t root_len = sizeof(ROOT) - 1;
+    const char *action = &request->path[root_len];
     const char *error = "";
     int post = strcmp(request->method, "POST") == 0;
     int volume = 0, duration_ms = 0;

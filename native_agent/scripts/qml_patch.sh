@@ -2414,10 +2414,21 @@ qt5_drop_recovery_copies() {
     done
 }
 
+# Same content, mode and owner: the start script stays as it is. The agent
+# trusts the display only while it holds the installed start script itself
+# (its inode), so a rollback that changes nothing keeps it.
+qt5_same_artifact() {
+    [ -f "$2" ] && [ ! -L "$2" ] && cmp -s "$1" "$2" || return 1
+    qt5_meta="$(stat -c '%a %u %g' "$1" 2>/dev/null)" || return 1
+    [ -n "$qt5_meta" ] && [ "$qt5_meta" = "$(stat -c '%a %u %g' "$2" 2>/dev/null)" ]
+}
+
 qt5_restore_artifact() {
     qt5_artifact_path "$2"
     qt5_saved="$1/.qt5/$2"
-    if [ -f "$qt5_saved" ]; then
+    if [ "$2" = wrapper ] && [ -f "$qt5_saved" ] && qt5_same_artifact "$qt5_saved" "$qt5_target"; then
+        return 0
+    elif [ -f "$qt5_saved" ]; then
         # The wrapper may live on another filesystem. Keep the recovery copy
         # until every artifact is restored; rename only beside the destination.
         # A step cut off by a signal runs again in this process: drop its copy.

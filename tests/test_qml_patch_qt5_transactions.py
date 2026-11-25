@@ -135,15 +135,27 @@ def test_publication_failures_restore_activation_and_quarantine(device, failure,
 
 
 @pytest.mark.parametrize("artifact", ["rcc", "library", "original", "wrapper", "failed"])
-def test_failed_rollback_keeps_recovery_and_blocks_overlay(device, artifact):
+def test_failed_rollback_keeps_recovery_and_blocks_overlay(device, monkeypatch, artifact):
     device.ok("apply")
     artifacts(device)["failed"].write_bytes(b"quarantined\n")
+    action = "core-restore"
+    if artifact == "wrapper":
+        # An unchanged start script is left alone: the write must replace it.
+        device.wrapper.write_text(device.wrapper.read_text() + "# previous version\n")
+        source = overlay.SCRIPT.read_text()
+        start, end = source.index("reload_gui() {"), source.index("\nremount_rw() {")
+        script = device.root / "reload-failure.sh"
+        script.write_text(source[:start] + "reload_gui() { return 1; }\n" + source[end:])
+        script.chmod(0o700)
+        monkeypatch.setattr(overlay, "SCRIPT", script)
+        action = "core-apply"
     before = snapshot(device)
     env = command_failure(
         device, "mv", f'case "$2" in "{artifacts(device)[artifact]}.c300x-recovery."*) true;; *) false;; esac',
     )
-    env["QT5_TEST_PACK_FAILS"] = "1"
-    result = device.run("core-restore", **env)
+    if artifact != "wrapper":
+        env["QT5_TEST_PACK_FAILS"] = "1"
+    result = device.run(action, **env)
     assert result.returncode != 0
     assert "recovery files retained" in result.stderr
     assert artifacts(device)["failed"].is_file()
@@ -187,7 +199,7 @@ def test_a_sigterm_during_the_activation_rollback_repeats_it_and_exits_130(devic
     held = device.root / "held"
     env = command_failure(
         device, "cp",
-        f'case "$*" in *"/.qt5/wrapper {device.wrapper}.c300x-recovery."*) [ ! -e "{held}" ];; *) false;; esac',
+        f'case "$*" in *"/.qt5/rcc {device.rcc}.c300x-recovery."*) [ ! -e "{held}" ];; *) false;; esac',
         effect=f': > "{held}"; while :; do sleep 0.02; done',
     )
     process = subprocess.Popen([str(script), "media-user-label-apply"], env=device.environment(**env),
@@ -219,7 +231,7 @@ def test_a_sigkill_during_the_activation_rollback_leaves_no_recovery_copy_after_
     held = device.root / "held"
     env = command_failure(
         device, "cp",
-        f'case "$*" in *"/.qt5/wrapper {device.wrapper}.c300x-recovery."*) [ ! -e "{held}" ];; *) false;; esac',
+        f'case "$*" in *"/.qt5/rcc {device.rcc}.c300x-recovery."*) [ ! -e "{held}" ];; *) false;; esac',
         effect=f': > "{held}"; while :; do sleep 0.02; done',
     )
     process = subprocess.Popen([str(script), "media-user-label-apply"], env=device.environment(**env),
@@ -300,7 +312,7 @@ def test_a_sigterm_during_the_recovery_restart_waits_for_its_request_on_qt5(devi
     held = device.root / "held"
     env = command_failure(
         device, "cp",
-        f'case "$*" in *"/.qt5/wrapper {device.wrapper}.c300x-recovery."*) [ ! -e "{held}" ];; *) false;; esac',
+        f'case "$*" in *"/.qt5/rcc {device.rcc}.c300x-recovery."*) [ ! -e "{held}" ];; *) false;; esac',
         effect=f': > "{held}"; while :; do sleep 0.02; done',
     )
     process = subprocess.Popen([str(failing), "media-user-label-apply"], env=device.environment(**env),
@@ -327,3 +339,21 @@ def test_a_sigterm_during_the_recovery_restart_waits_for_its_request_on_qt5(devi
     assert time.monotonic() - started < 15
     assert len(filed()) == 1
     assert not list(device.gui.glob(".c300x-qml-transaction.*"))
+
+
+def test_a_rollback_leaves_an_unchanged_start_script_in_place(device, monkeypatch):
+    """The agent trusts the display only while it holds the installed start script
+    itself (the same inode); a rollback that rewrote an identical copy would lock
+    the station actions of the Integration tab out until the next display restart."""
+
+    device.ok("apply")
+    before = {device.wrapper: device.wrapper.stat().st_ino}
+    source = overlay.SCRIPT.read_text()
+    start, end = source.index("reload_gui() {"), source.index("\nremount_rw() {")
+    script = device.root / "reload-failure.sh"
+    script.write_text(source[:start] + "reload_gui() { return 1; }\n" + source[end:])
+    script.chmod(0o700)
+    monkeypatch.setattr(overlay, "SCRIPT", script)
+    # The label is packed into the resource file: the write changes it, not the start script.
+    assert device.ok("media-user-label-apply")["state"] == "reload_failed"
+    assert {path: path.stat().st_ino for path in before} == before

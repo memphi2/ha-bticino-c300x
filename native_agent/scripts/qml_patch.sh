@@ -671,6 +671,7 @@ finish_write_action() {
 }
 
 exit_write_signal() {
+    cleanup_staging
     if [ "$recovery_ok" = "1" ] && [ "$write_root_ro" = "1" ] && [ "${WRITE_TRANSACTION_COMMITTED:-0}" != "1" ]; then
         exit 130
     fi

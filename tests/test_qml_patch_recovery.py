@@ -286,8 +286,11 @@ def test_a_sigterm_during_the_rollback_gui_restart_still_restarts_the_gui_and_re
         f'#!/bin/sh\nprintf "%s\\n" "pidof $*" >> "{log}"\n'
         f'[ "$(grep -c "^killall" "{log}")" -ge 3 ]\n')
     log.unlink(missing_ok=True)
+    env["C300X_QML_STAGING_DIR"] = str(tmp_path / "stage")
     result = qml._terminate_when_held(tmp_path, gui, backup, "core-apply", env)
     assert result.returncode == 130, result.stderr
+    # The generated files (in RAM on the device) go with the script.
+    assert not (tmp_path / "stage").exists()
     assert result.stdout == ""
     assert _gui_files(gui) == before
     assert _calls(tmp_path, "killall") == ["killall BtClass"] * 3
@@ -324,8 +327,10 @@ def test_a_sigterm_during_the_final_remount_retries_it_and_exits_131(tmp_path: P
     gui.mkdir()
     _write_original_gui(gui)
     env = _commands(tmp_path, ("mount", "-o remount,ro /"))
+    env["C300X_QML_STAGING_DIR"] = str(tmp_path / "stage")
     result = qml._terminate_when_held(tmp_path, gui, backup, "core-apply", env)
     assert result.returncode == 131, result.stderr
+    assert not (tmp_path / "stage").exists()
     assert result.stdout == ""
     assert not list(gui.glob(".c300x-qml-transaction.*"))
     assert _calls(tmp_path, "mount") == ["mount -o remount,rw /", "mount -o remount,ro /",

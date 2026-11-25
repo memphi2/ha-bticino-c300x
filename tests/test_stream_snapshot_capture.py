@@ -429,3 +429,23 @@ def test_a_visitor_image_the_store_refuses_is_reported(tmp_path, monkeypatch, ca
 
     asyncio.run(run())
 
+
+def test_a_visitor_image_save_that_runs_out_of_time_is_not_blamed_on_the_agent(tmp_path, monkeypatch):
+    from custom_components.bticino_c300x import snapshot_capture
+
+    async def run():
+        manager = setup(tmp_path, monkeypatch)
+        api = manager.entry.runtime_data.api.async_doorbell_snapshot
+        api.return_value = (bmp(), "image/bmp")
+        monkeypatch.setattr(snapshot_capture, "CAPTURE_TIMEOUT", 0.2)
+
+        async def slow(*args, **kwargs):
+            await asyncio.sleep(5)
+
+        monkeypatch.setattr(manager, "save", slow)
+        event(manager, "doorbell_pressed", "one")
+        await drain(manager)
+        assert manager.capture.last_failure == "save_failed"
+        manager.close()
+
+    asyncio.run(run())

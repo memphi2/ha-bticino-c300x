@@ -206,6 +206,7 @@ class SnapshotCapture:
         return entry_video_enabled(entry) and supports_capability(entry, "doorbell_video")
 
     async def _capture(self, generation: int, identity: str) -> None:
+        delivered = False
         try:
             options = snapshot_options(self.manager.entry)
             await asyncio.sleep(options.delay_seconds)
@@ -233,6 +234,7 @@ class SnapshotCapture:
                     if options.timestamp else None
                 )
                 image = await self.manager.disk_job(framebuffer_jpeg, content, content_type, stamp)
+                delivered = True
                 if self._current(generation):
                     try:
                         item = await self.manager.save(image, identity, is_current=lambda: self._current(generation))
@@ -256,7 +258,8 @@ class SnapshotCapture:
         except (C300XAgentApiError, ClientConnectionError, OSError, TimeoutError, ValueError) as err:
             # Failed reads must never replace a previously useful preview.
             _LOGGER.debug("Could not acquire C300X framebuffer snapshot", exc_info=True)
-            self._failed(snapshot_failure_cause(err))
+            # A time-out after the station delivered the image is HA's own save.
+            self._failed("save_failed" if delivered and isinstance(err, TimeoutError) else snapshot_failure_cause(err))
 
     def _failed(self, cause: str | None) -> None:
         """Record the outcome; warn once per cause until an image succeeds again."""

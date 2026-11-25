@@ -24,12 +24,14 @@ from custom_components.bticino_c300x import repair_work, repairs
 from custom_components.bticino_c300x.const import CONF_CALLBACK_BASE_URL
 from custom_components.bticino_c300x.repair_issues import (
     DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE,
+    MEDIA_SETUP_REPAIR_REQUIRED_ISSUE,
     UNSUPPORTED_CALLBACK_URL_ISSUE,
     repair_issue_id,
 )
 
 CREATED = {"type": "create_entry", "data": {}}
 CALLBACK_ISSUE = repair_issue_id(UNSUPPORTED_CALLBACK_URL_ISSUE, "entry-1")
+MEDIA_ISSUE = repair_issue_id(MEDIA_SETUP_REPAIR_REQUIRED_ISSUE, "entry-1")
 CORE_HOOK_ISSUE = repair_issue_id(DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE, "entry-1")
 
 
@@ -202,5 +204,73 @@ def test_core_hook_repair_finishes_after_the_station_write(issue_registry) -> No
         assert marked
         assert await flow.async_step_confirm({}) == CREATED
         assert api.calls.count("apply_qml_core") == 1
+
+    asyncio.run(scenario())
+
+
+def test_media_repair_finishes_the_station_writes(issue_registry) -> None:
+    async def scenario() -> None:
+        api = _GatedApi("async_apply_firewall")
+        runtime = FakeRuntimeData(
+            api,
+            capabilities={"doorbell_video": {"supported": True}, "doorbell_call": {"supported": True}},
+            self_test_status={
+                "ok": False,
+                "checks": {
+                    "capabilities": {"ok": True},
+                    "firewall": {"ok": False, "reason": "ipv4_media_ports_missing"},
+                    "rtsp": {"ok": True},
+                    "talkback_rtp": {"ok": True},
+                    "homeassistant_user": {"ok": False},
+                    "device_routing": {"ok": False},
+                    "startup": {"ok": True},
+                },
+            },
+        )
+        entry = FakeEntry(runtime_data=runtime, options={"video_enabled": True})
+        issue_registry.add(MEDIA_ISSUE)
+        flow = _prepare(repairs.MediaSetupRepairFlow(FakeHass(entry), "entry-1"))
+
+        request = asyncio.create_task(flow.async_step_confirm({}))
+        await api.started.wait()
+        await _drop(request)
+        api.gate.set()
+        await _settle()
+
+        # Not only the firewall the request was cut in: the user as well.
+        assert api.calls == [
+            "set_firewall_enabled:True",
+            "apply_firewall",
+            "ensure_homeassistant_user:Home Assistant HA Test",
+            "self_test",
+            "device_user_status",
+        ]
+        assert MEDIA_ISSUE not in issue_registry
+        assert await flow.async_step_confirm({}) == {
+            "type": "create_entry", "data": {"repaired": ["firewall", "homeassistant_user"]},
+        }
+        assert api.calls.count("apply_firewall") == 1
+
+    asyncio.run(scenario())
+
+
+def test_media_repair_finishes_its_reload() -> None:
+    async def scenario() -> None:
+        runtime = FakeRuntimeData(FakePatchApi())
+        runtime.connection_state.available = False
+        entry = FakeEntry(runtime_data=runtime, options={"video_enabled": True})
+        hass = FakeHass(entry)
+        gate = asyncio.Event()
+        hass.config_entries = _ReloadingConfigEntries(entry, gate)
+        flow = _prepare(repairs.MediaSetupRepairFlow(hass, "entry-1"))
+
+        request = asyncio.create_task(flow.async_step_confirm({}))
+        await hass.config_entries.reload_started.wait()
+        await _drop(request)
+        gate.set()
+        await _settle()
+
+        assert hass.config_entries.reloads == ["entry-1"]
+        assert hass.config_entries.state == "loaded"
 
     asyncio.run(scenario())

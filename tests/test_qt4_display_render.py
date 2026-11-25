@@ -29,13 +29,20 @@ def energy_page(station, view: str = "now", picture: Path | None = None) -> str:
 def test_energy_hour_labels_stand_below_the_bars_on_qt4(station):
     """The hour labels of Today stand below the bars."""
     output = energy_page(station)
-    assert "C300X_ENERGY_QT4_FAIL" not in output, [line for line in output.splitlines() if "QT4_FAIL" in line]
-    assert "C300X_ENERGY_QT4_PASS 9" in output, output[-800:]
+    assert [line for line in output.splitlines() if "QT4_FAIL today" in line] == []
+    assert "C300X_ENERGY_QT4_PASS " in output, output[-800:]
+
+
+def test_energy_flow_arrows_sit_on_their_lines_on_qt4(station):
+    """Each arrow of Now is centred on its line, whichever way it points and whenever it was turned."""
+    output = energy_page(station)
+    faults = [line for line in output.splitlines() if "QT4_FAIL now" in line]
+    assert faults == []
+    assert "C300X_ENERGY_QT4_PASS 27" in output, output[-800:]
 
 
 def test_energy_views_raise_no_qml_warning_on_qt4(station):
     assert qt4_render.warnings(energy_page(station)) == []
-
 
 
 def delegate_anchor_faults(text: str) -> list[str]:

@@ -42,6 +42,7 @@ Rectangle {
                  {label: "Home", color: "#ff9a8b", values: powerValues(0.7), dots: []}]})
 
     Loader { id: first; x: 26; y: 96; width: 748; height: 318 }
+    Loader { id: second; x: 26; y: 96; width: 748; height: 318; visible: false; source: "C300XEnergy.qml" }
 
     function all(item, test, out) {
         if (!item) return out
@@ -53,6 +54,21 @@ Rectangle {
     function check(condition, label) {
         if (condition) checks++
         else console.log("C300X_ENERGY_QT4_FAIL " + label)
+    }
+    function lane(item) {
+        while (item && item.laneWidth === undefined) item = item.parent
+        return item
+    }
+    function arrows(view, expected, label) {
+        var found = all(view, function(i) { return i.text === "▶" && i.visible === true }, [])
+        check(found.length === expected, label + ": " + found.length + " arrows, expected " + expected)
+        for (var i = 0; i < found.length; i++) {
+            var line = lane(found[i])
+            var at = found[i].mapToItem(host, found[i].width / 2, found[i].height / 2)
+            var want = line.mapToItem(host, line.width / 2, line.height / 2)
+            check(Math.abs(at.x - want.x) <= 1 && Math.abs(at.y - want.y) <= 1,
+                  label + ": arrow " + i + " at " + at.x + "," + at.y + ", its line at " + want.x + "," + want.y)
+        }
     }
     function hourLabels(view) {
         var tap = all(view, function(i) { return i.objectName === "energyHoursTap" }, [])[0]
@@ -69,6 +85,7 @@ Rectangle {
         first.source = "C300XEnergy.qml"
         first.item.energy = energy(1, -1, -1)
         first.item.powerHistory = history
+        second.item.powerHistory = history
     }
     Timer {
         property int step: 0
@@ -76,15 +93,27 @@ Rectangle {
         onTriggered: {
             step++
             if (step === 1) {
-                check(first.item.shown === "now", "now view shown")
-                first.item.view = "today"
+                arrows(first.item, 4, "now, set after creation")
+                first.item.energy = energy(-1, 1, 1)
             } else if (step === 2) {
+                arrows(first.item, 4, "now, every flow turned")
+                first.item.energy = energy(1, -1, 0)
+                second.item.energy = energy(1, -1, -1)
+                first.visible = false
+                second.visible = true
+            } else if (step === 3) {
+                arrows(second.item, 4, "now, second view")
+                second.visible = false
+                first.visible = true
+                arrows(first.item, 3, "now, battery idle")
+                first.item.view = "today"
+            } else if (step === 4) {
                 hourLabels(first.item)
                 first.item.view = "power"
-            } else if (step === 3) {
+            } else if (step === 5) {
                 check(first.item.shown === "power", "power view shown")
                 first.item.view = "balance"
-            } else if (step === 4) {
+            } else if (step === 6) {
                 check(first.item.shown === "balance", "balance view shown")
                 first.item.view = "@VIEW@"
                 console.log("C300X_ENERGY_QT4_PASS " + checks)

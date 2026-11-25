@@ -147,18 +147,22 @@ Item {
                     opacity: link.flow === 0 ? 0.35 : 1
                 }
 
-                UbuntuLightText {
+                Item {
                     id: flowArrow
                     visible: link.flow !== 0
                     anchors.centerIn: parent
                     width: 20
                     height: 20
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                    text: "\u25B6"
-                    font.pixelSize: 18
-                    color: link.flowColor
                     rotation: (modelData === "solar" ? 180 : 0) + (link.flow < 0 ? 180 : 0)
+
+                    UbuntuLightText {
+                        anchors.fill: parent
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                        text: "\u25B6"
+                        font.pixelSize: 18
+                        color: link.flowColor
+                    }
                 }
 
                 UbuntuLightText {

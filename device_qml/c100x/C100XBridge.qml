@@ -12,7 +12,6 @@ Item {
     property int normalState: -1
     property int offState: -1
     property var focusWindow: null
-    // The verified hook's Loader supplies the vendor stack through its creation context.
     property var pageStack: typeof mainStackView === "undefined" ? null : mainStackView
     readonly property var homeItem: pageStack && pageStack.depth > 0 && typeof pageStack.get === "function" ? pageStack.get(0) : null
     property bool homeRegulationActive: false

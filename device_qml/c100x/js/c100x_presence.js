@@ -1,6 +1,5 @@
 .pragma library
 
-// The socket advertises presence; only a fresh challenge proves event-loop progress.
 function create(owner) {
     var pending = null
     var probe = ""

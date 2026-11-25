@@ -1,6 +1,5 @@
 .pragma library
 
-// One sleeping request, cancelled on vendor preemption; no deferred commands.
 function create(owner) {
     var pending = null
     var lastId = ""

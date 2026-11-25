@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+# The ARMHF checks rebuild the whole agent; one compile per CPU.
+MAKE_JOBS = f"-j{os.cpu_count() or 1}"
 
 
 @dataclass(frozen=True)
@@ -32,7 +34,7 @@ def main() -> int:
             "Legal/provenance audit",
             (sys.executable, "scripts/check_legal_audit.py"),
         ),
-        ValidationStep("Native agent ARMHF stack check", ("make", "-C", "native_agent", "armhf-stack-check")),
+        ValidationStep("Native agent ARMHF stack check", ("make", "-C", "native_agent", "armhf-stack-check", MAKE_JOBS)),
     ]
 
     abi_step = _native_agent_abi_step()
@@ -66,7 +68,7 @@ def _native_agent_abi_step() -> ValidationStep | None:
         return None
     return ValidationStep(
         "Native agent ARMHF ABI check",
-        ("make", "-C", "native_agent", "armhf-abi-check"),
+        ("make", "-C", "native_agent", "armhf-abi-check", MAKE_JOBS),
     )
 
 

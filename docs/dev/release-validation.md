@@ -235,11 +235,22 @@ Setup builds and verifies the ARM probe in `$XDG_CACHE_HOME/c300x-dev/qt4-runtim
 (default `~/.cache/c300x-dev/qt4-runtime`). Pytest discovers it automatically.
 Changed probe sources or damaged cache files fail explicitly: rerun setup.
 `C300X_QT4_QEMU`, `C300X_QT4_ROOTFS`, `C300X_QT4_PROBE` and `C300X_QT4_IMPORTS`
-override the built setup; one that is not set comes from the built setup.
-`C300X_QT4_QEMU` and `C300X_QT4_ROOTFS` also belong to the compile and render
-checks below: set without a built setup, they leave this runtime unconfigured
-and its tests skip. `C300X_QT4_PROBE` or `C300X_QT4_IMPORTS` without the rest
-is an error that names the missing variables.
+override the built setup; one that is not set comes from the built setup. An
+explicit `C300X_QT4_ROOTFS` is used as given, also with the built probe: it is
+not compared with the sysroot the probe was built and verified against.
+A variable that is set but does not point to an existing executable
+(`QEMU`, `PROBE`) or directory (`ROOTFS`, `IMPORTS`) is an error that names
+the variable; it never skips.
+
+Without a built setup:
+
+- none of the four set: the runtime is unconfigured and its tests skip;
+- `C300X_QT4_QEMU` and `C300X_QT4_ROOTFS` both set and valid: the same. The
+  two also belong to the compile and render checks below, which need no
+  runtime probe;
+- only one of those two, or `C300X_QT4_PROBE` or `C300X_QT4_IMPORTS` without
+  all the others: an error that names the missing variables.
+
 The separate compile-only checks use `C300X_QT4_COMPILE_PROBE` and
 `C300X_QT4_COMPILE_IMPORTS` for the compiler and its placeholder modules.
 Do not use the compile-only executable as the runtime probe.

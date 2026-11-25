@@ -29,10 +29,12 @@ import sys
 import threading
 import time
 import zlib
+from collections import Counter
 from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlsplit
+from types import SimpleNamespace
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
@@ -83,6 +85,9 @@ def _agent_data() -> dict[str, object]:
         CONF_DEVICE_UI_ENABLED,
         CONF_WEATHER_ENTITY_ID,
     )
+    from custom_components.bticino_c300x.display_settings import (
+        async_set_display_setting,
+    )
 
     states = {
         "light.kitchen": FakeState("on", attributes={
@@ -103,6 +108,7 @@ def _agent_data() -> dict[str, object]:
             "friendly_name": "Wetter", "temperature": 14, "humidity": 60, "temperature_unit": "°C"}),
     }
     hass = FakeHass(states=FakeStates(states))
+    hass.config.location_name = "Zuhause"
     entry = FakeEntry(data={CONF_DEVICE_UI_ENABLED: True}, options={
         CONF_DASHBOARD_ENTITIES: [entity for entity in states if not entity.startswith(("weather.", "alarm_"))],
         CONF_WEATHER_ENTITY_ID: "weather.home",
@@ -113,7 +119,15 @@ def _agent_data() -> dict[str, object]:
         "kind": "image", "source": f"http://127.0.0.1:{AGENT_PORT}/ui/test-picture.png",
         "caption": "Haustür", "width": 220, "height": 120,
     })
-    return {"status": run(dashboard.async_status(hass, entry)), "dashboard": payload}
+
+
+    def setting(key: str, value: str) -> dict[str, object]:
+        """The integration's own answer to the Integration tab's setting request."""
+        stored = FakeEntry(data=dict(entry.data), options=dict(entry.options))
+        config_entries = SimpleNamespace(async_update_entry=lambda target, options: setattr(target, "options", options))
+        return run(async_set_display_setting(SimpleNamespace(config_entries=config_entries), stored, key, value))
+
+    return {"status": run(dashboard.async_status(hass, entry)), "dashboard": payload, "setting": setting}
 
 
 def _png(width: int, height: int) -> bytes:
@@ -153,7 +167,22 @@ def agent() -> Iterator[list[str]]:
                 self.end_headers()
                 self.wfile.write(picture)
             elif url.path == "/homeassistant":
-                self._reply(data["dashboard"] if not url.query else {"ok": True})
+                query = {key: values[0] for key, values in parse_qs(url.query).items()}
+                if query.get("service") == "setting":
+                    self._reply(data["setting"](query.get("entities", ""), query.get("option", "")))
+                else:
+                    self._reply(data["dashboard"] if not url.query else {"ok": True})
+            elif url.path == "/ui/status":
+                # The agent's own answer (ui_status.c), reachable on loopback only.
+                self._reply({"ok": True, "version": "2.10.0b2", "firmware": "3.0.6", "registered": True,
+                             "disabled": False, "home_assistant": "http://homeassistant.local:8123",
+                             "last_contact_age": 42})
+            elif url.path == "/ui/maintenance":
+                self._reply({"ok": True, "ssh": True, "remove": True, "reboot": True})
+            elif url.path == "/ui/maintenance/ssh":
+                self._reply({"ok": True, "running": False})
+            elif url.path in ("/ui/maintenance/reboot", "/ui/maintenance/remove"):
+                self._reply({"ok": True, "scheduled": True}, 202)
             elif url.path in ("/ui/state", "/ui/alarm/status"):
                 self._reply(data["status"])
             elif url.path == "/ui/alarm/command":
@@ -251,8 +280,20 @@ def _split(lines: list[str]) -> tuple[list[str], list[str]]:
 
 
 def _new_warnings(patched: list[str], vendor: list[str], vendor_name: str, name: str) -> list[str]:
-    known = {_LINE.sub(":", line.replace(vendor_name, name)) for line in vendor}
-    return [line for line in patched if _LINE.sub(":", line) not in known]
+    """Warnings the unpatched vendor file does not give as often.
+
+    Line numbers move with the patch, so they are left out of the match; a
+    text counts once per vendor occurrence, so the same text more often is new.
+    """
+    known = Counter(_LINE.sub(":", line.replace(vendor_name, name)) for line in vendor)
+    new = []
+    for line in patched:
+        text = _LINE.sub(":", line)
+        if known[text] > 0:
+            known[text] -= 1
+        else:
+            new.append(line)
+    return new
 
 
 @pytest.mark.parametrize("page", ["Alarm", "HomeAssistant", "C300XEnergy", "C300XRingerControl", "C300XAlerts"])
@@ -301,7 +342,10 @@ def test_the_home_page_adds_both_buttons_and_the_agents_message_counts(
     name = f"home-{home_buttons}-{station}"
     steps = quick + f"""
         if (n === 2) {{
-            console.log("CHECK buttons " + harness.onScreen(harness.find(page, "alarmButton")) + " " + harness.onScreen(harness.find(page, "haButton")))
+            var alarm = harness.find(page, "alarmButton"), ha = harness.find(page, "haButton")
+            console.log("CHECK buttons " + (harness.onScreen(alarm) && alarm.opacity === 1 && alarm.enabled) + " " + (harness.onScreen(ha) && ha.opacity === 1 && ha.enabled))
+            var hint = harness.find(page, "bridgeHint")
+            console.log("CHECK hint " + harness.onScreen(hint) + " " + hint.children[0].visible)
             console.log("CHECK unread " + page.unreadMessagesCount() + " " + page.unreadMemosCount())
             var shown = [], off = [], overlaps = [], names = {names};
             names.forEach(function(name) {{
@@ -321,15 +365,97 @@ def test_the_home_page_adds_both_buttons_and_the_agents_message_counts(
         if (n === 3) {{
             harness.find(page, "alarmButton").touched()
             harness.find(page, "haButton").touched()
+            c300xDisplayPreferences.bridgeProblem = "bridge_unreachable"
         }}
-        return n < 4
+        if (n === 4) {{
+            console.log("CHECK problem " + harness.find(page, "bridgeHint").children[0].visible)
+            c300xDisplayPreferences.bridgeShown = false
+        }}
+        if (n === 5) {{ console.log("CHECK pages off " + harness.find(page, "bridgeHint").visible) }}
+        return n < 6
 """
     checks, patched = _split(_page(skin, "HomePage.qml", f"run-{name}", steps))
-    assert checks[:3] == ["loaded true", "buttons true true", "unread 1 2"]
-    assert checks[3] == f"layout shown {','.join(expected)} off [] overlaps []"
-    assert checks[4:] == ["activated alarmPage", "activated haPage"]
-    _, vendor = _split(_page(skin, "HomePageVendor.qml", f"run-{name}-vendor", quick + "        return n < 4"))
+    assert checks[:4] == ["loaded true", "buttons true true", "hint true false", "unread 1 2"]
+    assert checks[4] == f"layout shown {','.join(expected)} off [] overlaps []"
+    assert checks[5:] == ["activated alarmPage", "activated haPage", "problem true", "pages off false"]
+    _, vendor = _split(_page(skin, "HomePageVendor.qml", f"run-{name}-vendor", quick + "        return n < 6"))
     assert _new_warnings(patched, vendor, "HomePageVendor.qml", "HomePage.qml") == []
+
+
+INTEGRATION_HOST = """import QtQuick 2.7
+Page {
+    property variant panel: integration
+    @PANEL@
+}
+"""
+
+
+def test_the_integration_tab_shows_the_status_switches_and_asks_in_the_station_popup(
+    skin: Path, agent: list[str],
+) -> None:
+    """The Integration tab of 2.9.2 inside the vendor Page, as in Settings.qml.
+
+    Status rows from the agent's /ui/status and the bridge's /ui/state, the
+    navigation switch through service=setting, and reboot asked in the
+    vendor's ConfirmPopup through the Page's installPopup.
+    """
+    (skin / "IntegrationHost.qml").write_text(INTEGRATION_HOST.replace(
+        "@PANEL@", 'C300XSettings { id: integration; objectName: "integration"; anchors.fill: parent }'))
+    (skin / "IntegrationHostVendor.qml").write_text(INTEGRATION_HOST.replace(
+        "@PANEL@", "Item { id: integration }"))
+    steps = """
+        function popup(node) {
+            if (node.deleteClicked !== undefined && node.message !== undefined) return node
+            for (var i = 0; i < node.children.length; i++) { var found = popup(node.children[i]); if (found) return found }
+            return null
+        }
+        var panel = page.panel
+        if (n === 0) { panel.aboutToShow() }
+        if (n === 2) {
+            var rows = []
+            for (var r = 0; r < 5; r++) rows.push(harness.find(panel, "statusValue" + r).text)
+            console.log("CHECK status " + rows.join(" | "))
+            console.log("CHECK reason " + harness.find(panel, "bridgeReason").visible)
+            console.log("CHECK maintenance " + panel.canReboot + " " + panel.canRemove + " " + panel.sshKnown + " " + panel.sshRunning)
+            console.log("CHECK navigation " + panel.tabNavigation + " " + panel.rowText(3))
+            shot("integration")
+            panel.setDisplay("dashboard_navigation", "pager")
+        }
+        if (n === 3) {
+            console.log("CHECK navigation " + panel.tabNavigation + " " + panel.rowText(3) + " " + panel.status)
+            panel.ask("reboot")
+        }
+        if (n === 4) {
+            var asked = popup(page)
+            console.log("CHECK popup " + (asked !== null) + " " + (asked ? asked.message.split("\\n")[0] : ""))
+            shot("integration-popup")
+        }
+        if (n === 5) { popup(page).deleteClicked() }
+        if (n === 6) {
+            console.log("CHECK confirmed " + (popup(page) === null) + " " + panel.status + " " + panel.canReboot)
+        }
+        return n < 7
+"""
+    checks, patched = _split(_page(skin, "IntegrationHost.qml", "run-integration", steps))
+    assert checks == [
+        "loaded true",
+        "status erreichbar (Zuhause) | http://homeassistant.local:8123 | gerade eben | "
+        f"{_integration_version()} | 2.10.0b2 \u00b7 Firmware 3.0.6",
+        "reason false",
+        "maintenance true true true false",
+        "navigation true Seitenwechsel: Favoritenleiste",
+        "navigation false Seitenwechsel: Pfeile ",
+        "popup true Station jetzt neu starten?",
+        "confirmed true maintenance_accepted false",
+    ]
+    _, vendor = _split(_page(skin, "IntegrationHostVendor.qml", "run-integration-vendor", "        return n < 2"))
+    assert _new_warnings(patched, vendor, "IntegrationHostVendor.qml", "IntegrationHost.qml") == []
+    assert "/ui/status" in agent and "/ui/maintenance/reboot" in agent
+    assert any("service=setting" in path and "option=pager" in path for path in agent)
+
+
+def _integration_version() -> str:
+    return json.loads((ROOT / "custom_components/bticino_c300x/manifest.json").read_text())["version"]
 
 
 def test_the_general_settings_keep_the_touch_tone_and_add_the_feedback_switch(skin: Path, agent: list[str]) -> None:

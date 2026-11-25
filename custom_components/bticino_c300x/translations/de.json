@@ -33,7 +33,7 @@
       },
       "c100x_experimental": {
         "title": "Classe 100X: experimentelle Unterstützung",
-        "description": "Diese Station ist eine Classe 100X. Ihre Unterstützung ist experimentell: Sie ist nur mit Firmware 1.5.8 getestet, und nicht jede Funktion der Classe 300X ist verfügbar. Vor deiner Bestätigung wird an der Station nichts geändert; schließe diesen Dialog, um sie zu lassen, wie sie ist.",
+        "description": "Diese Station ist eine Classe 100X. Ihre Unterstützung ist experimentell: Sie ist für Firmware 1.5.8 gebaut und bisher nur ohne Gerät geprüft, noch nicht auf einer Classe 100X bestätigt, und nicht jede Funktion der Classe 300X ist verfügbar. Vor deiner Bestätigung wird an der Station nichts geändert; schließe diesen Dialog, um sie zu lassen, wie sie ist.",
         "data": {
           "c100x_experimental": "Experimentelle Unterstützung der Classe 100X einrichten"
         }

@@ -33,7 +33,7 @@
       },
       "c100x_experimental": {
         "title": "Classe 100X : prise en charge expérimentale",
-        "description": "Cette platine est un Classe 100X. Sa prise en charge est expérimentale : elle n'est testée qu'avec le firmware 1.5.8 et toutes les fonctions du Classe 300X ne sont pas disponibles. Rien n'est modifié sur la platine avant votre confirmation ; fermez cette fenêtre pour la laisser telle quelle.",
+        "description": "Cette platine est un Classe 100X. Sa prise en charge est expérimentale : elle est conçue pour le firmware 1.5.8 et n'a été vérifiée jusqu'ici que sans appareil, pas encore confirmée sur un Classe 100X, et toutes les fonctions du Classe 300X ne sont pas disponibles. Rien n'est modifié sur la platine avant votre confirmation ; fermez cette fenêtre pour la laisser telle quelle.",
         "data": {
           "c100x_experimental": "Configurer la prise en charge expérimentale du Classe 100X"
         }

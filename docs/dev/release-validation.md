@@ -24,21 +24,11 @@ PRs and pushes to `main` and `beta` still run all of them. Stable releases requi
 the current `main` tip. Beta/RC tags retain the existing branch policy: use the
 current `beta` tip first, or `main` if only main matches the tagged commit.
 When both tips match, beta is selected and failed beta checks cannot fall back
-to main checks. The local `v2.9.0_fw3.0.6` development branch is not an additional
-release source. The firmware-3.0.6 `2.10.x` betas are intended for canonical
-`beta`, not for a merge into `main`.
+to main checks. Firmware 3.0.6 support became stable with 2.10.0 and is released from `main`
+like every stable release; the `v2.9.0_fw3.0.6` development branch is not a
+release source of its own.
 
-Local candidate preparation may proceed after the beta review, including its
-version bump, native rebuild and package approval. Before proceeding beyond
-local preparation, finish and publish stable **2.9.0 first**, then recompare
-and port any final changes into the beta worktree one way only. Run the
-full local checks on the final beta candidate **before opening its PR**; the
-focused port checks are not a substitute. After authorized integration into
-canonical `beta`, require all normal exact-commit beta-push checks. Only then
-prepare the authorized tag-bound prerelease publication. Do not push, tag,
-stage a remote transport draft or publish while the stable-first/review/full
-gate conditions remain outstanding. Local candidate metadata stays
-`local-unverified`; it must not claim CI success.
+Local candidate metadata stays `local-unverified`; it must not claim CI success.
 
 Release requires successful **push runs on that selected branch** of the
 canonical `validate.yml`, `browser.yml` and `codeql.yml` workflows for the exact

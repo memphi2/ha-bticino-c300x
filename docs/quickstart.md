@@ -46,8 +46,8 @@ Everything works as on `1.7.x` and `2.0.2`, with these differences:
 
 Every release is tested on a station with `1.7.19`. On a `3.0.6` station,
 Ring Call, the camera at its factory size, the door and activations were
-tested, and the display pages loaded at start with the Alarm and Home
-Assistant buttons in place. The other display pages, the other camera sizes,
+tested with earlier releases, and the display pages loaded at start with the
+Alarm and Home Assistant buttons in place. The other display pages, the other camera sizes,
 picture controls, visitor images, Speex and announcements are checked offline
 only.
 

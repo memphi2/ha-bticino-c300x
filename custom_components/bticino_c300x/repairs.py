@@ -66,7 +66,7 @@ from .device_installer import (
     async_install_device_agent,
 )
 from .device_user import homeassistant_account_label
-from .display_activation import display_unsupported
+from .display_activation import display_is_qt5, display_unsupported
 from .entry_config import entry_config_value
 from .error_text import compact_error_text
 from .factory_login import LOGIN_REFUSED, ssh_login
@@ -1104,8 +1104,9 @@ async def _async_restore_external_patch_state(
             entry, apply_full_patch=_display_followup_full(entry, patch_state),
         )
     if changed.runtime_changed:
-        status = await busy_retry(api.async_qml_patch_status)
-        if status.get("qt5_overlay") is not None:
+        # The status read just before the update (cached) tells the Qt 5
+        # display; on 1.7.x/2.0.2 this is 2.9.2's GUI reload, without a read.
+        if display_is_qt5(getattr(entry.runtime_data, "qml_patch_status", None)):
             # The preload library is embedded in the runtime, not the QML group.
             return await async_restore_display_after_update(
                 entry, apply_full_patch=patch_state.qml_patch_required,

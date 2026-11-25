@@ -2780,7 +2780,7 @@ def test_restore_external_patch_state_reloads_gui_after_runtime_update_when_ui_a
         )
     )
 
-    assert api.calls == ["qml_status", "reload_gui"]
+    assert api.calls == ["reload_gui"]
 
 
 def test_restore_external_patch_state_skips_gui_reload_after_runtime_update_when_ui_inactive() -> None:
@@ -2800,7 +2800,7 @@ def test_restore_external_patch_state_skips_gui_reload_after_runtime_update_when
         )
     )
 
-    assert api.calls == ["qml_status"]
+    assert api.calls == []
 
 
 @pytest.mark.parametrize("full_patch", [False, True])
@@ -2810,6 +2810,8 @@ def test_restore_external_patch_state_reconciles_qt5_runtime_even_without_option
     api.qml_status["gui_running"] = True
     api.qml_status["core_patched"] = True
     entry = FakeEntry(runtime_data=FakeRuntimeData(api))
+    # The status the update flow read just before the update.
+    entry.runtime_data.qml_patch_status = dict(api.qml_status)
     state = _ExternalPatchState(
         qml_patch_required=full_patch, firewall_patched=False,
         firewall_status_known=True, ipv6_firewall_patched=False,
@@ -2818,10 +2820,35 @@ def test_restore_external_patch_state_reconciles_qt5_runtime_even_without_option
         entry, state, _ExternalPatchChanges(runtime_changed=True),
     ))
     assert api.calls == [
-        "qml_status", "apply_qml_core",
+        "apply_qml_core",
         *(["apply_qml", "qml_status"] if full_patch else []),
         "reload_gui", "qml_status",
     ]
+
+
+@pytest.mark.parametrize("full_patch", [False, True])
+def test_a_qt4_runtime_update_reads_no_display_status(full_patch) -> None:
+    """1.7.x/2.0.2 as in 2.9.2: a status read that would fail fails nothing."""
+
+    class _NoStatus(FakePatchApi):
+        async def async_qml_patch_status(self) -> dict[str, Any]:
+            self.calls.append("qml_status")
+            raise C300XAgentApiError("status read failed")
+
+    api = _NoStatus()
+    entry = FakeEntry(runtime_data=FakeRuntimeData(api))
+    entry.runtime_data.qml_patch_status = {"patched": full_patch, "core_patched": True}
+    state = _ExternalPatchState(
+        qml_patch_required=full_patch, firewall_patched=False,
+        firewall_status_known=True, ipv6_firewall_patched=False,
+    )
+    outcome = asyncio.run(_async_restore_external_patch_state(
+        entry, state, _ExternalPatchChanges(runtime_changed=True),
+    ))
+    assert outcome is None
+    assert api.calls == (["reload_gui"] if full_patch else [])
+    if full_patch:
+        assert api.reload_display_restart is False
 
 
 @pytest.mark.parametrize("full_patch", [False, True])
@@ -3120,7 +3147,7 @@ def test_ssh_install_log_text_names_the_kind_of_the_cause_but_not_its_text() -> 
         {"firewall_patch_changed": True, "ipv6_firewall_patch_changed": True},
         ["apply_firewall", "set_ipv6_firewall_enabled:True", "apply_ipv6_firewall"],
     ),
-    ({"runtime_changed": True}, ["qml_status", "reload_gui"]),
+    ({"runtime_changed": True}, ["reload_gui"]),
 ])
 def test_patch_restore_after_update_waits_while_the_agent_is_busy(
     monkeypatch, changes, expected

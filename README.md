@@ -6,7 +6,7 @@
 [![Marketplace](https://img.shields.io/badge/Home_Assistant-Marketplace-41BDF5?style=flat-square)](https://contributors.home-assistant.io/marketplace/)
 [![License Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-Beta: **2.10.0b1** (display pages and additional Low camera sizes for firmware 3.0.6; the home page buttons were checked on a 3.0.6 station, the rest offline only), including **2.9.1**.
+Beta: **2.10.0b2** (display pages and additional Low camera sizes for firmware 3.0.6; the home page buttons were checked on a 3.0.6 station, the rest offline only), including **2.9.2**.
 
 Local-first Home Assistant custom integration for the BTicino Classe 300X /
 C300X video door station. A small agent on the station connects it to Home
@@ -77,12 +77,12 @@ through the options and adds the card. Later releases: [Update](docs/quickstart.
 
 ### Beta Versions
 
-Betas are opt-in. The current beta, **2.10.0b1**, brings the Home Assistant
+Betas are opt-in. The current beta, **2.10.0b2**, brings the Home Assistant
 pages to the display of firmware `3.0.6`. On a 3.0.6 station the pages loaded
 at start, the Alarm and Home Assistant buttons sat in the right place and stayed
-after a configuration change; the other pages, the Low camera sizes and the
-recovery paths are checked offline only. On `1.7.x` and `2.0.2` it works like
-stable 2.9.0. Enable **Pre-release** for this
+after a configuration change (checked with 2.10.0b1); the other pages, the Low
+camera sizes and the recovery paths are checked offline only. On `1.7.x` and
+`2.0.2` it works like stable 2.9.2. Enable **Pre-release** for this
 repository in Marketplace, or beta versions in HACS. Stable installations are
 not switched to a beta automatically. See
 [beta versions and returning to stable](docs/quickstart.md#beta-versions).

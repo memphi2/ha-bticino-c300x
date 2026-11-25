@@ -1,5 +1,19 @@
 # Changelog
 
+## v2.10.0b2 - Unreleased
+
+Firmware 3.0.6 beta. Includes 2.9.2; on firmware 1.7.x and 2.0.2 it works
+like 2.9.2. On a 3.0.6 station only the start with the pages and the home
+page buttons were checked (with 2.10.0b1); the rest is checked offline only.
+
+- On firmware 3.0.6 the display overlay carries the station pages of 2.9.2:
+  the **Integration** tab with its status block, the two Display options and
+  the station's own confirmation window for **Reboot station** and **Remove
+  agent**, the house symbol on the home page that shows the connection to
+  Home Assistant, and the other page changes of 2.9.2. Checked offline only,
+  with the station's own Qt 5 display components.
+- The native agent is rebuilt as 2.10.0b2; an agent update is required.
+
 ## v2.10.0b1 - 2026-11-25
 
 Firmware 3.0.6 beta. On a 3.0.6 station (Dave, PR #126) the display pages

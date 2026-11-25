@@ -25,7 +25,7 @@ the current `main` tip. Beta/RC tags retain the existing branch policy: use the
 current `beta` tip first, or `main` if only main matches the tagged commit.
 When both tips match, beta is selected and failed beta checks cannot fall back
 to main checks. The local `v2.9.0_fw3.0.6` development branch is not an additional
-release source. The firmware-3.0.6 `2.10.0b1` candidate is intended for canonical
+release source. The firmware-3.0.6 `2.10.x` betas are intended for canonical
 `beta`, not for a merge into `main`.
 
 Local candidate preparation may proceed after the beta review, including its

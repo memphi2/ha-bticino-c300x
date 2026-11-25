@@ -544,7 +544,10 @@ def test_the_3_0_6_beta_texts_say_what_ran_on_a_station():
 
     changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     beta = changelog.split("## v2.10.0b1", 1)[1].split("\n## ", 1)[0]
+    beta2 = changelog.split("## v2.10.0b2", 1)[1].split("\n## ", 1)[0]
     texts = {
+        "CHANGELOG v2.10.0b2": beta2,
+        "v2.10.0b2.md": (ROOT / ".github/release-notes/v2.10.0b2.md").read_text(encoding="utf-8"),
         "README.md": (ROOT / "README.md").read_text(encoding="utf-8"),
         "SUPPORT.md": (ROOT / "SUPPORT.md").read_text(encoding="utf-8"),
         "display.md": (DOCS / "display.md").read_text(encoding="utf-8"),
@@ -563,7 +566,8 @@ def test_the_way_out_of_a_restart_loop_removes_the_overlay_before_the_setting():
 
     agent = "/home/bticino/cfg/extra/c300x-native-agent"
     for name, path in (("display.md", DOCS / "display.md"),
-                       ("v2.10.0b1.md", ROOT / ".github/release-notes/v2.10.0b1.md")):
+                       ("v2.10.0b1.md", ROOT / ".github/release-notes/v2.10.0b1.md"),
+                       ("v2.10.0b2.md", ROOT / ".github/release-notes/v2.10.0b2.md")):
         text = path.read_text(encoding="utf-8")
         way_out = " ".join(text.split("keeps restarting", 1)[1].split("\n## ", 1)[0].split())
         rename = way_out.index(f"`mv {agent}/display-qt5.rcc {agent}/display-qt5.rcc.hang`")

@@ -192,10 +192,7 @@ Item {
     Timer {
         id: deadline
         interval: 125000
-        onTriggered: {
-            Maintenance.cancel(panel, deadline)
-            panel.status = "maintenance_timeout"
-        }
+        onTriggered: Maintenance.expire(panel, deadline)
     }
 
     UbuntuLightText {
@@ -211,6 +208,12 @@ Item {
         contentHeight: content.height
         boundsBehavior: Flickable.StopAtBounds
         interactive: contentHeight > height
+        property real span: 0
+        onHeightChanged: {
+            var lost = span - height
+            if (lost > 0 && contentY >= contentHeight - span - lost) contentY = Math.max(0, contentHeight - height)
+            span = height
+        }
         Column {
             id: content
             anchors.horizontalCenter: parent.horizontalCenter

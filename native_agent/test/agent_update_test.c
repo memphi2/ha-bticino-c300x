@@ -4,6 +4,7 @@
 #include <sys/stat.h>
 #include <sys/statvfs.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <string.h>
 #include <unistd.h>
 #include "../src/agent_update.h"
@@ -244,6 +245,7 @@ static void obsolete_source_safety_test(const struct c300x_config *config, const
     char backup[sizeof(obsolete_source) + 24], other[C300X_MAX_PATH_LEN], content[64];
     struct agent_update_change_summary summary;
     struct stat info;
+    int fd;
     assert(snprintf(backup, sizeof(backup), "%s.update-backup", obsolete_source) < (int)sizeof(backup));
     assert(agent_update_target_path(config, "device_agent/qml/user-file.qml", other, sizeof(other)));
     assert(write_binary_chunk(other, (const unsigned char *)"user-file", 9, 0, 0600));
@@ -253,7 +255,9 @@ static void obsolete_source_safety_test(const struct c300x_config *config, const
     fail_obsolete_unlink = 0;
     assert(read_bounded_text_file(obsolete_source, content, sizeof(content), NULL));
     assert(strcmp(content, "old-distribution") == 0);
-    assert(stat(obsolete_source, &info) == 0 && (info.st_mode & 0777) == 0640);
+    fd = open(obsolete_source, O_RDONLY | O_NOFOLLOW);
+    assert(fd >= 0 && fstat(fd, &info) == 0 && (info.st_mode & 0777) == 0640);
+    close(fd);
     assert(access(backup, F_OK) != 0 && errno == ENOENT);
     assert(summary.changed_files == 0);
     /* The committed update that retired it could not clean up: the

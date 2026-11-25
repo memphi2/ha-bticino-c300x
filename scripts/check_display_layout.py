@@ -829,6 +829,14 @@ def render(args):
                             grey = shot.pixelColor(panel.mapToScene(QPointF(5, 5)).toPoint())
                             check("grey panel pixels", 110 <= grey.red() <= 150 and
                                   max(grey.red(), grey.green(), grey.blue()) - min(grey.red(), grey.green(), grey.blue()) < 12, True)
+                            # Sheet and button are separated like two station popup buttons
+                            # (2 px); a wider strip shows the black backing as a band.
+                            column = panel.mapToScene(QPointF(5, 0)).toPoint()
+                            band = longest = 0
+                            for y in range(round(panel.height())):
+                                band = band + 1 if shot.pixelColor(column.x(), column.y() + y).lightness() < 60 else 0
+                                longest = max(longest, band)
+                            check("no black band above the button", longest <= 2, True)
                             # Severity is a small coloured marker; the box and its text keep their colours.
                             severity_item = named(component, "severityMark")
                             origin = severity_item.mapToScene(QPointF(0, 0)).toPoint()

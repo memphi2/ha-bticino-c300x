@@ -341,13 +341,14 @@ def test_optional_host_loads_and_unloads_each_page_without_actions(tmp_path):
         }
 
 
-@pytest.mark.parametrize("fault", ["none", "wrong_palette", "click_through", "broken_scroll",
+@pytest.mark.parametrize("fault", ["none", "wrong_palette", "black_band", "click_through", "broken_scroll",
                                     "ignore_blocked", "qml_error", "network_fallback"])
 def test_alerts_mock_transport_pixels_and_interactions(tmp_path, fault):
     component = "C300XAlerts"
     source = (SCRIPT.parents[1] / "device_qml" / (component + ".qml")).read_text()
     replacements = {
         "wrong_palette": ('color: root.accent', 'color: "#a00000"'),
+        "black_band": ('height: Math.max(0, acknowledgeButton.y - 2)', 'height: Math.max(0, acknowledgeButton.y - 10)'),
         "click_through": ('onClicked: root.acknowledge()',
                           'propagateComposedEvents: true; onClicked: { root.acknowledge(); mouse.accepted = false }'),
         "broken_scroll": ('id: messageScroll', 'id: messageScroll; interactive: false'),
@@ -366,7 +367,8 @@ def test_alerts_mock_transport_pixels_and_interactions(tmp_path, fault):
     assert result.returncode == int(fault != "none"), result.stdout + result.stderr
     kinds = {issue["kind"] for case in report["cases"] for issue in case["issues"]}
     failed = {check["name"] for case in report["cases"] for check in case["checks"] if not check["passed"]}
-    expected = {"wrong_palette": "severity marker pixels", "click_through": "ack touch never clicks underlying",
+    expected = {"wrong_palette": "severity marker pixels", "black_band": "no black band above the button",
+                "click_through": "ack touch never clicks underlying",
                 "broken_scroll": "long message drag moves", "ignore_blocked": "callActive-True aborts poll"}
     if fault in expected:
         assert expected[fault] in failed

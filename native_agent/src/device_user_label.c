@@ -5,6 +5,12 @@
 
 #include <ctype.h>
 #include <string.h>
+#include <unistd.h>
+
+int c300x_label_script_usable(const char *script)
+{
+    return c300x_device_display_files_patchable() && access(script, X_OK) == 0;
+}
 
 const char *c300x_label_trim(char *value)
 {

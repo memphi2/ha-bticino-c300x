@@ -205,7 +205,10 @@ def test_the_agent_asks_the_patch_script_for_the_label_on_both_displays():
     routes = (NATIVE / "src/http_device_user.c").read_text(encoding="utf-8")
     assert "c300x_device_display_is_qt5()" not in routes
     # Creation, deletion and routing restoration skip the label on a C100X only.
-    assert routes.count("c300x_device_display_files_patchable()") == 3
+    assert routes.count("c300x_device_display_files_patchable()") == 1
+    assert routes.count("c300x_label_script_usable(") == 2
+    label = (NATIVE / "src/device_user_label.c").read_text(encoding="utf-8")
+    assert "return c300x_device_display_files_patchable() && access(script, X_OK) == 0;" in label
 
 
 class _Device:

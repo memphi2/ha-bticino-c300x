@@ -15,6 +15,7 @@ static char route_ext_path[4096];
 
 const char *c300x_device_sip_user(void) { return "c100x"; }
 int c300x_device_display_files_patchable(void) { return 0; }
+int c300x_device_display_is_qt5(void) { return 0; }
 
 static int responses;
 void c300x_http_send_json(int fd, int status, const char *reason, const char *body)

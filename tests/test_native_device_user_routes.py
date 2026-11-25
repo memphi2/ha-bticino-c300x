@@ -19,7 +19,7 @@ def route_binary(request, tmp_path_factory):
          "-D_DEFAULT_SOURCE", "-D_POSIX_C_SOURCE=200809L", *flags,
          str(NATIVE / "test/http_device_user_test.c"),
          *[str(NATIVE / "src" / name) for name in (
-             "http_device_user.c", "http_maintenance.c", "http_auth.c",
+             "http_device_user.c", "device_user_label.c", "http_maintenance.c", "http_auth.c",
              "command_job.c", "command_transaction.c", "string_util.c", "json_util.c", "json_parse.c")],
          "-o", str(binary)], capture_output=True, text=True, timeout=30,
     )
@@ -37,7 +37,9 @@ def route_binary(request, tmp_path_factory):
     for operation in ("ensure", "restore")
     for case in ("unauthorized", "unconfirmed")
 ] + [("ensure", case) for case in ("routing-failure", "user-failure", "user-failure-patched", "invalid", "false")]
-  + [("restore", "restore-failure"), ("status", "qt5"), ("ensure", "qt5"), ("restore", "qt5"),
+  + [("restore", "restore-failure"), ("restore", "false"),
+     ("restore", "invalid-json"), ("ensure", "invalid-json"), ("status", "qt5"), ("ensure", "qt5"),
+     ("restore", "qt5"),
      ("ensure", "busy-root"), ("restore", "busy-root")])
 def test_route_state_machine(route_binary, tmp_path, operation, case):
     script = tmp_path / "job.sh"
@@ -57,6 +59,8 @@ def test_route_state_machine(route_binary, tmp_path, operation, case):
         body = "printf invalid\n"
     elif case == "false":
         body = 'printf \'{"ok":false}\'\n'
+    elif case == "invalid-json":
+        body = 'printf \'{"ok":true\'\n'
     elif case == "overflow":
         body += "head -c 12000 /dev/zero | tr '\\000' ' '\n"
     if case != "missing":
@@ -81,7 +85,7 @@ def test_c100x_restore_with_real_detector_and_rejecting_stock_script(tmp_path):
         *[str(NATIVE / "src" / name) for name in (
             "http_device_user.c", "http_maintenance.c", "http_auth.c", "command_job.c",
             "command_transaction.c", "string_util.c", "json_util.c", "json_parse.c", "file_io.c",
-            "sha256.c")],
+            "sha256.c", "device_user_label.c")],
         "-o", str(binary),
     ], capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stderr

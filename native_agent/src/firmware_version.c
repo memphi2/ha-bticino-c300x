@@ -78,7 +78,11 @@ void resolve_device_firmware(
         return;
     }
     out[0] = '\0';
-    if (config != NULL && config->device_firmware[0] != '\0') {
+    if (
+        config != NULL
+        && firmware_version_is_safe(config->device_firmware, strlen(config->device_firmware))
+        && strlen(config->device_firmware) < out_len
+    ) {
         c300x_copy_string(out, out_len, config->device_firmware);
         return;
     }

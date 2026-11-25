@@ -54,6 +54,7 @@ int main(int argc, char **argv)
     for (int maintenance = 0; maintenance <= 1; maintenance++) {
         context.maintenance_supported = maintenance;
         context.memo_led_present = !maintenance;
+        context.ipv6_firewall_hook = maintenance;
         context.https_callbacks = maintenance;
         for (int pcmu = 0; pcmu <= 1; pcmu++) {
             context.device_codec_pcmu = pcmu;

@@ -4,11 +4,11 @@
 #include "device_detect.h"
 #include "device_routing.h"
 #include "device_user.h"
+#include "device_user_label.h"
 #include "http_util.h"
 #include "json_util.h"
 #include "string_util.h"
 
-#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -24,20 +24,6 @@ struct device_user_request {
     struct c300x_device_routing_status routing;
     char output[C300X_DEVICE_USER_STATUS_BODY_LEN];
 };
-
-static const char *trim_ascii(char *value)
-{
-    char *start = value, *end;
-    while (*start != '\0' && isspace((unsigned char)*start)) {
-        start++;
-    }
-    end = start + strlen(start);
-    while (end > start && isspace((unsigned char)end[-1])) {
-        end--;
-    }
-    *end = '\0';
-    return start;
-}
 
 static void device_user_status_body(
     const struct c300x_device_routing_status *routing,
@@ -59,7 +45,7 @@ static void device_user_status_body(
     char qml_state_json[C300X_JSON_QUOTED_LEN(sizeof(qml_state))];
 
     if (qml_ok) {
-        char *start = (char *)trim_ascii(qml_output);
+        char *start = (char *)c300x_label_trim(qml_output);
         if (start[0] == '{') {
             qml_available = 1;
             c300x_json_string_field(start, "media_user_label_state", qml_state, sizeof(qml_state));
@@ -224,15 +210,12 @@ static int ensure_user(struct c300x_http_maintenance *owner, int fd,
     /* The label is written into the display's QML files. Without files the
      * patch can edit, user and routing are set up, only the label is not shown. */
     if (c300x_device_display_files_patchable()) {
-        const char *body;
-        int ok = 0;
         if (!c300x_command_transaction_capture(state->config->maintenance_qml_patch_script,
                 "media-user-label-apply", state->output, sizeof(state->output))) {
             send_error(fd, "media_user_label_setup_failed", NULL);
             return 0;
         }
-        body = trim_ascii(state->output);
-        if (body[0] != '{' || !c300x_json_bool_field(body, "ok", &ok) || !ok) {
+        if (!c300x_label_result_ok(state->output, 1)) {
             send_error(fd, "media_user_label_setup_failed", NULL);
             return 0;
         }
@@ -286,9 +269,10 @@ int c300x_http_device_user_route(struct c300x_http_maintenance *owner, int clien
         || access(config->maintenance_qml_patch_script, X_OK) != 0) {
         pending = restore_routing(owner, client_fd, state);
     } else {
-        /* Restore historically checks exit success, not the script's JSON. */
+        /* The script can exit zero and still report that it rolled back. */
         if (c300x_command_transaction_capture(config->maintenance_qml_patch_script,
-                "media-user-label-restore", state->output, sizeof(state->output))) {
+                "media-user-label-restore", state->output, sizeof(state->output))
+            && c300x_label_result_ok(state->output, 0)) {
             pending = restore_routing(owner, client_fd, state);
         } else {
             pending = 0;

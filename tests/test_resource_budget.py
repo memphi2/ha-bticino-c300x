@@ -59,6 +59,7 @@ def test_extracted_http_modules_have_separate_budgets() -> None:
         "request_queue.c": (1_500, 55),
         "video_control.c": (5_000, 165),
         "http_media_actions.c": (7_500, 210),
+        "http_ring_status.c": (4_000, 110),
         "http_identity.c": (4_500, 130),
         "proc_probe.c": (2_000, 80),
         "http_ui_preferences.c": (2_000, 45),

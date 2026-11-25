@@ -11,6 +11,7 @@ Item {
     property bool busy: false
     property bool online: true
     property string pendingActionId: ""
+    property bool pinned: buttons.height + 60 <= height
     signal actionRequested(variant item)
     signal alarmRequested()
     clip: true
@@ -44,97 +45,116 @@ Item {
 
     Flickable {
         id: list
-        anchors.fill: parent
+        width: parent.width - (contentHeight > height ? 9 : 0)
+        height: root.pinned ? Math.floor(Math.max(0, root.height - buttons.height) / 52) * 52 - 8 : root.height
         contentWidth: width
         contentHeight: content.height
         interactive: contentHeight > height
         clip: true
         boundsBehavior: Flickable.StopAtBounds
-        Column {
+        onMovementEnded: contentY = Math.max(0, Math.min(contentHeight - height, Math.round(contentY / 52) * 52))
+        Item {
             id: content
             width: parent.width
-            spacing: 8
+            height: checkList.height + (root.pinned ? 0 : 8 + buttons.height)
             C300XChecks {
+                id: checkList
                 width: content.width
                 checks: root.checks
                 emptyText: root.leaveHome && root.leaveHome.empty_text ? root.leaveHome.empty_text : ""
             }
+        }
+    }
+    Rectangle {
+        anchors.right: parent.right
+        y: list.visibleArea.yPosition * list.height
+        width: 3
+        height: list.visibleArea.heightRatio * list.height
+        visible: list.contentHeight > list.height
+        color: "white"
+        opacity: 0.6
+    }
+    Column {
+        id: buttons
+        parent: root.pinned ? root : content
+        y: root.pinned ? root.height - height : checkList.height + 8
+        width: parent.width
+        spacing: 8
+        Item {
+            width: buttons.width
+            height: visible ? 54 : 0
+            visible: !!root.alarm
+            opacity: root.online && root.alarm && root.alarm.available ? 1 : 0.5
+            Image {
+                anchors.fill: parent
+                source: alarmMouse.pressed ? "images/settings/act_btn_p.svg" : "images/settings/act_btn.svg"
+                fillMode: Image.Stretch
+            }
+            UbuntuLightText {
+                anchors.fill: parent
+                anchors.margins: 10
+                text: root.alarm ? root.alarm.name + "  |  " + root.alarm.state_label : ""
+                font.pixelSize: 20
+                color: "white"
+                verticalAlignment: Text.AlignVCenter
+                elide: Text.ElideRight
+            }
+            BeepingMouseArea {
+                id: alarmMouse
+                anchors.fill: parent
+                enabled: !root.busy && root.online && root.alarm && root.alarm.available
+                onClicked: { root.clearConfirmation(); root.alarmRequested() }
+            }
+        }
+        Repeater {
+            model: root.actions
             Item {
-                width: content.width
-                height: visible ? 54 : 0
-                visible: !!root.alarm
-                opacity: root.online && root.alarm && root.alarm.available ? 1 : 0.5
+                width: buttons.width
+                height: 54
+                property bool confirming: root.pendingActionId === modelData.entity_id
+                opacity: root.busy || !root.online ? 0.5 : 1
                 Image {
-                    anchors.fill: parent
-                    source: alarmMouse.pressed ? "images/settings/act_btn_p.svg" : "images/settings/act_btn.svg"
+                    width: confirming ? parent.width * 0.68 - 8 : parent.width
+                    height: parent.height
+                    source: actionMouse.pressed ? "images/settings/act_btn_p.svg" : "images/settings/act_btn.svg"
                     fillMode: Image.Stretch
                 }
                 UbuntuLightText {
-                    anchors.fill: parent
-                    anchors.margins: 10
-                    text: root.alarm ? root.alarm.name + "  |  " + root.alarm.state_label : ""
+                    x: 10
+                    width: (confirming ? parent.width * 0.68 - 8 : parent.width) - 20
+                    height: parent.height
+                    text: confirming ? root.leaveHome.confirm_label + ": " + modelData.name : modelData.name
+                    textFormat: Text.PlainText
                     font.pixelSize: 20
                     color: "white"
                     verticalAlignment: Text.AlignVCenter
+                    horizontalAlignment: Text.AlignHCenter
                     elide: Text.ElideRight
                 }
                 BeepingMouseArea {
-                    id: alarmMouse
-                    anchors.fill: parent
-                    enabled: !root.busy && root.online && root.alarm && root.alarm.available
-                    onClicked: { root.clearConfirmation(); root.alarmRequested() }
+                    id: actionMouse
+                    width: confirming ? parent.width * 0.68 - 8 : parent.width
+                    height: parent.height
+                    enabled: !root.busy && root.online
+                    onClicked: root.requestAction(modelData)
                 }
-            }
-            Repeater {
-                model: root.actions
                 Item {
-                    width: content.width
-                    height: 54
-                    property bool confirming: root.pendingActionId === modelData.entity_id
-                    opacity: root.busy || !root.online ? 0.5 : 1
-                    Image {
-                        width: confirming ? parent.width * 0.68 - 8 : parent.width
-                        height: parent.height
-                        source: actionMouse.pressed ? "images/settings/act_btn_p.svg" : "images/settings/act_btn.svg"
-                        fillMode: Image.Stretch
-                    }
+                    anchors.right: parent.right
+                    width: parent.width * 0.32
+                    height: parent.height
+                    visible: confirming
+                    Image { anchors.fill: parent; source: cancelMouse.pressed ? "images/settings/act_btn_p.svg" : "images/settings/act_btn.svg"; fillMode: Image.Stretch }
                     UbuntuLightText {
-                        x: 10
-                        width: (confirming ? parent.width * 0.68 - 8 : parent.width) - 20
-                        height: parent.height
-                        text: confirming ? root.leaveHome.confirm_label + ": " + modelData.name : modelData.name
-                        textFormat: Text.PlainText
-                        font.pixelSize: 20
+                        anchors.fill: parent
+                        anchors.margins: 8
+                        text: root.leaveHome.cancel_label
+                        font.pixelSize: 18
                         color: "white"
-                        verticalAlignment: Text.AlignVCenter
                         horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
                         elide: Text.ElideRight
                     }
-                    BeepingMouseArea {
-                        id: actionMouse
-                        width: confirming ? parent.width * 0.68 - 8 : parent.width
-                        height: parent.height
-                        enabled: !root.busy && root.online
-                        onClicked: root.requestAction(modelData)
-                    }
-                    Item {
-                        anchors.right: parent.right
-                        width: parent.width * 0.32
-                        height: parent.height
-                        visible: confirming
-                        Image { anchors.fill: parent; source: cancelMouse.pressed ? "images/settings/act_btn_p.svg" : "images/settings/act_btn.svg"; fillMode: Image.Stretch }
-                        UbuntuLightText {
-                            anchors.fill: parent
-                            anchors.margins: 8
-                            text: root.leaveHome.cancel_label
-                            font.pixelSize: 18
-                            color: "white"
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                            elide: Text.ElideRight
-                        }
-                        BeepingMouseArea { id: cancelMouse; anchors.fill: parent; onClicked: root.clearConfirmation() }
-                    }
+                    BeepingMouseArea { id: cancelMouse; anchors.fill: parent; onClicked: root.clearConfirmation() }
                 }
             }
         }

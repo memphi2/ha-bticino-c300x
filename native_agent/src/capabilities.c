@@ -82,6 +82,7 @@ int c300x_capabilities_json(
         "\"touch_tone\":{\"supported\":%s,\"requires_display_patch\":true},"
         "\"display_alerts\":%s,"
         "\"memo_led\":%s,"
+        "\"ipv6_firewall_hook\":%s,"
         "\"display_bridge\":{\"supported\":%s,\"configurable\":%s,\"configured\":%s}%s"
         "}"
         "}\n",
@@ -167,6 +168,7 @@ int c300x_capabilities_json(
         context->display_features ? "true" : "false",
         context->display_features ? "true" : "false",
         context->memo_led_present ? "true" : "false",
+        context->ipv6_firewall_hook ? "true" : "false",
         context->display_features ? "true" : "false",
         context->display_features ? "true" : "false",
         config->display_bridge_enabled ? "true" : "false",

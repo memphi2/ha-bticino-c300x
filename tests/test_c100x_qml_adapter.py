@@ -40,6 +40,24 @@ def test_parity_inventory_is_complete_and_sources_are_separate(tmp_path):
             assert (tmp_path / "js" / path.name).read_text() == strip_device_source(path.read_text())
 
 
+def test_c300x_popup_look_and_scroll_bars_are_not_taken_over(tmp_path):
+    """The C300X popup is a touch window; the station's lists show arrows, not a bar."""
+    builder.build(tmp_path / "c100x")
+    notice = (tmp_path / "c100x/C300XAlerts.qml").read_text()
+    for popup in ("opacity: 0.9", "opacity: 0.5", "Ubuntu", "Font.Light", "anchors.centerIn: parent"):
+        assert popup not in notice, popup
+    assert notice.count("visible: false") == 3
+    for kept in ("anchors.fill: parent", '"../images/background.jpg"', 'objectName: "alertFocusBar"',
+                 "height: 6; color: root.accent", "C100XScroll {"):
+        assert kept in notice, kept
+    for name in ("C300XAgenda.qml", "C300XLeaveHome.qml", "C300XSituations.qml"):
+        page = (tmp_path / "c100x" / name).read_text()
+        bar = page[page.index("anchors.right: parent.right\ny: list"):]
+        assert bar[:bar.index("}")].count("visible: false") == 1, name
+        assert "width: parent.width\nheight:" in page and "? 9 : 0" not in page, name
+        assert "C100XList {" in page or "C100XScroll {" in page, name
+
+
 def test_physical_keys_leave_vendor_actions_untouched():
     page = (ROOT / "device_qml/c100x/C100XPage.qml").read_text()
     for key in ("Key_Up", "Key_Down", "Key_Return"):

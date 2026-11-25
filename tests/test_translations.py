@@ -664,12 +664,13 @@ def test_the_display_form_texts_name_only_the_fields_of_its_schema() -> None:
 
 
 def test_every_raised_service_error_has_a_message_in_every_language() -> None:
-    """A key passed to service_validation_error must exist under exceptions."""
+    """A key passed to service_validation_error or home_assistant_error must exist under exceptions."""
 
     raised: set[str] = set()
     for path in INTEGRATION.rglob("*.py"):
-        raised |= set(re.findall(r'service_validation_error\(\s*"([a-z0-9_]+)"', path.read_text(encoding="utf-8")))
-    assert "text_memo_write_not_supported" in raised
+        raised |= set(re.findall(
+            r'(?:service_validation|home_assistant)_error\(\s*"([a-z0-9_]+)"', path.read_text(encoding="utf-8")))
+    assert {"text_memo_write_not_supported", "station_busy"} <= raised
     for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
         exceptions = _load_json(path)["exceptions"]
         assert sorted(key for key in raised if not exceptions.get(key, {}).get("message")) == [], path.name
@@ -875,3 +876,19 @@ def test_the_home_page_buttons_name_the_vendor_layout_stock() -> None:
             assert not any(text in help_text for text in old), (language, step)
     strings = _load_json(INTEGRATION / "strings.json")
     assert strings["selector"]["dashboard_dynamic_homepage"]["options"]["stock"].startswith("Stock (")
+
+
+def test_the_busy_station_message_is_plain_in_every_language() -> None:
+    assert _load_json(INTEGRATION / "strings.json")["exceptions"]["station_busy"]["message"] == (
+        "The station is busy with a call. Try again after it ends."
+    )
+    messages = {
+        path.stem: _load_json(path)["exceptions"]["station_busy"]["message"]
+        for path in TRANSLATIONS.glob("*.json")
+    }
+    assert set(messages) == {"de", "en", "fr", "it"}
+    assert messages["en"] == "The station is busy with a call. Try again after it ends."
+    assert len(set(messages.values())) == 4
+    for language, message in messages.items():
+        # No agent, error code or HTTP wording reaches the user.
+        assert not re.search(r"agent|409|station_busy|HTTP", message, re.IGNORECASE), language

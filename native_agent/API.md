@@ -12,7 +12,7 @@ proxy if a site needs TLS.
 ## Versioning
 
 - HTTP base path: `/api/v1`
-- Current agent version: `2.9.1`
+- Current agent version: `2.9.2`
 - Self-test contract version: `api_version: "1.1"`
 - Normal payloads are JSON unless an endpoint explicitly returns binary media.
 
@@ -946,7 +946,13 @@ display does: the agent writes `message.txt` into `memos.recordsDir`, sends
 request `*#8**100#3##`, whose answer the station also sends to the display,
 and for `read: true` marks the memo read with `*#8**#101#3#<n>*1##`.
 A save the station refuses (it is recording, for example) answers
-`502 memo_create_refused`. Further `502` errors of this route:
+`502 memo_create_refused`. The station only saves a memo while it is idle
+and refuses with the same plain NACK during a call. When the agent itself
+sees a call or stream at that moment (its own stream or Ring Call, a Home
+Call, or a call on the station's display), the refusal answers
+`409 station_busy` instead: nothing was saved, and the request can be
+repeated after the call. The agent never refuses on its own; it always asks
+the station first. Further `502` errors of this route:
 
 | `error` | Meaning |
 | --- | --- |
@@ -1289,6 +1295,12 @@ Authentication: maintenance.
 
 Side effects: restores the Home Assistant media-user/routing setup from device
 backups.
+
+The label is put back first, by `qml_patch.sh media-user-label-restore`. When
+that script fails, or exits zero and reports `"ok":false` (a display restart
+that failed, after which it put the labelled files back), the agent answers
+`500` with `media_user_label_restore_failed` and leaves the media user and the
+routing as they are. A script that prints no JSON counts by its exit status.
 
 Request fields:
 
@@ -1720,6 +1732,12 @@ The IPv6 firewall block allows `ipv6-icmp` and the configured API TCP port as
 destination and source port, using idempotent `ip6tables -C` checks before
 inserting rules.
 
+The capability `ipv6_firewall_hook` says whether the configured IPv6 firewall
+start script exists on the station. Firmware 3.0.x has none
+(`/etc/network/if-pre-up.d/iptables6`), so it reports `false` there and Home
+Assistant does not offer the IPv6 firewall switch; apply would answer
+`missing`.
+
 ### QML Patch
 
 `GET /api/v1/maintenance/qml-patch`
@@ -1811,9 +1829,11 @@ Restores the core media hook.
 
 Applies the core hook plus the optional Display patch: MainApp navigation,
 HomePage unread memo/video-message badges, MemoPage external-delete refresh,
-the Settings > General HA feedback and touch-tone controls, the Alarmo, Home
-Assistant and energy pages (`Alarm.qml`, `HomeAssistant.qml`,
-`C300XEnergy.qml`) and the local QML JavaScript bridge.
+the Settings > Integration tab with its Status messages switch, the touch-tone
+control in Settings > General (`Components/Settings/GeneralsChoice.qml`, which
+reports the station's own setting to the agent), the Alarmo, Home Assistant
+and energy pages (`Alarm.qml`, `HomeAssistant.qml`, `C300XEnergy.qml`) and the
+local QML JavaScript bridge.
 
 `dynamic_homepage` chooses the home page button layout: `true` installs the
 Alarm and Home Assistant buttons among the station's own buttons (shown only when
@@ -1975,6 +1995,7 @@ requests to Home Assistant require an active display bridge.
 | `GET` | `/ui/ringer/next` | Core GUI ringer command/acknowledgment channel. |
 | `GET` | `/ui/alerts/next` | One sleeping GUI alert delivery connection; no acknowledgement or queue. |
 | `GET`, `POST` | `/ui/preferences` | Local display feedback preference, independent of HA registration. |
+| `GET` | `/ui/status` | Local facts for the station's Integration tab: agent and firmware version, whether Home Assistant is registered or has switched the display bridge off, its address as scheme, host and port, and the age of the last contact. |
 | `GET` | `/ui/maintenance` | Availability of SSH, reboot and removal on this station. |
 | `GET`, `POST` | `/ui/maintenance/ssh` | Read SSH status or request `{"enabled":true}` or `{"enabled":false}`. A write checks the resulting process state. |
 | `POST` | `/ui/maintenance/reboot` | Schedule a reboot with `{"confirm":"reboot"}`; leaves SSH unchanged. |
@@ -1991,6 +2012,43 @@ requests to Home Assistant require an active display bridge.
 Home Assistant proxy endpoints use the display bridge and shared secret
 configured through the API listener. Local metadata, preferences and core GUI
 hooks do not require that registration. No route exposes configured token values.
+
+`GET /ui/status` is answered by the agent alone, so it also works while Home
+Assistant cannot be reached. It requires a loopback client and returns
+
+```json
+{"ok":true,"version":"2.9.2","firmware":"1.7.19","registered":true,"disabled":false,"home_assistant":"http://192.0.2.10:8123","last_contact_age":42}
+```
+
+`home_assistant` is cut from the registered callback URL and carries scheme,
+host and port only. Path, query and fragment are never returned, because the
+path holds the webhook id; a URL with user information or any character
+outside letters, digits and `.-:[]` in its host part gives an empty string, and
+so does a missing registration. A host name with `_` and an IPv6 address with
+a zone id (`%eth0`) are such cases: the station shows `-` for them, the
+connection itself is not affected. `registered` is false until Home Assistant
+has registered since the agent started. `disabled` is true while Home
+Assistant has switched the display bridge off (`POST /api/v1/display-bridge`
+with `"enabled":false`); the bridge requests of the station are answered with
+HTTP 404 in both cases, and this flag tells them apart. `last_contact_age` is the number of seconds
+since the last contact with Home Assistant in this run, or `null` if there was
+none yet. Four things count as a contact: Home Assistant registering its event
+subscription, Home Assistant posting a display event
+(`POST /api/v1/display-bridge/events`),
+an event callback that Home Assistant accepted, and a display bridge request
+that Home Assistant answered. Other authenticated API requests do not count.
+The age is measured on the monotonic clock, so a time sync or a changed date
+on the station does not move it. No token, secret or webhook id is part of the
+answer.
+
+`GET /homeassistant?domain=c300x&service=setting&entities=<key>&option=<value>`
+forwards `{"type":"display_setting","key":"<key>","value":"<value>"}` to Home
+Assistant and returns its answer. Key and value are at most 48 characters of
+letters, digits and `_.:-`; anything else is answered with HTTP 400
+`invalid_action_id` and not forwarded. Which keys and values exist is decided
+by Home Assistant alone, which accepts `dashboard_prevent_return` (`on`,
+`off`) and `dashboard_navigation` (`pager`, `tabs`) and rejects everything
+else with `invalid_display_setting`.
 
 Station maintenance works without HA. It requires the local maintenance and
 per-action permissions, no browser Origin, the `X-C300X-UI: settings-v1`
@@ -2056,7 +2114,7 @@ request has a monotonic five-second deadline. Diagnostics expose
 
 ## Compatibility
 
-Agent `2.9.1` retains self-test contract `api_version: "1.1"` for firmware families
+Agent `2.9.2` retains self-test contract `api_version: "1.1"` for firmware families
 `1.7.x`, `2.0.x` and `3.0.x`; a C100X firmware reads `1.5.x`. `firmware_family` is derived from `device.firmware` of
 the agent config, or from the station's firmware info when that is empty, which
 is what the installer writes; it is `unknown` only when neither is readable. Of

@@ -2101,15 +2101,33 @@ static int ensure_config_mode(
     int *changed
 )
 {
-    mode_t mode;
+#ifdef __arm__
+    struct stat64 status;
+#else
+    struct stat status;
+#endif
+    /* The mode is read and set on one descriptor, so both are the same file. */
+    int fd = open(path, O_RDONLY | O_NONBLOCK | O_NOCTTY | O_CLOEXEC);
+    int ok;
 
-    if (!read_config_file_metadata(path, &mode, NULL, NULL)) {
+    if (fd < 0) {
         return 1;
     }
-    if ((mode & 07777) == 0600) {
+#ifdef __arm__
+    if (syscall(SYS_fstat64, fd, &status) != 0) {
+#else
+    if (fstat(fd, &status) != 0) {
+#endif
+        close(fd);
         return 1;
     }
-    if (chmod(path, 0600) != 0) {
+    if ((status.st_mode & 07777) == 0600) {
+        close(fd);
+        return 1;
+    }
+    ok = fchmod(fd, 0600) == 0;
+    close(fd);
+    if (!ok) {
         set_error(error, error_len, "unable to set config file mode");
         return 0;
     }

@@ -44,6 +44,7 @@ def test_native_capabilities_contract(tmp_path: Path) -> None:
         }
         assert document["agent"]["self_update_supported"] is maintenance
         assert caps["memo_led"] is (not maintenance)
+        assert caps["ipv6_firewall_hook"] is maintenance
         assert document["agent"]["self_update_file_set_version"] == 7
         assert caps["https_callbacks"] is maintenance
         assert caps["maintenance"]["audio_codec_apply"] is False

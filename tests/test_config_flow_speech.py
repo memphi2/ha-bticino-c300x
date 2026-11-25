@@ -158,3 +158,43 @@ def test_changing_the_speech_settings_does_not_reload_the_integration(monkeypatc
     entry.options = {**entry.options, "snapshot_width": 640}
     asyncio.run(listener(None, entry))  # type: ignore[arg-type]
     assert reloads == [entry]
+
+
+def test_display_settings_from_the_station_do_not_reload(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A reload would drop the display registration the station is using.
+
+    The two settings are read with every page, so the display is only told to
+    read again; that also covers a change made in the options form.
+    """
+
+    from custom_components.bticino_c300x import runtime_manager
+
+    reloads: list[Any] = []
+    told: list[Any] = []
+
+    async def reload(_hass: Any, updated: Any) -> None:
+        reloads.append(updated)
+
+    async def no_reapply(*_args: Any, **_kwargs: Any) -> None:
+        reloads.append("reapply")
+
+    async def tell(updated: Any, api: Any) -> None:
+        told.append((updated, api))
+
+    monkeypatch.setattr(runtime_manager, "_async_update_listener", reload)
+    monkeypatch.setattr(runtime_manager, "_async_reapply_display_patch_for_home_page", no_reapply)
+    monkeypatch.setattr(runtime_manager, "_async_notify_display_configuration", tell)
+    entry = _entry()
+    entry.runtime_data = SimpleNamespace(api="api")
+    listener = _entry_update_listener(entry)  # type: ignore[arg-type]
+
+    entry.options = {**entry.options, "dashboard_navigation": "pager"}
+    asyncio.run(listener(None, entry))  # type: ignore[arg-type]
+    entry.options = {**entry.options, "dashboard_prevent_return": False}
+    asyncio.run(listener(None, entry))  # type: ignore[arg-type]
+    assert reloads == [] and told == [(entry, "api"), (entry, "api")]
+    asyncio.run(listener(None, entry))  # type: ignore[arg-type]
+    assert len(told) == 2
+    entry.options = {**entry.options, "snapshot_width": 640}
+    asyncio.run(listener(None, entry))  # type: ignore[arg-type]
+    assert reloads == ["reapply", entry] and len(told) == 2

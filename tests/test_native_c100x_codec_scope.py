@@ -35,6 +35,7 @@ def codec_probe(request, tmp_path_factory):
     sources = [
         "audio_codec",
         "device_file",
+        "device_file_sync",
         "device_detect",
         "http_audio_codec",
         "http_auth",

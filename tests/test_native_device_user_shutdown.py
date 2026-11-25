@@ -77,8 +77,10 @@ def test_label_shutdown_finishes_commit_or_rollback(route_binary, tmp_path, oper
         stdout, stderr = process.communicate(timeout=5)
         assert process.returncode == 0, stderr
         result = json.loads(stdout)
-        assert result["writes"] == int(operation == "restore" or outcome == "success")
-        assert result["restored"] == int(operation == "restore")
+        assert result["writes"] == int(outcome == "success")
+        assert result["restored"] == int(operation == "restore" and outcome == "success")
+        # Shutdown cancels the follow-up status query after a successful commit.
+        assert result["status"] == (0 if outcome == "success" else 500)
         if outcome == "rollback":
             assert snapshot(gui) == before
             assert snapshot(observations / "2", gui_only=True) == before

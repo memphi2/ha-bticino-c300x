@@ -254,3 +254,24 @@ def test_targeted_save_preserves_unrelated_disk_changes_even_without_restart_fla
     persisted = json.loads(lab.path.read_text())
     assert persisted["mqtt"]["host"] == "pending.local"
     assert persisted["mqtt"]["password"] == "pending-secret"
+
+
+def test_ui_status_answers_only_a_loopback_client(lab):
+    address = None
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+        for _, name in socket.if_nameindex():
+            if name == "lo":
+                continue
+            try:
+                result = fcntl.ioctl(probe, 0x8915, struct.pack("256s", name.encode()[:15]))
+                address = socket.inet_ntoa(result[20:24])
+                break
+            except OSError:
+                continue
+    if address is None:
+        pytest.skip("No local non-loopback IPv4 interface")
+    status, body = request(lab.ui, "GET", None, HEADER, "/ui/status")[:2]
+    assert status == 200 and body["ok"] is True
+    status, body = request(lab.ui, "GET", None, HEADER, "/ui/status", source=(address, 0))[:2]
+    assert status == 403
+    assert "version" not in json.dumps(body)

@@ -101,8 +101,11 @@ The optional `dashboard` object changes that tile:
 - Two buttons on the home page open the Alarm and Home Assistant pages,
   arranged like the station's own buttons or as a fixed pair, as set under
   **Home page buttons**.
-- A **Home Assistant** tab in the Settings menu
+- An **Integration** tab in the Settings menu
   ([Station Settings Tab](#station-settings-tab)).
+- A house symbol beside the power button of the home page for the connection
+  to Home Assistant, with a yellow exclamation mark while the station cannot
+  reach it ([Home Assistant not reachable](#home-assistant-not-reachable)).
 - The swipe threshold of the touch screen rises from 4 to 16 pixels, so a tap
   that moves a little is no longer taken for a swipe.
 - Every original file it changes is backed up first. Turning the patch off or
@@ -502,7 +505,7 @@ data:
 | --- | --- |
 | `notification_id` | Required. 1 to 64 lowercase letters, digits, `_` or `-`. The same ID replaces a notice. |
 | `title` | Required, up to 80 characters. |
-| `message` | Required, up to 500 characters. |
+| `message` | Required. A longer text is cut to 500 characters and ends with "…". |
 | `icon` | `info` (default), `warning` or `calendar`. |
 | `priority` | `normal` (default), `important` or `urgent`. |
 | `expires_in` | Seconds, 1 to 604800 (7 days); default 3600. |
@@ -533,29 +536,78 @@ removes a notice.
 
 ## Station Settings Tab
 
-The Display patch adds a **Home Assistant** tab to the station's **Settings**
-menu, below **Configuration**. These controls work without Home Assistant;
-only maintenance operations the agent has enabled are offered.
+The Display patch adds an **Integration** tab (it **Integrazione**) to the
+station's **Settings** menu, below **Configuration**. **Status messages**,
+**SSH** and the maintenance operations work without Home Assistant; the two
+Display options need it and are greyed out while it cannot be reached. Only
+maintenance operations the agent has enabled are offered.
 
 <table>
   <tr>
-    <td align="center"><strong>Home Assistant tab</strong><br><img src="images/readme/display-settings-home-assistant-en.webp" alt="Station Settings, Home Assistant tab with SSH, HA feedback, Reboot station and Remove agent" width="360"></td>
+    <td align="center"><strong>Integration tab</strong><br><img src="images/readme/display-settings-home-assistant-en.webp" alt="Station Settings, Integration tab with SSH, Status messages, Reboot station and Remove agent" width="360"></td>
     <td align="center"><strong>Generals: Tone buttons</strong><br><img src="images/readme/display-settings-tone-buttons-en.webp" alt="Station Settings, Generals tab with the Tone buttons switch" width="360"></td>
   </tr>
 </table>
 
+The tab starts with a short status block:
+
+| Line | Meaning |
+| --- | --- |
+| **Home Assistant** | **reachable** with the name of the Home Assistant instance, or **not reachable** with the reason underneath (see [Home Assistant not reachable](#home-assistant-not-reachable)). |
+| Second line | The address the station calls Home Assistant at: `http` or `https`, host and port, on a line of its own so that long names fit. Nothing else of the address is shown. |
+| **Last contact** | How long ago the agent and Home Assistant last exchanged a request, or **never since start**. Read when the tab opens, and once more after Home Assistant has answered. |
+| **Integration**, **Agent** | The version of the integration, and of the agent with the station firmware. The integration version is known only while Home Assistant answers. |
+
+Address, last contact, agent and firmware version come from the agent on the
+station, so they also show while Home Assistant cannot be reached.
+
 | Control | Effect |
 | --- | --- |
-| **HA feedback** | Shows (default) or hides coloured action confirmations and routine messages such as "Page loaded" in the upper right of the Home Assistant page. Text at a control, errors, pending actions, connection warnings and real alarm or entity states always stay visible. |
+| **Status messages** | Shows (default) or hides coloured action confirmations and routine messages on the Home Assistant and Alarm pages, such as "Page loaded", "Connected", "Sending" or "Ready to arm". Text at a control, errors, a required PIN, sensors that block arming, connection warnings and real alarm or entity states always stay visible; while a command runs, the Alarm page still names it in its state box. |
+| **Keep page open in standby** | The integration's Display option of the same name: whether the Home Assistant and Alarm pages stay open when the screen goes to standby. |
+| **Page change: favourites bar / arrows** | The integration's Display option **Page navigation**: on shows the favourites bar, off the arrows. The label names the current choice. |
 | **SSH** | Switches the station's SSH access. |
 | **Reboot station** | Restarts the station. |
 | **Remove agent** | Removes the device agent; see [Remove Agent](advanced-maintenance.md#remove-agent). |
 
-Reboot and removal need a second, explicit confirmation within ten seconds;
-leaving the tab or the screen going off cancels it. **HA feedback** is a
+Reboot and removal ask first, in the station's own confirmation window with
+**Yes** and **No**. Nothing is sent before **Yes**; the question closes by
+itself after 30 seconds, and leaving the tab, a call or the screen going off
+cancels it. **Keep page open in standby** and **Page change** are stored in Home
+Assistant: the switch shows the value Home Assistant confirmed, the
+integration's options show the same value, and a change made there reaches
+the station as well. Neither reloads the integration or touches the Display
+patch. While Home Assistant cannot be reached, both switches are greyed out.
+**Status messages** is a
 station preference, not an integration option, and survives restarts. If the
 agent cannot read or save it, the switch shows **Setting unavailable**; reopen
 the tab before trying again.
+
+### Home Assistant not reachable
+
+A house symbol beside the power button of the home page stands for the
+connection to Home Assistant; tapping it opens the **Integration** tab. The
+home page asks Home Assistant which of its two buttons to show. If that fails
+seven times in a row (about a minute), the symbol gets a yellow exclamation
+mark and the page keeps asking every five minutes while it is visible. The
+next answer removes the mark. The symbol follows what the home page last
+read: when it is shown, on a message from Home Assistant, and on those
+retries. It is hidden while the display pages are switched off in the
+integration, also when Home Assistant has told the agent so and no longer
+answers the station. The **Integration** tab names the reason for as long as the
+problem lasts:
+
+- **Home Assistant has not registered since the agent started.** The agent is
+  running, but Home Assistant has not connected to it yet, for example
+  shortly after a station restart or while the integration is not loaded.
+- **The station pages are switched off in Home Assistant.** The integration
+  option **Home Assistant pages on the display** is off, so Home Assistant has
+  told the agent not to ask it.
+- **Home Assistant does not answer.** The station cannot reach Home Assistant
+  at the address the integration gave it. Check the address of Home Assistant
+  for the C300X in the integration's connection settings: it must be
+  reachable from the station over http, or over https with a trusted
+  certificate.
 
 **Settings > Generals > Tone buttons** stays the station's own touch-sound
 control. With the Display patch active, the device page in Home Assistant

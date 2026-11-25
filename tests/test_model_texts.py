@@ -2,7 +2,8 @@
 
 The texts name the model through ``{model}``. Rendered for a C300X, each area
 must stay byte-identical to the texts before the change; the pinned digests
-were taken from the translations of 04a99ea6.
+were taken from the translations of 04a99ea6, the exceptions with the
+"station_busy" message of release 2.9.2 added.
 """
 
 from __future__ import annotations
@@ -103,11 +104,11 @@ HEAD_DIGESTS = {
         "fr": "ed1022d9229a880b0eb484f2c7a8523975b1cbbd1a67240941228203d53fb1df",
     },
     "exceptions": {
-        "base": "8003e89ef3f7f28858b391bbfc9f5b4768b20765b2458b4fddae5fb3e377a9e3",
-        "en": "8003e89ef3f7f28858b391bbfc9f5b4768b20765b2458b4fddae5fb3e377a9e3",
-        "de": "469cb09d37bce546681efc6fb4405abccc4e8ff25ccf8bd150c97a679cb20193",
-        "it": "0f56168d06507f02fd2c796b7e7dc228d94a005d1e5a54a3ca9e0c18507c1dcd",
-        "fr": "de5f78e2d9d0273ad231b2bdf39ea0c08719af6dfba94e5feca870dc8b227575",
+        "base": "d1682fd87a2f26b1065134323ba5f007cd87bbb75d9ee2f18573248b1f1b4f78",
+        "en": "d1682fd87a2f26b1065134323ba5f007cd87bbb75d9ee2f18573248b1f1b4f78",
+        "de": "1f8a1c0dae39b26c8d961e0a8d7cd4c42035661732b792d0bd97b312667ed70a",
+        "it": "51f5849a371e5d84961ab9a1a4878d06102942ae3636b518719767365fc6d047",
+        "fr": "08f03d522233fe816dc5452fdee1231ae425cf240b9758c4fa410641b47efc7b",
     },
 }
 

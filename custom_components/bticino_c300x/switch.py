@@ -83,7 +83,8 @@ async def async_setup_entry(
     if not _agent_has_no_display_patch(entry):
         entities.append(C300XGuiFunctionPatchSwitch(entry))
     entities.append(C300XFirewallPatchSwitch(entry))
-    entities.append(C300XIpv6FirewallPatchSwitch(entry))
+    if not _ipv6_firewall_hook_missing(entry):
+        entities.append(C300XIpv6FirewallPatchSwitch(entry))
     entities.append(C300XNativeMqttBridgeSwitch(entry))
     entities.append(C300XLegacyMqttBridgeSwitch(entry))
     if entities:
@@ -124,6 +125,13 @@ class C300XSnapshotSwitch(C300XEntity, SwitchEntity):
     def is_on(self) -> bool | None:
         manager = get_snapshots(self.hass, self._entry.entry_id) if self.hass else None
         return manager.enabled if manager else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Why the last visitor image could not be taken; None after a success."""
+
+        manager = get_snapshots(self.hass, self._entry.entry_id) if self.hass else None
+        return {"last_failure": manager.capture.last_failure if manager else None}
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         await self._set_enabled(True)
@@ -1408,7 +1416,20 @@ def _supports_firewall_switch(entry: BticinoC300XConfigEntry) -> bool:
     ) or _supports_auth_config(entry)
 
 
+def _ipv6_firewall_hook_missing(entry: BticinoC300XConfigEntry) -> bool:
+    """Return whether the agent says the station has no IPv6 firewall start script.
+
+    Firmware 3.0.x has no /etc/network/if-pre-up.d/iptables6. Only an explicit
+    answer counts; an agent that does not report it keeps the switch.
+    """
+
+    capabilities = getattr(getattr(entry, "runtime_data", None), "capabilities", None)
+    return isinstance(capabilities, Mapping) and capabilities.get("ipv6_firewall_hook") is False
+
+
 def _supports_ipv6_firewall_switch(entry: BticinoC300XConfigEntry) -> bool:
+    if _ipv6_firewall_hook_missing(entry):
+        return False
     return _supports_maintenance_actions(
         entry,
         "ipv6_firewall_status",

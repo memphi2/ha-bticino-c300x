@@ -1557,6 +1557,9 @@
     "agent_command_failed": {
       "message": "La commande de l'agent {model} a échoué ou n'est pas prise en charge par l'agent installe."
     },
+    "station_busy": {
+      "message": "La station est occupée par un appel. Réessayez une fois l'appel terminé."
+    },
     "gui_function_patch_required": {
       "message": "Cette action nécessite le patch display {model}. Activez et appliquez d'abord le patch display dans les options de l'intégration."
     },

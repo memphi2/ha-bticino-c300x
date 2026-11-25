@@ -164,7 +164,8 @@ function page(name, values) {
     assert.equal(p.statusText(), "stale_state", "fetch failures remain visible");
     const qml = fs.readFileSync(path.join(root, "device_qml/HomeAssistant.qml"), "utf8");
     assert.match(qml.slice(qml.lastIndexOf("id: status")), /text: statusText\(\)/);
-    assert.match(qml, /text: selectedItem \? feedbackText\(selectedItem\) : status.text/);
+    assert.match(qml, /text: selectedItem \? feedbackText\(selectedItem\) : statusText\(\)/,
+        "the line under the notification list follows the switch like the header");
     for (const name of ["HomeAssistant.qml", "Alarm.qml"]) {
         assert.doesNotMatch(fs.readFileSync(path.join(root, "device_qml", name), "utf8"),
             /status\.(?:text|color)\s*=/, "all status writes reset the optional marker");
@@ -255,6 +256,59 @@ for (const data of [{ok: true}, {ok: true, id: "../bad", enabled: true, expires:
     assert.equal(p.modeFeedbackVisible("arm_home"), true);
 }
 {
+    // The switch "Status messages" off: the Alarm page hides what only confirms
+    // that things work and keeps what the user has to act on. The state box
+    // above the line still names a running command and the alarm state.
+    const {api} = runtime();
+    const noop = () => {};
+    const p = page("Alarm.qml", {Api: api, I18n: {text: (_, key) => key}, uiLanguage: "en",
+        feedbackColorsEnabled: false, status: {}, alarmState: {}, activeSince: {},
+        alarmOnline: true, alarmConfigured: true, alarmRawState: "disarmed", alarmCommands: ["arm_home"],
+        alarmCommandDetails: [], selectedCommand: "arm_home", commandPending: false, commandInFlight: false,
+        commandAwaitedState: "", commandFeedback: "", commandFeedbackColor: "", activeFeedbackCommand: "",
+        runtimeGeneration: 0, statusGeneration: 0, pinCode: "", bypassOffered: false,
+        modeFeedbackTimer: {restart: noop}, delayedStatusRefresh: {restart: noop, stop: noop}});
+    p.page = p;
+    const reads = [];
+    api.getJsonShared = (url, success, failure) => reads.push({success, failure});
+    for (const key of ["checking", "sending", "ready_to_arm"]) {
+        p.setCommandFeedback(key, "arm_home", "#58d68d");
+        assert.notEqual(p.status.text, "", key);
+        assert.equal(p.statusText(), "", key + " is routine and hidden with the switch off");
+        p.feedbackColorsEnabled = true;
+        assert.equal(p.statusText(), p.status.text, key + " shows again with the switch on");
+        p.feedbackColorsEnabled = false;
+    }
+    for (const key of ["not_ready_to_arm", "pin_required", "invalid_code", "alarm_command_error", "bypass_open_sensors"]) {
+        p.setCommandFeedback(key, "arm_home", "#ff6b6b");
+        assert.equal(p.statusText(), p.status.text, key + " stays visible");
+        assert.notEqual(p.statusText(), "");
+    }
+    for (const pending of [false, true]) {
+        p.commandPending = p.commandInFlight = pending;
+        api.status(p.status, p, p.alarmState, p.activeSince);
+        reads.pop().success({alarm: {state: "disarmed", commands: ["arm_home"]}});
+        assert.notEqual(p.status.text, "");
+        assert.equal(p.statusText(), "", "a plain connected or sending line is routine");
+        if (pending) assert.equal(p.feedbackTitle(), "sending", "the state box keeps naming the running command");
+    }
+    p.commandPending = p.commandInFlight = false;
+    api.status(p.status, p, p.alarmState, p.activeSince);
+    reads.pop().failure("API error: 503");
+    assert.equal(p.statusText(), "status_error (503)", "a failed read stays visible");
+    p.alarmOnline = true;
+    p.alarmConfigured = false;
+    p.alarmCommands = ["arm_home"];
+    p.executeCommand("arm_home", false);
+    assert.equal(p.statusText(), "alarm_not_configured");
+    const source = fs.readFileSync(path.join(root, "device_qml/Alarm.qml"), "utf8");
+    assert.match(source.slice(source.lastIndexOf("id: status")), /text: statusText\(\)/);
+    const texts = vm.createContext({});
+    vm.runInContext(fs.readFileSync(path.join(jsRoot, "c300x_i18n.js"), "utf8").replace(/^\.pragma library\s*/, ""), texts);
+    assert.deepEqual(["de", "en", "it", "fr"].map(language => texts.text(language, "ha_feedback_colors")),
+        ["Statusmeldungen", "Status messages", "Messaggi di stato", "Messages d'état"]);
+}
+{
     const qml = fs.readFileSync(path.join(root, "device_qml/Alarm.qml"), "utf8");
     const color = qml.match(/color: (feedbackColorsEnabled \|\| !alarmOnline[^\n]+)/)[1];
     const values = vm.createContext({feedbackColorsEnabled: false, alarmOnline: true,
@@ -266,5 +320,167 @@ for (const data of [{ok: true}, {ok: true, id: "../bad", enabled: true, expires:
     values.alarmOnline = true;
     values.feedbackColorsEnabled = true;
     assert.equal(vm.runInContext(color, values), "#ff6b6b");
+}
+
+function alarmPage(api, values) {
+    const noop = () => {};
+    const p = page("Alarm.qml", Object.assign({Api: api, I18n: {text: (_, key) => key}, uiLanguage: "en",
+        feedbackColorsEnabled: false, status: {held: false}, alarmState: {}, activeSince: {},
+        alarmOnline: true, alarmConfigured: true, alarmRawState: "disarmed", alarmCommands: ["arm_home"],
+        alarmCommandDetails: [], selectedCommand: "arm_home", commandPending: false, commandInFlight: false,
+        commandAwaitedState: "", commandFeedback: "", commandFeedbackColor: "", activeFeedbackCommand: "",
+        runtimeGeneration: 0, statusGeneration: 0, pinCode: "", bypassOffered: false, lastStatusRefreshMs: 0,
+        quickActionPending: false, quickActionGeneration: 0,
+        modeFeedbackTimer: {restart: noop}, delayedStatusRefresh: {restart: noop, stop: noop}}, values || {}));
+    p.page = p;
+    return p;
+}
+
+{
+    // A status the user has to read is not replaced by the routine line of
+    // the next status read. It holds until its timer on the page releases it
+    // after 30 seconds, whatever the station clock does meanwhile (it is set
+    // by NTP after boot); a new command, another error or a failed read
+    // replace it at once.
+    const {api} = runtime();
+    let now = 1000000;
+    api.clock = () => now;
+    vm.runInContext("Date.now = function() { return clock(); }", api);
+    const p = alarmPage(api);
+    const reads = [];
+    api.getJsonShared = (url, success, failure) => reads.push({success, failure});
+    const connected = () => {
+        api.status(p.status, p, p.alarmState, p.activeSince);
+        reads.pop().success({alarm: {state: "disarmed", commands: ["arm_home"]}});
+    };
+    for (const key of ["alarm_command_error", "pin_required", "not_ready_to_arm"]) {
+        p.setCommandFeedback(key, "arm_home", "#ff6b6b");
+        const shown = p.status.text;
+        connected();
+        assert.equal(p.statusText(), shown, key + " survives the next status read");
+        for (const step of [29000, 86400000, -172800000]) {
+            now += step;
+            connected();
+            assert.equal(p.statusText(), shown, key + " is still held when the clock moves by " + step);
+        }
+        assert.equal(p.status.held, true);
+        p.status.held = false;
+        connected();
+        assert.equal(p.status.text, "ha_connected", key + " gives way after 30 seconds");
+        assert.equal(p.statusText(), "", "and the routine line is hidden with the switch off");
+    }
+    api.setStatus(p.status, "action_error", "#ff6b6b");
+    connected();
+    assert.equal(p.statusText(), "action_error", "the quick-action error is held the same way");
+    p.setCommandFeedback("sending", "arm_home", "#f1c40f");
+    assert.equal(p.status.text, "sending: " + p.commandLabel("arm_home"), "a new command replaces a held error at once");
+    p.commandPending = false;
+    connected();
+    assert.equal(p.status.text, "ha_connected", "and nothing is held after it");
+    p.setCommandFeedback("alarm_command_error", "arm_home", "#ff6b6b");
+    p.setCommandFeedback("pin_required", "arm_home", "#f1c40f");
+    assert.match(p.status.text, /^pin_required/, "a newer prompt replaces the error");
+    api.status(p.status, p, p.alarmState, p.activeSince);
+    reads.pop().failure("API error: 503");
+    assert.equal(p.statusText(), "status_error (503)", "a failed read replaces a held status");
+    p.alarmOnline = true;
+    connected();
+    assert.equal(p.status.text, "ha_connected", "and is itself not held once Home Assistant answers again");
+    api.setStatus(p.status, "", "#ff6b6b");
+    assert.equal(p.status.held, false, "an empty line holds nothing");
+    const alarm = fs.readFileSync(path.join(root, "device_qml/Alarm.qml"), "utf8");
+    assert.match(alarm, /function aboutToShow\(\) \{[^}]*status\.held = false/, "opening the page starts fresh");
+    assert.ok(alarm.includes("Timer { interval: 30000; running: status.held; onTriggered: status.held = false }"));
+    assert.ok(!/heldUntil|Date\.now\(\) \+ 30000/.test(alarm + api.setStatus.toString()), "no wall clock in the hold");
+}
+
+{
+    // The Home Assistant page has the same rule for its header line.
+    const {api} = runtime();
+    let now = 1000000;
+    api.clock = () => now;
+    vm.runInContext("Date.now = function() { return clock(); }", api);
+    const p = page("HomeAssistant.qml", {Api: api, I18n: {text: (_, key) => key}, uiLanguage: "en",
+        feedbackColorsEnabled: true, status: {held: false}, selectedItem: null,
+        runtimeGeneration: 0, dashboardLoading: false, dashboardRefreshAgain: false,
+        currentPageIndex: 0, pageCount: 1, dashboardPages: [{items: []}]});
+    p.page = p;
+    const queued = [];
+    api.getJson = (url, success, failure) => queued.push({success, failure});
+    const loaded = () => { api.dashboard(p.status, p); queued.shift().success({data: {pages: [{items: []}]}}); };
+    api.setStatus(p.status, "action_error", "#ff6b6b");
+    loaded();
+    assert.equal(p.statusText(), "action_error", "an action error survives the next board read");
+    now += 31000;
+    loaded();
+    assert.equal(p.statusText(), "action_error", "the clock alone releases nothing");
+    p.status.held = false;
+    loaded();
+    assert.equal(p.statusText(), "board_loaded");
+    api.dashboard(p.status, p);
+    queued.shift().failure("offline");
+    assert.equal(p.statusText(), "stale_state");
+    loaded();
+    assert.equal(p.statusText(), "board_loaded", "the offline line goes as soon as a read works again");
+    const qml = fs.readFileSync(path.join(root, "device_qml/HomeAssistant.qml"), "utf8");
+    assert.match(qml, /uiText\("stale_state"\), "#f1c40f", false, true\)/, "a lost event stream is a read result too");
+    assert.match(qml, /function aboutToShow\(\) \{[^}]*status\.held = false/);
+    assert.ok(qml.includes("Timer { interval: 30000; running: status.held; onTriggered: status.held = false }"));
+}
+
+{
+    // The quick action on the Alarm page with "Status messages" off: a
+    // success is routine and hidden, a failure stays visible.
+    const {api} = runtime();
+    const p = alarmPage(api);
+    const sent = [], reads = [];
+    api.getJson = (url, success, failure) => sent.push({url, success, failure});
+    api.getJsonShared = (url, success, failure) => reads.push({success, failure});
+    const item = {entity_id: "switch.gate", domain: "switch", kind: "switch"};
+    api.dashboardAction(item, p.status, p, false);
+    assert.match(sent[0].url, /^\/homeassistant\?domain=switch&service=toggle&entities=switch\.gate$/);
+    assert.equal(p.quickActionPending, true);
+    api.dashboardAction(item, p.status, p, false);
+    assert.equal(sent.length, 1, "one quick action at a time");
+    sent.shift().success({ok: true});
+    assert.equal(p.status.text, "action_sent");
+    assert.equal(p.statusText(), "", "ok is hidden with the switch off");
+    assert.equal(reads.length, 1, "and the alarm status is read again");
+    p.feedbackColorsEnabled = true;
+    assert.equal(p.statusText(), "action_sent", "and shown with the switch on");
+    p.feedbackColorsEnabled = false;
+    api.dashboardAction(item, p.status, p, false);
+    sent.shift().success({ok: false});
+    assert.equal(p.statusText(), "action_error", "a refused action is visible");
+    assert.equal(reads.length, 1, "without another status read");
+    api.dashboardAction(item, p.status, p, false);
+    sent.shift().failure("API error: 503");
+    assert.equal(p.statusText(), "status_error (503)", "a failed request is visible");
+    assert.equal(p.quickActionPending, false);
+    api.dashboardAction({domain: "switch"}, p.status, p, false);
+    assert.equal(p.statusText(), "invalid_action");
+    assert.equal(sent.length, 0);
+}
+
+{
+    // Alarm commands report through the page, which always has
+    // setCommandFeedback; there is no second way to write the line.
+    const source = fs.readFileSync(path.join(jsRoot, "c300x_ha.js"), "utf8");
+    assert.doesNotMatch(source, /if \(pageItem\.setCommandFeedback\) \{/);
+    const {api} = runtime();
+    const p = alarmPage(api, {alarmCommandDetails: [{command: "arm_home", ready: false, blocking_sensor_count: 1}]});
+    const sent = [];
+    api.getJson = (url, success, failure) => sent.push({url, success, failure});
+    api.alarmCommand("arm_home", "", p.status, p, p.alarmState, p.activeSince, false);
+    assert.equal(sent.length, 0, "a blocked mode is not sent");
+    assert.match(p.statusText(), /^not_ready_to_arm/);
+    p.alarmCommandDetails = [{command: "arm_home", ready: true}];
+    api.alarmCheck("arm_home", p.status, p);
+    sent.shift().success({ok: true, ready: true});
+    assert.match(p.status.text, /^ready_to_arm/);
+    assert.equal(p.statusText(), "", "ready is routine");
+    api.alarmCheck("arm_home", p.status, p);
+    sent.shift().success({ok: true, ready: false, blocking_sensor_count: 1});
+    assert.match(p.statusText(), /^not_ready_to_arm/);
 }
 console.log("display preferences: persistence protocol, lifecycle and feedback isolation passed");

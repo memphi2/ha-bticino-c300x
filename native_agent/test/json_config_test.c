@@ -4,6 +4,10 @@ static int checked_mkstemp(char *path);
 static FILE *checked_fdopen(int fd, const char *mode);
 static int checked_fchown(int fd, uid_t uid, gid_t gid);
 static int checked_fsync(int fd);
+static int checked_chmod(const char *path, mode_t mode);
+static int checked_fchmod(int fd, mode_t mode);
+#define chmod checked_chmod
+#define fchmod checked_fchmod
 #define fsync checked_fsync
 #define mkstemp checked_mkstemp
 #define fdopen checked_fdopen
@@ -13,6 +17,8 @@ static int checked_fsync(int fd);
 #undef fdopen
 #undef fchown
 #undef fsync
+#undef chmod
+#undef fchmod
 #include <assert.h>
 #include <dirent.h>
 
@@ -23,6 +29,41 @@ extern int fsync(int);
 extern int mkstemp(char *);
 extern FILE *fdopen(int, const char *);
 extern int fchown(int, uid_t, gid_t);
+extern int chmod(const char *, mode_t);
+extern int fchmod(int, mode_t);
+/* When set: the config name is swapped for a symlink to this file at the
+ * moment the saved config's mode is corrected, as another process could. */
+static const char *swap_path, *swap_moved, *swap_target;
+static int name_chmods;
+
+static void swap_config_name(void)
+{
+    if (swap_path == NULL) {
+        return;
+    }
+    assert(rename(swap_path, swap_moved) == 0);
+    assert(symlink(swap_target, swap_path) == 0);
+    swap_path = NULL;
+}
+
+static int checked_chmod(const char *path, mode_t mode)
+{
+    name_chmods++;
+    swap_config_name();
+    return chmod(path, mode);
+}
+
+static int checked_fchmod(int fd, mode_t mode)
+{
+    struct stat opened, named;
+
+    /* Not for the temporary file every save secures first. */
+    if (swap_path != NULL && fstat(fd, &opened) == 0 && stat(swap_path, &named) == 0
+        && opened.st_ino == named.st_ino) {
+        swap_config_name();
+    }
+    return fchmod(fd, mode);
+}
 
 static int checked_mkstemp(char *path)
 {
@@ -170,9 +211,31 @@ int main(int argc, char **argv)
     assert(strcmp(loaded->lock_name, config->lock_name) == 0);
     assert(c300x_save_config_if_changed(config, error, sizeof(error), &changed) && !changed);
     assert(stat(config->config_path, &after) == 0 && before.st_ino == after.st_ino);
-    assert(chmod(config->config_path, 0644) == 0);
+    assert(checked_chmod(config->config_path, 0644) == 0);
+    name_chmods = 0;
     assert(c300x_save_config_if_changed(config, error, sizeof(error), &changed) && changed);
-    assert(stat(config->config_path, &after) == 0 && (after.st_mode & 0777) == 0600);
+    assert(stat(config->config_path, &after) == 0 && (after.st_mode & 07777) == 0600);
+    assert(before.st_ino == after.st_ino);
+    /* The mode is set on the opened file, never through the name. */
+    assert(name_chmods == 0);
+    assert(c300x_save_config_if_changed(config, error, sizeof(error), &changed) && !changed);
+    /* A name swapped for a symlink while the mode is corrected: the config
+     * that was checked gets 0600, the symlink's target keeps its mode. */
+    char moved[C300X_MAX_PATH_LEN + 8];
+    struct stat victim_before, victim_after, moved_after;
+    snprintf(moved, sizeof(moved), "%s.moved", config->config_path);
+    assert(checked_chmod(victim, 0644) == 0 && stat(victim, &victim_before) == 0);
+    assert(checked_chmod(config->config_path, 0640) == 0);
+    name_chmods = 0;
+    swap_path = config->config_path;
+    swap_moved = moved;
+    swap_target = victim;
+    assert(c300x_save_config_if_changed(config, error, sizeof(error), &changed) && changed);
+    assert(swap_path == NULL && name_chmods == 0);
+    assert(stat(victim, &victim_after) == 0 && victim_after.st_mode == victim_before.st_mode);
+    assert(stat(moved, &moved_after) == 0 && (moved_after.st_mode & 07777) == 0600);
+    assert(moved_after.st_ino == before.st_ino);
+    assert(unlink(config->config_path) == 0 && rename(moved, config->config_path) == 0);
     strcpy(config->mqtt_password, "replacement");
     fail_owner = 1;
     assert(!c300x_save_config_if_changed(config, error, sizeof(error), &changed));

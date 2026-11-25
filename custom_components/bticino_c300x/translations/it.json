@@ -1557,6 +1557,9 @@
     "agent_command_failed": {
       "message": "Il comando del device agent {model} non è riuscito o non è supportato dall'agente installato."
     },
+    "station_busy": {
+      "message": "La stazione è occupata da una chiamata. Riprova quando è terminata."
+    },
     "gui_function_patch_required": {
       "message": "Questa azione richiede la patch display {model}. Abilita e applica prima il patch display nelle opzioni dell'integrazione."
     },

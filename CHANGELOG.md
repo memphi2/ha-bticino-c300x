@@ -1,5 +1,88 @@
 # Changelog
 
+## v2.9.2 - 2026-11-25
+
+Station:
+
+- The tab the Display patch adds to the station's **Settings** is called
+  **Integration** (it **Integrazione**) instead of **Home Assistant**. The
+  **Home Assistant** button on the home page keeps its name.
+- The switch **HA feedback** on that tab is called **Status messages** (de
+  **Statusmeldungen**) and now also covers the Alarm page: switched off, the
+  routine lines there ("Connected", "Checking", "Sending", "Ready to arm",
+  "Action sent") are hidden like on the Home Assistant page, and so is the
+  routine line under the notification list. Errors, a required PIN, sensors
+  that block arming, connection warnings and the alarm state stay visible.
+- A house symbol beside the power button of the home page shows the
+  connection to Home Assistant. It gets a yellow exclamation mark when the
+  station cannot reach Home Assistant; a tap opens **Settings > Integration**,
+  which names the reason. The page then keeps asking every five minutes, so
+  the **Alarm** and **Home Assistant** buttons come back by themselves.
+- The **Integration** tab starts with a status block: whether Home Assistant
+  is reachable (with the reason if not), the address the station calls it at,
+  the last contact, and the versions of integration, agent and firmware. Most
+  of it also shows while Home Assistant cannot be reached. The tab is laid out
+  like the station's own settings tabs, in a centred column.
+- Two Display options can now also be switched at the station, on the
+  **Integration** tab: **Keep page open in standby** and the page change
+  (favourites bar or arrows). The value is stored in Home Assistant and shows
+  the same in the integration's options; changing it on either side does not
+  reload the integration.
+- The status line of the **Alarm** page ("PIN required: Away") is readable on
+  every station background: it sits on a dark panel with white text and
+  shows the status colour as a small marker.
+- **Agenda**, **Leave home** and **Situations** no longer end on a row cut in
+  half: the lists show whole rows, stop on a row and have a thin scroll bar
+  while there is more. On **Leave home** the alarm row and the actions such
+  as "All off" stay fixed under the checks and are fully visible.
+- A display notification now looks like the station's own popups: a grey
+  panel on black with the station font and a grey button. The severity shows
+  as a small coloured marker instead of colouring the whole box.
+- The **Alarm** and **Home Assistant** buttons on the home page draw their
+  icons at the size of the station's own button icons, and the label
+  "Home Assistant" is shown in full instead of "Home Assist…".
+- An error, warning or PIN prompt on the **Alarm** page and in the header of
+  the **Home Assistant** page is no longer replaced at once by the routine
+  line of the next status read ("Connected", "loaded"). It stays until
+  the first status read after at least 30 seconds, unless a new command, a
+  newer message or a failed read replaces it earlier.
+- The texts of the station pages are spelled properly in German, Italian and
+  French, with umlauts and accents ("PIN benötigt", "Umidità", "Arrêt")
+  instead of stand-ins such as "benoetigt".
+- **Reboot station** and **Remove agent** on the **Integration** tab now ask
+  in the station's own confirmation window with **Yes** and **No**, and say
+  what happens, instead of showing a second button further down the tab.
+
+Notifications and card:
+
+- A display notification whose message is longer than 500 characters is now
+  shown, cut to 500 characters and ending with "…", instead of being refused
+  with an error. Spoken notifications keep the full text.
+- With a camera picture that is not 5:3 (for example 688x480 or 704x576),
+  the doorbell card no longer changes its height at every stream start and
+  stop while it shows a visitor snapshot. The card keeps the shape of the
+  camera picture; a snapshot of another shape is shown inside it.
+
+Fixed:
+
+- **Restore Home Assistant media-user setup** no longer removes the user and
+  the call routing when the label could not be taken off the display (for
+  example after a failed display restart); it reports the failure and leaves
+  the setup complete.
+- Setting up or restoring the media user is no longer reported as failed
+  while the station is still writing the label.
+- Writing a text memo while a call or stream is running fails with a clear
+  message ("The station is busy with a call. Try again after it ends.")
+  instead of the general agent error.
+- A visitor image that could not be taken now logs a warning with the cause,
+  and the **Save images** switch shows it as the attribute `last_failure`
+  until an image succeeds again.
+
+Documentation:
+
+- **Quick Start** links the community project that describes rooting a
+  station (third party, at your own risk).
+
 ## v2.9.1 - 2026-11-24
 
 Station:

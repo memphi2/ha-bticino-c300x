@@ -2391,7 +2391,7 @@ def test_async_dashboard_payload_includes_configured_weather() -> None:
         },
         "forecast_2": {
             "time": "18:00",
-            "condition": "Bewoelkt",
+            "condition": "Bewölkt",
             "condition_key": "cloudy",
             "temperature": "18 C",
         },
@@ -2695,7 +2695,7 @@ def test_async_dashboard_payload_weather_uses_nested_attribute_forecast() -> Non
     assert weather["wind"] == ""
     assert weather["forecast_1"] == {
         "time": "Tomorrow",
-        "condition": "Bewoelkt",
+        "condition": "Bewölkt",
         "condition_key": "cloudy",
         "temperature": "11 C",
     }
@@ -3171,7 +3171,7 @@ def test_async_dashboard_payload_localizes_binary_sensor_labels() -> None:
     expected = {
         "de": ("Geschlossen", "Offen"),
         "en": ("Closed", "Open"),
-        "fr": ("Ferme", "Ouvert"),
+        "fr": ("Fermé", "Ouvert"),
         "it": ("Chiuso", "Aperto"),
     }
     for language, labels in expected.items():

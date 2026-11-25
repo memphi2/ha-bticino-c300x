@@ -82,34 +82,46 @@ def adapt_alerts(source: str) -> str:
     source = source.replace("Component.onCompleted: initialize()", "Component.onCompleted: { completed = true; initialize() }")
     # The notice covers the whole screen on the station's own background; Return marks it read,
     # so that button carries the selection bar the station draws under its selected item.
+    # The C300X popup look (black panel, grey sheet, severity marker, scroll bar, Ubuntu font)
+    # is not the C100X's: its notice keeps the accent line, the accent label and the scroll arrows.
     source = swap(source, """        anchors.centerIn: parent
-        width: Math.max(0, parent.width - 24)
-        height: Math.max(0, Math.min(parent.height - 24, 370))
-        color: "#176196"
-        border.color: root.accent
-        border.width: 2
-        radius: 4
+        width: Math.max(0, Math.min(parent.width - 24, 560))
+        height: Math.max(0, Math.min(parent.height - 24, 330))
         clip: true
 """, """        anchors.fill: parent
-        color: "black"
         clip: true
+        Rectangle { anchors.fill: parent; color: "black" }
         Image { anchors.fill: parent; source: "../images/background.jpg" }
         Rectangle { anchors.fill: parent; color: "#66000000" }
         Rectangle { width: parent.width; height: 6; color: root.accent }
 """)
+    source = swap(source, '        Rectangle { anchors.fill: parent; color: "black"; opacity: 0.9 }\n', "")
+    sheet = re.compile(r'height: Math\.max\(0, acknowledgeButton\.y - \d+\)\n            color: "white"\n            opacity: 0\.5\n')
+    if len(sheet.findall(source)) != 1:
+        raise ValueError("Shared alert sheet changed; review the C100X adaptation")
+    source = sheet.sub('height: acknowledgeButton.y\n            visible: false\n', source)
+    source = swap(source, "x: 16; y: 14; width: 6; height: 22\n", "x: 16; y: 14; width: 6; height: 22\n            visible: false\n")
+    for line in ('font.family: "Ubuntu"\n', "font.weight: Font.Light\n"):
+        if len(re.findall(r"^ +" + re.escape(line), source, re.M)) != 4:
+            raise ValueError("Shared alert fonts changed; review the C100X adaptation")
+        source = re.sub(r"^ +" + re.escape(line), "", source, flags=re.M)
     source = swap(source, "        Flickable {\n            id: messageScroll", "        C100XScroll {\n            id: messageScroll")
-    source = swap(source, 'color: acknowledgeMouse.pressed ? "#124974" : "#207cb6"\n            border.color: "white"; radius: 4',
-                  'color: acknowledgeMouse.pressed ? "#66ffffff" : "#33ffffff"\n            radius: 6\n'
+    source = swap(source, "            visible: messageScroll.contentHeight > messageScroll.height\n", "            visible: false\n")
+    source = swap(source, 'Rectangle { anchors.fill: parent; color: "white"; opacity: acknowledgeMouse.pressed ? 0.75 : 0.5 }',
+                  'Rectangle { anchors.fill: parent; radius: 6; color: acknowledgeMouse.pressed ? "#66ffffff" : "#33ffffff" }\n'
                   '            Rectangle { objectName: "alertFocusBar"; anchors.bottom: parent.bottom; width: parent.width; height: 5; color: "white" }')
-    source = swap(source, "x: 16; y: 10; width: parent.width - 32; height: 30", "x: 36; y: 22; width: parent.width - 72; height: 30")
-    source = swap(source, "x: 16; y: 44; width: parent.width - 32; height: 58", "x: 36; y: 56; width: parent.width - 72; height: 66")
-    source = swap(source, "x: 16; y: 108; width: parent.width - 32", "x: 36; y: 130; width: parent.width - 72")
-    source = swap(source, "x: 16; y: parent.height - 64; width: parent.width - 32; height: 48",
+    source = swap(source, "x: 30; y: 10; width: parent.width - 46; height: 30", "x: 36; y: 22; width: parent.width - 72; height: 30")
+    source = swap(source, 'font.pixelSize: 18\n            color: "white"\n            verticalAlignment: Text.AlignVCenter',
+                  "font.pixelSize: 20\n            color: root.accent")
+    source = swap(source, "x: 16; y: 44; width: parent.width - 32; height: 54", "x: 36; y: 56; width: parent.width - 72; height: 66")
+    source = swap(source, "x: 16; y: 104; width: parent.width - 32", "x: 36; y: 130; width: parent.width - 72")
+    source = swap(source, "y: parent.height - 44; width: parent.width; height: 44",
                   "x: 36; y: parent.height - 76; width: parent.width - 72; height: 56")
-    source = swap(source, "font.pixelSize: 22\n            color: \"white\"\n            wrapMode: Text.Wrap\n            elide: Text.ElideRight",
+    source = swap(source, "font.pixelSize: 20\n            color: \"white\"\n            wrapMode: Text.Wrap\n            elide: Text.ElideRight",
                   "font.pixelSize: 27\n            font.bold: true\n            color: \"white\"\n            wrapMode: Text.Wrap\n            elide: Text.ElideRight")
-    source = swap(source, "                font.pixelSize: 20\n                color: \"white\"\n                wrapMode: Text.Wrap",
+    source = swap(source, "                font.pixelSize: 18\n                color: \"white\"\n                wrapMode: Text.Wrap",
                   "                font.pixelSize: 24\n                color: \"white\"\n                wrapMode: Text.Wrap")
+    source = swap(source, 'font.pixelSize: 18; color: "white"', 'font.pixelSize: 22; color: "white"')
     source = source.replace("id: messageScroll", 'id: messageScroll\n            objectName: "alertMessageScroll"')
     source = source.replace("id: acknowledgeButton", 'id: acknowledgeButton\n            objectName: "alertAcknowledge"')
     if "global." in source or "ScreenState." in source or "AudioState." in source or "BtClass" in source:
@@ -164,6 +176,11 @@ def adapt_page(name: str, source: str) -> str:
         source = swap(source, "height: pageCount > 1 && !tabNavigation ? 38 : 0", "height: 0")
         source = swap(source, "visible: pageCount > 1 && !tabNavigation", "visible: false")
         source = swap(source, "visible: tabNavigation && pageCount > 1 && !detailOpen && !notificationsOpen", "visible: false")
+    if name in ("C300XAgenda.qml", "C300XLeaveHome.qml", "C300XSituations.qml"):
+        # More content shows as the adapter's arrows, like in the station's own lists; the C300X
+        # scroll bar and the strip it reserves are not shown.
+        source = swap(source, "width: parent.width - (contentHeight > height ? 9 : 0)", "width: parent.width")
+        source = swap(source, "visible: list.contentHeight > list.height\n", "visible: false\n")
     if name == "C300XDetailControl.qml":
         # A number is set like the station's own regulations: Return, Up/Down, Return. No +/- buttons.
         source = swap(source, "model: [-1, 1]", "model: []")

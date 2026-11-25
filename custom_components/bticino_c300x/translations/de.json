@@ -1557,6 +1557,9 @@
     "agent_command_failed": {
       "message": "Der {model}-Device-Agent-Befehl ist fehlgeschlagen oder wird vom installierten Agent nicht unterstützt."
     },
+    "station_busy": {
+      "message": "Die Station ist gerade mit einem Anruf beschäftigt. Versuche es erneut, wenn er beendet ist."
+    },
     "gui_function_patch_required": {
       "message": "Diese Aktion benötigt den {model}-Display-Patch. Aktiviere und wende den Display-Patch zuerst in den Integrationsoptionen an."
     },

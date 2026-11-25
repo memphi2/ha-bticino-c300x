@@ -409,10 +409,12 @@ const texts = vm.createContext({});
 vm.runInContext(fs.readFileSync(root + '/device_qml/js/c300x_i18n.js', 'utf8').replace(/^\.pragma library\s*/, ''), texts);
 function tab(language) {
     const calls = {status: [], details: [], setting: []};
-    const preferences = {bridgeProblem: ''};
+    const preferences = {bridgeProblem: '', ready: true, busy: false, load() {}};
     const panel = vm.createContext({c300xDisplayPreferences: preferences, visible: true, pending: '', saving: false,
-        answered: false, problem: '', bridgeOff: false, address: '', contact: '', agentVersion: '', firmwareVersion: '', integrationVersion: '',
-        instanceName: '', keepOpen: false, tabNavigation: false, status: '', Math,
+        answered: false, visit: 0, problem: '', bridgeOff: false, address: '', contact: '', agentVersion: '', firmwareVersion: '', integrationVersion: '',
+        instanceName: '', keepOpen: false, tabNavigation: false, status: '', Math, deadline: {},
+        sshRunning: false, sshKnown: false, canReboot: false, canRemove: false, busy: false,
+        clearConfirmation() {}, Maintenance: {request() {}, cancel() {}},
         label(key) { return texts.text(language || 'de', key); },
         Bridge: {
             stationStatus(callback, owner) { calls.status.push({callback, owner}); },
@@ -421,7 +423,7 @@ function tab(language) {
         }});
     panel.panel = panel;
     Object.defineProperty(panel, 'reachable', {get() { return panel.answered && panel.problem === ''; }});
-    vm.runInContext(qml.slice(qml.indexOf('    function contactText'), qml.indexOf('    function aboutToShow')), panel);
+    vm.runInContext(qml.slice(qml.indexOf('    function statusKey'), qml.indexOf('    onVisibleChanged')), panel);
     return {panel, calls, preferences};
 }
 """
@@ -520,6 +522,69 @@ assert.match(qml, /text: panel\.problem \? panel\.label\(panel\.reasonKey\(\)\) 
 assert.match(qml, /onVisibleChanged: if \(visible\) readStatus\(\); else hidden\(\)/);
 const sizes = [...qml.matchAll(/font\.pixelSize: (\d+)/g)].map(match => Number(match[1]));
 assert.ok(sizes.length >= 5 && Math.min(...sizes) >= 18, String(sizes));
+""")
+
+
+def test_integration_tab_checks_again_on_every_visit():
+    """Reopening the tab never shows the last visit's answer.
+
+    Home Assistant was reachable on the last visit and is down now: until the
+    new answer arrives the tab says "checking" and both switches rest, and an
+    answer still on its way from the last visit is dropped.
+    """
+
+    _run_tab_harness(r"""
+const {panel, calls} = tab('en');
+function show() { panel.visible = true; panel.readStatus(); }
+function hide() { panel.visible = false; panel.hidden(); }
+function checking(message) {
+    assert.deepEqual([panel.reachable, panel.problem, panel.statusValue(0), panel.rowEnabled(2), panel.rowEnabled(3)],
+        [false, '', texts.text('en', 'status_checking'), false, false], message);
+}
+assert.match(qml, /onVisibleChanged: if \(visible\) readStatus\(\); else hidden\(\)/);
+show();
+calls.status.at(-1).callback({ok: true, home_assistant: 'http://192.0.2.10:8123', last_contact_age: 30});
+calls.details.at(-1).callback({ok: true, instance_name: 'Home', preventReturnToHomepage: false, navigation: 'pager'}, '');
+assert.deepEqual([panel.reachable, panel.rowEnabled(2), panel.rowEnabled(3)], [true, true, true]);
+hide();
+show();
+checking('a reopened tab checks again before it calls Home Assistant reachable');
+panel.setDisplay('dashboard_navigation', 'tabs');
+assert.equal(calls.setting.length, 0, 'no write before the new answer');
+calls.details.at(-1).callback(null, 'bridge_unreachable');
+assert.deepEqual([panel.reachable, panel.problem], [false, 'bridge_unreachable']);
+hide();
+show();
+checking('the last reason is not shown again');
+calls.details.at(-1).callback({}, '');
+assert.equal(panel.reachable, true);
+panel.aboutToShow();
+checking('the vendor tab switch starts the same way');
+calls.details.at(-1).callback({}, '');
+assert.equal(panel.reachable, true);
+// The answers of the last visit arrive after the tab was opened again.
+hide();
+show();
+const late = calls.details.at(-1);
+const lateStatus = calls.status.at(-1);
+hide();
+show();
+late.callback({ok: true, instance_name: 'Old'}, '');
+lateStatus.callback({ok: true, home_assistant: 'http://192.0.2.99:8123', last_contact_age: 0});
+checking('a late answer of the last visit is dropped');
+assert.equal(panel.address, 'http://192.0.2.10:8123');
+calls.details.at(-1).callback(null, 'bridge_not_registered');
+assert.equal(panel.problem, 'bridge_not_registered', 'the answer of this visit counts');
+hide();
+show();
+calls.details.at(-1).callback({}, '');
+panel.setDisplay('dashboard_prevent_return', 'on');
+const write = calls.setting.at(-1);
+hide();
+show();
+write.callback(null);
+assert.deepEqual([panel.saving, panel.status, panel.reachable], [false, '', false],
+    'a write answer of the last visit leaves the new visit alone');
 """)
 
 

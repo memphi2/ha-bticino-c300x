@@ -19,6 +19,7 @@ Item {
     property string problem: ""
     property bool bridgeOff: false
     property bool answered: false
+    property int visit: 0
     property bool reachable: answered && problem === ""
     property string address: ""
     property string contact: ""
@@ -110,7 +111,9 @@ Item {
         tabNavigation = data.navigation === "tabs"
     }
     function readLocal() {
+        var current = visit
         Bridge.stationStatus(function(data) {
+            if (current !== panel.visit) return
             panel.address = data && /^https?:\/\/[^\/?#@\s]+$/.test(data.home_assistant) ? data.home_assistant : ""
             panel.contact = data ? panel.contactText(data.last_contact_age) : ""
             panel.bridgeOff = !!data && data.disabled === true
@@ -119,8 +122,10 @@ Item {
         }, panel)
     }
     function readStatus() {
+        var current = visit
         readLocal()
         Bridge.bridgeDetails(function(data, reason) {
+            if (current !== panel.visit) return
             panel.readLocal()
             panel.answered = true
             panel.problem = reason
@@ -134,7 +139,9 @@ Item {
         if (saving || !reachable || pending) return
         saving = true
         status = ""
+        var current = visit
         Bridge.displaySetting(key, value, function(data) {
+            if (current !== panel.visit) return
             panel.saving = false
             if (data) panel.applyDisplay(data)
             else panel.status = "display_settings_error"
@@ -151,6 +158,9 @@ Item {
     function hidden() {
         clearConfirmation()
         Maintenance.cancel(panel, deadline)
+        visit++
+        answered = false
+        problem = ""
         saving = false
     }
     onVisibleChanged: if (visible) readStatus(); else hidden()

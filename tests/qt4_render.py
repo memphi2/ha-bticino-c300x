@@ -9,11 +9,14 @@ test. None of these belong in the repository.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
 import shutil
 import subprocess
 import tempfile
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -72,6 +75,13 @@ class Station:
     def close(self) -> None:
         shutil.rmtree(self.work, ignore_errors=True)
 
+    def patch_vendor_pages(self) -> None:
+        """Change the vendor pages of the skin the way the agent does on a station."""
+        from test_qml_patch_script import _run_qml_patch
+
+        if not (self.work / "backup").exists():
+            assert _run_qml_patch(self.work, self.gui, self.work / "backup", "apply")["state"] == "patched"
+
     def show(self, name: str, source: str, milliseconds: int = 2000, picture: Path | None = None) -> str:
         """Show QML source as a file of the skin; return what Qt and the page printed."""
         page = self.gui / f"{name}.qml"
@@ -93,6 +103,37 @@ class Station:
         output = result.stdout + result.stderr
         assert result.returncode == 0 and "PROBE_SAVED 1" in output, output[-1500:]
         return output
+
+
+class Agent:
+    """Stand-in for the agent's display listener: fixed answers by path, on the loopback."""
+
+    def __init__(self, answers: dict[str, tuple[int, dict[str, object]]]):
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self) -> None:
+                status, body = answers.get(self.path.split("?")[0], (404, {"ok": False}))
+                data = json.dumps(body).encode()
+                self.send_response(status)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Connection", "close")
+                self.end_headers()
+                self.wfile.write(data)
+
+            def do_POST(self) -> None:
+                self.rfile.read(int(self.headers.get("Content-Length") or 0))
+                self.do_GET()
+
+            def log_message(self, format: str, *args: object) -> None:
+                pass
+
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.url = f"http://127.0.0.1:{self.server.server_address[1]}"
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+
+    def close(self) -> None:
+        self.server.shutdown()
+        self.server.server_close()
 
 
 def warnings(output: str) -> list[str]:

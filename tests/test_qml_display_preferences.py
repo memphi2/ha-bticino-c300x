@@ -411,7 +411,7 @@ function tab(language) {
     const calls = {status: [], details: [], setting: []};
     const preferences = {bridgeProblem: '', ready: true, busy: false, load() {}};
     const panel = vm.createContext({c300xDisplayPreferences: preferences, visible: true, pending: '', saving: false,
-        answered: false, visit: 0, problem: '', bridgeOff: false, address: '', contact: '', agentVersion: '', firmwareVersion: '', integrationVersion: '',
+        answered: false, visit: 0, problem: '', bridgeOff: false, addressShown: '', contact: '', agentVersion: '', firmwareVersion: '', integrationVersion: '',
         instanceName: '', keepOpen: false, tabNavigation: false, status: '', Math, deadline: {},
         sshRunning: false, sshKnown: false, canReboot: false, canRemove: false, busy: false,
         clearConfirmation() {}, Maintenance: {request() {}, cancel() {}},
@@ -422,6 +422,11 @@ function tab(language) {
             displaySetting(key, value, callback, owner) { calls.setting.push({key, value, callback, owner}); },
         }});
     panel.panel = panel;
+    // The station measures the text in its own font; here every character is 9 px wide, 34 fill the value column.
+    panel.statusRows = {width: 456};
+    panel.gauge = {text: '', get paintedWidth() { return this.text.length * 9; }};
+    let address = '';
+    Object.defineProperty(panel, 'address', {get() { return address; }, set(value) { address = value; panel.fitAddress(); }});
     Object.defineProperty(panel, 'reachable', {get() { return panel.answered && panel.problem === ''; }});
     vm.runInContext(qml.slice(qml.indexOf('    function statusKey'), qml.indexOf('    onVisibleChanged')), panel);
     return {panel, calls, preferences};
@@ -836,11 +841,12 @@ def test_integration_tab_status_lines_fit_long_values():
     """Measured in the station font at 18 px: the value column is 306 px wide.
 
     "https://ha.example.duckdns.org:8123" is 298 px and fits in one line. A
-    longer address may take a second line; the versions are two rows.
+    longer address takes a second line, which the tab breaks itself; the
+    versions are two rows.
     """
     source = (ROOT / "device_qml/C300XSettings.qml").read_text(encoding="utf-8")
     assert "                model: 5\n" in source
-    assert "wrapMode: index === 1 ? Text.Wrap : Text.NoWrap" in source
+    assert "wrapMode" not in source[source.index("                model: 5\n"):source.index('objectName: "bridgeReason"')]
     assert "height: Math.max(26, statusValue.paintedHeight + 4)" in source
     assert 'row === 3 ? "Integration" : row === 4 ? "Agent"' in source
     assert '(agentVersion || "-") + " \\u00b7 Firmware " + (firmwareVersion || "-")' in source
@@ -857,25 +863,65 @@ def test_integration_tab_address_is_a_table_row_like_the_others():
     source = (ROOT / "device_qml/C300XSettings.qml").read_text(encoding="utf-8")
     row = source[source.index("                model: 5\n"):source.index('objectName: "bridgeReason"')]
     assert re.findall(r"anchors\.leftMargin: ([^\n]+)", row) == ["150"], "one value column for all five rows"
-    assert "WrapAnywhere" not in source, "an address is never cut inside a word"
     _run_tab_harness(r"""
 assert.deepEqual(['de', 'en', 'it', 'fr'].map(language => tab(language).panel.statusKey(1)),
     ['Adresse', 'Address', 'Indirizzo', 'Adresse']);
 const {panel} = tab('de');
 assert.deepEqual([0, 1, 2, 3, 4].map(row => panel.statusKey(row) !== ''), [true, true, true, true, true]);
 assert.equal(panel.statusValue(1), '-');
-// A long address breaks after a dot or a colon only, never inside the scheme and never inside a group.
-const gap = '​';
-for (const address of ['http://192.0.2.10:8123', 'https://ha.example.duckdns.org:8123',
-        'http://[fd00:1234:5678:9abc:def0:1234:5678:9abc]:8123', 'http://homeassistant.local']) {
+""")
+
+
+def test_integration_tab_address_shows_its_start_and_its_port():
+    """A long address lost its port: Qt wrapped it where it liked and cut the second line at the end.
+
+    "https://homeassistant.my-very-long-home-name.example.duckdns.org:8123"
+    broke after a hyphen and ended "...duckdns.org:..." without the port. The
+    tab measures the text and breaks it itself. Guaranteed: at most two
+    lines, none wider than the value column; an address that fits in two
+    lines is shown completely; a longer one keeps as much of its start as
+    the first line holds and as much of its end as the second line holds
+    behind an ellipsis, so the port always shows. The break follows a dot,
+    colon or hyphen where the rest then still fits, otherwise it falls
+    inside a name. The widths here are stand-ins (9 px per character); the
+    station's font is measured in tests/test_qt4_display_render.py.
+    """
+    source = (ROOT / "device_qml/C300XSettings.qml").read_text(encoding="utf-8")
+    assert "    onAddressChanged: fitAddress()\n" in source
+    assert "Text.Wrap\n" not in source and "u200b" not in source, "Qt no longer chooses the break"
+    assert "return gauge.paintedWidth <= statusRows.width - 150\n" in source, "measured against the value column"
+    gauge = source[source.index("        id: gauge\n"):source.index("    Flickable {")]
+    assert "visible: false\n" in gauge and "font.pixelSize: 18\n" in gauge
+    _run_tab_harness(r"""
+const {panel} = tab('de');
+const dots = '…';
+function shown(address) {
     panel.address = address;
-    const shown = panel.statusValue(1);
-    assert.equal(shown.split(gap).join(''), address, 'the visible text is the address');
-    const parts = shown.split(gap);
-    assert.ok(parts.length > 1 && parts[0].startsWith(address.slice(0, address.indexOf('//') + 2)), shown);
-    for (const part of parts.slice(0, -1)) assert.match(part, /[.:]$/, shown);
-    for (const part of parts) assert.ok(!/[.:]./.test(part.replace('://', '')), 'every dot and colon is a break point: ' + part);
+    const lines = panel.statusValue(1).split('\n');
+    assert.ok(lines.length <= 2 && lines.every(line => line.length <= 34 && line.length > 0), JSON.stringify(lines));
+    return lines;
 }
+// Fits in one line: unchanged.
+for (const address of ['http://192.0.2.10:8123', 'https://ha.example.duckdns.org:443', 'http://homeassistant.local'])
+    assert.deepEqual(shown(address), [address]);
+// Fits in two lines: complete, broken after a separator when the rest then fits.
+assert.deepEqual(shown('http://[fd00:1234:5678:9abc:def0:1234:5678:9abc]:8123'),
+    ['http://[fd00:1234:5678:9abc:def0:', '1234:5678:9abc]:8123']);
+assert.deepEqual(shown('https://home.example-name.duckdns.org:8123'), ['https://home.example-name.duckdns.', 'org:8123']);
+assert.deepEqual(shown('http://averyveryverylonghostnamewithoutanydot:8123'),
+    ['http://averyveryverylonghostnamewi', 'thoutanydot:8123'], 'no separator in reach: broken inside the name, nothing lost');
+assert.deepEqual(shown('https://ha.averyveryverylongnamewithoutbreaks-x.example.org:8123'),
+    ['https://ha.averyveryverylongnamewi', 'thoutbreaks-x.example.org:8123'], 'the rest after the last separator would not fit');
+// Longer than two lines: start and end, the port never lost.
+for (const address of ['https://homeassistant.my-very-long-home-name.example.duckdns.org:8123',
+        'http://averyveryverylonghostnamewithoutanydotsatallinsideit-andmore:8123',
+        'https://' + 'a'.repeat(200) + ':8123', 'https://' + 'sub.'.repeat(40) + 'example.org']) {
+    const [first, second] = shown(address);
+    assert.equal(first, address.slice(0, 34), 'the first line is full');
+    assert.equal(second, dots + address.slice(-33), 'the second line is full and ends with the end of the address');
+}
+panel.address = '';
+assert.equal(panel.statusValue(1), '-');
 """)
 
 

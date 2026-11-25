@@ -153,14 +153,21 @@ def compare_agent_bundle(
     }
     if not installed_version or not available_version:
         return AgentUpdateState(state=UPDATE_STATE_UNKNOWN, reason="version_missing", **common)
-    if installed_api_version and available_api_version and installed_api_version != available_api_version:
+    # An agent with an older API updates itself like an older version: its
+    # maintenance routes install the bundle. A newer or unreadable API cannot.
+    api_older = self_update_supported and _api_older(installed_api_version, available_api_version)
+    if (
+        installed_api_version and available_api_version
+        and installed_api_version != available_api_version and not api_older
+    ):
         return AgentUpdateState(
             state=UPDATE_STATE_INCOMPATIBLE,
             reason="api_version_mismatch",
             **common,
         )
     if (
-        installed_version == available_version
+        not api_older
+        and installed_version == available_version
         and not payload_bootstrap_pending
         and not qml_patch_pending
         and (
@@ -184,7 +191,7 @@ def compare_agent_bundle(
             reason="payload_bootstrap_pending",
             **common,
         )
-    if installed_version != available_version:
+    if installed_version != available_version or api_older:
         return AgentUpdateState(
             state=UPDATE_STATE_UPDATE_AVAILABLE,
             reason="version_mismatch",
@@ -209,6 +216,18 @@ def compare_agent_bundle(
             **common,
         )
     return AgentUpdateState(state=UPDATE_STATE_UP_TO_DATE, reason=DOMAIN, **common)
+
+
+def _api_version(value: str) -> tuple[int, ...] | None:
+    parts = value.split(".")
+    return tuple(int(part) for part in parts) if all(part.isdigit() for part in parts) else None
+
+
+def _api_older(installed: str, available: str) -> bool:
+    """True when both API versions are readable and the installed one is older."""
+
+    old, new = _api_version(installed), _api_version(available)
+    return old is not None and new is not None and old < new
 
 
 def agent_update_repair_placeholders(

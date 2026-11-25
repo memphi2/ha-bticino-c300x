@@ -186,7 +186,7 @@ def test_compare_agent_bundle_detects_version_and_api_metadata_problems() -> Non
     api_mismatch = compare_agent_bundle(
         {
             "version": "0.3.1",
-            "api_version": "1",
+            "api_version": "3",
             "agent": {"self_update_supported": True},
         },
         {"agent_version": "0.3.1", "api_version": "2", "bundle_hash": "sha256:abc"},
@@ -742,3 +742,26 @@ def test_packaged_bundle_names_the_api_the_agent_reports(monkeypatch):
     bundle = {"agent_version": version, "api_version": stager.AGENT_API_VERSION,
               "bundle_hash": "sha256:same", "update_file_set_version": stager.AGENT_UPDATE_FILE_SET_VERSION}
     assert compare_agent_bundle(agent, bundle).state == UPDATE_STATE_UP_TO_DATE
+
+
+@pytest.mark.parametrize(("installed_api", "self_update", "version", "expected", "reason"), [
+    # An older API is an update like an older version: the old agent installs
+    # the bundle through its maintenance routes (2.x/3.0.x API 1 -> 3.1.0 API 2).
+    ("1", True, "3.0.0", UPDATE_STATE_UPDATE_AVAILABLE, "version_mismatch"),
+    ("1", True, "3.1.0", UPDATE_STATE_UPDATE_AVAILABLE, "version_mismatch"),
+    ("1", False, "3.0.0", UPDATE_STATE_INCOMPATIBLE, "api_version_mismatch"),
+    ("3", True, "3.0.0", UPDATE_STATE_INCOMPATIBLE, "api_version_mismatch"),
+    ("x", True, "3.0.0", UPDATE_STATE_INCOMPATIBLE, "api_version_mismatch"),
+], ids=["older api", "older api same version", "older api without self-update", "newer api", "unreadable api"])
+def test_an_older_agent_api_is_a_self_update(installed_api, self_update, version, expected, reason) -> None:
+    state = compare_agent_bundle(
+        {"version": version, "api_version": installed_api,
+         "agent": {"bundle_hash": "sha256:old", "self_update_supported": self_update,
+                   "self_update_file_set_version": 7}},
+        {"agent_version": "3.1.0", "api_version": "2", "bundle_hash": "sha256:new",
+         "update_file_set_version": 7},
+    )
+
+    assert (state.state, state.reason) == (expected, reason)
+    assert state.update_required
+    assert state.self_update_repair_supported is (expected == UPDATE_STATE_UPDATE_AVAILABLE)

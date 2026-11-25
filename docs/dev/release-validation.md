@@ -292,7 +292,8 @@ the optional firmware-specific tests.
 
 The staged manifest (`update_file_set_version`) and the agent capability
 (`self_update_file_set_version`) must advertise the same update file set, today
-6. An installed updater with a lower file set cannot install the new paths; the
+7 (set 7 added the C100X display adapter `qml/c100x_bundle.sh`, which only a
+C100X installs). An installed updater with a lower file set cannot install the new paths; the
 HA Repair then runs its second pass before the active display is patched or
 reloaded.
 

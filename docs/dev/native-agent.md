@@ -440,8 +440,10 @@ Firmware `3.0.6` fails this check and is supported with its own display path:
   same binary runs there; `armhf-abi-check` checks it against the `3.0.6` root
   file system too.
 - Its display is Qt 5 with the QML built into the vendor program `BtClass` as
-  Qt resources. `qml_patch.sh` recognises it by `/usr/lib/libQt5Core.so.5` and
-  then works on a copy in `display-qt5/` under the agent folder: the agent
+  Qt resources. `qml_patch.sh` recognises it in its device-profile block
+  (display kind `qt5_rcc`: `/usr/lib/libQt5Core.so.5` is there and the C100X
+  display program is not; the same block stands in `remove_agent.sh` and
+  matches `device_detect.c`) and then works on a copy in `display-qt5/` under the agent folder: the agent
   reads the seven display files the patch changes out of `BtClass`
   (`--display-qt5 extract`: at the known table offsets of the 3.0.6 build, for
   another build where exactly one resource tree with those files is found), the

@@ -42,12 +42,26 @@ def _text(limit: int) -> Callable[[Any], str]:
     return validate
 
 
+def _shortened_text(limit: int) -> Callable[[Any], str]:
+    """Cut a long text to the display limit and mark the cut with an ellipsis."""
+
+    def validate(value: Any) -> str:
+        if not isinstance(value, str) or not value.strip():
+            raise vol.Invalid(f"expected nonempty text up to {limit} characters")
+        text = value.strip()
+        if len(text) <= limit:
+            return text
+        return text[: limit - 1].rstrip() + "\u2026"
+
+    return validate
+
+
 SHOW_SCHEMA = vol.Schema(
     {
         vol.Optional("entry_id"): str,
         vol.Required("notification_id"): notification_id,
         vol.Required("title"): _text(80),
-        vol.Required("message"): _text(500),
+        vol.Required("message"): _shortened_text(500),
         vol.Optional("icon", default="info"): vol.In({"info", "warning", "calendar"}),
         vol.Optional("priority", default="normal"): vol.In(set(_PRIORITY)),
         vol.Optional("expires_in", default=3600): vol.All(

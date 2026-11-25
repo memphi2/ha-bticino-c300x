@@ -435,7 +435,7 @@ data:
 | --- | --- |
 | `notification_id` | Required. 1 to 64 lowercase letters, digits, `_` or `-`. The same ID replaces a notice. |
 | `title` | Required, up to 80 characters. |
-| `message` | Required, up to 500 characters. |
+| `message` | Required. A longer text is cut to 500 characters and ends with "…". |
 | `icon` | `info` (default), `warning` or `calendar`. |
 | `priority` | `normal` (default), `important` or `urgent`. |
 | `expires_in` | Seconds, 1 to 604800 (7 days); default 3600. |

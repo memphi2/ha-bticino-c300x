@@ -496,7 +496,7 @@ def test_invalid_data_has_no_storage_or_transport_effect(tmp_path, monkeypatch, 
     asyncio.run(run())
 
 
-@pytest.mark.parametrize("bad", [{"title": ""}, {"title": " "}, {"title": "x" * 81}, {"message": ""}, {"message": "x" * 501}, {"target": ["another"]}])
+@pytest.mark.parametrize("bad", [{"title": ""}, {"title": " "}, {"title": "x" * 81}, {"message": ""}, {"target": ["another"]}])
 def test_invalid_standard_fields(tmp_path, monkeypatch, bad):
     async def run():
         async with notify_context(tmp_path, monkeypatch) as (hass, entry):
@@ -504,6 +504,16 @@ def test_invalid_standard_fields(tmp_path, monkeypatch, bad):
                 await send(hass, entry, **bad)
             assert entry.runtime_data.display_notifications is None
             entry.runtime_data.api.async_send_display_alert.assert_not_awaited()
+    asyncio.run(run())
+
+
+def test_a_long_message_reaches_the_display_shortened(tmp_path, monkeypatch):
+    async def run():
+        async with notify_context(tmp_path, monkeypatch) as (hass, entry):
+            await send(hass, entry, message="m" * 585)
+            payload = entry.runtime_data.api.async_send_display_alert.call_args.args[0]
+            assert payload["message"] == "m" * 499 + "\u2026"
+            assert notification_payload(entry)[0]["message"] == payload["message"]
     asyncio.run(run())
 
 

@@ -317,8 +317,13 @@ def test_a_sigterm_during_the_recovery_restart_waits_for_its_request_on_qt5(devi
         C300X_QML_RELOAD_GUI="1", C300X_QML_GUI_FLOCK=str(noflock), C300X_QML_GUI_BUDGET_SECONDS="60"),
         text=True, start_new_session=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     started = time.monotonic()
-    _, stderr = signal_when(process, lambda: requests.is_dir() and any(requests.iterdir()), signal.SIGTERM)
+
+    def filed():
+        # A request is filed once renamed from its .tmp; the worker skips a .tmp.
+        return [p for p in requests.iterdir() if not p.name.endswith(".tmp")] if requests.is_dir() else []
+
+    _, stderr = signal_when(process, lambda: bool(filed()), signal.SIGTERM)
     assert process.returncode == 131, stderr
     assert time.monotonic() - started < 15
-    assert len(list(requests.iterdir())) == 1
+    assert len(filed()) == 1
     assert not list(device.gui.glob(".c300x-qml-transaction.*"))

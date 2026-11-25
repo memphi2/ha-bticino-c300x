@@ -1404,7 +1404,21 @@
         "name": "Home Assistant media user"
       },
       "stream_snapshots": {
-        "name": "Save images"
+        "name": "Save images",
+        "state_attributes": {
+          "last_failure": {
+            "name": "Last failure",
+            "state": {
+              "snapshot_unavailable": "Display picture could not be read",
+              "snapshot_throttled": "Requested too soon after the previous image",
+              "invalid_snapshot_size": "Station rejected the image size",
+              "invalid_image": "Station delivered an invalid image",
+              "agent_unreachable": "Device agent not reachable",
+              "agent_error": "Device agent reported an error",
+              "save_failed": "Home Assistant could not save the image"
+            }
+          }
+        }
       }
     }
   },

@@ -103,7 +103,12 @@ Rectangle {
             report("switch")
             view.contentY = Math.max(0, view.contentHeight - view.height)
             report("end")
-            if (!@END@) view.contentY = 0
+            if (@END@) return
+            var message = tab.status
+            tab.status = ""
+            report("cleared")
+            tab.status = message
+            view.contentY = 0
             console.log("C300X_TAB_QT4_DONE")
         }
     }

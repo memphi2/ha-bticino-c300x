@@ -1,8 +1,9 @@
 #include "c300x_agent.h"
 #include "audio_codec.h"
 #include "camera_quality.h"
-#include "camera_running.h"
 #include "device_routing.h"
+#include "display_qt5.h"
+#include "camera_running.h"
 #include "display_touch.h"
 #include "https_client.h"
 #include "media_geometry_patch.h"
@@ -18,6 +19,7 @@ static void print_usage(const char *program)
         stderr,
         "Usage: %s [--config PATH] [--check-config] [--diagnose-startup]"
         " [--audio-codec status|apply|restore] [--display-touch status|apply|restore]"
+        " [--display-qt5 extract DIR REL...|pack ROOT OUT REL...|overlay PATH]"
         " [--restore-media-patches] [--version]\n",
         program
     );
@@ -150,6 +152,9 @@ int main(int argc, char **argv)
     struct c300x_config config;
     char error[256] = {0};
 
+    if (argc >= 2 && strcmp(argv[1], "--display-qt5") == 0) {
+        return c300x_display_qt5_cli(argc - 2, argv + 2);
+    }
     for (int index = 1; index < argc; index++) {
         if (strcmp(argv[index], "--config") == 0) {
             if (index + 1 >= argc) {

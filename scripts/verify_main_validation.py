@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Require fresh, complete canonical main-push checks for the exact release SHA."""
+"""Require fresh, complete canonical branch-push checks for the exact release SHA."""
 
 from __future__ import annotations
 
@@ -21,6 +21,7 @@ from validation_evidence import (
     ROOT,
     TARGETS,
     identity,
+    release_branches,
     require,
     validate_payload,
     workflow_digest,
@@ -72,12 +73,12 @@ def timestamp(value: str) -> datetime:
     return result
 
 
-def check_run(run: dict, workflow: dict, repository: dict, sha: str, now: datetime) -> None:
+def check_run(run: dict, workflow: dict, repository: dict, sha: str, now: datetime, branch: str = "main") -> None:
     require(workflow["state"] == "active", "Required workflow disabled")
     require(run["workflow_id"] == workflow["id"] and run["path"] == workflow["path"], "Foreign workflow identity")
     for key in ("repository", "head_repository"):
         require(run[key]["id"] == repository["id"] and run[key]["full_name"] == repository["full_name"], "Foreign run repository")
-    require(run["head_sha"] == sha and run["head_branch"] == "main" and run["event"] == "push", "Not an exact-SHA main push")
+    require(run["head_sha"] == sha and run["head_branch"] == branch and run["event"] == "push", "Not an exact-SHA canonical branch push")
     require(type(run["id"]) is int and run["id"] > 0 and type(run["run_attempt"]) is int and run["run_attempt"] > 0, "Invalid run identity")
     if run["status"] != "completed":
         raise Pending(f"Workflow {workflow['path']} is {run['status']}")
@@ -100,7 +101,7 @@ def artifact_payload(artifact: dict, archive: bytes, expected: dict, target: str
     binding = artifact["workflow_run"]
     for key, value in {
         "id": expected["run_id"], "repository_id": expected["repository_id"],
-        "head_repository_id": expected["repository_id"], "head_sha": expected["source_sha"], "head_branch": "main",
+        "head_repository_id": expected["repository_id"], "head_sha": expected["source_sha"], "head_branch": expected["ref"].removeprefix("refs/heads/"),
     }.items():
         require(binding[key] == value, "Foreign artifact run")
     require(0 < len(archive) <= MAX_ARCHIVE and len(archive) == artifact["size_in_bytes"], "Unexpected artifact size")
@@ -112,39 +113,49 @@ def artifact_payload(artifact: dict, archive: bytes, expected: dict, target: str
     return validate_payload(payload, expected, target)
 
 
-def check_refs(api: GitHub, tag: str, sha: str) -> None:
-    require(api.get("/branches/main")["commit"]["sha"] == sha, "Release is not current main HEAD")
+def check_refs(api: GitHub, tag: str, sha: str) -> str:
+    branch = None
+    for candidate in release_branches(tag):
+        refs = api.get(f"/git/matching-refs/heads/{candidate}")
+        matches = [ref for ref in refs if ref["ref"] == f"refs/heads/{candidate}"]
+        require(len(matches) <= 1, "Conflicting canonical branch references")
+        if matches:
+            require(matches[0]["object"]["type"] == "commit", "Canonical branch must reference a commit")
+            if matches[0]["object"]["sha"] == sha:
+                branch = candidate
+                break
+    require(branch is not None, "Release is not current authorized branch HEAD")
     obj = api.get(f"/git/ref/tags/{quote(tag, safe='')}")["object"]
     for _ in range(5):
         if obj["type"] == "commit":
-            require(obj["sha"] == sha, "Release tag differs from checkout/main")
-            return
+            require(obj["sha"] == sha, "Release tag differs from checkout/branch")
+            return branch
         require(obj["type"] == "tag", "Unexpected release tag object")
         obj = api.get(f"/git/tags/{obj['sha']}")["object"]
     raise ValueError("Excessively nested release tag")
 
 
-def select_run(api: GitHub, filename: str, sha: str) -> dict:
-    runs = api.listing(f"/actions/workflows/{filename}/runs?branch=main&event=push&head_sha={sha}", "workflow_runs")
+def select_run(api: GitHub, filename: str, sha: str, branch: str = "main") -> dict:
+    runs = api.listing(f"/actions/workflows/{filename}/runs?branch={branch}&event=push&head_sha={sha}", "workflow_runs")
     if not runs:
-        raise Pending(f"Missing canonical {filename} main push for {sha}")
+        raise Pending(f"Missing canonical {filename} {branch} push for {sha}")
     # Never fall back to an older successful run when a newer run fails or waits.
     return max(runs, key=lambda run: run["id"])
 
 
 def verify(api: GitHub, repository_name: str, tag: str, sha: str) -> dict:
     now = datetime.now(UTC)
-    check_refs(api, tag, sha)
+    branch = check_refs(api, tag, sha)
     repository = api.get("")
     require(repository["full_name"] == repository_name and repository["default_branch"] == "main", "Noncanonical repository")
-    result = {"schema": 1, "repository": repository_name, "repository_id": repository["id"], "source_sha": sha, "homeassistant": {}, "runs": {}}
+    result = {"schema": 1, "repository": repository_name, "repository_id": repository["id"], "source_sha": sha, "source_branch": branch, "homeassistant": {}, "runs": {}}
     snapshots = {}
     for filename in REQUIRED_JOBS:
         workflow = api.get(f"/actions/workflows/{filename}")
         path = f".github/workflows/{filename}"
         require(workflow["path"] == path, "Unexpected workflow definition")
-        run = select_run(api, filename, sha)
-        check_run(run, workflow, repository, sha, now)
+        run = select_run(api, filename, sha, branch)
+        check_run(run, workflow, repository, sha, now, branch)
         jobs = api.listing(f"/actions/runs/{run['id']}/attempts/{run['run_attempt']}/jobs", "jobs")
         check_jobs(jobs, run, filename)
         record = {
@@ -154,7 +165,7 @@ def verify(api: GitHub, repository_name: str, tag: str, sha: str) -> dict:
         }
         if filename == "validate.yml":
             artifacts = api.listing(f"/actions/runs/{run['id']}/artifacts", "artifacts")
-            expected = identity(repository_name, repository["id"], sha, run["id"], run["run_attempt"])
+            expected = identity(repository_name, repository["id"], sha, run["id"], run["run_attempt"], branch)
             for target in TARGETS:
                 name = f"ha-validation-{target}-{run['run_attempt']}"
                 matches = [artifact for artifact in artifacts if artifact["name"] == name]
@@ -168,9 +179,9 @@ def verify(api: GitHub, repository_name: str, tag: str, sha: str) -> dict:
         snapshots[filename] = run
     # Re-read after downloads: reject a concurrent rerun or replacement run.
     for filename, previous in snapshots.items():
-        current = select_run(api, filename, sha)
+        current = select_run(api, filename, sha, branch)
         require(all(current[key] == previous[key] for key in ("id", "run_attempt", "status", "conclusion", "updated_at")), "Workflow changed during evidence verification")
-    check_refs(api, tag, sha)
+    require(check_refs(api, tag, sha) == branch, "Canonical release branch changed during verification")
     return result
 
 

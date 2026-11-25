@@ -1,0 +1,84 @@
+import QtQuick 2.7
+Item {
+    id: harness
+    width: 800; height: 480
+    property int step: 0
+    QtObject { id: screenStateObj; property int state: 3; property int screensaverInterval: 60; signal stateChangedInt(int old_state, int new_state); function simulateClick() {} function disableState(s) {} function enableState(s) {} }
+    QtObject { id: audioStateObj; property int state: 1; function enableState(s) {} function disableState(s) {} function isStateEnabled(s) { return false } }
+    QtObject { id: techObj; property bool powered: false; property bool connected: false }
+    QtObject { id: routeObj; property bool connected: true; property string state: "online" }
+    QtObject { id: nmObj; property var defaultRoute: routeObj; property string state: "online"; property bool offlineMode: false; property var servicesList: []; property bool servicesEnabled: true; property bool technologiesEnabled: true; function getTechnology(t) { return techObj } function setOfflineMode(v) {} }
+    property var networkManager: nmObj
+    QtObject { id: guiSettingsObj; property bool answeringMachineVisible: true; property bool ntp: false; property bool professionalStudio: false; property string town: "" }
+    QtObject { id: mqttObj; function onNetworkChange() {} }
+    QtObject { id: fwObj; property int connStatus: 0; signal dateCertChanged(); function requestDateCert() {} }
+    QtObject { id: myHomeModels; property var mediaLinks: null; property var homepageLinks: null }
+    QtObject { id: netatmoCameras; property int count: 0 }
+    QtObject { id: intercomPageModel; property int count: 1 }
+    QtObject { id: cameraPageModel; property int count: 1 }
+    QtObject { id: actuatorPageModel; property int count: 1 }
+    QtObject { id: informationPage }
+    QtObject { id: settingsPage }
+    QtObject { id: wiFiSettings }
+    QtObject { id: alarmPage; objectName: "alarmPage" }
+    QtObject { id: haPage; objectName: "haPage" }
+    QtObject { id: tabView; property var current: null; function activateTab(t) { console.log("CHECK activated " + t.objectName) } }
+    QtObject { id: global; property var guiSettings: guiSettingsObj; property var mNetworkManager: nmObj; property var mMqttWorker: mqttObj; property bool advancedConfiguration: true; property bool answeringMachine: true; property var assaabloyService: ({}); property string device: "C300X"; property bool ntp: false; property bool wait: false; property bool beepEnabled: true; property bool guiReadyToReceiveCalls: true; property var screenState: screenStateObj; property var audioState: audioStateObj; signal netatmoStatusChanged(); function firmwareVersion() { return fwObj } function getConfigFile() { return "" } function getCountWifiFailures() { return 0 } function getNetworkService() { return null } function relaunchConnman() {} function select(a) {} function sendGrayLog(a) {} function setCountWifiFailures(a) {} function setWaitIconStatus(a) {} function setWifiAverage(a) {} function setWifiEnabled(a) {} function beep() {} }
+    QtObject { id: trsl; property string language: "de"; property string empty: "" }
+    QtObject { id: c300xDisplayPreferences; property bool feedbackEnabled: true; property bool ready: true; property bool busy: false; property string label: "Farbige Rückmeldung"; property string uiBaseUrl: "http://127.0.0.1:8090"; property string bridgeProblem: ""; property bool bridgeShown: true; property bool openIntegration: false; function load() {} function setFeedbackEnabled(v) {} }
+    function find(node, name) {
+        if (node.objectName === name) return node
+        for (var i = 0; i < node.children.length; i++) {
+            var found = find(node.children[i], name)
+            if (found) return found
+        }
+        return null
+    }
+    function emptyModels(node) {
+        if (node.objectName === "objectModel" || node.objectName === "mediaModel") node.count = 0
+        for (var i = 0; i < node.children.length; i++) emptyModels(node.children[i])
+    }
+    function navigation(node) {
+        for (var i = 0; i < node.children.length; i++) {
+            var c = node.children[i]
+            if (c.selected !== undefined && c.current !== undefined && c.visible) return c
+            var found = navigation(c)
+            if (found) return found
+        }
+        return null
+    }
+    function pictureReady(node, part) {
+        if (node.status !== undefined && node.sourceSize !== undefined && String(node.source).indexOf(part) >= 0)
+            return node.status === Image.Ready && node.visible
+        for (var i = 0; i < node.children.length; i++)
+            if (pictureReady(node.children[i], part)) return true
+        return false
+    }
+    function onScreen(item) {
+        var corner = item.mapToItem(harness, 0, 0)
+        return item.visible && corner.x >= 0 && corner.y >= 0 && corner.x + item.width <= harness.width && corner.y + item.height <= harness.height
+    }
+    function shot(name) { if ("@SHOTS@" !== "") harness.grabToImage(function(r) { r.saveToFile("@SHOTS@/" + name + ".png") }) }
+    function run(n, page) {
+@STEPS@
+        return false
+    }
+    Loader {
+        id: loader
+        anchors.fill: parent
+        onLoaded: if (String(source).indexOf("HomePage") >= 0) { item.intercomPageModel = intercomPageModel; item.cameraPageModel = cameraPageModel; item.actuatorPageModel = actuatorPageModel }
+        source: "@PAGE@"
+        onStatusChanged: if (status === Loader.Error || status === Loader.Ready) {
+            console.log("CHECK loaded " + (status === Loader.Ready))
+            if (status === Loader.Ready && item.aboutToShow) item.aboutToShow()
+            ticker.start()
+        }
+    }
+    Timer {
+        id: ticker
+        interval: 1500
+        repeat: true
+        onTriggered: if (!harness.run(harness.step++, loader.item)) { stop(); quitter.start() }
+    }
+    Timer { id: quitter; interval: 300; onTriggered: Qt.quit() }
+}

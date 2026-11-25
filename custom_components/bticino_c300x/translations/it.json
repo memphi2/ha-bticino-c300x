@@ -130,7 +130,7 @@
           "actions_json": "Azioni che il display e le sue notifiche possono eseguire, in JSON: una voce per azione con domain e service, facoltativamente target e data. Lascia vuoto se non ne usi.",
           "dashboard_prevent_return": "Attivo: le pagine Home Assistant e Allarme restano aperte quando lo schermo va in standby. Disattivo: il display torna alla pagina iniziale.",
           "dashboard_navigation": "Come il display cambia pagina. La barra dei preferiti mostra le prime quattro pagine come pulsanti lungo il bordo inferiore. Con più di quattro pagine, il quarto pulsante diventa «Altro» e apre l'elenco delle altre pagine. L'ordine segue le posizioni delle pagine.",
-          "dashboard_dynamic_homepage": "Dove stanno i pulsanti Allarme e Home Assistant nella pagina iniziale del C300X. Di fabbrica: ogni pulsante compare solo quando ha qualcosa da aprire e prende posto tra i pulsanti originali, anche sotto quando la fila è piena. Fissi affiancati: entrambi tengono due posti fissi uno accanto all'altro; un pulsante senza niente da aprire lascia vuoto il suo posto. Una modifica riapplica il patch display e riavvia il display una volta."
+          "dashboard_dynamic_homepage": "Dove stanno i pulsanti Allarme e Home Assistant nella pagina iniziale del C300X. Vista di fabbrica: ogni pulsante compare solo quando ha qualcosa da aprire e prende posto tra i pulsanti originali, anche sotto quando la fila è piena. Fissi affiancati: entrambi tengono due posti fissi uno accanto all'altro; un pulsante senza niente da aprire lascia vuoto il suo posto. Una modifica riapplica il patch display e riavvia il display una volta."
         }
       },
       "user_dashboard_entity_display": {
@@ -243,7 +243,7 @@
           "actions_json": "Azioni che il display e le sue notifiche possono eseguire, in JSON: una voce per azione con domain e service, facoltativamente target e data. Lascia vuoto se non ne usi.",
           "dashboard_prevent_return": "Attivo: le pagine Home Assistant e Allarme restano aperte quando lo schermo va in standby. Disattivo: il display torna alla pagina iniziale.",
           "dashboard_navigation": "Come il display cambia pagina. La barra dei preferiti mostra le prime quattro pagine come pulsanti lungo il bordo inferiore. Con più di quattro pagine, il quarto pulsante diventa «Altro» e apre l'elenco delle altre pagine. L'ordine segue le posizioni delle pagine.",
-          "dashboard_dynamic_homepage": "Dove stanno i pulsanti Allarme e Home Assistant nella pagina iniziale del C300X. Di fabbrica: ogni pulsante compare solo quando ha qualcosa da aprire e prende posto tra i pulsanti originali, anche sotto quando la fila è piena. Fissi affiancati: entrambi tengono due posti fissi uno accanto all'altro; un pulsante senza niente da aprire lascia vuoto il suo posto. Una modifica riapplica il patch display e riavvia il display una volta."
+          "dashboard_dynamic_homepage": "Dove stanno i pulsanti Allarme e Home Assistant nella pagina iniziale del C300X. Vista di fabbrica: ogni pulsante compare solo quando ha qualcosa da aprire e prende posto tra i pulsanti originali, anche sotto quando la fila è piena. Fissi affiancati: entrambi tengono due posti fissi uno accanto all'altro; un pulsante senza niente da aprire lascia vuoto il suo posto. Una modifica riapplica il patch display e riavvia il display una volta."
         }
       },
       "reconfigure_dashboard_entity_display": {
@@ -672,6 +672,7 @@
     "error": {
       "agent_bundle_missing": "Il bundle ARMHF dell'agent non e incluso. Compila/prepara il bundle di release prima di usare l'installer.",
       "device_install_failed": "Installazione SSH non riuscita. Controlla l'accesso SSH e riprova.",
+      "device_display_timeout": "I file del display non sono stati scritti entro il tempo limite; al dispositivo è stato chiesto di ripristinare i file precedenti. Controlla che il display funzioni e riprova.",
       "device_install_verify_failed": "L'installazione è terminata, ma l'agent nativo non risponde con la chiave di accesso generata.",
       "invalid_agent_port": "Inserisci una porta valida per il device agent.",
       "invalid_agent_host": "Inserisci l'host del device agent.",
@@ -842,7 +843,7 @@
           "actions_json": "Azioni che il display e le sue notifiche possono eseguire, in JSON: una voce per azione con domain e service, facoltativamente target e data. Lascia vuoto se non ne usi.",
           "dashboard_prevent_return": "Attivo: le pagine Home Assistant e Allarme restano aperte quando lo schermo va in standby. Disattivo: il display torna alla pagina iniziale.",
           "dashboard_navigation": "Come il display cambia pagina. La barra dei preferiti mostra le prime quattro pagine come pulsanti lungo il bordo inferiore. Con più di quattro pagine, il quarto pulsante diventa «Altro» e apre l'elenco delle altre pagine. L'ordine segue le posizioni delle pagine.",
-          "dashboard_dynamic_homepage": "Dove stanno i pulsanti Allarme e Home Assistant nella pagina iniziale del C300X. Di fabbrica: ogni pulsante compare solo quando ha qualcosa da aprire e prende posto tra i pulsanti originali, anche sotto quando la fila è piena. Fissi affiancati: entrambi tengono due posti fissi uno accanto all'altro; un pulsante senza niente da aprire lascia vuoto il suo posto. Una modifica riapplica il patch display e riavvia il display una volta."
+          "dashboard_dynamic_homepage": "Dove stanno i pulsanti Allarme e Home Assistant nella pagina iniziale del C300X. Vista di fabbrica: ogni pulsante compare solo quando ha qualcosa da aprire e prende posto tra i pulsanti originali, anche sotto quando la fila è piena. Fissi affiancati: entrambi tengono due posti fissi uno accanto all'altro; un pulsante senza niente da aprire lascia vuoto il suo posto. Una modifica riapplica il patch display e riavvia il display una volta."
         }
       },
       "dashboard_entity_display": {
@@ -1404,7 +1405,21 @@
         "name": "Patch utente Home Assistant"
       },
       "stream_snapshots": {
-        "name": "Salva immagini"
+        "name": "Salva immagini",
+        "state_attributes": {
+          "last_failure": {
+            "name": "Ultimo errore",
+            "state": {
+              "snapshot_unavailable": "Impossibile leggere l'immagine del display",
+              "snapshot_throttled": "Richiesta troppo presto dopo l'immagine precedente",
+              "invalid_snapshot_size": "Il dispositivo ha rifiutato la dimensione dell'immagine",
+              "invalid_image": "Il dispositivo ha fornito un'immagine non valida",
+              "agent_unreachable": "Device agent non raggiungibile",
+              "agent_error": "Il device agent ha segnalato un errore",
+              "save_failed": "Home Assistant non ha potuto salvare l'immagine"
+            }
+          }
+        }
       }
     }
   },
@@ -1518,6 +1533,7 @@
         },
         "error": {
           "ssh_install_failed": "Installazione di riparazione SSH non riuscita. Controlla l'accesso SSH e riprova.",
+          "device_display_timeout": "I file del display non sono stati scritti entro il tempo limite; al dispositivo è stato chiesto di ripristinare i file precedenti. Controlla che il display funzioni e riprova.",
           "update_failed": "Aggiornamento del device agent non riuscito. Verifica che l'accesso di manutenzione sia attivo e riprova.",
           "update_root_already_writable": "L'aggiornamento è stato rifiutato prima dell'applicazione perché il filesystem radice (/) era già scrivibile. Se in precedenza hai rimontato manualmente / in scrittura, riavvia normalmente il dispositivo, poi ripeti questa riparazione. Altrimenti verifica perché / è scrivibile prima di riprovare.",
           "update_root_readonly_failed": "L'aggiornamento non è riuscito a riportare il filesystem radice (/) in sola lettura. Lo stato finale del dispositivo è incerto; il ripristino non è confermato. Conserva i file di recupero e verifica l'agente e il filesystem prima di un altro aggiornamento.",
@@ -1542,6 +1558,10 @@
       "title": "Watcher eventi display C300X protetto",
       "description": "{entry_title} ha rilevato troppi watcher eventi display C300X simultanei. Il device agent ha rifiutato il watcher aggiuntivo per evitare un ciclo di polling locale che può sovraccaricare il C300X. Watcher attivi: {waiters}/{capacity}. Watcher rifiutati: {overflows}. Ricarica la GUI display C300X dall'integrazione se dashboard o memo sul display non si aggiornano più, poi aggiorna la diagnostica."
     },
+    "device_display_unsupported": {
+      "title": "Le pagine del display C300X non sono disponibili su questo dispositivo",
+      "description": "{entry_title}: il device agent non conosce il programma del display o lo script di avvio del display di questo dispositivo ({reason}). Ha lasciato il display nello stato originale e funziona senza le pagine del display: il dispositivo non mostra pagine o pulsanti di Home Assistant e la patch display resta disattivata. Le altre funzioni del device agent funzionano come prima delle pagine del display per il firmware 3.0.x. Applicare di nuovo la patch display controlla il dispositivo ancora una volta."
+    },
     "device_core_qml_hook_required": {
       "title": "Hook media core C300X mancante",
       "fix_flow": {
@@ -1557,7 +1577,28 @@
         },
         "abort": {
           "entry_not_loaded": "La voce BTicino C300X non è caricata.",
-          "core_patch_unsupported": "Il device agent C300X installato non supporta l'applicazione dell'hook media core."
+          "core_patch_unsupported": "Il device agent C300X installato non supporta l'applicazione dell'hook media core.",
+          "display_unsupported": "Il device agent non conosce il display di questo dispositivo; funziona senza le pagine del display e non c'è alcun hook media core da applicare."
+        }
+      }
+    },
+    "device_display_followup_pending": {
+      "title": "Le pagine del display C300X devono ancora essere applicate dopo l'aggiornamento",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Applica di nuovo le pagine del display C300X",
+            "description": "{entry_title}: l'aggiornamento o l'installazione del device agent è completato, ma i passaggi del display successivi non sono riusciti sul display del dispositivo. Le pagine del display del nuovo device agent non sono ancora confermate; il dispositivo potrebbe mostrare ancora le pagine del device agent precedente o il display originale.\n\nHome Assistant esegue i passaggi del display lasciati in sospeso dall'aggiornamento: l'hook media core, le pagine del display se la patch display è attiva e un riavvio del display del dispositivo. Durante la correzione il display si spegne e si riavvia; può richiedere alcuni minuti."
+          }
+        },
+        "error": {
+          "core_patch_failed": "I passaggi del display non sono riusciti. Verifica che il dispositivo sia raggiungibile e che il suo display funzioni, poi riprova.",
+          "core_patch_verify_failed": "I passaggi del display sono stati eseguiti, ma il device agent non ha confermato l'hook media core."
+        },
+        "abort": {
+          "entry_not_loaded": "La voce BTicino C300X non è caricata.",
+          "core_patch_unsupported": "Il device agent C300X installato non supporta i passaggi del display.",
+          "display_unsupported": "Il device agent non conosce il display di questo dispositivo; funziona senza le pagine del display e non ci sono passaggi del display da eseguire."
         }
       }
     },
@@ -1743,7 +1784,7 @@
     },
     "dashboard_dynamic_homepage": {
       "options": {
-        "stock": "Di fabbrica (se servono, anche uno sotto l'altro)",
+        "stock": "Vista di fabbrica (se servono, anche uno sotto l'altro)",
         "side_by_side": "Fissi affiancati"
       }
     },
@@ -1752,7 +1793,9 @@
         "patched": "applicato",
         "original": "non applicato (file originali)",
         "unknown": "sconosciuto",
-        "unavailable": "non disponibile"
+        "unavailable": "non disponibile",
+        "display_failed": "applicato, ma il display è partito nello stato originale",
+        "display_unsupported": "non disponibile per il display di questo dispositivo"
       }
     }
   },

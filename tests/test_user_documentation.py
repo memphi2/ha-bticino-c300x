@@ -101,15 +101,18 @@ def test_quickstart_names_where_rooting_is_described_as_a_third_party_project():
     requirements = " ".join(section("quickstart.md", "Requirements").split())
     assert "This project provides no firmware images" in requirements
     assert "rooting instructions" in requirements
-    # The one link out of the requirements goes to a rooting guide of others.
+    # The links out of the requirements go to rooting guides of others, each
+    # marked as a third-party project used at the reader's own risk.
     links = re.findall(r"\]\((https?://[^)]+)\)", requirements)
-    assert len(links) == 1
-    assert links[0].startswith("https://github.com/") and "ha-bticino-c300x" not in links[0]
-    sentence = next(part for part in requirements.split(". ") if links[0] in part)
-    assert sentence.startswith("Rooting is described by the community project [")
+    assert len(links) == 2 and links[1] == "https://github.com/davemajor/c300x-root"
+    assert all(link.startswith("https://github.com/") and "ha-bticino-c300x" not in link for link in links)
+    sentences = [next(part for part in requirements.split(". ") if link in part) for link in links]
+    assert sentences[0].startswith("Rooting is described by the community project [")
     for phrase in ("third-party project", "not part of this project", "at your own risk",
                    "flashing a station can brick it"):
-        assert phrase in sentence, phrase
+        assert phrase in sentences[0], phrase
+    for phrase in ("third-party project", "at your own risk", "can destroy the station"):
+        assert phrase in sentences[1], phrase
 
 
 def test_removal_docs_distinguish_entry_package_device_and_retained_data():
@@ -396,6 +399,26 @@ def test_the_api_lists_every_error_the_agent_update_answers_with():
     assert "missing, empty or only line breaks, unreadable or 8 KiB or larger" in row
 
 
+def test_the_label_write_is_documented_as_the_qml_write_job_it_is():
+    """The label apply/restore runs with the QML write deadline and grace
+    period; no part of the developer texts may still call it synchronous."""
+
+    label = (ROOT / "native_agent/src/device_user_label.c").read_text()
+    start = label.split("int c300x_label_job_start(", 1)[1].split("\n}", 1)[0]
+    assert "C300X_QML_WRITE_TIMEOUT_MS" in start and "C300X_QML_WRITE_TERM_GRACE_MS" in start
+    api = " ".join((ROOT / "native_agent/API.md").read_text().split())
+    architecture = " ".join((ROOT / "docs/dev/architecture.md").read_text().split())
+    for stale in (
+        "label apply/restore are **synchronous**", "without an execution deadline",
+        "block HTTP dispatch and graceful shutdown indefinitely",
+        "synchronous label transaction", "exit-status-only",
+        "| Label apply/restore | none",
+    ):
+        assert stale not in api and stale not in architecture, stale
+    assert "Label apply/restore is not: it is a QML write job" in api
+    assert "| Label apply/restore (QML write jobs, see below) | 30 s |" in architecture
+
+
 def test_every_display_call_follows_the_ui_port_as_the_api_says():
     api = (ROOT / "native_agent/API.md").read_text()
     listeners = api.split("## Listeners", 1)[1].split("\n## ", 1)[0]
@@ -507,3 +530,88 @@ def test_display_docs_name_the_home_page_button_layouts_as_the_form_does():
     row = next(line for line in reference.splitlines() if line.startswith("| Display > Display and Display patch |"))
     assert label in row
     assert "Changing the home page buttons applies it again and restarts the display once" in row
+
+
+def test_the_display_docs_name_the_notice_for_an_unknown_display():
+    strings = json.loads((ROOT / "custom_components/bticino_c300x/strings.json").read_text())
+    title = strings["issues"]["device_display_unsupported"]["title"]
+    qt5 = section("display.md", "Enable the Display Pages").split("### Display Patch on Firmware 3.0.6\n", 1)[1]
+    assert f"**{title}**" in qt5
+
+
+def test_picture_control_docs_say_tvp5150_may_need_the_ring_call_path():
+    guide = (DOCS / "user-guide.md").read_text(encoding="utf-8")
+    guide = guide.split("### Picture Controls\n", 1)[1].split("\n### ", 1)[0]
+    readme = next(line for line in (ROOT / "README.md").read_text(encoding="utf-8").splitlines()
+                  if line.startswith("| Picture controls |"))
+    for text in (guide.replace("\n  ", " "), readme):
+        assert "checked offline only" in text
+        assert "may only work during a Ring Call" in text
+
+
+def test_announcement_docs_name_each_stations_own_sound_files():
+    announcements = section("user-guide.md", "Speaker Announcements and TTS").replace("\n", " ")
+    assert "same sound parts" not in announcements
+    assert "each station's own sound files" in announcements
+
+
+def test_the_qt5_marker_is_named_as_the_trap_for_the_c100x_merge():
+    audit = (DOCS / "dev/firmware-3.0.6-display.md").read_text(encoding="utf-8")
+    trap = audit.split("## Known Trap: One Marker For Camera And Display\n", 1)[1].split("\n## ", 1)[0]
+    for name in ("libQt5Core.so.5", "camera_quality.c", "qml_patch.sh", "C100X"):
+        assert name in trap
+
+
+def changelog_2_10_0() -> str:
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    return changelog.split("## v2.10.0 - ", 1)[1].split("\n## ", 1)[0]
+
+
+def test_the_3_0_6_texts_say_what_ran_on_a_station():
+    """Dave ran the overlay on a 3.0.6 station (PR #126); the rest is offline only."""
+
+    texts = {
+        "CHANGELOG v2.10.0": changelog_2_10_0(),
+        "v2.10.0.md": (ROOT / ".github/release-notes/v2.10.0.md").read_text(encoding="utf-8"),
+        "README.md": (ROOT / "README.md").read_text(encoding="utf-8"),
+        "SUPPORT.md": (ROOT / "SUPPORT.md").read_text(encoding="utf-8"),
+        "display.md": (DOCS / "display.md").read_text(encoding="utf-8"),
+        "quickstart.md": (DOCS / "quickstart.md").read_text(encoding="utf-8"),
+    }
+    for name, text in texts.items():
+        flat = " ".join(text.split())
+        assert "not yet tested on a device" not in flat, name
+        assert "offline only" in flat, name
+
+
+def test_the_way_out_of_a_restart_loop_removes_the_overlay_before_the_setting():
+    """Turning the pages off while the overlay is left writes the resource file back
+    (tests/test_qml_patch_qt5_overlay.py); restore-all gives the display back as shipped."""
+
+    agent = "/home/bticino/cfg/extra/c300x-native-agent"
+    for name, path in (("display.md", DOCS / "display.md"),
+                       ("v2.10.0.md", ROOT / ".github/release-notes/v2.10.0.md")):
+        text = path.read_text(encoding="utf-8")
+        way_out = " ".join(text.split("keeps restarting", 1)[1].split("\n## ", 1)[0].split())
+        rename = way_out.index(f"`mv {agent}/display-qt5.rcc {agent}/display-qt5.rcc.hang`")
+        removal = way_out.index(f"`{agent}/qml_patch.sh restore-all`")
+        pages_off = way_out.index("turn off **Home Assistant pages on the display**")
+        assert rename < removal < pages_off, name
+        for control in ("core hook Repair", "**Display patch** switch", "agent update"):
+            assert control in way_out[pages_off:], (name, control)
+
+
+def test_the_quarantine_texts_name_the_controls_that_retry_the_pages():
+    """A quarantined overlay is retried by the switch, the core Repair or an update;
+    the Display setting sync never retries it (display_patch_sync._differs)."""
+
+    texts = {
+        "display.md": (DOCS / "display.md").read_text(encoding="utf-8"),
+        "v2.10.0.md": (ROOT / ".github/release-notes/v2.10.0.md").read_text(encoding="utf-8"),
+        "CHANGELOG v2.10.0": changelog_2_10_0(),
+    }
+    for name, text in texts.items():
+        flat = " ".join(text.split())
+        assert "pplying the Display patch" not in flat, name
+        assert "the **Display patch** switch on" in flat, name
+        assert "saving the display settings does not" in flat, name

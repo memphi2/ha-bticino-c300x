@@ -14,6 +14,8 @@ import logging
 import secrets
 import shlex
 import stat
+import time
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
@@ -28,6 +30,11 @@ from .const import (
     DOMAIN,
 )
 from .device_activations import desired_activation_items
+from .display_activation import (
+    display_activation_confirmed,
+    display_restart_pending,
+    display_unsupported,
+)
 from .factory_login import LOGIN_REFUSED
 
 if TYPE_CHECKING:
@@ -48,7 +55,20 @@ REMOTE_FIREWALL_BACKUP = (
     "/etc/network/if-pre-up.d/iptables"
 )
 _SSH_CONNECT_TIMEOUT = 12.0
+# Probes, uploads of at most the agent binary, the init script and its
+# restart (5 s stop wait, 2 s after SIGKILL, 20 status checks of 100 ms).
 _SSH_COMMAND_TIMEOUT = 30.0
+# A display write over SSH is the script the agent runs as a job, so it gets
+# the agent's handling (http_maintenance.h): this deadline, then SIGTERM for
+# the script's rollback trap and this grace period. On the Qt 5 display of
+# firmware 3.0.x the write is the same: it waits for its display restart at
+# most 24 s from its start (then answers that the restart is pending, which
+# the install polls), and after the signal at most 5 s. The station's SSH server
+# sends no signal when a channel closes; a write merely cut off would run on
+# and die of SIGPIPE at its next message, in the middle of its clean-up.
+_SSH_DISPLAY_WRITE_TIMEOUT = 30.0
+_SSH_DISPLAY_WRITE_TERM_GRACE = 15.0
+DISPLAY_WRITE_TIMEOUT = "device_display_timeout"
 _REQUIRED_ASYNCSSH_VERSION = "2.24.1"
 INSTALLER_REQUIREMENTS = (f"asyncssh=={_REQUIRED_ASYNCSSH_VERSION}",)
 # The display files the agent directory holds; qml_patch.sh installs them.
@@ -110,6 +130,16 @@ class C300XDeviceInstallResult:
     remote_dir: str
     installed_files: tuple[str, ...]
     changed_files: tuple[str, ...]
+    # The display step ran and failed on the Qt 5 display: the agent is
+    # installed, the step is owed (HA records it, the core Repair runs it).
+    display_pending: bool = False
+
+
+@dataclass(slots=True)
+class _DisplaySteps:
+    """What the display steps of one install left undone."""
+
+    pending: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,11 +172,13 @@ async def async_install_device_agent(
         device_activations=request.device_activations,
     ).encode("utf-8")
 
+    display = _DisplaySteps()
     changed_files = await asyncio.to_thread(
         _install_device_agent_sync,
         request,
         bundle,
         config_bytes,
+        display,
     )
 
     return C300XDeviceInstallResult(
@@ -159,6 +191,7 @@ async def async_install_device_agent(
             REMOTE_INIT_LINK,
         ),
         changed_files=changed_files,
+        display_pending=display.pending,
     )
 
 
@@ -185,6 +218,7 @@ def _install_device_agent_sync(
     request: C300XDeviceInstallRequest,
     bundle: _ResolvedBundle,
     config_bytes: bytes,
+    display: _DisplaySteps | None = None,
 ) -> tuple[str, ...]:
     """Install the device files through a Python SSH client."""
 
@@ -222,10 +256,18 @@ def _install_device_agent_sync(
         _verify_startup_sync(client)
 
         actions = ("core-apply", "apply") if request.apply_gui_patch else ("core-apply",)
+        display_is_qt5 = _device_display_is_qt5(client)
         for action in actions:
-            _apply_qml_patch_sync(client, request.remote_dir, action)
-        # Capabilities reads this file on every request. Publish it only after
-        # activation succeeds so an interrupted install still needs repair.
+            step = _apply_display_step_sync(client, request.remote_dir, action, qt5=display_is_qt5)
+            if step is None and display is not None:
+                display.pending = True
+            if not step:
+                break
+        # Capabilities reads this file on every request; it names the installed
+        # bundle. Published only once the agent runs and every display step
+        # either succeeded or, on the Qt 5 display, failed after it ran: such a
+        # step is owed and recorded by HA (display_pending), so the identity
+        # hides nothing. An install cut short before still needs repair.
         if manifest is not None and client.put_file(
             manifest.source, manifest.remote_path, manifest.mode
         ):
@@ -642,6 +684,44 @@ class _AsyncSshDeviceSshClient(_DeviceSshClient):
                 result = await process.wait(check=True)
         return cast(bytes, result.stdout).decode("utf-8", "replace")
 
+    def run_display_write(self, command: str) -> str:
+        """Run a display write; past its deadline end it by SIGTERM, not a cut."""
+
+        if self._closed or self._client.is_closed():
+            raise C300XDeviceInstallError("device_install_failed")
+        try:
+            return self._runner.run(self._run_display_write(command))
+        except (OSError, self._asyncssh.Error) as err:
+            raise C300XDeviceInstallError("device_install_failed") from err
+
+    async def _run_display_write(self, command: str) -> str:
+        deadline = asyncio.get_running_loop().time() + _SSH_DISPLAY_WRITE_TIMEOUT
+        async with asyncio.timeout_at(deadline):
+            process = await self._client.create_process(
+                command, encoding=None, request_pty=False,
+            )
+        try:
+            process.stdin.write_eof()
+            try:
+                async with asyncio.timeout_at(deadline):
+                    result = await process.wait(check=True)
+            except TimeoutError:
+                # The channel stays open: the trap's messages must not kill it.
+                # A channel that closed right at the deadline takes no signal
+                # (AsyncSSH documents OSError); it is a time-out all the same.
+                with suppress(OSError):
+                    process.terminate()
+                with suppress(TimeoutError):
+                    async with asyncio.timeout(_SSH_DISPLAY_WRITE_TERM_GRACE):
+                        await process.wait()
+                raise C300XDeviceInstallError(DISPLAY_WRITE_TIMEOUT) from None
+        finally:
+            process.close()
+            with suppress(TimeoutError):
+                async with asyncio.timeout(_SSH_CONNECT_TIMEOUT):
+                    await process.wait_closed()
+        return cast(bytes, result.stdout).decode("utf-8", "replace")
+
     def put_file(
         self,
         source: Path,
@@ -890,15 +970,13 @@ def _remove_obsolete_display_source_sync(client: _DeviceSshClient, remote_dir: s
 _LOGGER = logging.getLogger(__name__)
 
 # Firmware 3.0.x has a Qt 5 display with its QML built into the BtClass program
-# (qrc:/skins/default/...), so there are no files for the Display patch. The
-# earlier ones have Qt 4 and QML files on disk. The Qt 5 library is the mark,
-# not a missing QML folder: on an older device a missing folder is a fault the
-# Display patch has to report.
+# (qrc:/skins/default/...); the earlier ones have Qt 4 and QML files on disk.
+# The Qt 5 library is the mark, not a missing QML folder.
 _QT5_DISPLAY_MARKER = "/usr/lib/libQt5Core.so.5"
 
 
 def _device_display_is_qt5(client: _DeviceSshClient) -> bool:
-    """Return whether the device has the Qt 5 display, which cannot be patched."""
+    """Return whether the device has the Qt 5 display of firmware 3.0.x."""
 
     output = client.run(f"test -e {_quote(_QT5_DISPLAY_MARKER)} && echo yes || echo no")
     return output.strip().splitlines()[-1:] == ["yes"]
@@ -942,34 +1020,83 @@ def _apply_qt5_low_res_video_default(
     return (json.dumps(config, indent=2, sort_keys=True) + "\n").encode("utf-8")
 
 
-def _apply_qml_patch_sync(client: _DeviceSshClient, remote_dir: str, action: str) -> None:
-    """Require the patcher's reported outcome, not just a successful shell exit."""
+def _apply_display_step_sync(
+    client: _DeviceSshClient, remote_dir: str, action: str, *, qt5: bool
+) -> bool | None:
+    """Run one display step; True done, False not supported here, None owed.
 
-    if _device_display_is_qt5(client):
-        # Qt5 firmware (3.0.x+) has no on-disk QML to patch. Skip rather than
-        # abort the whole install: the on-device display pages and ringer-sync
-        # are unavailable, but camera, door, stair light, ring and calls work
-        # through the agent API and do not depend on the QML hook.
+    On the Qt 5 display a step that ran and whose display failed does not fail
+    the install: the agent is installed, the step is owed (None) and HA
+    records it for the core Repair. A step that could not run (SSH failure)
+    still fails the install, as every failure does on firmware 1.7.x/2.0.x.
+    """
+
+    try:
+        return _apply_qml_patch_sync(client, remote_dir, action)
+    except C300XDeviceInstallError as err:
+        if not qt5 or err.reason != "device_install_verify_failed":
+            raise
         _LOGGER.warning(
-            "C300X: device has no on-disk QML (Qt5 GUI); skipping %s patch", action
+            "C300X: the display step %s failed on the Qt 5 display; the agent is "
+            "installed and the core Repair runs the display steps again", action,
         )
-        return
-    output = client.run(
+        return None
+
+
+# As for the agent API (qml_patch.DISPLAY_RESTART_*): the worker's cycle with
+# a retry and the stock fallback ends within about three minutes.
+DISPLAY_RESTART_WAIT_SECONDS = 180.0
+DISPLAY_RESTART_POLL_SECONDS = 2.0
+
+
+def _run_qml_patch_sync(client: _DeviceSshClient, remote_dir: str, action: str) -> dict[str, Any]:
+    # exec: the signal the SSH server delivers must reach the script itself.
+    # The assignment prefix reaches the exec'd script without an env binary.
+    command = (
         f"C300X_QML_SOURCE_DIR={_quote(f'{remote_dir}/qml')} "
-        f"{_quote(f'{remote_dir}/qml_patch.sh')} {action}"
+        f"exec {_quote(f'{remote_dir}/qml_patch.sh')} {action}"
     )
+    run_display_write = getattr(client, "run_display_write", client.run)
+    output = run_display_write(command)
     try:
         result = json.loads(output)
     except (TypeError, ValueError) as err:
         raise C300XDeviceInstallError("device_install_verify_failed") from err
+    if not isinstance(result, dict):
+        raise C300XDeviceInstallError("device_install_verify_failed")
+    return result
+
+
+def _apply_qml_patch_sync(client: _DeviceSshClient, remote_dir: str, action: str) -> bool:
+    """Require the patcher's reported outcome, not just a successful shell exit.
+
+    False: the station's display is one the agent does not know, so it stays
+    as shipped and the agent runs without the display pages.
+    """
+
+    result = _run_qml_patch_sync(client, remote_dir, action)
+    # A restart still running on the station is not a failure: wait for it.
+    deadline = time.monotonic() + DISPLAY_RESTART_WAIT_SECONDS
+    while display_restart_pending(result) and time.monotonic() < deadline:
+        time.sleep(DISPLAY_RESTART_POLL_SECONDS)
+        result = {**result, **_run_qml_patch_sync(client, remote_dir, "status")}
+    reason = display_unsupported(result)
+    if reason is not None and result.get("error") == "display_unsupported":
+        _LOGGER.warning(
+            "C300X: the display of this station is not supported (%s); "
+            "the agent is installed without the display pages", reason,
+        )
+        return False
     if (
         not isinstance(result, dict)
         or result.get("ok") is not True
         or result.get("core_patched") is not True
         or result.get("gui_running") is not True
         or (action == "apply" and result.get("patched") is not True)
+        or not display_activation_confirmed(result)
     ):
         raise C300XDeviceInstallError("device_install_verify_failed")
+    return True
 
 
 def _apply_firewall_patch_sync(

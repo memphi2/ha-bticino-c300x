@@ -99,7 +99,9 @@ def test_repair_shows_specific_update_failure_without_followup(
     assert result["errors"] == {"base": key}
     assert len(session.requests) == 1
     assert hass.config_entries.reloads == []
-    assert entry.data == {}
+    # No follow-up step runs now, but it stays noted: a failed answer does not
+    # tell whether the station kept its old files.
+    assert entry.data == {"agent_update_qml_pending": True}
     assert set(entry.runtime_data.api.calls) <= {"qml_status", "firewall_status", "ipv6_firewall_status"}
 
 

@@ -55,8 +55,15 @@ def timeout_binary(request, tmp_path_factory):
     ("exit131", "", AFTER_FINISH + "exit 131\n"),
     # An output overflow fails the write; it still gets SIGTERM and its grace.
     ("overflow", ROLLBACK, AFTER_FINISH + "head -c 5000 /dev/zero | tr '\\0' x\n" + LOOP),
+    # A standalone GUI restart past its deadline finishes in its trap too.
+    ("reload", ROLLBACK, LOOP),
+    ("reload-ignore", IGNORE, LOOP),
     # Agent start: the recovery job holds the slot, with the write deadline.
     ("recover", ROLLBACK, LOOP),
+    # A GUI reload keeps 2.9.2's 10 s limit on Qt 4 (firmware 1.7.x/2.0.2);
+    # on the Qt 5 display it waits for the old program, up to the write limit.
+    ("reload-qt4", "", LOOP),
+    ("reload-qt5", "", LOOP),
 ])
 def test_qml_write_deadline_terminates_gently(timeout_binary, tmp_path, mode, trap, body):
     script = tmp_path / "job.sh"

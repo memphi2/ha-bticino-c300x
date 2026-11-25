@@ -93,8 +93,11 @@ def test_snapshot_switch_names_why_the_last_visitor_image_failed(monkeypatch) ->
                               capture=SimpleNamespace(last_failure="snapshot_unavailable"))
     monkeypatch.setattr(module, "get_snapshots", lambda *_: manager)
     assert switch.extra_state_attributes == {"last_failure": "snapshot_unavailable"}
+    # A null attribute reads "Unknown" in the frontend; no failure shows no row.
     manager.capture.last_failure = None
-    assert switch.extra_state_attributes == {"last_failure": None}
+    assert switch.extra_state_attributes == {}
+    monkeypatch.setattr(module, "get_snapshots", lambda *_: None)
+    assert switch.extra_state_attributes == {}
 
 
 pytestmark = pytest.mark.usefixtures("entity_ha_boundary")
@@ -793,6 +796,18 @@ def test_gui_function_patch_switch_uses_read_only_status() -> None:
     assert entry.runtime_data.api.qml_patch_actions == []
     assert entity.is_on is False
     assert entity.extra_state_attributes["state"] == "original"
+
+
+@pytest.mark.parametrize("overlay", ["failed", "incomplete", "off"])
+def test_gui_function_patch_switch_exposes_unconfirmed_activation_without_saving_success(overlay):
+    entry = _FakeEntry()
+    status = {"patched": True, "core_patched": True, "gui_running": True, "qt5_overlay": overlay}
+    entry.runtime_data.qml_patch_status = status
+    entity = C300XGuiFunctionPatchSwitch(entry)
+    assert entity.is_on is None
+    assert entity.extra_state_attributes["qt5_overlay"] == overlay
+    # No hass is attached: a false success would try to save the options here.
+    entity._follow_with_setting(status, True)
 
 
 def test_gui_function_patch_switch_applies_and_restores_patch() -> None:
@@ -1643,15 +1658,18 @@ def test_mqtt_push_updates_matching_native_and_legacy_switches() -> None:
     assert legacy.is_on is True
 
 
-@pytest.mark.parametrize(("display_patch_offered", "is_on"), [(True, False), (False, True)])
+@pytest.mark.parametrize(("display_patch_offered", "unsupported", "is_on"), [
+    (True, None, False), (False, None, True), (True, "display_program_unknown", True),
+])
 def test_media_user_setup_needs_the_display_label_only_where_there_is_a_display_patch(
-    display_patch_offered: bool, is_on: bool
+    display_patch_offered: bool, unsupported: str | None, is_on: bool
 ) -> None:
-    """A Qt 5 display (firmware 3.0.x) has no Display patch and shows no label."""
+    """No label without a Display patch: an agent that offers none, or a display it does not know."""
 
     entry = _FakeEntry(
         runtime_data=_FakeRuntimeData(
             capabilities={"maintenance": {"supported": True, "qml_core_patch": display_patch_offered}},
+            qml_patch_status={"qt5_overlay": "off", "qt5_unsupported": unsupported},
         )
     )
     entity = C300XHomeAssistantMediaUserSetupSwitch(entry)  # type: ignore[arg-type]

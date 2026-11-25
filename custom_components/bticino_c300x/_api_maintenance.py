@@ -33,6 +33,8 @@ _MAINTENANCE_JOB_TIMEOUT = 15.0
 # 30 s native deadline, 15 s for the script's rollback after SIGTERM, margin.
 # The media-user label is set and restored by such a write, GUI restart included.
 _QML_WRITE_JOB_TIMEOUT = 50.0
+# 10 s native deadline, the same 15 s for the script to finish the restart, margin.
+_GUI_RELOAD_JOB_TIMEOUT = 30.0
 _UPDATE_REQUEST_TIMEOUT = 20.0
 
 
@@ -489,21 +491,29 @@ class _ApiMaintenanceMixin(_C300XApiCore):
 
         Allow response overhead beyond the native job deadline: 10 s normally,
         or 30 s for QML writes plus the 15 s the agent then gives the script
-        for its rollback before it answers ``qml_patch_timeout``.
+        for its rollback before it answers ``qml_patch_timeout``. A GUI reload
+        gets the same 15 s after its 10 s to finish the restart.
         Update requests also write to the device's flash and get longer.
         """
 
         return max(self._timeout, minimum)
 
-    async def async_reload_gui(self) -> dict[str, Any]:
-        """Reload the C300X graphical interface through the maintenance API."""
+    async def async_reload_gui(self, *, display_restart: bool = False) -> dict[str, Any]:
+        """Reload the C300X graphical interface through the maintenance API.
+
+        ``display_restart``: the station has the Qt 5 display of firmware
+        3.0.x, whose restart first waits for the old display program to end
+        (agent job limit 30 s there); the wait is then that of a display write.
+        """
 
         data = await self._request_json(
             "POST",
             "/api/v1/maintenance/gui/actions/reload",
             json_data={"confirm": "reload_gui"},
             extra_headers=self._maintenance_headers(),
-            request_timeout=self._job_timeout(),
+            request_timeout=self._job_timeout(
+                _QML_WRITE_JOB_TIMEOUT if display_restart else _GUI_RELOAD_JOB_TIMEOUT
+            ),
         )
         return _ok_response(data)
 

@@ -15,7 +15,7 @@ def test_spawned_scripts_get_default_sigpipe(tmp_path, sanitize):
     result = subprocess.run(
         ["cc", "-std=c11", "-D_DEFAULT_SOURCE", "-D_POSIX_C_SOURCE=200809L", "-g", "-Wall", "-Wextra",
          "-Werror", *flags, str(NATIVE / "test/spawn_sigpipe_test.c"),
-         *(str(NATIVE / "src" / name) for name in ("command_job.c", "command_transaction.c", "time_util.c")),
+         *(str(NATIVE / "src" / name) for name in ("command_job.c", "time_util.c")),
          "-o", str(binary)],
         capture_output=True, text=True, timeout=60,
     )

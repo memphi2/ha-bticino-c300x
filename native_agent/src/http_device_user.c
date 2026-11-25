@@ -1,6 +1,5 @@
 #include "http_device_user.h"
 #include "c300x_agent.h"
-#include "command_transaction.h"
 #include "device_routing.h"
 #include "device_user.h"
 #include "device_user_label.h"
@@ -21,6 +20,7 @@ struct device_user_request {
     const struct c300x_config *config;
     struct c300x_device_user_status status;
     struct c300x_device_routing_status routing;
+    int restoring;
     char output[C300X_DEVICE_USER_STATUS_BODY_LEN];
 };
 
@@ -53,6 +53,10 @@ static void device_user_status_body(
             }
             if (!c300x_json_bool_field(start, "media_user_label_patched", &qml_patched)) {
                 qml_patched = 0;
+            }
+            if (qml_patched && !c300x_label_qt5_state_ok(start, 1)) {
+                qml_patched = 0;
+                c300x_copy_string(qml_state, sizeof(qml_state), "activation_unconfirmed");
             }
         }
     }
@@ -140,17 +144,24 @@ static void send_error(int fd, const char *error, const char *detail)
     c300x_http_send_json(fd, 500, "Internal Server Error", body);
 }
 
+static int finish_device_user(struct c300x_http_maintenance *owner)
+{
+    struct device_user_request *state = owner->context;
+    send_status(owner->client_fd, state, !owner->job.failed);
+    return 1;
+}
+
 static int start_status(struct c300x_http_maintenance *owner, int fd,
     struct device_user_request *state)
 {
+    owner->complete = finish_device_user;
     /* A write of this request that left / writable is reported with it. */
     int root_writable = state->routing.root_writable;
     (void)c300x_device_user_read_status(&state->status);
     memset(&state->routing, 0, sizeof(state->routing));
     (void)c300x_device_routing_read_status(&state->routing);
     state->routing.root_writable = root_writable;
-    if (!c300x_device_display_is_qt5()
-        && access(state->config->maintenance_qml_patch_script, X_OK) == 0
+    if (access(state->config->maintenance_qml_patch_script, X_OK) == 0
         && c300x_command_job_start_capture(&owner->job,
             state->config->maintenance_qml_patch_script, "status", state->output, 4096, 10000)) {
         return 1;
@@ -172,10 +183,38 @@ static int restore_routing(struct c300x_http_maintenance *owner, int fd,
     return start_status(owner, fd, state);
 }
 
-static int finish_device_user(struct c300x_http_maintenance *owner)
+/* The label is a QML write: the same job, deadline and grace period, so the
+ * script's trap rolls back instead of a kill, and the main loop never waits. */
+static int finish_label(struct c300x_http_maintenance *owner)
 {
     struct device_user_request *state = owner->context;
-    send_status(owner->client_fd, state, !owner->job.failed);
+    int fd = owner->client_fd;
+    if (owner->job.failed && owner->job.timed_out) {
+        c300x_label_send_timeout(fd, owner->job.exit_status);
+        return 1;
+    }
+    /* The script can exit zero and still report that it rolled back. */
+    if (owner->job.failed || !c300x_label_result_ok(state->output, !state->restoring)) {
+        send_error(fd, state->restoring ? "media_user_label_restore_failed"
+            : "media_user_label_setup_failed", NULL);
+        return 1;
+    }
+    if (state->restoring) {
+        return !restore_routing(owner, fd, state);
+    }
+    owner->record_write(owner->write_context, "device_user", "ensure_homeassistant_user");
+    return !start_status(owner, fd, state);
+}
+
+static int start_label(struct c300x_http_maintenance *owner, struct device_user_request *state,
+    int restoring)
+{
+    state->restoring = restoring;
+    if (!c300x_label_job_start(&owner->job, state->config->maintenance_qml_patch_script,
+            restoring, state->output, sizeof(state->output))) {
+        return 0;
+    }
+    owner->complete = finish_label;
     return 1;
 }
 
@@ -206,21 +245,13 @@ static int ensure_user(struct c300x_http_maintenance *owner, int fd,
         send_error(fd, "device_user_update_failed", error);
         return 0;
     }
-    /* The label is written into the display's QML files. A Qt 5 display has
-     * none on disk: user and routing are set up, only the label is not shown. */
-    if (!c300x_device_display_is_qt5()) {
-        if (!c300x_command_transaction_capture(state->config->maintenance_qml_patch_script,
-                "media-user-label-apply", state->output, sizeof(state->output))) {
-            send_error(fd, "media_user_label_setup_failed", NULL);
-            return 0;
-        }
-        if (!c300x_label_result_ok(state->output, 1)) {
-            send_error(fd, "media_user_label_setup_failed", NULL);
-            return 0;
-        }
+    /* The label is written into the display files; on the Qt 5 display of
+     * firmware 3.0.x into the agent's resource overlay. */
+    if (start_label(owner, state, 0)) {
+        return 1;
     }
-    owner->record_write(owner->write_context, "device_user", "ensure_homeassistant_user");
-    return start_status(owner, fd, state);
+    send_error(fd, "media_user_label_setup_failed", NULL);
+    return 0;
 }
 
 int c300x_http_device_user_route(struct c300x_http_maintenance *owner, int client_fd,
@@ -266,23 +297,15 @@ int c300x_http_device_user_route(struct c300x_http_maintenance *owner, int clien
         pending = ensure_user(owner, client_fd, state, request);
     } else if (access(config->maintenance_qml_patch_script, X_OK) != 0) {
         pending = restore_routing(owner, client_fd, state);
-    } else {
-        /* The script can exit zero and still report that it rolled back. */
-        if (c300x_command_transaction_capture(config->maintenance_qml_patch_script,
-                "media-user-label-restore", state->output, sizeof(state->output))
-            && c300x_label_result_ok(state->output, 0)) {
-            pending = restore_routing(owner, client_fd, state);
-        } else {
-            pending = 0;
-            send_error(client_fd, "media_user_label_restore_failed", NULL);
-        }
+    } else if (!(pending = start_label(owner, state, 1))) {
+        send_error(client_fd, "media_user_label_restore_failed", NULL);
     }
     if (pending) {
         owner->client_fd = client_fd;
-        owner->complete = finish_device_user;
         owner->context = state;
         owner->destroy_context = free;
     } else {
+        owner->complete = NULL;
         free(state);
     }
     return 1;

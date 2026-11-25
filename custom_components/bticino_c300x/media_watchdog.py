@@ -13,6 +13,7 @@ from .camera_media.state_machine import (
     derive_media_state,
     media_state_input_from_video_status,
 )
+from .display_activation import gui_reload_kwargs
 
 AGENT_CPU_WATCHDOG_THRESHOLD_PERCENT = 90.0
 AGENT_CPU_WATCHDOG_SECONDS = 300.0
@@ -189,7 +190,7 @@ async def async_handle_runtime_agent_cpu_watchdog(
     with suppress(Exception):
         status = await api.async_doorbell_video_status()
     await _async_stop_media_for_watchdog(api, status)
-    await _async_reload_display_gui_for_watchdog(api)
+    await _async_reload_display_gui_for_watchdog(api, gui_reload_kwargs(entry))
 
 
 async def async_handle_agent_cpu_watchdog(camera: Any) -> None:
@@ -238,11 +239,11 @@ async def _async_stop_media_for_watchdog(
             await api.async_stop_doorbell_video()
 
 
-async def _async_reload_display_gui_for_watchdog(api: Any) -> None:
+async def _async_reload_display_gui_for_watchdog(api: Any, kwargs: dict[str, bool]) -> None:
     """Reload the display GUI after sustained high CPU watchdog trips."""
 
     reload_gui = getattr(api, "async_reload_gui", None)
     if not callable(reload_gui):
         return
     with suppress(Exception):
-        await reload_gui()
+        await reload_gui(**kwargs)

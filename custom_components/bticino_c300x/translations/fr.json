@@ -130,7 +130,7 @@
           "actions_json": "Actions que l'écran et ses notifications peuvent exécuter, en JSON : une entrée par action avec domain et service, éventuellement target et data. Laissez vide si vous n'en utilisez pas.",
           "dashboard_prevent_return": "Activé : les pages Home Assistant et Alarme restent ouvertes quand l'écran passe en veille. Désactivé : l'écran revient alors à la page d'accueil.",
           "dashboard_navigation": "Manière dont l'écran change de page. La barre de favoris affiche les quatre premières pages sous forme de boutons en bas de l'écran. Au-delà de quatre pages, le quatrième bouton devient « Plus » et ouvre la liste des autres pages. L'ordre suit les positions des pages.",
-          "dashboard_dynamic_homepage": "Où se placent les boutons Alarme et Home Assistant sur la page d'accueil du C300X. D'usine : chaque bouton n'apparaît que s'il a quelque chose à ouvrir et prend sa place parmi les boutons d'origine, aussi en dessous quand la rangée est pleine. Côte à côte, fixes : les deux gardent deux places fixes l'une à côté de l'autre ; un bouton sans rien à ouvrir laisse sa place vide. Un changement réapplique le patch display et redémarre l'écran une fois."
+          "dashboard_dynamic_homepage": "Où se placent les boutons Alarme et Home Assistant sur la page d'accueil du C300X. Vue d'usine : chaque bouton n'apparaît que s'il a quelque chose à ouvrir et prend sa place parmi les boutons d'origine, aussi en dessous quand la rangée est pleine. Côte à côte, fixes : les deux gardent deux places fixes l'une à côté de l'autre ; un bouton sans rien à ouvrir laisse sa place vide. Un changement réapplique le patch display et redémarre l'écran une fois."
         }
       },
       "user_dashboard_entity_display": {
@@ -243,7 +243,7 @@
           "actions_json": "Actions que l'écran et ses notifications peuvent exécuter, en JSON : une entrée par action avec domain et service, éventuellement target et data. Laissez vide si vous n'en utilisez pas.",
           "dashboard_prevent_return": "Activé : les pages Home Assistant et Alarme restent ouvertes quand l'écran passe en veille. Désactivé : l'écran revient alors à la page d'accueil.",
           "dashboard_navigation": "Manière dont l'écran change de page. La barre de favoris affiche les quatre premières pages sous forme de boutons en bas de l'écran. Au-delà de quatre pages, le quatrième bouton devient « Plus » et ouvre la liste des autres pages. L'ordre suit les positions des pages.",
-          "dashboard_dynamic_homepage": "Où se placent les boutons Alarme et Home Assistant sur la page d'accueil du C300X. D'usine : chaque bouton n'apparaît que s'il a quelque chose à ouvrir et prend sa place parmi les boutons d'origine, aussi en dessous quand la rangée est pleine. Côte à côte, fixes : les deux gardent deux places fixes l'une à côté de l'autre ; un bouton sans rien à ouvrir laisse sa place vide. Un changement réapplique le patch display et redémarre l'écran une fois."
+          "dashboard_dynamic_homepage": "Où se placent les boutons Alarme et Home Assistant sur la page d'accueil du C300X. Vue d'usine : chaque bouton n'apparaît que s'il a quelque chose à ouvrir et prend sa place parmi les boutons d'origine, aussi en dessous quand la rangée est pleine. Côte à côte, fixes : les deux gardent deux places fixes l'une à côté de l'autre ; un bouton sans rien à ouvrir laisse sa place vide. Un changement réapplique le patch display et redémarre l'écran une fois."
         }
       },
       "reconfigure_dashboard_entity_display": {
@@ -672,6 +672,7 @@
     "error": {
       "agent_bundle_missing": "Le bundle agent ARMHF package est manquant. Construisez/packagez le bundle de release avant d'utiliser l'installateur.",
       "device_install_failed": "L'installation SSH a échoué. Vérifiez l'accès SSH et réessayez.",
+      "device_display_timeout": "Les fichiers de l'écran n'ont pas été écrits dans le délai imparti ; l'appareil a reçu l'ordre de remettre les fichiers précédents. Vérifiez que l'écran fonctionne et réessayez.",
       "device_install_verify_failed": "L'installation est terminée, mais l'agent natif ne répond pas avec la clé d'accès générée.",
       "invalid_agent_port": "Saisissez un port valide pour l'agent appareil.",
       "invalid_agent_host": "Saisissez l'hôte de l'agent appareil.",
@@ -842,7 +843,7 @@
           "actions_json": "Actions que l'écran et ses notifications peuvent exécuter, en JSON : une entrée par action avec domain et service, éventuellement target et data. Laissez vide si vous n'en utilisez pas.",
           "dashboard_prevent_return": "Activé : les pages Home Assistant et Alarme restent ouvertes quand l'écran passe en veille. Désactivé : l'écran revient alors à la page d'accueil.",
           "dashboard_navigation": "Manière dont l'écran change de page. La barre de favoris affiche les quatre premières pages sous forme de boutons en bas de l'écran. Au-delà de quatre pages, le quatrième bouton devient « Plus » et ouvre la liste des autres pages. L'ordre suit les positions des pages.",
-          "dashboard_dynamic_homepage": "Où se placent les boutons Alarme et Home Assistant sur la page d'accueil du C300X. D'usine : chaque bouton n'apparaît que s'il a quelque chose à ouvrir et prend sa place parmi les boutons d'origine, aussi en dessous quand la rangée est pleine. Côte à côte, fixes : les deux gardent deux places fixes l'une à côté de l'autre ; un bouton sans rien à ouvrir laisse sa place vide. Un changement réapplique le patch display et redémarre l'écran une fois."
+          "dashboard_dynamic_homepage": "Où se placent les boutons Alarme et Home Assistant sur la page d'accueil du C300X. Vue d'usine : chaque bouton n'apparaît que s'il a quelque chose à ouvrir et prend sa place parmi les boutons d'origine, aussi en dessous quand la rangée est pleine. Côte à côte, fixes : les deux gardent deux places fixes l'une à côté de l'autre ; un bouton sans rien à ouvrir laisse sa place vide. Un changement réapplique le patch display et redémarre l'écran une fois."
         }
       },
       "dashboard_entity_display": {
@@ -1404,7 +1405,21 @@
         "name": "Patch utilisateur Home Assistant"
       },
       "stream_snapshots": {
-        "name": "Enregistrer les images"
+        "name": "Enregistrer les images",
+        "state_attributes": {
+          "last_failure": {
+            "name": "Dernier échec",
+            "state": {
+              "snapshot_unavailable": "L'image de l'écran n'a pas pu être lue",
+              "snapshot_throttled": "Demandée trop tôt après l'image précédente",
+              "invalid_snapshot_size": "L'appareil a refusé la taille de l'image",
+              "invalid_image": "L'appareil a fourni une image non valide",
+              "agent_unreachable": "Agent appareil injoignable",
+              "agent_error": "L'agent appareil a signalé une erreur",
+              "save_failed": "Home Assistant n'a pas pu enregistrer l'image"
+            }
+          }
+        }
       }
     }
   },
@@ -1518,6 +1533,7 @@
         },
         "error": {
           "ssh_install_failed": "La réparation par SSH a échoué. Vérifiez l'accès SSH et réessayez.",
+          "device_display_timeout": "Les fichiers de l'écran n'ont pas été écrits dans le délai imparti ; l'appareil a reçu l'ordre de remettre les fichiers précédents. Vérifiez que l'écran fonctionne et réessayez.",
           "update_failed": "La mise à jour de l'agent a échoué. Vérifiez que l'accès maintenance est actif et réessayez.",
           "update_root_already_writable": "La mise à jour a été refusée avant application car le système de fichiers racine (/) était déjà accessible en écriture. Si vous avez auparavant remonté / manuellement en écriture, redémarrez normalement l'appareil, puis relancez cette réparation. Sinon, recherchez pourquoi / est accessible en écriture avant de réessayer.",
           "update_root_readonly_failed": "La mise à jour n'a pas pu remettre le système de fichiers racine (/) en lecture seule. L'état final de l'appareil est incertain ; le retour à l'état précédent n'est pas confirmé. Conservez les fichiers de récupération et vérifiez l'agent et le système de fichiers avant toute autre mise à jour.",
@@ -1542,6 +1558,10 @@
       "title": "Le watcher d'événements display C300X a été protégé",
       "description": "{entry_title} a détecté trop de watchers d'événements display C300X simultanés. L'agent a refusé le watcher supplémentaire pour éviter une boucle de polling locale qui peut surcharger le C300X. Watchers actifs : {waiters}/{capacity}. Watchers refusés : {overflows}. Rechargez la GUI display C300X depuis l'intégration si le dashboard ou les mémos de l'écran ne se mettent plus a jour, puis actualisez les diagnostics."
     },
+    "device_display_unsupported": {
+      "title": "Les pages de l'écran C300X ne sont pas disponibles sur cet appareil",
+      "description": "{entry_title} : l'agent appareil ne connaît pas le programme de l'écran ou le script de démarrage de l'écran de cet appareil ({reason}). Il a laissé l'écran dans son état d'origine et fonctionne sans les pages de l'écran : l'appareil n'affiche ni pages ni boutons Home Assistant, et le patch display reste désactivé. Les autres fonctions de l'agent appareil fonctionnent comme avant les pages de l'écran pour le firmware 3.0.x. Appliquer à nouveau le patch display vérifie l'appareil une nouvelle fois."
+    },
     "device_core_qml_hook_required": {
       "title": "Hook média core C300X manquant",
       "fix_flow": {
@@ -1557,7 +1577,28 @@
         },
         "abort": {
           "entry_not_loaded": "L'entrée BTicino C300X n'est pas chargée.",
-          "core_patch_unsupported": "L'agent appareil C300X installé ne prend pas en charge l'application du hook média core."
+          "core_patch_unsupported": "L'agent appareil C300X installé ne prend pas en charge l'application du hook média core.",
+          "display_unsupported": "L'agent appareil ne connaît pas l'écran de cet appareil ; il fonctionne sans les pages de l'écran et il n'y a pas de hook média core à appliquer."
+        }
+      }
+    },
+    "device_display_followup_pending": {
+      "title": "Les pages de l'écran C300X doivent encore être appliquées après la mise à jour",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Appliquer à nouveau les pages de l'écran C300X",
+            "description": "{entry_title} : la mise à jour ou l'installation de l'agent appareil est terminée, mais les étapes de l'écran qui la suivent n'ont pas abouti sur l'écran de l'appareil. Les pages de l'écran du nouvel agent appareil ne sont pas encore confirmées ; l'appareil affiche peut-être encore les pages de l'agent précédent ou l'écran d'origine.\n\nHome Assistant exécute les étapes de l'écran laissées en suspens par la mise à jour : le hook média core, les pages de l'écran si le patch display est activé, et un redémarrage de l'écran de l'appareil. L'écran s'éteint et redémarre pendant la réparation ; cela peut prendre quelques minutes."
+          }
+        },
+        "error": {
+          "core_patch_failed": "Les étapes de l'écran n'ont pas abouti. Vérifiez que l'appareil est joignable et que son écran fonctionne, puis réessayez.",
+          "core_patch_verify_failed": "Les étapes de l'écran ont été exécutées, mais l'agent appareil n'a pas confirmé le hook média core."
+        },
+        "abort": {
+          "entry_not_loaded": "L'entrée BTicino C300X n'est pas chargée.",
+          "core_patch_unsupported": "L'agent appareil C300X installé ne prend pas en charge les étapes de l'écran.",
+          "display_unsupported": "L'agent appareil ne connaît pas l'écran de cet appareil ; il fonctionne sans les pages de l'écran et il n'y a aucune étape de l'écran à exécuter."
         }
       }
     },
@@ -1743,7 +1784,7 @@
     },
     "dashboard_dynamic_homepage": {
       "options": {
-        "stock": "D'usine (si nécessaire, aussi empilés)",
+        "stock": "Vue d'usine (si nécessaire, aussi empilés)",
         "side_by_side": "Côte à côte, fixes"
       }
     },
@@ -1752,7 +1793,9 @@
         "patched": "appliqué",
         "original": "non appliqué (fichiers d'origine)",
         "unknown": "inconnu",
-        "unavailable": "indisponible"
+        "unavailable": "indisponible",
+        "display_failed": "appliqué, mais l'écran a démarré dans son état d'origine",
+        "display_unsupported": "non disponible pour l'écran de cet appareil"
       }
     }
   },

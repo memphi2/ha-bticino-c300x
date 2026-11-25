@@ -1,6 +1,7 @@
 #include "http_maintenance.h"
 #include "http_util.h"
 #include "json_util.h"
+#include "maintenance_job_limit.h"
 
 #include <ctype.h>
 #include <stdio.h>
@@ -121,15 +122,15 @@ static void start_script(struct c300x_http_maintenance *owner, int client_fd,
             : "{\"ok\":false,\"available\":false,\"state\":\"script_missing\"}\n");
         return;
     }
-    /* QML writes may need both a failed start and a restored-GUI restart. */
-    int timeout_ms = !gui_reload && records_write ? C300X_QML_WRITE_TIMEOUT_MS : 10000;
+    int timeout_ms = c300x_maintenance_job_timeout_ms(records_write, gui_reload);
     if (!c300x_command_job_start(&owner->job, program, action, dynamic_homepage, timeout_ms)) {
         c300x_http_send_json(client_fd, 502, "Bad Gateway", gui_reload
             ? "{\"ok\":false,\"error\":\"reload_failed\"}\n"
             : "{\"ok\":false,\"available\":false,\"state\":\"script_failed\"}\n");
         return;
     }
-    owner->job.term_grace_ms = records_write ? C300X_QML_WRITE_TERM_GRACE_MS : 0;
+    /* A reload cut between the GUI's stop and its start finishes in its trap. */
+    owner->job.term_grace_ms = records_write || gui_reload ? C300X_QML_WRITE_TERM_GRACE_MS : 0;
     owner->client_fd = client_fd;
     owner->gui_reload = gui_reload;
     owner->records_write = records_write;

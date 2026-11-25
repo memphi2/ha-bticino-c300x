@@ -10,6 +10,9 @@
 #include "../src/agent_update.h"
 #include "../src/file_io.h"
 
+/* The agent's Qt 5 display check; the updates here run on a Qt 4 station. */
+int c300x_device_display_is_qt5(void) { return 0; }
+
 static char init_script[512], init_link[512], denied_backup[512];
 static int fail_cleanup, cleanup_failures, root_writable_model;
 static int rw_calls, ro_calls, fail_rw_at, fail_ro_at, remount_failures;
@@ -78,7 +81,7 @@ static void stage_bundle(struct c300x_config *config, const char *base, char *ma
     assert(c300x_join_path(config->config_path, sizeof(config->config_path), base, "config.json"));
     assert(c300x_join_path(init_script, sizeof(init_script), base, "init-script"));
     assert(c300x_join_path(init_link, sizeof(init_link), base, "init-link"));
-    assert(c300x_appendf(manifest, capacity, &used, "{\"files\":["));
+    assert(c300x_appendf(manifest, capacity, &used, "{\"qt5_recovery_version\":1,\"files\":["));
     for (size_t i = 0; i + 1 < C300X_AGENT_UPDATE_FILE_COUNT; i++) {
         const char *name = C300X_AGENT_UPDATE_FILES[i].path;
         const char *content = !strcmp(name, "device_agent/init/c300x-native-agent")

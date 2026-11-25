@@ -100,6 +100,63 @@ def test_the_speaker_shows_its_state_and_last_result_in_words_with_a_state_icon(
     assert icons == {"default": "mdi:bullhorn-outline", "state": {"playing": "mdi:bullhorn"}}
 
 
+# Every cause the capture can record for a visitor image that was not taken.
+SNAPSHOT_FAILURES = {
+    "snapshot_unavailable", "snapshot_throttled", "invalid_snapshot_size", "invalid_image",
+    "agent_unreachable", "agent_error", "save_failed",
+}
+
+
+def _snapshot_failure_codes() -> set[str]:
+    """Read the causes out of snapshot_capture.py: what ``_failed`` is called
+    with and what ``snapshot_failure_cause`` can return."""
+
+    tree = ast.parse((INTEGRATION / "snapshot_capture.py").read_text(encoding="utf-8"))
+    sources: list[ast.AST] = []
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "_failed"):
+            sources.extend(node.args)
+        elif isinstance(node, ast.FunctionDef) and node.name == "snapshot_failure_cause":
+            # Skip the docstring; every other text in it is a cause.
+            sources.extend(node.body[1:])
+    return {
+        child.value for source in sources for child in ast.walk(source)
+        if isinstance(child, ast.Constant) and isinstance(child.value, str)
+    }
+
+
+def test_the_italian_visitor_image_failures_name_the_agent_as_the_file_does() -> None:
+    """The Italian file keeps "device agent"; a second term for it reads as a second thing."""
+
+    states = _load_json(TRANSLATIONS / "it.json")["entity"]["switch"]["stream_snapshots"][
+        "state_attributes"]["last_failure"]["state"]
+    for code in ("agent_unreachable", "agent_error"):
+        assert "device agent" in states[code].lower(), code
+        assert "agente del dispositivo" not in states[code].lower(), code
+
+
+def test_every_visitor_image_failure_is_shown_in_words_in_every_language() -> None:
+    """The switch attribute keeps the code; the frontend shows the translated text."""
+
+    assert _snapshot_failure_codes() == SNAPSHOT_FAILURES
+    english = _load_json(TRANSLATIONS / "en.json")["entity"]["switch"]["stream_snapshots"]
+    for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
+        switch = _load_json(path)["entity"]["switch"]["stream_snapshots"]
+        last_failure = switch["state_attributes"]["last_failure"]
+        assert last_failure["name"], path.name
+        assert set(last_failure["state"]) == SNAPSHOT_FAILURES, path.name
+        assert all(last_failure["state"].values()), path.name
+        if path.stem not in ("strings", "en"):
+            # A copied English text is not a translation.
+            assert last_failure["name"] != english["state_attributes"]["last_failure"]["name"]
+            for code, text in last_failure["state"].items():
+                assert text != english["state_attributes"]["last_failure"]["state"][code], (path.name, code)
+    guide = (ROOT / "docs" / "user-guide.md").read_text(encoding="utf-8")
+    for code, text in english["state_attributes"]["last_failure"]["state"].items():
+        assert f"| `{code}` | {text} |" in guide, code
+
+
 def test_native_camera_audio_explains_prerequisites_on_all_feature_forms() -> None:
     for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
         data = _load_json(path)
@@ -323,17 +380,28 @@ def test_fixable_core_qml_hook_repair_uses_ha_issue_fix_flow_schema() -> None:
         TRANSLATIONS / "fr.json",
     ):
         data = _load_json(path)
-        fix_flow = _path_value(
-            data,
-            "issues",
-            "device_core_qml_hook_required",
-            "fix_flow",
-        )
-        assert _path_value(fix_flow, "step", "confirm")["description"]
-        assert _path_value(fix_flow, "error")["core_patch_failed"]
-        assert _path_value(fix_flow, "error")["core_patch_verify_failed"]
-        assert _path_value(fix_flow, "abort")["entry_not_loaded"]
-        assert _path_value(fix_flow, "abort")["core_patch_unsupported"]
+        # The same flow, with its own text while an update owes display steps.
+        for key in ("device_core_qml_hook_required", "device_display_followup_pending"):
+            fix_flow = _path_value(data, "issues", key, "fix_flow")
+            assert _path_value(fix_flow, "step", "confirm")["description"]
+            assert _path_value(fix_flow, "error")["core_patch_failed"]
+            assert _path_value(fix_flow, "error")["core_patch_verify_failed"]
+            assert _path_value(fix_flow, "abort")["entry_not_loaded"]
+            assert _path_value(fix_flow, "abort")["core_patch_unsupported"]
+            assert _path_value(fix_flow, "abort")["display_unsupported"]
+        owed = _path_value(data, "issues", "device_display_followup_pending")
+        confirm = _path_value(owed, "fix_flow", "step", "confirm")["description"]
+        assert owed["title"] and "{entry_title}" in confirm
+        assert "{qml_patch_status}" not in confirm
+
+
+def test_no_issue_has_both_a_description_and_a_fix_flow() -> None:
+    """Hassfest takes the two as exclusive: a fixable issue explains itself in its flow."""
+
+    for path in (INTEGRATION / "strings.json", *sorted(TRANSLATIONS.glob("*.json"))):
+        issues = _path_value(_load_json(path), "issues")
+        both = sorted(key for key, issue in issues.items() if "description" in issue and "fix_flow" in issue)
+        assert both == [], f"{path.name}: {both}"
 
 
 def test_fixable_frontend_card_repair_uses_ha_issue_fix_flow_schema() -> None:
@@ -856,7 +924,7 @@ def test_every_flow_error_message_belongs_to_an_error_the_flows_report() -> None
 
 
 def test_the_home_page_buttons_name_the_vendor_layout_stock() -> None:
-    names = {"en": "Stock", "de": "Werkseinstellung", "it": "Di fabbrica", "fr": "D'usine"}
+    names = {"en": "Stock view", "de": "Werksansicht", "it": "Vista di fabbrica", "fr": "Vue d'usine"}
     old = ("Like the original", "Wie das Original", "Come l'originale", "Comme l'original")
     for language, name in names.items():
         data = _load_json(TRANSLATIONS / f"{language}.json")
@@ -867,7 +935,7 @@ def test_the_home_page_buttons_name_the_vendor_layout_stock() -> None:
             assert re.search(re.escape(name) + r"\s?:", help_text), (language, step)
             assert not any(text in help_text for text in old), (language, step)
     strings = _load_json(INTEGRATION / "strings.json")
-    assert strings["selector"]["dashboard_dynamic_homepage"]["options"]["stock"].startswith("Stock (")
+    assert strings["selector"]["dashboard_dynamic_homepage"]["options"]["stock"].startswith("Stock view (")
 
 
 def test_the_busy_station_message_is_plain_in_every_language() -> None:

@@ -515,6 +515,9 @@ def normalize_qml_patch_status(data: Any) -> dict[str, Any]:
         "backup_available": _optional_bool(data.get("backup_available")),
         "core_backup_available": _optional_bool(data.get("core_backup_available")),
         "gui_running": _optional_bool(data.get("gui_running")),
+        "qt5_overlay": _optional_string(data.get("qt5_overlay")),
+        # Set when the Qt 5 display program or start script is unknown.
+        "qt5_unsupported": _optional_string(data.get("qt5_unsupported")),
         # The installed home page button layout; None from an agent that
         # does not report it or a page in neither layout.
         "home_buttons": (

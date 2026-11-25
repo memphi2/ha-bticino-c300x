@@ -2,11 +2,9 @@
 
 [![Validate](https://img.shields.io/badge/checks-local%20%2B%20CI-2ea44f?style=flat-square)](.github/workflows/validate.yml)
 [![Quality](https://img.shields.io/badge/HA%20Quality%20Scale-Self%20assessment-0366d6?style=flat-square)](docs/dev/quality-scale.md)
-[![Release](https://img.shields.io/badge/release-v2.9.2-0366d6?style=flat-square)](CHANGELOG.md)
+[![Release](https://img.shields.io/badge/release-v2.10.0-0366d6?style=flat-square)](CHANGELOG.md)
 [![Marketplace](https://img.shields.io/badge/Home_Assistant-Marketplace-41BDF5?style=flat-square)](https://contributors.home-assistant.io/marketplace/)
 [![License Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
-
-Current version: **2.9.2**.
 
 Local-first Home Assistant custom integration for the BTicino Classe 300X /
 C300X video door station. A small agent on the station connects it to Home
@@ -18,10 +16,6 @@ Assistant over your local network.
 
 [Quick Start](docs/quickstart.md) | [User guide](docs/user-guide.md) |
 [Display pages](docs/display.md) | [Troubleshooting](docs/media-troubleshooting.md)
-
-<p align="center">
-  <a href="https://ko-fi.com/oliver7557"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Support me on Ko-fi"></a>
-</p>
 
 ## Features
 
@@ -50,9 +44,8 @@ Assistant over your local network.
 ## Requirements
 
 - Home Assistant `2026.10.0` or newer.
-- BTicino Classe 300X / C300X firmware `1.7.x` or `2.0.2`. Firmware `3.0.6` is
-  supported experimentally: without the Home Assistant pages on the display and
-  with the low-resolution camera stream.
+- BTicino Classe 300X / C300X firmware `1.7.x`, `2.0.2` or `3.0.6`
+  ([what differs on 3.0.6](docs/quickstart.md#firmware-306)).
 - Root or SSH access on the station for the first agent installation.
 - A trusted local network between Home Assistant and the station.
 
@@ -74,6 +67,12 @@ Then add **BTicino C300X** under **Settings > Devices & services** and follow
 the [Quick Start](docs/quickstart.md): it installs the device agent, walks
 through the options and adds the card. Later releases: [Update](docs/quickstart.md#update).
 
+### Beta Versions
+
+Betas are opt-in: enable **Pre-release** for this repository in Marketplace,
+or beta versions in HACS. Stable installations are not switched to a beta
+automatically. See [beta versions](docs/quickstart.md#beta-versions).
+
 ## Doorbell Video, Ring Calls and Talkback
 
 Use one **C300X Doorbell Call Card** in **Doorstation + Home Call** mode.
@@ -84,7 +83,7 @@ Use one **C300X Doorbell Call Card** in **Doorstation + Home Call** mode.
 | Ring Call | Set **Forwarding** to **Home Assistant**. When someone rings, the card shows the picture; press **Answer**, later **Hang Up**. With **Smartphone**, calls go to the Door Entry app instead. |
 | Home Call | Audio-only call from Home Assistant to the station display. |
 | Talkback | Speak through the browser microphone. Needs HTTPS or Home Assistant Cloud and microphone permission. |
-| Picture controls | Brightness, contrast and colour saturation during a Ring Call; for on-demand video on firmware 1.7.19, 2.0.2 (either video decoder) and 3.0.6 (TVP5150 boards only), once the station reads them back live; 2.0.2 and 3.0.6 are untested on a device. Saved media stays unchanged. |
+| Picture controls | Brightness, contrast and colour saturation during a Ring Call, and for on-demand video once the station reads them back live. Tested on 1.7.19; 2.0.2 and 3.0.6 are checked offline only. On TVP5150 boards (every 3.0.6 station) they may only work during a Ring Call until the station has written the contrast once after a start. Saved media stays unchanged. |
 
 Talking in Home Assistant's own camera view is optional and off by default
 (Home Assistant 2026.11+, **Two-way audio** in Labs and the option **Talk
@@ -99,7 +98,7 @@ Details: [Live picture and talkback](docs/user-guide.md#live-picture-and-talkbac
 <table>
   <tr>
     <td align="center"><strong>Doorbell card</strong><br><img src="docs/images/readme/ha-doorbell-card-en.webp" alt="C300X Doorbell Call Card in Home Assistant dark mode with a saved visitor snapshot, play, call, door and light buttons" width="360"></td>
-    <td align="center"><strong>Station home page</strong><br><img src="docs/images/readme/display-home-stock-en.webp" alt="C300X home page with the station's own buttons and the added Alarm and Home Assistant buttons in two rows" width="360"></td>
+    <td align="center"><strong>Station display</strong><br><img src="docs/images/readme/display-start-en.webp" alt="Home Assistant start page on the station with status, weather and the favourites bar" width="360"></td>
   </tr>
 </table>
 <table>
@@ -110,8 +109,9 @@ Details: [Live picture and talkback](docs/user-guide.md#live-picture-and-talkbac
   </tr>
 </table>
 
-All screenshots come from a C300X and its Home Assistant; camera pictures and
-some values are examples, see [legal notes](docs/legal.md#no-firmware-or-apk-payloads).
+The card is a capture from Home Assistant; the station pages are renders of
+the integration's own display pages with example values on a plain background
+of our own, see [legal notes](docs/legal.md#no-firmware-or-apk-payloads).
 The card shows an earlier visitor image. Entities and pages depend on the
 enabled options.
 
@@ -154,3 +154,7 @@ only be checked against its files. A contribution towards a second unit, or a
 used or defective Classe 300X / C300X (`344642` or `344643`), is welcome in a
 [discussion](https://github.com/memphi2/ha-bticino-c300x/discussions/new?category=general).
 It is voluntary; support and features stay open to everyone.
+
+<p align="center">
+  <a href="https://ko-fi.com/oliver7557"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Support me on Ko-fi"></a>
+</p>

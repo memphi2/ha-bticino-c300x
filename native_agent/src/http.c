@@ -8530,8 +8530,12 @@ static void handle_agent_update_apply(
     c300x_root_close_left_open();
     if (!apply_agent_update_files(config, workspace->manifest, workspace->installed_manifest,
             &summary, apply_agent_update_firewall_patches)) {
-        int status = agent_update_error_status(summary.error);
-        send_json(client_fd, status, status == 409 ? "Conflict" : "Internal Server Error", agent_update_error_json(summary.error));
+        if (summary.qt5_recovery_required) {
+            send_json(client_fd, 409, "Conflict", "{\"ok\":false,\"error\":\"qt5_recovery_required\"}\n");
+        } else {
+            int status = agent_update_error_status(summary.error);
+            send_json(client_fd, status, status == 409 ? "Conflict" : "Internal Server Error", agent_update_error_json(summary.error));
+        }
         free(workspace);
         return;
     }

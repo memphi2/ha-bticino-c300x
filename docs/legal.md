@@ -41,25 +41,22 @@ cd64c8c333ae2cfde2f32a8681054c1a5755a2edafadec1183501cd774088834
 
 ## No firmware or APK payloads
 
-Documentation illustrations under `docs/images/readme/` come from the
-maintainer's own C300X and Home Assistant test instance. None of them are
-extracted firmware assets, and their values are examples.
+Documentation illustrations under `docs/images/readme/` show pages of this
+integration, rendered on a PC from the integration's own page files with
+example data, on a plain background of our own, or browser captures of the
+maintainer's Home Assistant test instance. They contain no firmware artwork,
+and no firmware file is part of this repository. The values shown are
+examples; the two camera pictures are AI-generated views of an entrance and a
+garden, supplied by the maintainer.
 
-- `display-lights-en`, `-light-detail-en` and `-media-player-en` are device
-  photographs with AI-assisted English localization and color matching,
-  display-only crops and perspective correction. They are not pixel-exact.
-- `display-start-en`, `-general-en`, `-more-en`, `-camera-en`,
-  `-appointments-en`, `-energy-flow-en`, `-energy-power-en` and
-  `-energy-consumers-en` are read-only captures of the display framebuffer
-  from 2026-11-20. Their German texts were replaced by the display's English
-  texts, and private content by examples: appointments and consumer names are
-  example text, and the two camera pictures are AI-generated views of an
-  entrance and a garden, supplied by the maintainer, cropped and softened.
-- `display-c300x-dashboard-en`, `-alarmo-en`, `-settings-home-assistant-en`
-  and `-settings-tone-buttons-en` are read-only framebuffer captures from
-  2026-11-23, taken with the station set to English and left unchanged.
-- `display-home-stock-en` is a read-only framebuffer capture from 2026-11-24,
-  taken with the station set to English and left unchanged.
+- The `display-*-en` images show only the integration's own pages, no
+  station pages. The pages run on the station's Qt 4.8 libraries in an
+  emulator on a PC, in English, 800 x 480 pixels. For the render, the
+  station's wallpaper and every station graphic the pages use (button
+  backgrounds, switches, arrows, icons) are replaced by a gradient and
+  similar shapes drawn for the render; the text is set in the free fonts
+  Ubuntu Light (Ubuntu Font Licence 1.0) and DejaVu Sans. The Integration tab
+  picture shows the tab's content without the surrounding Settings page.
 - The `ha-*-en` images are browser captures of the Home Assistant test
   instance from 2026-11-23, in English and dark mode. The picture in the
   doorbell card is an earlier visitor image from the maintainer's own station,

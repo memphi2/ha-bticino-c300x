@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from .const import CONF_DEVICE_UI_ENABLED
+from .display_activation import display_activation_confirmed
 from .event_types import (
     ACTIVATION_EVENTS,
     ALWAYS_REGISTERED_EVENTS,
@@ -242,7 +243,11 @@ def entry_device_ui_enabled_or_patch_active(entry: Any) -> bool:
 def qml_patch_status_is_active(status: Any) -> bool:
     """Return true only for a complete, active C300X Display patch."""
 
-    return isinstance(status, dict) and status.get("patched") is True
+    return (
+        isinstance(status, dict)
+        and status.get("patched") is True
+        and display_activation_confirmed(status)
+    )
 
 
 def events_for_capabilities(capabilities: dict[str, Any]) -> list[str]:

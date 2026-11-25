@@ -245,7 +245,9 @@ class _C300XApiCore:
                 raise C300XDeviceNotRegisteredError(_http_error_text(status, text))
             if status == 409 and _agent_error_field(text, "error") == "station_busy":
                 raise C300XStationBusyError(_http_error_text(status, text))
-            raise C300XAgentApiConnectionError(_http_error_text(status, text))
+            raise C300XAgentApiConnectionError(
+                _http_error_text(status, text), http_status=status,
+                agent_state=_agent_error_field(text, "state") or _agent_error_field(text, "error"))
 
     def _maintenance_headers(self) -> dict[str, str]:
         """Return maintenance authorization headers when configured."""

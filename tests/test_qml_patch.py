@@ -8,7 +8,10 @@ from typing import Any
 
 import pytest
 
-from custom_components.bticino_c300x.api_errors import C300XAgentApiConnectionError
+from custom_components.bticino_c300x.api_errors import (
+    C300XAgentApiConnectionError,
+    C300XAgentApiError,
+)
 from custom_components.bticino_c300x.const import CONF_DASHBOARD_DYNAMIC_HOMEPAGE
 from custom_components.bticino_c300x.data import C300XOperationDiagnostics
 from custom_components.bticino_c300x.entry_locks import clear_entry_locks
@@ -75,8 +78,9 @@ class _FakeApi:
             raise RuntimeError("core apply failed")
         return self.core_apply_status
 
-    async def async_reload_gui(self) -> dict[str, Any]:
+    async def async_reload_gui(self, *, display_restart: bool = False) -> dict[str, Any]:
         self.calls.append("reload_gui")
+        self.reload_display_restart = display_restart
         return {"ok": True}
 
 
@@ -107,6 +111,44 @@ def test_refresh_qml_patch_status_stores_device_status() -> None:
     assert status == {"available": True, "patched": True}
     assert entry.runtime_data.qml_patch_status == status
     assert entry.runtime_data.qml_patch_status_updated_at is not None
+
+
+@pytest.mark.parametrize("overlay", ["failed", "incomplete", "off", "unknown"])
+@pytest.mark.parametrize("late", [False, True])
+@pytest.mark.parametrize("core", [False, True])
+def test_qt5_confirmation_rejects_action_and_late_activation_failure(overlay, late, core):
+    active = {"available": True, "patched": True, "core_patched": True,
+              "gui_running": True, "qt5_overlay": "active"}
+    failed = {**active, "qt5_overlay": overlay}
+    api = _FakeApi(status=failed if late else active,
+                   apply_status=active if late else failed,
+                   core_apply_status=active if late else failed)
+    entry = _entry(api)
+    run = async_apply_qml_core_patch_and_confirm if core else async_apply_qml_patch_and_confirm
+    with pytest.raises(C300XAgentApiError, match="activation is not confirmed"):
+        asyncio.run(run(entry))
+    assert entry.runtime_data.qml_patch_status == failed
+    assert api.calls == (["apply_qml_core" if core else "apply_qml"] + (["qml_status"] if late else []))
+
+
+@pytest.mark.parametrize("late", [False, True])
+def test_qt5_update_failure_stays_visible_without_following_core_failure_with_reload(late):
+    active = {"available": True, "patched": True, "core_patched": True,
+              "gui_running": True, "qt5_overlay": "active"}
+    failed = {**active, "qt5_overlay": "failed"}
+    api = _FakeApi(status=failed, core_apply_status=active if late else failed)
+    entry = _entry(api)
+    with pytest.raises(C300XAgentApiError, match="activation is not confirmed"):
+        asyncio.run(async_restore_qml_patches_after_update(entry, apply_full_patch=False))
+    assert entry.runtime_data.qml_patch_status == failed
+    assert api.calls == ["apply_qml_core", *(["reload_gui", "qml_status"] if late else [])]
+
+
+def test_qt5_restore_can_confirm_complete_removal():
+    original = {"available": True, "patched": False, "core_patched": False,
+                "gui_running": True, "qt5_overlay": "off"}
+    api = _FakeApi(status=original, restore_status=original)
+    assert asyncio.run(async_restore_qml_patch_and_confirm(_entry(api))) == original
 
 
 def test_apply_qml_patch_confirms_with_fresh_status() -> None:
@@ -159,6 +201,52 @@ def test_agent_update_repatch_keeps_a_side_by_side_layout() -> None:
     asyncio.run(async_restore_qml_patches_after_update(entry, apply_full_patch=True))
 
     assert api.dynamic_homepage is False
+    # A Qt 4 status: the reload keeps 2.9.2's wait.
+    assert api.reload_display_restart is False
+
+
+def _script_answer(changed_files: int | None) -> dict[str, Any]:
+    """An apply answer as the API client returns it from the station's script."""
+
+    from custom_components.bticino_c300x._api_normalize import (
+        normalize_qml_patch_status,
+    )
+
+    answer: dict[str, Any] = {"ok": True, "patched": True, "core_patched": True}
+    if changed_files is not None:
+        answer["changed_files"] = changed_files
+    return normalize_qml_patch_status(answer)
+
+
+@pytest.mark.parametrize(
+    ("core", "full", "reload_unchanged", "restarted"),
+    [
+        # Nothing written: the pages were current, the display keeps running.
+        (0, 0, False, False),
+        (0, 0, True, True),
+        (0, 2, False, True),
+        (1, 0, False, True),
+        # An answer without a count does not say that nothing changed.
+        (None, 0, False, True),
+        (0, None, False, True),
+    ],
+)
+def test_agent_update_repatch_restarts_the_display_only_for_changed_pages(
+    core, full, reload_unchanged, restarted,
+) -> None:
+    api = _FakeApi(
+        status={"available": True, "patched": True, "state": "patched"},
+        apply_status=_script_answer(full),
+        core_apply_status=_script_answer(core),
+    )
+    entry = _entry(api)
+
+    asyncio.run(async_restore_qml_patches_after_update(
+        entry, apply_full_patch=True, reload_unchanged=reload_unchanged,
+    ))
+
+    assert ("reload_gui" in api.calls) is restarted
+    assert api.calls[:2] == ["apply_qml_core", "apply_qml"]
 
 
 def test_restore_qml_patch_keeps_action_status_when_confirmation_mismatches() -> None:
@@ -565,3 +653,90 @@ def test_a_real_status_read_clears_an_earlier_failed_read() -> None:
     asyncio.run(async_refresh_qml_patch_status(entry))
 
     assert diagnostics.last_error is None
+
+
+@dataclass
+class _RestartingApi(_FakeApi):
+    """The station answers its write while the display restart still runs."""
+
+    pending_reads: int = 2
+
+    async def async_qml_patch_status(self) -> dict[str, Any]:
+        self.calls.append("qml_status")
+        if self.pending_reads > 0:
+            self.pending_reads -= 1
+            return {**self.status, "gui_restart": "pending", "gui_running": False}
+        return {**self.status, "gui_restart": "idle"}
+
+
+_ACTIVE = {"ok": True, "available": True, "patched": True, "core_patched": True,
+           "gui_running": True, "qt5_overlay": "active"}
+
+
+@pytest.mark.parametrize("core", [False, True])
+def test_a_restart_still_running_is_waited_for_not_failed(monkeypatch, core):
+    from custom_components.bticino_c300x import qml_patch
+
+    monkeypatch.setattr(qml_patch, "DISPLAY_RESTART_POLL_SECONDS", 0)
+    pending = {**_ACTIVE, "gui_running": False, "gui_restart": "pending", "changed_files": 3}
+    api = _RestartingApi(status=_ACTIVE, apply_status=pending, core_apply_status=pending)
+    entry = _entry(api)
+    run = async_apply_qml_core_patch_and_confirm if core else async_apply_qml_patch_and_confirm
+    status = asyncio.run(run(entry))
+    assert status["gui_restart"] == "idle" and status["gui_running"] is True
+    assert api.calls.count("qml_status") >= 3
+
+
+def test_a_restart_that_does_not_end_in_time_is_not_confirmed(monkeypatch):
+    from custom_components.bticino_c300x import qml_patch
+    from custom_components.bticino_c300x.api_errors import C300XDisplayNotConfirmedError
+
+    monkeypatch.setattr(qml_patch, "DISPLAY_RESTART_POLL_SECONDS", 0)
+    monkeypatch.setattr(qml_patch, "DISPLAY_RESTART_WAIT_SECONDS", 0.05)
+    pending = {**_ACTIVE, "gui_running": False, "gui_restart": "pending"}
+    api = _RestartingApi(status=_ACTIVE, core_apply_status=pending, pending_reads=10**6)
+    with pytest.raises(C300XDisplayNotConfirmedError, match="still running"):
+        asyncio.run(async_apply_qml_core_patch_and_confirm(_entry(api)))
+
+
+def test_the_update_followup_waits_for_a_pending_restart(monkeypatch):
+    from custom_components.bticino_c300x import qml_patch
+
+    monkeypatch.setattr(qml_patch, "DISPLAY_RESTART_POLL_SECONDS", 0)
+    pending = {**_ACTIVE, "gui_running": False, "gui_restart": "pending"}
+    api = _RestartingApi(status=_ACTIVE, apply_status=pending, core_apply_status=pending, pending_reads=1)
+    status = asyncio.run(async_restore_qml_patches_after_update(_entry(api), apply_full_patch=True))
+    assert status["gui_running"] is True
+    # The Qt 5 display restart gets the longer reload wait.
+    assert api.reload_display_restart is True
+
+
+def test_a_busy_agent_during_the_restart_wait_does_not_end_it(monkeypatch):
+    """Inside a busy wait further out, a 409 comes straight back; the wait goes on."""
+
+    from custom_components.bticino_c300x import qml_patch
+    from custom_components.bticino_c300x.agent_update import (
+        async_retry_update_maintenance_busy,
+    )
+    from custom_components.bticino_c300x.api_errors import C300XAgentApiConnectionError
+
+    monkeypatch.setattr(qml_patch, "DISPLAY_RESTART_POLL_SECONDS", 0)
+    pending = {**_ACTIVE, "gui_running": False, "gui_restart": "pending"}
+
+    class _BusyOnce(_RestartingApi):
+        busy: int = 1
+
+        async def async_qml_patch_status(self) -> dict[str, Any]:
+            if self.busy:
+                self.busy -= 1
+                self.calls.append("busy")
+                raise C300XAgentApiConnectionError(
+                    "device agent returned HTTP 409: maintenance_busy", http_status=409)
+            return await super().async_qml_patch_status()
+
+    api = _BusyOnce(status=_ACTIVE, pending_reads=0)
+    entry = _entry(api)
+    status = asyncio.run(async_retry_update_maintenance_busy(
+        lambda: qml_patch.async_display_restart_settled(entry, pending)))
+    assert status["gui_restart"] == "idle" and status["gui_running"] is True
+    assert api.calls == ["busy", "qml_status"]

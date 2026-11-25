@@ -70,7 +70,7 @@ def test_previous_release_requires_reachable_tags_and_reports_git_failure(monkey
         previous_release_tag("v2.1.0b2", ROOT)
 
 
-@pytest.mark.parametrize("version", ["2.1.0", "2.1.0b1", "2.1.0rc1"])
+@pytest.mark.parametrize("version", ["2.1.0", "2.1.0b1", "2.1.0rc1", "2.9.0b2"])
 def test_beta_tag_keeps_manifest_notes_and_date_gates(tmp_path, monkeypatch, version):
     monkeypatch.syspath_prepend(str(ROOT / "scripts"))
     checker = importlib.import_module("check_release_tag")
@@ -95,6 +95,19 @@ def test_beta_tag_keeps_manifest_notes_and_date_gates(tmp_path, monkeypatch, ver
         tag, workflow_ref=f"refs/tags/{tag}", workflow_commit="a" * 40,
         checkout_commit="a" * 40,
     ) == []
+
+
+@pytest.mark.parametrize("ref,commit", [
+    ("refs/heads/beta", "a" * 40),
+    ("refs/heads/main", "a" * 40),
+    ("refs/tags/v2.9.0b1", "a" * 40),
+    ("refs/tags/v2.9.0b2", "b" * 40),
+])
+def test_b2_attestation_stays_bound_to_its_tag_and_exact_checkout(monkeypatch, ref, commit):
+    monkeypatch.syspath_prepend(str(ROOT / "scripts"))
+    checker = importlib.import_module("check_release_tag")
+    assert checker.validate_attestation_context(
+        "v2.9.0b2", workflow_ref=ref, workflow_commit=commit, checkout_commit="a" * 40)
 
 
 def test_beta_branch_has_normal_validation_browser_and_security_checks():

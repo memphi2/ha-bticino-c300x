@@ -62,8 +62,10 @@ stops new reads. Nothing is stored on the C300X. `dashboard_energy_updates.py`
 owns subscriptions and the five-minute refresh; Now and Consumers share live
 power subscriptions, throttled to ten seconds. Unloading releases them.
 `C300XEnergy.qml` draws the page only while open and creates curve segments only
-for the visible Power view; `C300XEnergyConsumers.qml` is loaded only for the
-visible Consumers view.
+for the visible Power view; `C300XEnergyConsumers.qml` is loaded when the
+Consumers view is first shown and kept while that view stays selected, also
+while the page hides it under one of its own lists, so its rows and scales
+survive; selecting another view unloads it.
 
 Each config entry keeps its live state in `BticinoC300XRuntimeData`, with a typed
 agent API. `resources` owns its tasks, subscriptions and media preparation
@@ -216,13 +218,12 @@ ASan/UBSan; symbol contracts limit each module's exports and dependencies.
 | `http.c` | API admission, global busy-write guard, poll integration, diagnostics and event accounting. |
 | `http_auth.c` | Bearer, admin, bootstrap and confirmation policy; shared header lookup. Route modules never bypass admission. |
 | `http_maintenance.c` | QML/GUI routes and the single job slot: one child process, retained client socket and completion context. Exposes a write-accounting callback, not the runtime structure. |
-| `http_device_user.c` | Device-user validation and responses, synchronous label writes, asynchronous read-only status phase. |
+| `http_device_user.c` | Device-user validation and responses; the label write and the read-only status as successive phases of one job slot request. `device_user_label.c` starts the label job and words its timeout answer. |
 | `http_service_commands.c` | SSH probe/start/stop and the ordered SSH-before-reboot/removal continuations. |
 | `http_audio_codec.c` | Codec status/action validation and responses. The file transaction stays synchronous; only the reboot tail is a job. |
 | `http_camera_quality.c` | Camera quality routes, like the codec. `camera_quality.c` reads the state and runs an apply under the update lock; `camera_files.c` and `camera_update.c` own the file transaction (backup, write, verify, rollback), `camera_settings.c` and `camera_crop.c` the key edits, `camera_sizes.c` the offered sizes and limits; `camera_quality_body.c` only formats the response. |
 | `http_clients.c`, `http_client_input.c` | Bounded slot admission and deferred dispatch; request receive, framing and deadline. |
 | `command_job.c` | Spawn, bounded nonblocking pipe reads, monotonic deadline, process-group cancellation and reap. Capture buffers are borrowed, never freed by the job. |
-| `command_transaction.c` | Synchronous label-write spawn, bounded output drain and reap. No deadline, cancellation, worker or timer; signal interruptions retry the read/wait so commit/rollback cleanup can finish. |
 
 ### Jobs and Deadlines
 
@@ -236,7 +237,7 @@ The main loop never waits for these scripts; there is no queue and no thread.
 | QML write (incl. failed start, file rollback, restart of the previous GUI) | 30 s |
 | SSH start/stop | 60 s |
 | SSH status | 15 s |
-| Label apply/restore | none (synchronous, see below) |
+| Label apply/restore (QML write jobs, see below) | 30 s |
 
 At a deadline the process group is killed. While a job owns the slot,
 authorized maintenance writes and competing QML or device-user reads get
@@ -250,12 +251,12 @@ releases the socket and context without invoking a completion.
 Service commands discard stdout/stderr, close descriptors up to 4096 and use the
 active-only 50 ms reap tick; an idle job has no timer.
 
-Label writes run through `command_transaction.c` synchronously, including
-commit/rollback, remount cleanup and reap, then start the status job. They have
-no deadline or forced cancellation on purpose: a `SIGKILL` would skip the
-script's rollback/remount traps. A hung label script therefore blocks HTTP and
-graceful shutdown; power loss and forced termination are outside the
-guarantee. QML write transactions keep their previous active files until the
+Label writes are QML write jobs on the maintenance slot (`command_job.c`):
+30 s deadline, then `SIGTERM` for the process group and 15 s for the script's
+rollback/remount trap before `SIGKILL`; the completion then restores the
+routing (restore) and starts the status job. The loop never waits for the
+script, so a hung label script costs one `504`, not the agent; shutdown sends
+the same `SIGTERM` and waits out the grace period. QML write transactions keep their previous active files until the
 GUI start check succeeds and restore them on a failed start. Process presence is
 not a QML-readiness handshake, and QML-write job cancellation is not certified
 as transaction-safe.
@@ -300,10 +301,9 @@ failure and single-slot ownership.
 - `test_native_command_job_wait.py`: exit-only jobs, missing executable, one
   active process, descriptor closure.
 - `test_native_device_user_shutdown.py`: the real QML script against temporary
-  GUI files; commit, rollback, shutdown during start and recovery, read-only
-  remount cleanup, writes longer than ten seconds.
-- `test_native_command_transaction.py`: output bounds, interrupted reads and
-  waits, early stdout close, child and FD cleanup.
+  GUI files; shutdown during the write's and the rollback's GUI start ends in
+  the script's rollback, read-only remount cleanup, writes longer than ten
+  seconds are not killed.
 
 ## Request Workers
 
@@ -427,7 +427,7 @@ Paths are under `/api/v1/maintenance/` except device-user.
 | POST `update/apply` | `apply_agent_update_files` (`agent_update.c`): hash/copy/backup transaction, `system(mount ...)`; may enter both firewall apply paths. |
 | POST `audio-codec/actions/apply` or `restore` | Paired-file backup/patch/fsync and remount; only the SSH/reboot tail is a job. |
 | POST `camera-quality` | Backup/write/fsync of the settings file and, for the high stream, the crop file, with `c300x_device_file_remount`; choosing or leaving 960x576 also patches or restores the media executable. Rollback included, all on the loop. |
-| GET `/api/v1/device-user`; POST `device-user/actions/ensure-homeassistant`, `restore-homeassistant-setup` | Status reads hash files; ensure/restore patch routing (`c300x_patch_remount_root` -> `system`, copies, fsync) and persist user credentials; label writes via `c300x_command_transaction_capture`. |
+| GET `/api/v1/device-user`; POST `device-user/actions/ensure-homeassistant`, `restore-homeassistant-setup` | Status reads hash files; ensure/restore patch routing (`c300x_patch_remount_root` -> `system`, copies, fsync) and persist user credentials; label writes are QML write jobs (not on the loop). |
 
 Positive-delay `run_detached_command` calls (agent restart, update restart)
 return after fork and are not waits; their acceptance semantics must not turn

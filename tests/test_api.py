@@ -1720,6 +1720,28 @@ def test_reload_gui_sends_maintenance_confirmation() -> None:
     assert request["kwargs"]["json"] == {"confirm": "reload_gui"}
 
 
+def test_reload_gui_waits_as_long_as_a_display_patch_write() -> None:
+    """A Qt 5 display restart first waits for the old display program to end."""
+
+    calls: list[dict[str, object]] = []
+    api = C300XAgentApi(
+        _FakeSession(),  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+        "maintenance-token",
+        timeout=5,
+    )
+
+    async def request_json(method: str, path: str, **request_kwargs: object) -> dict[str, object]:
+        calls.append(request_kwargs)
+        return {"ok": True}
+
+    api._request_json = request_json  # type: ignore[method-assign]
+    asyncio.run(api.async_reload_gui(display_restart=True))
+    asyncio.run(api.async_apply_qml_core_patch())
+    assert calls[0]["request_timeout"] == calls[1]["request_timeout"] == 50.0
+
+
 def test_firewall_status_uses_maintenance_endpoint() -> None:
     session = _FakeSession('{"ok": true, "state": "patched", "api_port": 8091}')
     api = C300XAgentApi(
@@ -2542,10 +2564,16 @@ def test_normalize_qml_patch_status_derives_state() -> None:
         "backup_available": None,
         "core_backup_available": None,
         "gui_running": None,
+        "qt5_overlay": None,
+        "qt5_unsupported": None,
         "home_buttons": None,
         "transaction": None,
         "raw": {"patched": True},
     }
+    assert normalize_qml_patch_status({"patched": True, "qt5_overlay": "failed"})["qt5_overlay"] == "failed"
+    assert normalize_qml_patch_status(
+        {"ok": False, "qt5_overlay": "off", "qt5_unsupported": "display_program_unknown"}
+    )["qt5_unsupported"] == "display_program_unknown"
     for transaction in ("pending", "recovered", "stuck"):
         assert normalize_qml_patch_status({"transaction": transaction})["transaction"] == transaction
     for malformed in ("other", 1, None, []):
@@ -3984,7 +4012,6 @@ def test_ordinary_message_and_memo_ids_stay_valid(message_id):
 
 @pytest.mark.parametrize("call", [
     lambda api: api.async_qml_patch_status(),
-    lambda api: api.async_reload_gui(),
     lambda api: api.async_firewall_status(),
     lambda api: api.async_apply_firewall(),
     lambda api: api.async_restore_firewall(),
@@ -3996,9 +4023,10 @@ def test_ordinary_message_and_memo_ids_stay_valid(message_id):
 def test_script_backed_maintenance_requests_outlast_the_agent_script(
     call, configured, expected
 ) -> None:
-    # The agent answers these after running a script it gives 10 s. With the
-    # 5 s default the request gave up while the script was still running and
-    # an agent update reported a failure that a second try did not show.
+    # The agent answers these after running a script it gives 10 s (a GUI
+    # restart has the longer write timeout, see above). With the 5 s default
+    # the request gave up while the script was still running and an agent
+    # update reported a failure that a second try did not show.
     session = _FakeSession('{"ok": true, "patched": true, "state": "patched"}')
     api = C300XAgentApi(
         session,  # type: ignore[arg-type]
@@ -4009,6 +4037,25 @@ def test_script_backed_maintenance_requests_outlast_the_agent_script(
     )
 
     asyncio.run(call(api))
+
+    assert session.requests[0]["kwargs"]["timeout"] == expected
+
+
+@pytest.mark.parametrize(("configured", "expected"), [(5.0, 30.0), (45.0, 45.0)])
+def test_gui_reload_request_outlasts_the_restart_the_agent_lets_finish(configured, expected) -> None:
+    # Past its 10 s the reload script gets SIGTERM and 15 s to finish the
+    # restart; the agent answers only then. A 15 s wait gave up before that
+    # and reported a timeout instead of the agent's ``reload_failed``.
+    session = _FakeSession('{"ok": true, "action": "reload_gui"}')
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+        maintenance_token="maintenance-token",
+        timeout=configured,
+    )
+
+    asyncio.run(api.async_reload_gui())
 
     assert session.requests[0]["kwargs"]["timeout"] == expected
 

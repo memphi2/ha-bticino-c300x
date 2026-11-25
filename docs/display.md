@@ -3,17 +3,12 @@
 The Display patch adds Home Assistant pages to the C300X's own blue interface:
 tiles for your entities, an energy page, an agenda, departure checks, an Alarmo
 page and notices from automations. They are native station pages, not the
-Lovelace card or an embedded Home Assistant dashboard. Display pages need
-firmware 1.7.x or 2.0.2; on firmware 3.0.6 (experimental) the station's Qt 5
-interface has no display files to patch, so the Display patch is skipped and
-these pages are not available.
-
-<table>
-  <tr>
-    <td align="center"><strong>Home page buttons: Stock</strong><br><img src="images/readme/display-home-stock-en.webp" alt="C300X home page in the Stock layout: the Alarm and Home Assistant buttons among the station's own buttons, wrapped into two rows" width="360"></td>
-    <td align="center"><strong>Home page buttons: Fixed side by side</strong><br><img src="images/readme/display-c300x-dashboard-en.webp" alt="C300X home page with the Alarm and Home Assistant buttons in fixed places next to each other after Settings" width="360"></td>
-  </tr>
-</table>
+Lovelace card or an embedded Home Assistant dashboard. Display pages run on
+firmware 1.7.x, 2.0.2 and 3.0.6
+([Display Patch on Firmware 3.0.6](#display-patch-on-firmware-306)). Two
+buttons on the station's home page, **Alarm** and **Home Assistant**, open
+them; where they sit is set with **Home page buttons**
+([Enable the Display Pages](#enable-the-display-pages)).
 
 Page and tile settings are stored in Home Assistant, and the display asks for
 them, so changing them writes nothing to the station. Entity changes reach the
@@ -48,7 +43,7 @@ settings stay.
 | **Home Assistant pages on the display** | On applies the Display patch, off restores the original display. |
 | **Keep the page open on screen standby** | Off (default): the Home Assistant and Alarm pages return to the station's home page when the screen goes to standby. On: they stay open. |
 | **Page navigation** | **Favourites bar** (default) or **Arrows (previous / next)**; see [Page navigation](#page-navigation). |
-| **Home page buttons** | Where the **Alarm** and **Home Assistant** buttons sit on the station's home page. **Stock (when needed, also stacked)** (default): each button appears only while it has something to open and takes its place among the station's own buttons, which wrap into a second row like they always do. **Fixed side by side**: both keep two fixed places next to each other after **Settings**; a button with nothing to open leaves its place empty, so the other buttons never move. While the station shows its **Quick actions** panel, the buttons fill up to two rows of four from left to right, so all of them fit beside the panel. A change applies the Display patch again and restarts the display once. |
+| **Home page buttons** | Where the **Alarm** and **Home Assistant** buttons sit on the station's home page. **Stock view (when needed, also stacked)** (default): each button appears only while it has something to open and takes its place among the station's own buttons, which wrap into a second row like they always do. **Fixed side by side**: both keep two fixed places next to each other after **Settings**; a button with nothing to open leaves its place empty, so the other buttons never move. While the station shows its **Quick actions** panel, the buttons fill up to two rows of four from left to right, so all of them fit beside the panel. A change applies the Display patch again and restarts the display once. |
 | **Allowed actions (for experts)** | Actions the display and its notices may run. Leave empty if you use none. |
 
 The Alarm button has something to open while an alarm panel is configured, the
@@ -97,7 +92,8 @@ The optional `dashboard` object changes that tile:
   to Home Assistant, with a yellow exclamation mark while the station cannot
   reach it ([Home Assistant not reachable](#home-assistant-not-reachable)).
 - The swipe threshold of the touch screen rises from 4 to 16 pixels, so a tap
-  that moves a little is no longer taken for a swipe.
+  that moves a little is no longer taken for a swipe (firmware 1.7.x and
+  2.0.2 only).
 - Every original file it changes is backed up first. Turning the patch off or
   [removing the agent](advanced-maintenance.md#remove-agent) restores them.
   Installing the agent alone, without the Display patch, leaves the Settings
@@ -105,6 +101,62 @@ The optional `dashboard` object changes that tile:
 
 After an integration update, the agent-update Repair installs the matching
 agent and display files together.
+
+### Display Patch on Firmware 3.0.6
+
+The display has the same buttons, pages and **Integration** tab as on 1.7.x
+and 2.0.2, and is switched on and off the same way. Its pages are part of the
+station's display program, so the Display patch keeps the changed pages in the
+agent's folder and the display loads them at each start. On a 3.0.6 station
+the pages loaded at start and the Alarm and Home Assistant buttons sat in the
+right place; the other pages are checked offline only.
+
+- **When the display fails with the pages:** the agent starts it once more
+  and then as shipped, until the station restarts. The Display patch status
+  reads **applied, but the display started as shipped**. Turning the
+  **Display patch** switch on, the core hook Repair or an agent update tries
+  the pages again; saving the display settings does not.
+- **Restarts:** the agent runs one display restart at a time, after the old
+  display has ended; changes close together share one restart. Home Assistant
+  waits for a restart that takes longer.
+- **Install and update:** a display step that fails does not fail the
+  installation or the agent update; the core hook Repair stays until it has
+  run the display steps again. A step that could not run at all, for example
+  without a connection, still fails.
+- **On a display the agent does not know**, for example after a firmware
+  update, the display stays as shipped and the agent runs without the pages.
+  Repairs shows **C300X display pages are not available on this station**
+  with the reason.
+- **Removal:** removing the agent restores the station's display start. Before
+  going back to a release older than 2.10.0, remove the pages completely over
+  SSH with `/home/bticino/cfg/extra/c300x-native-agent/qml_patch.sh restore-all`
+  and check that its last line contains `"qt5_overlay":"off"`; older releases
+  cannot remove them, and the agent update refuses an older agent with
+  `qt5_recovery_required` until then.
+- **If the station keeps restarting** after an install, an update or saving
+  the display settings:
+  1. Over SSH, between two restarts, rename the display resource file:
+     `mv /home/bticino/cfg/extra/c300x-native-agent/display-qt5.rcc /home/bticino/cfg/extra/c300x-native-agent/display-qt5.rcc.hang`.
+     The next start uses the original display.
+  2. Once the original display runs, remove the pages and the core hook over
+     SSH: `/home/bticino/cfg/extra/c300x-native-agent/qml_patch.sh restore-all`.
+     Its last line contains `"qt5_overlay":"off"`; the display restarts once,
+     as shipped. If it answers `An unfinished GUI write is still in place`,
+     wait a minute and run it again.
+  3. If the restarts began with an install from Home Assistant or after
+     saving the display settings, also turn off **Home Assistant pages on the
+     display** (this discards the page settings); otherwise Home Assistant
+     applies the pages again at its next start. After step 2 this writes
+     nothing to the station.
+  4. Until you have reported it, do not run the core hook Repair, the
+     **Display patch** switch or an agent update: each writes the resource
+     file again. Keep `display-qt5.rcc.hang` for the report.
+- **What to report:** the Display patch status, the integration diagnostics
+  and, if you can reach the device, `/tmp/c300x-display-qt5.log` (the display's
+  error output, at most 64 KB, cleared by a restart of the device).
+
+Technical details: [Native Agent](dev/native-agent.md#supported-firmware-versions)
+and the [firmware display audit](dev/firmware-3.0.6-display.md).
 
 ## Pages and Positions
 
@@ -161,7 +213,7 @@ reserved for the status page.
 
 <table>
   <tr>
-    <td align="center"><strong>Favourites bar</strong><br><img src="images/readme/display-start-en.webp" alt="Start page with the favourites bar along the bottom edge" width="360"></td>
+    <td align="center"><strong>Favourites bar</strong><br><img src="images/readme/display-start-en.webp" alt="Start page with status, weather and the favourites bar along the bottom edge" width="360"></td>
     <td align="center"><strong>More: the other pages</strong><br><img src="images/readme/display-more-en.webp" alt="The list of further pages that More opens" width="360"></td>
   </tr>
 </table>
@@ -184,8 +236,8 @@ pages uses the data already loaded and requests nothing new.
     <td align="center"><strong>Light overview</strong><br><img src="images/readme/display-lights-en.webp" alt="Eight light tiles with state, brightness and on-off controls" width="360"></td>
   </tr>
   <tr>
-    <td align="center"><strong>Brightness and color</strong><br><img src="images/readme/display-light-detail-en.webp" alt="Light detail page with brightness slider and color presets" width="360"></td>
-    <td align="center"><strong>Media player</strong><br><img src="images/readme/display-media-player-en.webp" alt="Media player with current program, pause, volume, mute and shuffle" width="360"></td>
+    <td align="center"><strong>Brightness and color</strong><br><img src="images/readme/display-light-detail-en.webp" alt="Light detail page with brightness slider and color presets; the list scrolls" width="360"></td>
+    <td align="center"><strong>Media player</strong><br><img src="images/readme/display-media-player-en.webp" alt="Media player with current program, previous, pause and next, volume and mute; further controls follow below" width="360"></td>
   </tr>
 </table>
 
@@ -344,7 +396,7 @@ between them; all views off hides the page and keeps its settings.
 
 ## Agenda
 
-<p align="center"><img src="images/readme/display-appointments-en.webp" alt="Agenda page with two upcoming events" width="480"></p>
+<p align="center"><img src="images/readme/display-appointments-en.webp" alt="Agenda page with four upcoming events and the scroll bar for the further ones" width="480"></p>
 
 Turn on **Show Agenda** and select up to eight Home Assistant calendars. The
 page shows up to five ongoing or upcoming events within the next seven days,
@@ -393,7 +445,7 @@ action, does not wake the display and never changes the page by itself.
 
 ## Alarm Page (Alarmo)
 
-<p align="center"><img src="images/readme/display-alarmo-en.webp" alt="Alarm page while arming: Away and Night modes, PIN keypad with a PIN being entered, countdown and a Leaving Home shortcut" width="480"></p>
+<p align="center"><img src="images/readme/display-alarmo-en.webp" alt="Alarm page while arming: Away and Night modes, PIN keypad with a PIN being entered, countdown, a Leaving Home shortcut and the status line below it" width="480"></p>
 
 The Alarm page is a subpage in the station's original blue design, opened by
 the Alarm button on the home page. It is not one of the numbered pages. Set it
@@ -471,19 +523,14 @@ station's **Settings** menu, below **Configuration**. **Status messages**,
 Display options need it and are greyed out while it cannot be reached. Only
 maintenance operations the agent has enabled are offered.
 
-<table>
-  <tr>
-    <td align="center"><strong>Integration tab</strong><br><img src="images/readme/display-settings-home-assistant-en.webp" alt="Station Settings, Integration tab with SSH, Status messages, Reboot station and Remove agent" width="360"></td>
-    <td align="center"><strong>Generals: Tone buttons</strong><br><img src="images/readme/display-settings-tone-buttons-en.webp" alt="Station Settings, Generals tab with the Tone buttons switch" width="360"></td>
-  </tr>
-</table>
+<p align="center"><img src="images/readme/display-settings-home-assistant-en.webp" alt="Content of the Integration tab: status block with Home Assistant, Address, Last contact, Integration and Agent, then the Display switches Status messages, Keep page open in standby and Page change; the Station section with SSH, Reboot station and Remove agent follows when scrolling" width="360"></p>
 
 The tab starts with a short status block:
 
 | Line | Meaning |
 | --- | --- |
 | **Home Assistant** | **reachable** with the name of the Home Assistant instance, or **not reachable** with the reason underneath (see [Home Assistant not reachable](#home-assistant-not-reachable)). |
-| Second line | The address the station calls Home Assistant at: `http` or `https`, host and port, on a line of its own so that long names fit. Nothing else of the address is shown. |
+| **Address** | The address the station calls Home Assistant at: `http` or `https`, host and port. A long address takes a second line; a very long one is shortened in the middle, so that its start and its port stay visible. Nothing else of the address is shown. |
 | **Last contact** | How long ago the agent and Home Assistant last exchanged a request, or **never since start**. Read when the tab opens, and once more after Home Assistant has answered. |
 | **Integration**, **Agent** | The version of the integration, and of the agent with the station firmware. The integration version is known only while Home Assistant answers. |
 
@@ -511,6 +558,11 @@ patch. While Home Assistant cannot be reached, both switches are greyed out.
 station preference, not an integration option, and survives restarts. If the
 agent cannot read or save it, the switch shows **Setting unavailable**; reopen
 the tab before trying again.
+
+What the tab cannot read when it opens shows at the rows: the switch or button
+concerned is greyed out. A line at the foot of the tab appears only as the
+result of something done there: a request the station accepted, a setting
+that could not be saved, or a request that got no answer in time.
 
 ### Home Assistant not reachable
 

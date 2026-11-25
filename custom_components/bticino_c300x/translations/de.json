@@ -130,7 +130,7 @@
           "actions_json": "Aktionen, die das Display und seine Benachrichtigungen ausführen dürfen, als JSON: ein Eintrag je Aktion mit domain und service, optional target und data. Leer lassen, wenn du keine nutzt.",
           "dashboard_prevent_return": "An: Die Home-Assistant- und die Alarm-Seite bleiben offen, wenn der Bildschirm in den Standby geht. Aus: Das Display kehrt dann zur Startseite zurück.",
           "dashboard_navigation": "So wechselt das Display die Seiten. Die Favoritenleiste zeigt die ersten vier Seiten als Schaltflächen am unteren Rand. Bei mehr als vier Seiten heißt die vierte Schaltfläche „Mehr“ und öffnet die Liste der übrigen Seiten. Die Reihenfolge folgt den Seitenpositionen.",
-          "dashboard_dynamic_homepage": "Wo die Knöpfe Alarm und Home Assistant auf der Startseite des C300X stehen. Werkseinstellung: Jeder Knopf erscheint nur, solange er etwas zu öffnen hat, und reiht sich zwischen die originalen Knöpfe ein, auch untereinander, wenn die Reihe voll ist. Fest nebeneinander: Beide behalten zwei feste Plätze nebeneinander; ein Knopf ohne Inhalt lässt seinen Platz leer. Eine Änderung wendet den Display-Patch erneut an und startet das Display einmal neu."
+          "dashboard_dynamic_homepage": "Wo die Knöpfe Alarm und Home Assistant auf der Startseite des C300X stehen. Werksansicht: Jeder Knopf erscheint nur, solange er etwas zu öffnen hat, und reiht sich zwischen die originalen Knöpfe ein, auch untereinander, wenn die Reihe voll ist. Fest nebeneinander: Beide behalten zwei feste Plätze nebeneinander; ein Knopf ohne Inhalt lässt seinen Platz leer. Eine Änderung wendet den Display-Patch erneut an und startet das Display einmal neu."
         }
       },
       "user_dashboard_entity_display": {
@@ -243,7 +243,7 @@
           "actions_json": "Aktionen, die das Display und seine Benachrichtigungen ausführen dürfen, als JSON: ein Eintrag je Aktion mit domain und service, optional target und data. Leer lassen, wenn du keine nutzt.",
           "dashboard_prevent_return": "An: Die Home-Assistant- und die Alarm-Seite bleiben offen, wenn der Bildschirm in den Standby geht. Aus: Das Display kehrt dann zur Startseite zurück.",
           "dashboard_navigation": "So wechselt das Display die Seiten. Die Favoritenleiste zeigt die ersten vier Seiten als Schaltflächen am unteren Rand. Bei mehr als vier Seiten heißt die vierte Schaltfläche „Mehr“ und öffnet die Liste der übrigen Seiten. Die Reihenfolge folgt den Seitenpositionen.",
-          "dashboard_dynamic_homepage": "Wo die Knöpfe Alarm und Home Assistant auf der Startseite des C300X stehen. Werkseinstellung: Jeder Knopf erscheint nur, solange er etwas zu öffnen hat, und reiht sich zwischen die originalen Knöpfe ein, auch untereinander, wenn die Reihe voll ist. Fest nebeneinander: Beide behalten zwei feste Plätze nebeneinander; ein Knopf ohne Inhalt lässt seinen Platz leer. Eine Änderung wendet den Display-Patch erneut an und startet das Display einmal neu."
+          "dashboard_dynamic_homepage": "Wo die Knöpfe Alarm und Home Assistant auf der Startseite des C300X stehen. Werksansicht: Jeder Knopf erscheint nur, solange er etwas zu öffnen hat, und reiht sich zwischen die originalen Knöpfe ein, auch untereinander, wenn die Reihe voll ist. Fest nebeneinander: Beide behalten zwei feste Plätze nebeneinander; ein Knopf ohne Inhalt lässt seinen Platz leer. Eine Änderung wendet den Display-Patch erneut an und startet das Display einmal neu."
         }
       },
       "reconfigure_dashboard_entity_display": {
@@ -672,6 +672,7 @@
     "error": {
       "agent_bundle_missing": "Das paketierte ARMHF-Agent-Bundle fehlt. Baue/paketiere das Release-Bundle, bevor der Installer genutzt wird.",
       "device_install_failed": "Die SSH-Installation ist fehlgeschlagen. Prüfe den SSH-Zugriff und versuche es erneut.",
+      "device_display_timeout": "Die Display-Dateien wurden nicht innerhalb der Zeitgrenze geschrieben; das Gerät wurde angewiesen, die vorherigen Dateien wiederherzustellen. Prüfe, ob das Display funktioniert, und versuche es erneut.",
       "device_install_verify_failed": "Die Installation ist fertig, aber der native Agent antwortet nicht mit dem generierten Zugangsschlüssel.",
       "invalid_agent_port": "Gib einen gültigen Device-Agent-Port ein.",
       "invalid_agent_host": "Gib den Device-Agent-Host ein.",
@@ -842,7 +843,7 @@
           "actions_json": "Aktionen, die das Display und seine Benachrichtigungen ausführen dürfen, als JSON: ein Eintrag je Aktion mit domain und service, optional target und data. Leer lassen, wenn du keine nutzt.",
           "dashboard_prevent_return": "An: Die Home-Assistant- und die Alarm-Seite bleiben offen, wenn der Bildschirm in den Standby geht. Aus: Das Display kehrt dann zur Startseite zurück.",
           "dashboard_navigation": "So wechselt das Display die Seiten. Die Favoritenleiste zeigt die ersten vier Seiten als Schaltflächen am unteren Rand. Bei mehr als vier Seiten heißt die vierte Schaltfläche „Mehr“ und öffnet die Liste der übrigen Seiten. Die Reihenfolge folgt den Seitenpositionen.",
-          "dashboard_dynamic_homepage": "Wo die Knöpfe Alarm und Home Assistant auf der Startseite des C300X stehen. Werkseinstellung: Jeder Knopf erscheint nur, solange er etwas zu öffnen hat, und reiht sich zwischen die originalen Knöpfe ein, auch untereinander, wenn die Reihe voll ist. Fest nebeneinander: Beide behalten zwei feste Plätze nebeneinander; ein Knopf ohne Inhalt lässt seinen Platz leer. Eine Änderung wendet den Display-Patch erneut an und startet das Display einmal neu."
+          "dashboard_dynamic_homepage": "Wo die Knöpfe Alarm und Home Assistant auf der Startseite des C300X stehen. Werksansicht: Jeder Knopf erscheint nur, solange er etwas zu öffnen hat, und reiht sich zwischen die originalen Knöpfe ein, auch untereinander, wenn die Reihe voll ist. Fest nebeneinander: Beide behalten zwei feste Plätze nebeneinander; ein Knopf ohne Inhalt lässt seinen Platz leer. Eine Änderung wendet den Display-Patch erneut an und startet das Display einmal neu."
         }
       },
       "dashboard_entity_display": {
@@ -1404,7 +1405,21 @@
         "name": "Home Assistant User-Patch"
       },
       "stream_snapshots": {
-        "name": "Bilder speichern"
+        "name": "Bilder speichern",
+        "state_attributes": {
+          "last_failure": {
+            "name": "Letzter Fehler",
+            "state": {
+              "snapshot_unavailable": "Displaybild konnte nicht gelesen werden",
+              "snapshot_throttled": "Zu kurz nach dem vorherigen Bild angefordert",
+              "invalid_snapshot_size": "Türstation hat die Bildgröße abgelehnt",
+              "invalid_image": "Türstation hat ein ungültiges Bild geliefert",
+              "agent_unreachable": "Device-Agent nicht erreichbar",
+              "agent_error": "Device-Agent hat einen Fehler gemeldet",
+              "save_failed": "Home Assistant konnte das Bild nicht speichern"
+            }
+          }
+        }
       }
     }
   },
@@ -1518,6 +1533,7 @@
         },
         "error": {
           "ssh_install_failed": "Die SSH-Reparaturinstallation ist fehlgeschlagen. Prüfe den SSH-Zugriff und versuche es erneut.",
+          "device_display_timeout": "Die Display-Dateien wurden nicht innerhalb der Zeitgrenze geschrieben; das Gerät wurde angewiesen, die vorherigen Dateien wiederherzustellen. Prüfe, ob das Display funktioniert, und versuche es erneut.",
           "update_failed": "Das Device-Agent-Update ist fehlgeschlagen. Prüfe, ob Maintenance-Zugriff aktiv ist, und versuche es erneut.",
           "update_root_already_writable": "Das Update wurde vor dem Anwenden abgelehnt, weil das Root-Dateisystem (/) bereits beschreibbar war. Falls du / zuvor manuell beschreibbar eingehängt hast, starte das Gerät normal neu und wiederhole dann diese Reparatur. Andernfalls kläre vor einem neuen Versuch, warum / beschreibbar ist.",
           "update_root_readonly_failed": "Das Update konnte das Root-Dateisystem (/) nicht wieder schreibgeschützt einhängen. Der endgültige Gerätezustand ist ungewiss; eine erfolgreiche Wiederherstellung ist nicht bestätigt. Bewahre Wiederherstellungsdateien auf und prüfe Agent und Dateisystem vor einem weiteren Update.",
@@ -1542,6 +1558,10 @@
       "title": "C300X Display-Ereignis-Watcher wurde geschützt",
       "description": "{entry_title} hat zu viele gleichzeitige C300X Display-Ereignis-Watcher erkannt. Der Device Agent hat den zusätzlichen Watcher abgelehnt, damit keine lokale Display-Polling-Schleife den C300X überlastet. Aktive Watcher: {waiters}/{capacity}. Abgelehnte Watcher: {overflows}. Lade die C300X Display-GUI über die Integration neu, wenn Dashboard oder Memos am Display nicht mehr aktualisiert werden, und aktualisiere danach die Diagnose."
     },
+    "device_display_unsupported": {
+      "title": "C300X-Displayseiten sind auf dieser Station nicht verfügbar",
+      "description": "{entry_title}: Der Geräte-Agent kennt das Displayprogramm oder das Display-Startskript dieser Station nicht ({reason}). Er hat das Display im Originalzustand gelassen und läuft ohne die Displayseiten: Die Station zeigt keine Home-Assistant-Seiten oder -Tasten, und der Display-Patch bleibt aus. Die übrigen Funktionen des Agenten arbeiten wie vor den Displayseiten für Firmware 3.0.x. Ein erneutes Anwenden des Display-Patches prüft die Station noch einmal."
+    },
     "device_core_qml_hook_required": {
       "title": "C300X Core-Media-Hook fehlt",
       "fix_flow": {
@@ -1557,7 +1577,28 @@
         },
         "abort": {
           "entry_not_loaded": "Der BTicino-C300X-Eintrag ist nicht geladen.",
-          "core_patch_unsupported": "Der installierte C300X Device-Agent unterstützt das Anwenden des Core-Media-Hooks nicht."
+          "core_patch_unsupported": "Der installierte C300X Device-Agent unterstützt das Anwenden des Core-Media-Hooks nicht.",
+          "display_unsupported": "Der Geräte-Agent kennt das Display dieser Station nicht; er läuft ohne die Displayseiten, und es gibt keinen Core-Media-Hook anzuwenden."
+        }
+      }
+    },
+    "device_display_followup_pending": {
+      "title": "C300X-Displayseiten müssen nach dem Update noch angewendet werden",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "C300X-Displayseiten erneut anwenden",
+            "description": "{entry_title}: Das Agent-Update oder die Installation ist abgeschlossen, aber die anschließenden Display-Schritte waren auf dem Display der Station nicht erfolgreich. Die Displayseiten des neuen Agents sind noch nicht bestätigt; die Station zeigt möglicherweise noch die Seiten des früheren Agents oder das Original-Display.\n\nHome Assistant führt die Display-Schritte aus, die das Update offen gelassen hat: den Core-Media-Hook, die Displayseiten, wenn der Display-Patch eingeschaltet ist, und einen Neustart des Displays der Station. Das Display wird währenddessen dunkel und startet neu; das kann einige Minuten dauern."
+          }
+        },
+        "error": {
+          "core_patch_failed": "Die Display-Schritte waren nicht erfolgreich. Prüfe, ob die Station erreichbar ist und ihr Display läuft, und versuche es erneut.",
+          "core_patch_verify_failed": "Die Display-Schritte liefen, aber der Agent hat den Core-Media-Hook nicht bestätigt."
+        },
+        "abort": {
+          "entry_not_loaded": "Der BTicino-C300X-Eintrag ist nicht geladen.",
+          "core_patch_unsupported": "Der installierte C300X-Geräte-Agent unterstützt die Display-Schritte nicht.",
+          "display_unsupported": "Der Geräte-Agent kennt das Display dieser Station nicht; er läuft ohne die Displayseiten, und es gibt keine Display-Schritte auszuführen."
         }
       }
     },
@@ -1743,7 +1784,7 @@
     },
     "dashboard_dynamic_homepage": {
       "options": {
-        "stock": "Werkseinstellung (bei Bedarf, auch untereinander)",
+        "stock": "Werksansicht (bei Bedarf, auch untereinander)",
         "side_by_side": "Fest nebeneinander"
       }
     },
@@ -1752,7 +1793,9 @@
         "patched": "angewendet",
         "original": "nicht angewendet (Originaldateien)",
         "unknown": "unbekannt",
-        "unavailable": "nicht abrufbar"
+        "unavailable": "nicht abrufbar",
+        "display_failed": "angewendet, aber das Display startete im Originalzustand",
+        "display_unsupported": "für das Display dieser Station nicht verfügbar"
       }
     }
   },

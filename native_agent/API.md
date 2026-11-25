@@ -12,7 +12,7 @@ proxy if a site needs TLS.
 ## Versioning
 
 - HTTP base path: `/api/v1`
-- Current agent version: `2.9.2`
+- Current agent version: `2.10.0`
 - Self-test contract version: `api_version: "1.1"`
 - Normal payloads are JSON unless an endpoint explicitly returns binary media.
 
@@ -1253,6 +1253,25 @@ reboot makes it read-only. The agent remembers that root as its own, also
 across an agent restart, and its next device write or agent update tries the
 read-only remount again.
 
+The label is then written by `qml_patch.sh media-user-label-apply` (not on a
+Qt 5 display), as a QML write job: the request stays open, other maintenance
+requests get `409 maintenance_busy`, and the agent keeps serving everything
+else. A script that fails, or reports `"ok":false`, is answered `500` with
+`media_user_label_setup_failed`. A script still running after the 30-second
+QML write deadline gets `SIGTERM` for its process group and the same 15
+seconds for its rollback trap before `SIGKILL`; the request is answered once
+the script has ended, with `504`:
+
+```json
+{"ok": false, "error": "media_user_label_timeout", "rolled_back": true}
+```
+
+`rolled_back` has the meaning it has for `qml_patch_timeout`: `true` only for
+exit status 130, the label files as before and `/` read-only. The media user
+and the routing set up by this request stay; a repeated ensure writes the
+label. Agent shutdown during the label write sends the `SIGTERM` once and
+waits up to the 15 seconds; the request is closed without an answer.
+
 ### `POST /api/v1/maintenance/device-user/actions/restore-homeassistant-setup`
 
 Authentication: maintenance.
@@ -1265,6 +1284,9 @@ that script fails, or exits zero and reports `"ok":false` (a display restart
 that failed, after which it put the labelled files back), the agent answers
 `500` with `media_user_label_restore_failed` and leaves the media user and the
 routing as they are. A script that prints no JSON counts by its exit status.
+The script runs as the same QML write job as the label write of ensure: past
+30 seconds it is answered `504` with `media_user_label_timeout` as described
+there, and the media user and the routing are left as they are.
 
 Request fields:
 
@@ -1353,7 +1375,8 @@ new busy status or execution deadline. The 500ms receive deadline applies to
 incomplete input, not a complete deferred SSH request. Unauthorized and disabled
 SSH requests are not deferred. Retrying a busy request must wait for completion.
 
-QML status and standalone GUI reload retain a 10-second script deadline; QML
+QML status and standalone GUI reload retain a 10-second script deadline (the
+reload is not killed at it, see below); QML
 writes retain 30 seconds for a failed start, rollback and restart of the previous
 GUI. Their failed execution, timeout and overflowing 4096-byte output retain
 the existing `502` responses, with one exception: a QML write (apply,
@@ -1385,7 +1408,8 @@ write finishes it (see QML Patch).
 Graceful agent shutdown during a QML write sends that `SIGTERM` once, as the
 first step of its clean-up, and waits up to the same 15 seconds before
 `SIGKILL` at the end of it; that request is closed without an answer. The init
-script's own stop sends `SIGKILL` to the agent after 3 seconds; the script, in
+script's own stop sends `SIGKILL` to the agent after 5 seconds (50 waits of
+100 ms); the script, in
 a process group of its own, has its signal by then and still finishes its
 rollback. A write cut off even so is finished at the next agent start.
 
@@ -1394,31 +1418,41 @@ enabled and the script exists: a job without a client, with the QML write
 deadline and grace period. It finishes a transaction that a power loss, a
 crash or a killed write left behind (see QML Patch) and returns at once when
 there is none. Meanwhile other maintenance requests get `409
-maintenance_busy`, like during any other job. Device-user status alone also has a 10-second
+maintenance_busy`, like during any other job. The device-user label writes
+(ensure, restore) are QML write jobs with the same deadline and grace period.
+The deadline's `SIGTERM` does
+not stop a recovery half-way, neither this job nor the recovery that runs
+ahead of every QML write: the script repeats the recovery once from its
+start, which finishes the step the signal cut (files back in place, GUI
+restart, removal of the leftover, `/` read-only), and then exits with status
+131 without an answer on stdout. A write cut that way has not begun; its
+request is answered `504` with `rolled_back: false`. Only a recovery that
+also outlasts the grace period is killed and left to the next write or agent
+start. Device-user status alone also has a 10-second
 deadline and a 4096-byte bounded-prefix capture; script failure retains HTTP 200
 with unavailable/unknown label status. SSH start and stop have a 60-second
 deadline and SSH status a 15-second one; at the deadline the process group is
 killed with `SIGKILL`; an action then fails like a failed command and a
 status reads as not running, so a hanging script no longer holds maintenance. They discard output.
 
-Device-user native routing/user mutations and label apply/restore are
-**synchronous**. Label writes use an 8192-byte bounded-prefix capture, without
-an execution deadline, `SIGKILL` cancellation or `pthread_cancel`. Graceful agent
-shutdown waits for the script to finish commit/rollback and remount cleanup.
-This deliberately replaces the old unsafe ten-second label-write kill timeout.
-A hung script can block HTTP dispatch and graceful shutdown indefinitely; a
-client timeout or disconnect does not abort or replay a physical write. Forced
-process termination and power loss are not covered by this guarantee.
+Device-user native routing/user mutations are **synchronous**: they run inside
+the request. Label apply/restore is not: it is a QML write job with an
+8192-byte bounded-prefix capture, the 30-second deadline and the 15-second
+grace period. The agent keeps serving other requests while the script runs; a
+script still running at the deadline gets `SIGTERM` for its rollback and the
+request is answered `504` with `media_user_label_timeout` (see the device-user
+actions). A client timeout or disconnect does not abort or replay a physical
+write.
 
 Only after the write phase finishes does device-user start its asynchronous
-read-only status phase. Ensure still requires successful label-script exit and
-JSON `ok:true`; restore retains its exit-status-only interpretation. Native
-codec file mutation also remains synchronous; only its reboot tail uses jobs.
-Shutdown cancels an active asynchronous job without invoking its completion
-or advancing another phase, but cannot reach that cleanup during a synchronous
-label transaction. A QML write job gets `SIGTERM` and its grace period at its
-deadline and at shutdown (see above); one that is killed even so, or loses
-power, leaves a transaction that the next write or agent start finishes.
+read-only status phase. Ensure requires successful label-script exit and JSON
+`ok:true`; restore requires a successful exit and, when the script prints
+JSON, `ok:true`. Native codec file mutation also remains synchronous; only its
+reboot tail uses jobs. Shutdown cancels an active asynchronous job without
+invoking its completion or advancing another phase. A QML write job, label
+writes included, gets `SIGTERM` and its grace period at its deadline and at
+shutdown (see above); one that is killed even so, or loses power, leaves a
+transaction that the next write or agent start finishes.
 
 See [HTTP maintenance ownership](../docs/dev/architecture.md#http-maintenance-boundary) and the
 [remaining blocking work](../docs/dev/architecture.md#remaining-blocking-work).
@@ -1485,7 +1519,15 @@ Restarts the native agent.
 {"confirm": "reload_gui"}
 ```
 
-Reloads the C300X graphical interface.
+Reloads the C300X graphical interface. Failures are answered `502` with
+`{"ok": false, "error": "reload_failed"}` (`reload_script_missing` without the
+script). A reload past its 10 seconds gets `SIGTERM` for its process group and
+the 15-second grace period of a QML write, not `SIGKILL` at once: the signal
+can fall between the stop and the start of the GUI, so the script repeats the
+restart once and exits 131. The request stays open until the script has ended
+and is then answered with the same `502 reload_failed`, up to 25 seconds after
+it was sent; `gui_running` of `GET /api/v1/maintenance/qml-patch` says whether
+the display is up.
 
 ### Agent Self-Update
 
@@ -1552,6 +1594,7 @@ Errors:
 | `400` | `update_bundle_hash_mismatch` | `bundle_hash` differs from the hash in the staged manifest. |
 | `403` | `maintenance_unauthorized` | Maintenance is disabled, or the maintenance token is missing or wrong. |
 | `409` | `update_root_already_writable` | `/` was already writable before the update (by someone else, or left so by the agent and still busy); the agent refuses to install and leaves the mount as it is. |
+| `409` | `qt5_recovery_required` | Firmware 3.0.x: the staged agent has no Qt 5 display recovery while overlay files, a quarantine or an unverified display start script remain. The installed agent and its recovery stay untouched. |
 | `500` | `update_root_readonly_failed` | The update could not make `/` read-only again after writing to it. |
 | `500` | `update_apply_failed` | Validation or installation failed. |
 | `500` | `out_of_memory` | The agent could not allocate the memory for the update. |
@@ -1670,7 +1713,30 @@ Assistant does not offer the IPv6 firewall switch; apply would answer
 Reads both optional Display patch state and required core media-hook state.
 `home_buttons` names the home page button layout installed on the device:
 `"stock"` (the stock layout), `"side_by_side"` (the fixed pair), or `null`
-when the home page carries neither layout.
+when the home page carries neither layout. On firmware 3.0.x it is also `null`
+while the overlay is not active (`qt5_overlay` other than `active`): the
+display then shows the vendor home page.
+
+On firmware 3.0.x, `gui_restart` says whether a display restart is still
+queued or running (`"pending"`) or not (`"idle"`). A write whose restart had
+not ended when its wait on the station ended answers `200` with
+`"gui_restart":"pending"`; that is not a failure, and `gui_running` and
+`qt5_overlay` in that answer describe the moment of the answer. Read the
+status until `gui_restart` is `"idle"` for the outcome. Home Assistant, the
+SSH installer and the media-user label write handle it so; the label write
+accepts a pending restart because the label is already written.
+
+On firmware 3.0.x, `qt5_unsupported` names why the station's display program or
+start script is not one the agent knows (`display_program_unknown`,
+`display_resource_missing`, `display_file_unsupported`,
+`display_wrapper_unknown`). The apply actions then change nothing and answer
+`200` with `"ok":false,"error":"display_unsupported"` and the status fields; the
+agent runs without the display pages. The field stays until an apply finds a
+known display again. Full removal also records `display_wrapper_unknown` when
+the start script is no longer the original with a block of this or an earlier
+agent in it, for example after a
+vendor update; it then removes the overlay files and leaves that script as it
+is.
 
 Every QML write keeps the GUI files it may change in a transaction directory
 `.c300x-qml-transaction.<pid>` inside the GUI directory. The directory gets a
@@ -1678,6 +1744,18 @@ format marker `.c300x-v2` first, then the copies, then a file list that names
 the files it found and the ones it would add, written only once all copies are
 on flash and before any GUI file changes. A write cut off for good (power loss,
 crash, `SIGKILL`) leaves that directory behind.
+
+On firmware 3.0.x the GUI directory is the agent's working copy
+(`display-qt5/skins/default`), and the transaction also keeps copies of the
+display activation files (resource file, preload library, start script, its
+original backup, quarantine mark) in `.qt5/`, saved before the file list. A
+write marks `.qt5/.published` before it changes any of them; a rollback then
+first quarantines the overlay for this boot, puts every activation file back
+and restores the quarantine mark last, and restarts the GUI when the resource
+file, the library or the start script differed. The import that fills the
+working copy from the firmware before every apply is not part of the
+transaction: it only adds missing files, each written whole, and drops the
+copy when the firmware's files change.
 
 Status only reads: it reports a leftover and never changes the device. The
 recovery runs before every write and once at agent start (the `recover`
@@ -1694,7 +1772,9 @@ can repeat from any point where it was cut off:
    file, or to the file in place. When a display file is newer than that
    directory, a later write has replaced the files since, and the proven
    copies are dropped instead of moved back (a restore that already started
-   is finished). If any copy cannot be proven, the directory
+   is finished). On firmware 3.0.x the activation copies of such a write
+   count only while each equals the file in place and no activation file was
+   added. If any copy cannot be proven, the directory
    stays, the GUI is left as it is and the leftover is reported `stuck` for
    good; remove the directory by hand once the display works.
 2. Restart the GUI, only when step 1 changed a file. A marker file in the
@@ -1826,8 +1906,13 @@ legacy High sizes. The high stream takes 300–3000 kbit/s and 5–24 fps: at
 25 fps the device drops its frame rate control and sends about 8 frames per
 second. The low stream takes 100–2000 kbit/s (the device lowers the bit rate
 at run time and raises it again only up to 2000) and 5–25 fps, in the sizes
-352x288, 400x288 (from the factory), 640x480, 704x576 and 720x576; the sizes
-other than 400x288 are not tested on a 3.0.x device yet.
+320x240, 352x288, 400x288 (from the factory), 480x288, 640x384, 640x480,
+704x576, 720x432 and 720x576. The added 480x288, 640x384 and 720x432 choices have the LCD's
+5:3 ratio; 320x240 is a compact 4:3 choice. Original 3.0.6 Low caps were
+checked offline, not on hardware. Sizes other than 400x288, their framing and
+performance remain untested on a 3.0.x device. Low writes only configuration;
+it does not patch the executable or change the LCD window. 960x576 is never
+offered for the Low path. See [3.0.6 Low evidence](../docs/dev/firmware-3.0.6-camera.md).
 
 `POST` with `{"confirm": "apply_camera_quality", "size": "960x576",
 "bitrate_kbps": 3000, "fps": 24}` saves new values and returns the same body;
@@ -1981,10 +2066,14 @@ The socket must belong to UID 0. The GUI and wrapper must have root real,
 effective, saved and filesystem UIDs and GIDs. Stock SysV startup runs
 `bin/bt_daemon` from `/home/bticino`; its GUI entry in `stack_open.xml`
 starts `bin/BtClass_qws`, whose shell waits for its direct `bin/gui/BtClass`
-child. The alternate launch from `qml_patch.sh reload_gui` uses the absolute
-wrapper path and is accepted once init has adopted the wrapper. Both paths
-require the expected shell, working directory, complete wrapper argv and open
-script inode, with read-only firmware files. A standalone GUI process, an
+child. The Qt 5 display pages' start script runs `bin/gui/BtClass` inside a
+pipeline instead, so up to two forks of the wrapper shell may sit between the
+two; each must carry the same shell, working directory, wrapper argv and
+credentials as the wrapper above it. The alternate launch from
+`qml_patch.sh reload_gui` uses the absolute wrapper path and is accepted once
+init has adopted the wrapper. Both paths require the expected shell, working
+directory, complete wrapper argv and open script inode on the wrapper itself,
+with read-only firmware files. A standalone GUI process, an
 ambiguous instance or incomplete process evidence is denied, even with the
 header. This identifies a local privileged process, not a physical gesture,
 and does not protect against another root process. A scheduled reboot or removal returns 202:
@@ -2038,9 +2127,9 @@ request has a monotonic five-second deadline. Diagnostics expose
 
 ## Compatibility
 
-Agent `2.9.2` retains self-test contract `api_version: "1.1"` for firmware families
+Agent `2.10.0` retains self-test contract `api_version: "1.1"` for firmware families
 `1.7.x`, `2.0.x` and `3.0.x`. `firmware_family` is derived from `device.firmware` of
 the agent config, or from the station's firmware info when that is empty, which
 is what the installer writes; it is `unknown` only when neither is readable. Of
-the `2.0.x` family only `2.0.2` is supported, of `3.0.x` only `3.0.6`,
-experimentally. The release notes list the agent changes of each version.
+the `2.0.x` family only `2.0.2` is supported, of `3.0.x` only `3.0.6`.
+The release notes list the agent changes of each version.

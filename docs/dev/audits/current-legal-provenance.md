@@ -1,6 +1,7 @@
 # Current Legal and Provenance Audit Snapshot
 
-Source review: 2026-11-23. Scope: integration and native agent `2.9.0`.
+Source review: 2026-11-25. Scope: integration and native agent `2.10.0`, the
+stable release that brings the display pages to firmware 3.0.6.
 The station settings panel and ring-call controls use the existing Qt runtime
 on the device. The package includes the project's QML, JavaScript, patch script
 and native agent, not the vendor settings page or the vendor GUI executable.
@@ -52,6 +53,14 @@ runtime, including optional device libraries loaded at runtime, and runs the
 device's own sound programs and audio chip configuration in place. These dependencies are not copied into the source
 repository and are not relicensed by the repository's Apache-2.0 declaration.
 
+On firmware 3.0.6 the display files are Qt resources inside the vendor display
+program. The agent reads the few files it changes from that program on the
+device, applies the project's edits there and keeps the result on the device;
+the release package carries only the project's own pages, its edit scripts and
+a small library of its own that loads them. No vendor display file is tracked
+or packaged. `scripts/extract_btclass_resources.py` and the Qt 5 runtime test
+read a firmware copy outside the repository for local checks only.
+
 The development requirement files contain direct version pins, not complete
 transitive lockfiles. An installed development environment is not authoritative
 evidence of the dependencies on a user's Home Assistant or C300X.
@@ -91,14 +100,17 @@ The retired Distribution source is removed on update; the package-only inert
 bootstrap file preserves compatibility with the previous updater and is not
 part of the new active GUI.
 
-The English display examples are edited from maintainer-provided photographs,
-with AI-assisted perspective correction, color matching and localization.
-Eight examples are read-only framebuffer captures from the maintainer's C300X
-on 2026-11-20, with the texts replaced by the display's English texts.
-Appointments and consumer names are example text; the two camera pictures are
-AI-generated views supplied by the maintainer.
-These are illustrative documentation assets, not extracted firmware files or
-pixel-exact runtime captures.
+The documentation pictures under `docs/images/readme/` show pages of this
+integration, rendered on a PC from the integration's own page files with
+example data, on a plain background of our own, or browser captures of the
+maintainer's Home Assistant test instance. The display renders run the pages
+on the firmware's Qt 4.8 libraries in an emulator; the station wallpaper and
+every station graphic the pages load are replaced for the render by a
+generated gradient and similar shapes drawn for it, and the text uses the
+free fonts Ubuntu Light and DejaVu Sans. No vendor page, firmware artwork or
+firmware file is part of the pictures or the repository. Values are
+examples; the two camera pictures are AI-generated views supplied by the
+maintainer.
 
 ## Not Verified Here
 

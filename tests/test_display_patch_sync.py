@@ -98,6 +98,59 @@ def test_a_device_that_says_nothing_or_does_not_follow_stays_to_do(monkeypatch):
     assert _apply(_entry(True, capabilities={})) is None
 
 
+@pytest.mark.parametrize("wanted", [False, True])
+def test_quarantined_display_is_neither_confirmed_nor_automatically_retried(monkeypatch, wanted):
+    calls = _device(monkeypatch, {"patched": True, "qt5_overlay": "failed", "gui_running": True})
+    entry = _entry(wanted, data={CONF_DISPLAY_SETTING_PENDING: True})
+    updates = []
+    manager = _manager(entry, updates)
+    asyncio.run(display_patch_sync.async_settle_display_setting(manager.hass, entry))
+    assert calls == []
+    assert updates == []
+    assert CONF_DISPLAY_SETTING_PENDING in entry.data
+
+
+@pytest.mark.parametrize("overlay", ["off", "incomplete"])
+def test_incomplete_activation_is_repaired_even_with_patched_files(monkeypatch, overlay):
+    calls = _device(monkeypatch, {"patched": True, "qt5_overlay": overlay, "gui_running": True})
+    assert _apply(_entry(True)) is True
+    assert calls == ["apply"]
+
+
+def test_turning_the_pages_off_leaves_an_incomplete_overlay_to_the_core_repair(monkeypatch):
+    """After the resource file was renamed (the way out of a restart loop) a restore
+    would write it back with the core hook; the setting stays to do instead."""
+
+    calls = _device(monkeypatch, {"patched": True, "core_patched": True, "qt5_overlay": "incomplete",
+                                  "gui_running": True})
+    entry = _entry(False, data={CONF_DISPLAY_SETTING_PENDING: True})
+    updates: list[dict[str, Any]] = []
+    asyncio.run(display_patch_sync.async_settle_display_setting(_manager(entry, updates).hass, entry))
+    assert calls == []
+    assert updates == []
+    assert CONF_DISPLAY_SETTING_PENDING in entry.data
+
+
+def test_turning_the_pages_off_after_full_removal_writes_nothing_and_settles(monkeypatch):
+    """The end of the way out (restore-all): the setting is met, a pending one is dropped."""
+
+    calls = _device(monkeypatch, {"patched": False, "core_patched": False, "qt5_overlay": "off",
+                                  "gui_running": True})
+    entry = _entry(False, data={CONF_DISPLAY_SETTING_PENDING: True})
+    updates: list[dict[str, Any]] = []
+    asyncio.run(display_patch_sync.async_settle_display_setting(_manager(entry, updates).hass, entry))
+    assert calls == []
+    assert CONF_DISPLAY_SETTING_PENDING not in entry.data
+
+
+def test_failed_activation_after_setting_apply_is_not_confirmed(monkeypatch):
+    _device(monkeypatch, {"patched": False, "qt5_overlay": "off", "gui_running": True})
+    async def failed(*_args):
+        return {"patched": True, "qt5_overlay": "failed", "gui_running": True}
+    monkeypatch.setattr(display_patch_sync, "async_apply_qml_patch_and_confirm", failed)
+    assert _apply(_entry(True)) is None
+
+
 def test_without_a_setting_or_the_agent_action_nothing_is_to_do(monkeypatch):
     calls = _device(monkeypatch, {"patched": False})
     assert _apply(_entry(None)) is False
@@ -219,6 +272,32 @@ def test_a_matching_layout_is_not_applied_again(monkeypatch):
     assert calls == []
 
 
+def test_a_qt5_display_follows_the_layout_only_with_a_confirmed_overlay(monkeypatch):
+    active = {"patched": True, "qt5_overlay": "active", "gui_running": True}
+    calls = _device(monkeypatch, {**active, "home_buttons": "stock"})
+
+    async def applied(*_args: Any) -> dict[str, Any]:
+        calls.append("apply")
+        return {**active, "home_buttons": "side_by_side"}
+
+    monkeypatch.setattr(display_patch_sync, "async_apply_qml_patch_and_confirm", applied)
+    assert _apply(_side_by_side_entry()) is True
+    assert calls == ["apply"]
+    # A quarantined overlay is not retried for a layout change either.
+    calls.clear()
+    _device(monkeypatch, {**active, "qt5_overlay": "failed", "home_buttons": "stock"})
+    monkeypatch.setattr(display_patch_sync, "async_apply_qml_patch_and_confirm", applied)
+    assert _apply(_side_by_side_entry()) is None
+    assert calls == []
+    # The wanted layout under an overlay that did not come up stays to do.
+    async def fell_back(*_args: Any) -> dict[str, Any]:
+        return {**active, "qt5_overlay": "failed", "home_buttons": "side_by_side"}
+
+    _device(monkeypatch, {**active, "home_buttons": "stock"})
+    monkeypatch.setattr(display_patch_sync, "async_apply_qml_patch_and_confirm", fell_back)
+    assert _apply(_side_by_side_entry()) is None
+
+
 def test_a_status_without_the_layout_is_taken_as_it_is(monkeypatch):
     # An agent that does not name its layout cannot confirm one; asking it
     # again at every start would never end.
@@ -327,3 +406,36 @@ def test_the_agent_timeout_answer_names_itself():
     )
     with pytest.raises(C300XAgentApiConnectionError, match="qml_patch_timeout"):
         asyncio.run(api.async_apply_qml_patch(dynamic_homepage=True))
+
+
+def test_owed_display_steps_are_applied_although_the_old_pages_read_as_patched(monkeypatch):
+    calls = _device(monkeypatch, {"patched": True})
+    assert _apply(_entry(True, data={"display_followup_pending": True})) is True
+    assert calls == ["apply"]
+
+
+def test_settling_the_setting_clears_owed_display_steps(monkeypatch):
+    calls = _device(monkeypatch, {"patched": True})
+    entry = _entry(True, data={"display_followup_pending": True, CONF_DISPLAY_SETTING_PENDING: True})
+    updates: list[dict[str, Any]] = []
+
+    def update(_entry: Any, *, data: dict[str, Any]) -> None:
+        updates.append(data)
+        entry.data = data
+
+    hass = SimpleNamespace(config_entries=SimpleNamespace(async_update_entry=update))
+    asyncio.run(display_patch_sync.async_settle_display_setting(hass, entry))
+    assert calls == ["apply"]
+    assert "display_followup_pending" not in entry.data
+
+
+@pytest.mark.parametrize("status", [
+    {"patched": True, "qt5_overlay": "failed"},
+    {"patched": False, "error": "display_unsupported", "qt5_unsupported": "unknown start script"},
+])
+def test_owed_display_steps_never_retry_a_quarantined_or_unknown_display(monkeypatch, status):
+    """Every HA start would otherwise run a retrying apply against a failing overlay."""
+
+    calls = _device(monkeypatch, status)
+    assert _apply(_entry(True, data={"display_followup_pending": True})) is None
+    assert calls == []

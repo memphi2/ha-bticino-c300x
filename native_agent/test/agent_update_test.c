@@ -4,10 +4,14 @@
 #include <sys/stat.h>
 #include <sys/statvfs.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <string.h>
 #include <unistd.h>
 #include "../src/agent_update.h"
 #include "../src/file_io.h"
+
+/* The agent's Qt 5 display check; the updates here run on a Qt 4 station. */
+int c300x_device_display_is_qt5(void) { return 0; }
 
 static char test_init_script[512], test_init_link[512];
 static char fail_target[512];
@@ -237,6 +241,7 @@ static void obsolete_source_safety_test(const struct c300x_config *config, const
     char backup[sizeof(obsolete_source) + 24], other[C300X_MAX_PATH_LEN], content[64];
     struct agent_update_change_summary summary;
     struct stat info;
+    int fd;
     assert(snprintf(backup, sizeof(backup), "%s.update-backup", obsolete_source) < (int)sizeof(backup));
     assert(agent_update_target_path(config, "device_agent/qml/user-file.qml", other, sizeof(other)));
     assert(write_binary_chunk(other, (const unsigned char *)"user-file", 9, 0, 0600));
@@ -246,7 +251,9 @@ static void obsolete_source_safety_test(const struct c300x_config *config, const
     fail_obsolete_unlink = 0;
     assert(read_bounded_text_file(obsolete_source, content, sizeof(content), NULL));
     assert(strcmp(content, "old-distribution") == 0);
-    assert(stat(obsolete_source, &info) == 0 && (info.st_mode & 0777) == 0640);
+    fd = open(obsolete_source, O_RDONLY | O_NOFOLLOW);
+    assert(fd >= 0 && fstat(fd, &info) == 0 && (info.st_mode & 0777) == 0640);
+    close(fd);
     assert(access(backup, F_OK) != 0 && errno == ENOENT);
     assert(summary.changed_files == 0);
     /* The committed update that retired it could not clean up: the
@@ -285,7 +292,7 @@ static void whole_bundle_preflight_test(struct c300x_config *config)
     size_t used = 0;
     assert(agent_update_target_path(config, C300X_AGENT_UPDATE_FILES[0].path, binary, sizeof(binary)));
     assert(write_binary_chunk(binary, (const unsigned char *)"original", 8, 0, 0700));
-    assert(c300x_appendf(manifest, sizeof(manifest), &used, "{\"files\":["));
+    assert(c300x_appendf(manifest, sizeof(manifest), &used, "{\"qt5_recovery_version\":1,\"files\":["));
     for (size_t i = 0; i + 1 < C300X_AGENT_UPDATE_FILE_COUNT; i++) {
         const char *name = C300X_AGENT_UPDATE_FILES[i].path;
         const char *content = test_content(name);

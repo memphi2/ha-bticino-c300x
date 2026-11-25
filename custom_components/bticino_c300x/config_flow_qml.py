@@ -7,6 +7,7 @@ from typing import Any, cast
 
 from .api import C300XAgentApiError
 from .config_flow_forms import async_display_patch_status_text
+from .display_activation import display_unsupported
 from .entry_types import BticinoC300XConfigEntry
 
 _STATUS_CACHE_TTL = timedelta(seconds=30)
@@ -72,6 +73,13 @@ def qml_patch_status_label(status: dict[str, Any]) -> str:
         return QML_PATCH_STATUS_UNKNOWN
     if status.get("available") is False:
         return _STATUS_UNAVAILABLE
+    if display_unsupported(status):
+        return "display_unsupported"
+    overlay = status.get("qt5_overlay")
+    if overlay == "failed":
+        return "display_failed"
+    if overlay == "incomplete" or (overlay == "off" and status.get("patched") is True):
+        return "partial"
     patched = status.get("patched")
     if patched is True:
         return "patched"

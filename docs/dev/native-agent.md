@@ -377,6 +377,7 @@ for the current source. The lock covers these native and bundle inputs:
 
 - `native_agent/src`
 - `native_agent/scripts`
+- `native_agent/qt5`
 - `native_agent/VERSION`
 - `native_agent/Makefile`
 - `native_agent/config.example.json`
@@ -420,20 +421,61 @@ files, not just a routing table. It also lists the vendor programs that differ;
 those are covered by the device tests in
 [Release Validation](release-validation.md#firmware-versions).
 
-Firmware `3.0.6` fails this check and is supported experimentally:
+Firmware `3.0.6` fails this check and is supported with its own display path:
 
 - Its C library is glibc 2.35, and `libcurl` and `libsrtp` are other builds. The
   same binary runs there; `armhf-abi-check` checks it against the `3.0.6` root
   file system too.
-- Its display is Qt 5 with the QML built into the vendor program, so there are
-  no files to patch. Agent and installer recognise it by
-  `/usr/lib/libQt5Core.so.5`, skip the Display patch and the media-user label,
-  and the Home Assistant pages are not shown on the device.
+- Its display is Qt 5 with the QML built into the vendor program `BtClass` as
+  Qt resources. `qml_patch.sh` recognises it by `/usr/lib/libQt5Core.so.5` and
+  then works on a copy in `display-qt5/` under the agent folder: the agent
+  reads the seven display files the patch changes out of `BtClass`
+  (`--display-qt5 extract`: at the known table offsets of the 3.0.6 build, for
+  another build where exactly one resource tree with those files is found), the
+  patch runs on them as on Qt 4, and every changed file is packed, back in Qt 5
+  form, into `display-qt5.rcc` (`--display-qt5 pack`). The start script
+  `BtClass_qws` gets `c300x-qrc-overlay.so` preloaded
+  (`native_agent/qt5/qrc_overlay.c`, carried in the agent and written by
+  `--display-qt5 overlay`); it registers `display-qt5.rcc` before `BtClass`
+  registers its own resources, and Qt takes a file found twice from the first
+  one. A display that ends with an error within a minute of such a start marks
+  the overlay failed (`display-qt5.rcc.failed`, status `qt5_overlay: failed`)
+  and starts as shipped. Started with the overlay, the display's error output,
+  where Qt reports QML errors, goes to `/tmp/c300x-display-qt5.log` (at most
+  64 KB). Full removal (`restore-all`) puts the vendor start script back, but
+  only over the original with a block of this or an earlier agent in it. A start
+  script that a firmware
+  update or anyone else replaced stays as it is, and `status` reports
+  `qt5_unsupported: display_wrapper_unknown`. A
+  partial restore keeps the overlay for the remaining core hooks or user label.
+  User view:
+  [Display Patch on Firmware 3.0.6](../display.md#display-patch-on-firmware-306).
+- Activation changes preserve the resource file, preload library, wrapper,
+  original wrapper backup and quarantine marker as one rollback unit. A failed
+  rollback retains its recovery copies and leaves the overlay blocked. Updates
+  and partial restores never clear quarantine; full removal followed by an
+  explicit apply is required to retry. Apply also compares the RCC, embedded
+  preload and generated wrapper when QML is unchanged, repairing missing or
+  stale activation files. RCC timestamps are zero and disk caching is disabled,
+  so unchanged resources compare byte-for-byte without a restart. Runtime-only
+  updates reconcile the preload even with optional pages disabled.
+  `qt5_overlay: incomplete` means activation files are missing or incomplete.
+  The preload checks every node/name/payload boundary of the generated v2 RCC
+  before giving pointers to Qt. Rejected resources are quarantined and the
+  stock resources remain available. See the
+  [firmware display audit](firmware-3.0.6-display.md) for original-library
+  evidence, the per-path matrix and device-only gaps. On a 3.0.6 station only
+  the start with the pages and the home page buttons were checked; the other
+  pages, the restart and recovery paths are offline only. Process presence is
+  not proof of QML readiness or watchdog safety.
 - Its vendor media process forwards only the low-resolution stream. The camera
   is fixed to that stream (`video.av.highResolution: false`) and the Camera
   resolution entity is not offered. Camera quality sets the low stream
   (`BitrateRtpL`, `FpsRtpL`, `WidthLow`, `HeightLow`); sizes other than the
-  factory 400x288 are untested on a 3.0.6 device.
+  factory 400x288 are untested on a 3.0.6 device. The Low sizes 320x240,
+  480x288, 640x384 and 720x432 come through configuration only, without a
+  binary patch; evidence and limits:
+  [Firmware 3.0.6 Low Camera Evidence](firmware-3.0.6-camera.md).
 - `bt_answering_machine` is another build with its own routing table.
 - As on the other versions, Ring Call and video need a device registered once
   through the Door Entry app, which creates the Flexisip SIP user, domain and

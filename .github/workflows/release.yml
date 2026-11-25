@@ -27,7 +27,7 @@ env:
 
 jobs:
   main-validation:
-    name: main validation gate
+    name: canonical branch validation gate
     runs-on: ubuntu-26.04
     timeout-minutes: 20
     outputs:
@@ -41,7 +41,9 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.14"
-      - name: Wait for canonical main validation
+      - name: Install release channel policy tools
+        run: python -m pip install -c requirements-dev.txt packaging
+      - name: Wait for canonical release branch validation
         id: verified-main
         env:
           GH_TOKEN: ${{ github.token }}

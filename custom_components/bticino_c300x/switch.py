@@ -38,6 +38,7 @@ from .const import (
     SIGNAL_SETTING_STATE,
 )
 from .device_user import homeassistant_account_label
+from .display_activation import display_activation_confirmed, display_unsupported
 from .entity import (
     C300XEntity,
     entry_config_value,
@@ -127,10 +128,15 @@ class C300XSnapshotSwitch(C300XEntity, SwitchEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Why the last visitor image could not be taken; None after a success."""
+        """Why the last visitor image could not be taken; absent after a success.
+
+        The frontend shows a null attribute as "Unknown", which a working
+        capture is not. The codes are translated under ``state_attributes``.
+        """
 
         manager = get_snapshots(self.hass, self._entry.entry_id) if self.hass else None
-        return {"last_failure": manager.capture.last_failure if manager else None}
+        cause = manager.capture.last_failure if manager else None
+        return {"last_failure": cause} if cause else {}
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         await self._set_enabled(True)
@@ -188,10 +194,11 @@ class C300XHomeAssistantMediaUserSetupSwitch(C300XEntity, SwitchEntity):
             and self._status.get("device_routing_applied") is True
             and (
                 self._status.get("media_user_label_applied") is True
-                # The label is written into the Display patch files. An agent
-                # that offers no Display patch (Qt 5 display, firmware 3.0.x)
-                # has none, and the media user is complete without it.
+                # The label is written into the Display patch files. Without
+                # a Display patch (an agent that offers none, or a display the
+                # agent does not know) the media user is complete without it.
                 or not entry_maintenance_action_is_advertised(self._entry, "qml_core_patch")
+                or display_unsupported(_qml_patch_status(self._entry)) is not None
             )
         )
 
@@ -505,7 +512,10 @@ class C300XGuiFunctionPatchSwitch(C300XEntity, SwitchEntity):
     def is_on(self) -> bool | None:
         """Return whether the Display patch is fully applied."""
 
-        patched = _qml_patch_status(self._entry).get("patched")
+        status = _qml_patch_status(self._entry)
+        patched = status.get("patched")
+        if not display_activation_confirmed(status, required=patched is not False):
+            return None
         return patched if isinstance(patched, bool) else None
 
     @property
@@ -520,6 +530,8 @@ class C300XGuiFunctionPatchSwitch(C300XEntity, SwitchEntity):
             "core_patched": status.get("core_patched"),
             "core_backup_available": status.get("core_backup_available"),
             "gui_running": status.get("gui_running"),
+            **({"qt5_overlay": status["qt5_overlay"]} if status.get("qt5_overlay") is not None else {}),
+            **({"qt5_unsupported": status["qt5_unsupported"]} if display_unsupported(status) else {}),
         }
 
     @property
@@ -566,7 +578,11 @@ class C300XGuiFunctionPatchSwitch(C300XEntity, SwitchEntity):
         setting left the other way would undo the switch at the next save.
         """
 
-        if status.get("patched") is not patched or entry_device_ui_configured(self._entry) is patched:
+        if (
+            status.get("patched") is not patched
+            or not display_activation_confirmed(status, required=patched)
+            or entry_device_ui_configured(self._entry) is patched
+        ):
             return
         options = {**self._entry.options, CONF_DEVICE_UI_ENABLED: patched}
         self.hass.config_entries.async_update_entry(self._entry, options=options)

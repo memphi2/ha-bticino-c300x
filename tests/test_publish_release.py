@@ -70,7 +70,7 @@ def setup_publication(monkeypatch, tmp_path, *, version="2.1.0b1", existing=Fals
     return publisher, directory, release, calls
 
 
-@pytest.mark.parametrize("version", ["2.1.0", "2.1.0b1", "2.1.0rc1"])
+@pytest.mark.parametrize("version", ["2.1.0", "2.1.0b1", "2.1.0rc1", "2.9.0b2"])
 @pytest.mark.parametrize(("existing", "draft"), [(False, False), (True, True), (True, False)])
 def test_publication_channel_and_idempotent_verified_assets(monkeypatch, tmp_path, version, existing, draft):
     publisher, directory, release, calls = setup_publication(

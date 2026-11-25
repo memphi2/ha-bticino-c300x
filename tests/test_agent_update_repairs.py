@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import re
 import sys
 import types
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -15,6 +18,7 @@ from custom_components.bticino_c300x.api import C300XAgentApiError  # noqa: E402
 from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_CALLBACK_BASE_URL,
     CONF_DEVICE_UI_ENABLED,
+    CONF_DISPLAY_FOLLOWUP_PENDING,
     CONF_FRONTEND_CARD_SETUP_DISMISSED,
     CONF_FRONTEND_CARD_SETUP_REPAIR_VERSION,
     DOMAIN,
@@ -106,8 +110,9 @@ class FakePatchApi:
             "core_state": "patched",
         }
 
-    async def async_reload_gui(self) -> dict[str, Any]:
+    async def async_reload_gui(self, *, display_restart: bool = False) -> dict[str, Any]:
         self.calls.append("reload_gui")
+        self.reload_display_restart = display_restart
         return {"ok": True, "action": "reload_gui"}
 
     async def async_firewall_status(self) -> dict[str, Any]:
@@ -1804,7 +1809,7 @@ def test_core_qml_hook_repair_reports_agent_failure(monkeypatch) -> None:
     assert result["type"] == "form"
     assert result["step_id"] == "confirm"
     assert result["errors"] == {"base": "core_patch_failed"}
-    assert result["description_placeholders"] == {"qml_patch_status": "original"}
+    assert result["description_placeholders"] == {"qml_patch_status": "original", "entry_title": "entry-1"}
 
 
 def test_core_qml_hook_repair_reports_verify_failure(monkeypatch) -> None:
@@ -1833,7 +1838,27 @@ def test_core_qml_hook_repair_reports_verify_failure(monkeypatch) -> None:
     assert result["type"] == "form"
     assert result["step_id"] == "confirm"
     assert result["errors"] == {"base": "core_patch_verify_failed"}
-    assert result["description_placeholders"] == {"qml_patch_status": "patched"}
+    assert result["description_placeholders"] == {"qml_patch_status": "patched", "entry_title": "entry-1"}
+
+
+def test_owed_display_steps_repair_fills_every_placeholder_of_its_text() -> None:
+    """The issue has no description of its own: the confirm step names the entry."""
+
+    strings = json.loads(
+        (Path(__file__).resolve().parents[1] / "custom_components/bticino_c300x/strings.json").read_text()
+    )
+    text = strings["issues"]["device_display_followup_pending"]["fix_flow"]["step"]["confirm"]["description"]
+    runtime_data = FakeRuntimeData(FakePatchApi())
+    runtime_data.capabilities = {"maintenance": {"supported": True, "qml_core_patch": True}}
+    entry = FakeEntry(runtime_data=runtime_data, data={CONF_DISPLAY_FOLLOWUP_PENDING: True})
+    flow = DeviceCoreQmlHookRepairFlow(FakeHass(entry), "entry-1")  # type: ignore[arg-type]
+    flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}  # type: ignore[method-assign]
+
+    result = asyncio.run(flow.async_step_confirm(None))
+
+    assert result["step_id"] == "confirm"
+    assert set(re.findall(r"\{(\w+)\}", text)) == {"entry_title"}
+    assert result["description_placeholders"]["entry_title"] == "entry-1"
 
 
 def test_core_qml_hook_repair_success_finishes_repair(monkeypatch) -> None:
@@ -2656,35 +2681,29 @@ def test_capture_external_patch_state_marks_unknown_firewall_status() -> None:
     assert patch_state.firewall_status_known is False
 
 
-def test_failed_qml_followup_survives_same_bundle_retry(monkeypatch):
+@pytest.mark.parametrize("runtime_changed", [False, True])
+def test_unconfirmed_display_followup_is_a_check_without_a_forced_restart(
+    monkeypatch, runtime_changed,
+):
+    """An update whose follow-up never finished: the answer of this run does not cover it."""
+
     import custom_components.bticino_c300x.repairs as repairs
 
     entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()))
-    hass = FakeHass(entry)
     state = _ExternalPatchState(qml_patch_required=True, firewall_patched=False,
                                firewall_status_known=True, ipv6_firewall_patched=False)
-    repairs._remember_qml_followup(hass, entry, state, {"qml_patch_changed": True})
+    changes = _ExternalPatchChanges(runtime_changed=runtime_changed)
+    changes.display_unconfirmed = True
     calls = []
 
-    async def restore(_entry, *, apply_full_patch):
-        calls.append(apply_full_patch)
-        if len(calls) == 1:
-            raise RuntimeError("temporary failure")
+    async def restore(_entry, **kwargs):
+        calls.append(kwargs)
 
-    monkeypatch.setattr(repairs, "async_restore_qml_patches_after_update", restore)
-    with pytest.raises(RuntimeError, match="temporary failure"):
-        asyncio.run(_async_restore_external_patch_state(entry, state, _ExternalPatchChanges()))
-    repairs._remember_qml_followup(hass, entry, state, {"qml_patch_changed": False})
-    assert entry.data["agent_update_qml_pending"] is True
-    update = repairs.compare_agent_bundle(
-        {"version": "1.0", "agent": {"self_update_supported": True}},
-        {"agent_version": "1.0"}, qml_patch_pending=True,
-    )
-    assert update.update_required and update.self_update_repair_supported
-    asyncio.run(_async_restore_external_patch_state(entry, state, _ExternalPatchChanges()))
-    repairs._clear_qml_followup(hass, entry)
-    assert "agent_update_qml_pending" not in entry.data
-    assert calls == [True, True]
+    monkeypatch.setattr(repairs, "async_restore_display_after_update", restore)
+    asyncio.run(_async_restore_external_patch_state(entry, state, changes))
+
+    # Active pages are restarted for a new agent; current pages otherwise are not.
+    assert calls == [{"apply_full_patch": True, "reload_unchanged": runtime_changed}]
 
 
 def test_restore_external_patch_state_skips_active_patches_without_source_changes() -> None:
@@ -2776,6 +2795,142 @@ def test_restore_external_patch_state_skips_gui_reload_after_runtime_update_when
     )
 
     assert api.calls == []
+
+
+@pytest.mark.parametrize("full_patch", [False, True])
+def test_restore_external_patch_state_reconciles_qt5_runtime_even_without_optional_pages(full_patch) -> None:
+    api = FakePatchApi()
+    api.qml_status["qt5_overlay"] = "active"
+    api.qml_status["gui_running"] = True
+    api.qml_status["core_patched"] = True
+    entry = FakeEntry(runtime_data=FakeRuntimeData(api))
+    # The status the update flow read just before the update.
+    entry.runtime_data.qml_patch_status = dict(api.qml_status)
+    state = _ExternalPatchState(
+        qml_patch_required=full_patch, firewall_patched=False,
+        firewall_status_known=True, ipv6_firewall_patched=False,
+    )
+    asyncio.run(_async_restore_external_patch_state(
+        entry, state, _ExternalPatchChanges(runtime_changed=True),
+    ))
+    # Qt 5: the full apply carries the core files; one restart for the new runtime.
+    assert api.calls == ["apply_qml" if full_patch else "apply_qml_core", "reload_gui", "qml_status"]
+
+
+@pytest.mark.parametrize("full_patch", [False, True])
+def test_a_qt4_runtime_update_reads_no_display_status(full_patch) -> None:
+    """1.7.x/2.0.2 as in 2.9.2: a status read that would fail fails nothing."""
+
+    class _NoStatus(FakePatchApi):
+        async def async_qml_patch_status(self) -> dict[str, Any]:
+            self.calls.append("qml_status")
+            raise C300XAgentApiError("status read failed")
+
+    api = _NoStatus()
+    entry = FakeEntry(runtime_data=FakeRuntimeData(api))
+    entry.runtime_data.qml_patch_status = {"patched": full_patch, "core_patched": True}
+    state = _ExternalPatchState(
+        qml_patch_required=full_patch, firewall_patched=False,
+        firewall_status_known=True, ipv6_firewall_patched=False,
+    )
+    outcome = asyncio.run(_async_restore_external_patch_state(
+        entry, state, _ExternalPatchChanges(runtime_changed=True),
+    ))
+    assert outcome is None
+    assert api.calls == (["reload_gui"] if full_patch else [])
+    if full_patch:
+        assert api.reload_display_restart is False
+
+
+@pytest.mark.parametrize("full_patch", [False, True])
+def test_a_failed_qt5_display_followup_completes_the_update_and_stays_owed(monkeypatch, full_patch):
+    """The agent update is done; the display steps keep their own record."""
+
+    from custom_components.bticino_c300x import qml_patch, repairs
+    from custom_components.bticino_c300x.agent_update_followup import clear_followup
+    from custom_components.bticino_c300x.api_errors import C300XDisplayNotConfirmedError
+    api = FakePatchApi()
+    entry = FakeEntry(runtime_data=FakeRuntimeData(api))
+    entry.runtime_data.qml_patch_status = {"qt5_overlay": "failed"}
+    hass = FakeHass(entry)
+    state = _ExternalPatchState(qml_patch_required=full_patch, firewall_patched=False,
+                               firewall_status_known=True, ipv6_firewall_patched=False)
+    # The mark as the update stored it before the apply.
+    entry.data = {**entry.data, "agent_update_qml_pending": full_patch}
+    async def quarantined(_entry, *, apply_full_patch, **_kwargs):
+        assert apply_full_patch is full_patch
+        raise C300XDisplayNotConfirmedError("quarantined")
+    monkeypatch.setattr(qml_patch, "async_restore_qml_patches_after_update", quarantined)
+    full = repairs._display_followup_full(entry, state)
+    # On Qt 5 a runtime-only update changes the display (the preload library).
+    outcome = asyncio.run(_async_restore_external_patch_state(
+        entry, state, _ExternalPatchChanges(runtime_changed=True)))
+    assert outcome is False
+    repairs._settle_display_followup(hass, entry, outcome, full=full)
+    clear_followup(hass, entry)
+    assert "agent_update_qml_pending" not in entry.data
+    assert entry.data["display_followup_pending"] is full_patch
+    assert api.calls[-1:] == ["qml_status"]
+
+
+def test_owed_display_steps_run_again_with_the_next_followup_and_are_cleared(monkeypatch):
+    from custom_components.bticino_c300x import qml_patch, repairs
+    entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()))
+    entry.data = {**entry.data, "display_followup_pending": True}
+    hass = FakeHass(entry)
+    seen = []
+    async def confirmed(_entry, *, apply_full_patch, **_kwargs):
+        seen.append(apply_full_patch)
+    monkeypatch.setattr(qml_patch, "async_restore_qml_patches_after_update", confirmed)
+    state = _ExternalPatchState(qml_patch_required=False, firewall_patched=False,
+                               firewall_status_known=True, ipv6_firewall_patched=False)
+    outcome = asyncio.run(_async_restore_external_patch_state(entry, state, _ExternalPatchChanges()))
+    repairs._settle_display_followup(hass, entry, outcome, full=False)
+    assert seen == [True]
+    assert "display_followup_pending" not in entry.data
+
+
+@pytest.mark.parametrize("case", ["qt4", "unreachable", "busy", "rejected"])
+def test_a_display_followup_that_did_not_run_still_fails_the_update(monkeypatch, case):
+    """Only a step that ran and failed on the Qt 5 display is owed; the rest fails as before."""
+
+    from custom_components.bticino_c300x import qml_patch
+    from custom_components.bticino_c300x.api_errors import (
+        C300XAgentApiAuthError,
+        C300XAgentApiConnectionError,
+        C300XDisplayNotConfirmedError,
+    )
+    entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()))
+    entry.runtime_data.qml_patch_status = {} if case == "qt4" else {"qt5_overlay": "failed"}
+    error = {
+        "qt4": C300XDisplayNotConfirmedError("qt4"),
+        "unreachable": C300XAgentApiConnectionError("gone"),
+        "busy": C300XAgentApiConnectionError(
+            "device agent returned HTTP 409: maintenance_busy", http_status=409),
+        "rejected": C300XAgentApiAuthError(maintenance=True),
+    }[case]
+    async def failing(_entry, *, apply_full_patch, **_kwargs):
+        raise error
+    monkeypatch.setattr(qml_patch, "async_restore_qml_patches_after_update", failing)
+    state = _ExternalPatchState(qml_patch_required=True, firewall_patched=False,
+                               firewall_status_known=True, ipv6_firewall_patched=False)
+    with pytest.raises(C300XAgentApiError):
+        asyncio.run(_async_restore_external_patch_state(
+            entry, state, _ExternalPatchChanges(qml_patch_changed=True)))
+
+
+def test_a_display_write_the_agent_ran_and_failed_is_owed(monkeypatch):
+    from custom_components.bticino_c300x import qml_patch
+    from custom_components.bticino_c300x.api_errors import C300XAgentApiConnectionError
+    entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()))
+    entry.runtime_data.qml_patch_status = {"qt5_overlay": "active"}
+    async def failing(_entry, *, apply_full_patch, **_kwargs):
+        raise C300XAgentApiConnectionError("device agent returned HTTP 502: reload_failed", http_status=502)
+    monkeypatch.setattr(qml_patch, "async_restore_qml_patches_after_update", failing)
+    state = _ExternalPatchState(qml_patch_required=True, firewall_patched=False,
+                               firewall_status_known=True, ipv6_firewall_patched=False)
+    assert asyncio.run(_async_restore_external_patch_state(
+        entry, state, _ExternalPatchChanges(qml_patch_changed=True))) is False
 
 
 def test_restore_external_patch_state_reenables_ipv6_endpoint_before_apply() -> None:
@@ -3106,10 +3261,10 @@ def test_display_restore_follows_the_new_agent_capabilities(monkeypatch, mainten
                                firewall_status_known=True, ipv6_firewall_patched=False)
     calls = []
 
-    async def restore(_entry, *, apply_full_patch):
+    async def restore(_entry, *, apply_full_patch, reload_unchanged=True):
         calls.append(apply_full_patch)
 
-    monkeypatch.setattr(repairs, "async_restore_qml_patches_after_update", restore)
+    monkeypatch.setattr(repairs, "async_restore_display_after_update", restore)
     # The setup payload as async_validate_setup returns it.
     setup_data = asyncio.run(FakeUpdateVerifyApi().async_validate_setup())
     if maintenance is not None:
@@ -3163,3 +3318,86 @@ def test_ssh_install_uses_the_factory_login_and_asks_only_after_a_refusal(monkey
     assert logins[-1] == ("admin", "typed")
     # The fields stay once asked for, also after another kind of failure.
     assert set(asyncio.run(flow.async_step_ssh_install(None))["data_schema"]({})) == set(asked)
+
+
+def test_the_core_repair_runs_the_whole_owed_display_followup_and_clears_it() -> None:
+    """Steps an update left undone: core, full Display patch, restart, confirmation."""
+
+    api = FakePatchApi()
+    api.qml_status = {"available": True, "patched": True, "state": "patched",
+                      "core_patched": True, "core_state": "patched"}
+    entry = FakeEntry(
+        runtime_data=FakeRuntimeData(
+            api,
+            capabilities={"maintenance": {"supported": True, "qml_core_patch": True}},
+            qml_patch_status=dict(api.qml_status),
+        ),
+        data={"display_followup_pending": True},
+    )
+    flow = DeviceCoreQmlHookRepairFlow(FakeHass(entry), "entry-1")  # type: ignore[arg-type]
+    flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}  # type: ignore[method-assign]
+    flow.async_create_entry = lambda **kwargs: {"type": "create_entry", **kwargs}  # type: ignore[method-assign]
+    result = asyncio.run(flow.async_step_confirm({}))
+    assert result["type"] == "create_entry", result
+    assert api.calls[:2] == ["apply_qml_core", "apply_qml"]
+    assert "reload_gui" in api.calls
+    assert "display_followup_pending" not in entry.data
+
+
+def test_a_display_write_timeout_during_the_ssh_install_is_shown_on_the_form(monkeypatch) -> None:
+    """The flow itself, not only its helper: the form carries the display
+    time-out, a text of the repair exists for it in every language, and no
+    other login is asked for."""
+
+    import json
+    from pathlib import Path
+
+    import custom_components.bticino_c300x.repairs as repairs
+    from custom_components.bticino_c300x.device_installer import C300XDeviceInstallError
+
+    entry = FakeEntry(
+        runtime_data=FakeRuntimeData(FakePatchApi()),
+        data={"agent_host": "192.0.2.60", "agent_token": "t", "maintenance_token": "m"},
+    )
+    entry.runtime_data.agent_update_state = FakeAgentUpdateState()
+    flow = DeviceAgentUpdateRepairFlow(FakeHass(entry), "entry-1")  # type: ignore[arg-type]
+    installs: list[Any] = []
+
+    async def install_agent(request: Any, **_kwargs: Any) -> Any:
+        installs.append(request)
+        raise C300XDeviceInstallError("device_display_timeout")
+
+    async def ensure_installer_dependencies(_hass: Any) -> None:
+        return None
+
+    monkeypatch.setattr(repairs, "async_install_device_agent", install_agent)
+    monkeypatch.setattr(repairs, "async_ensure_installer_dependencies", ensure_installer_dependencies)
+    flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}  # type: ignore[method-assign]
+
+    result = asyncio.run(flow.async_step_ssh_install({}))
+
+    assert len(installs) == 1
+    assert result["type"] == "form" and result["step_id"] == "ssh_install"
+    assert result["errors"] == {"base": "device_display_timeout"}
+    assert result["data_schema"].schema == {}
+    integration = Path(repairs.__file__).parent
+    for path in (integration / "strings.json", *(integration / "translations").glob("*.json")):
+        texts = json.loads(path.read_text(encoding="utf-8"))
+        errors = texts["issues"]["device_agent_update_required"]["fix_flow"]["error"]
+        assert errors.get("device_display_timeout"), path.name
+
+
+def test_a_display_write_timeout_of_the_ssh_install_keeps_its_own_error() -> None:
+    import json
+    from pathlib import Path
+
+    from custom_components.bticino_c300x import repairs
+    from custom_components.bticino_c300x.device_installer import C300XDeviceInstallError
+
+    assert repairs._ssh_install_error(C300XDeviceInstallError("device_display_timeout")) == (
+        "device_display_timeout")
+    assert repairs._ssh_install_error(C300XDeviceInstallError("ssh_login_refused")) == "ssh_login_refused"
+    assert repairs._ssh_install_error(C300XDeviceInstallError("device_install_failed")) == "ssh_install_failed"
+    assert repairs._ssh_install_error(RuntimeError("x")) == "ssh_install_failed"
+    strings = json.loads((Path(repairs.__file__).parent / "strings.json").read_text(encoding="utf-8"))
+    assert "device_display_timeout" in strings["config"]["error"]

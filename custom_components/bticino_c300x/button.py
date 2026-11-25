@@ -29,6 +29,7 @@ from .const import (
     EVENT_AGENT_EVENT_RECEIVED,
     SIGNAL_QML_PATCH_CHANGED,
 )
+from .display_activation import gui_reload_kwargs
 from .entity import C300XEntity, entry_video_enabled, supports_capability
 from .entry_types import BticinoC300XConfigEntry
 from .event_payload import agent_event_key
@@ -307,7 +308,7 @@ class C300XReloadGuiButton(C300XMaintenanceButton):
         """Reload the device GUI through the device-agent maintenance API."""
 
         try:
-            await self._entry.runtime_data.api.async_reload_gui()
+            await self._entry.runtime_data.api.async_reload_gui(**gui_reload_kwargs(self._entry))
         except C300XAgentApiUnsupportedError as err:
             raise HomeAssistantError(
                 "The installed C300X device agent does not support Display reload"
@@ -574,11 +575,7 @@ def _connection_available(entry: BticinoC300XConfigEntry) -> bool:
 def _gui_required_action_available(entry: BticinoC300XConfigEntry) -> bool:
     if not _connection_available(entry):
         return False
-    runtime_data = getattr(entry, "runtime_data", None)
-    status = getattr(runtime_data, "qml_patch_status", {})
-    return entry_device_ui_enabled_or_patch_active(entry) and bool(
-        isinstance(status, dict) and status.get("patched") is True
-    )
+    return entry_device_ui_enabled_or_patch_active(entry) and entry_gui_function_patch_active(entry)
 
 
 def _memo_store_available(entry: BticinoC300XConfigEntry) -> bool:

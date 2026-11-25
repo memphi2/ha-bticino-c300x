@@ -207,6 +207,7 @@ def _lts_evidence(
             validation = load_verified_summary(
                 Path(evidence_path), os.environ.get("C300X_VALIDATION_EVIDENCE_SHA256", ""),
                 _git_output("rev-parse", "HEAD") or "", os.environ.get("GITHUB_REPOSITORY", ""),
+                tag,
             )
         except (OSError, ValueError, KeyError, TypeError) as err:
             raise ReleaseAssetError(f"Invalid canonical validation evidence: {err}") from err
@@ -224,7 +225,7 @@ def _lts_evidence(
         raise ReleaseAssetError(str(err)) from err
     return {
         "release": tag,
-        "validation_status": "canonical-main-push" if validation is not None else "local-unverified",
+        "validation_status": f"canonical-{validation['source_branch']}-push" if validation is not None else "local-unverified",
         "validation_evidence": validation,
         "min_homeassistant": minimum_ha,
         "current_homeassistant": current_ha,

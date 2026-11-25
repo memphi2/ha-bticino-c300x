@@ -8,7 +8,18 @@ class C300XAgentApiError(Exception):
 
 
 class C300XAgentApiConnectionError(C300XAgentApiError):
-    """Raised when the device agent cannot be reached."""
+    """Raised when the device agent cannot be reached.
+
+    Also raised for an HTTP error answer; ``http_status`` then holds its
+    status (None when no answer came at all) and ``agent_state`` the
+    ``state`` or ``error`` field of the agent's answer.
+    """
+
+    def __init__(self, *args: object, http_status: int | None = None,
+                 agent_state: str | None = None) -> None:
+        super().__init__(*args)
+        self.http_status = http_status
+        self.agent_state = agent_state
 
 
 class C300XDisplayBridgeNotRegisteredError(C300XAgentApiConnectionError):
@@ -60,6 +71,14 @@ class C300XAgentApiAuthError(C300XAgentApiError):
             "device agent rejected the maintenance key"
             if maintenance else "device agent rejected the access key"
         )
+
+
+class C300XDisplayNotConfirmedError(C300XAgentApiError):
+    """The display step ran on the station, but its display is not confirmed.
+
+    The Qt 5 overlay is quarantined, incomplete or off, no display program
+    runs, or the display restart was still running when the wait ended.
+    """
 
 
 class C300XAgentApiResponseError(C300XAgentApiError):

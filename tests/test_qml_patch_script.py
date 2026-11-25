@@ -328,17 +328,17 @@ PATCH_OUTPUT_SHA256 = {
     "MainApp.qml": "3860c9addd37ba6be61fb6eea7fa1a08d93a782ffc94c1e989341cf8ef4d53ce",
     "Settings.qml": "403b650e32e2353ba542b4960ea7d0d211d62897dbca9e953c7253e491156447",
     "Components/Settings/GeneralsChoice.qml": "fe4241e1c5d99abb9175f36ec6a9e35ef48033af0c07ab0c46b25309f615e240",
-    "C300XSettings.qml": "ad22875dee6b6e62f5915d4dea987672df0fc285a2e42f10e6a4867f361bb0a6",
-    "js/c300x_maintenance.js": "7baebcd3b0b52b92c934eb9b2cfaf27b198bf0064e16db6571a04aa927557c56",
+    "C300XSettings.qml": "e1bb26e8aea64ba95debd42ff2a5933fef19f09082c6606c8a9e45da997399bb",
+    "js/c300x_maintenance.js": "f06a7b3ba394203ae833fadc7b13b660ee652b85b6f3b27fd96d0e353f6dc1d2",
     "HomePage.qml": "998dbd1074ab0689303d213cff46663e8b72403eb944c28a9391e35512333193",
     "MemoPage.qml": "f7fe6279108429389bc607e6c92df065d75dbbce2d9cdfc6ec1280f30f893e0f",
     "EventManager.qml": "cf68c96d9b702ce9501e70f8a511658483e1bcd5f2c9fcdff2ae214af79e3a6a",
     "Alarm.qml": "65977bf521bcdca872d3c107148ddabf7b623c4af7e6707462f62ff565ab53d0",
-    "HomeAssistant.qml": "a90d61ca004be2115544dbbf14d67cfb88bccb3f0c9782dbfe931f51ac4eece2",
-    "C300XEnergy.qml": "6f106d8637158fdf789c2d3339e9bae6fcf2c557c30dbbe5734fcd1b2acb73a2",
-    "C300XEnergyConsumers.qml": "f01423312e0838cd54b6ca90ef3c84f84268454fbfdaab7805d3da90f496b948",
+    "HomeAssistant.qml": "f034c5bafc1d69aa1db71f6f93ce25c2d7c2ef180b3f2cea90dc6c01079e1a3d",
+    "C300XEnergy.qml": "abad8ce4ee25c49e000a44758d320afeff62d4b0964e14322a4a0cab7c90fd74",
+    "C300XEnergyConsumers.qml": "def84fa2328a4d310efc1173706d513fa51e4423c825242d703a688b4768a918",
     "C300XAgenda.qml": "0853c9658d39414bb539712761052c0a08ec1c5522507ee02e749814e0e9ab3e",
-    "C300XAlerts.qml": "c87ed986ae53cb24594fd65d8b1c375f6494bb2147f2488fe08881d1db89c43a",
+    "C300XAlerts.qml": "c815a8f04aa5cc7ca51297c23477a730bcbf707bdcf6a57de8302c8e46ae0722",
     "C300XDetailControl.qml": "07b3e761c43480d763bf0c943cfe1bb8d19de794fd095bd5478609ca3ec9c42f",
     "C300XEnergyReadout.qml": "03d300c00d5685bb095b0ddf08a8964685d6f7621a2bef0f93c59546e231560e",
     "C300XEnergySums.qml": "d69adc8a62deceaa27b7329b32827b991b1d8152476d4e2298c498558c295585",
@@ -353,7 +353,7 @@ PATCH_OUTPUT_SHA256 = {
     "js/c300x_energy_consumers.js": "f4128432b1990bebb79eae88daafe54481e953ad621fcf758e685ad57f0b4377",
     "js/c300x_ringer.js": "268fed06c44704de8fbf04ec458cac7425b9fbc78f9a68514112ca751603cb71",
     "js/c300x_ha.js": "40c83a7d5baffae75819a134657ca89ffe1e81194f5bb26a7533e13a401df0f5",
-    "js/c300x_i18n.js": "bd8c8566398a445ceba8350d7d10c3a43888b4b305ef665de9a88896c05da1c4",
+    "js/c300x_i18n.js": "2f1149d6ed2917d9819a742294b3e373894b1f7f97181641fbaac31aad685d14",
     "js/c300x_memos.js": "2e922d5617dfafda1c231581ef1eff46f83f4897a11a7350926641135c46040d",
 }
 
@@ -1859,6 +1859,7 @@ def _run_qml_patch(
     no_remount: bool = True,
     source_dir: Path = SOURCE_DIR,
     env_overrides: dict[str, str] | None = None,
+    extra_args: list[str] | None = None,
 ) -> dict[str, object]:
     result = _run_qml_patch_raw(
         tmp_path,
@@ -1868,6 +1869,7 @@ def _run_qml_patch(
         no_remount=no_remount,
         source_dir=source_dir,
         env_overrides=env_overrides,
+        extra_args=extra_args,
     )
     result.check_returncode()
     return json.loads(result.stdout)
@@ -1882,6 +1884,7 @@ def _run_qml_patch_raw(
     no_remount: bool = True,
     source_dir: Path = SOURCE_DIR,
     env_overrides: dict[str, str] | None = None,
+    extra_args: list[str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     env = {
         **os.environ,
@@ -1891,12 +1894,13 @@ def _run_qml_patch_raw(
         "C300X_QML_NO_REMOUNT": "1" if no_remount else "0",
         "C300X_QML_RELOAD_GUI": "0",
         "C300X_QML_GUI_ROOT": str(tmp_path),
+        "C300X_QML_QT5_MARKER": str(tmp_path / "no-qt5-display"),
     }
     if env_overrides:
         env.update(env_overrides)
     env["PATH"] = _without_host_display_tools(tmp_path, env.get("PATH", os.environ["PATH"]))
     return subprocess.run(
-        [str(SCRIPT), action],
+        [str(SCRIPT), action, *(extra_args or [])],
         check=False,
         capture_output=True,
         env=env,

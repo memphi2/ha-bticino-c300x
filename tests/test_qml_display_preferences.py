@@ -411,7 +411,7 @@ function tab(language) {
     const calls = {status: [], details: [], setting: []};
     const preferences = {bridgeProblem: '', ready: true, busy: false, load() {}};
     const panel = vm.createContext({c300xDisplayPreferences: preferences, visible: true, pending: '', saving: false,
-        answered: false, visit: 0, problem: '', bridgeOff: false, address: '', contact: '', agentVersion: '', firmwareVersion: '', integrationVersion: '',
+        answered: false, visit: 0, problem: '', bridgeOff: false, addressShown: '', contact: '', agentVersion: '', firmwareVersion: '', integrationVersion: '',
         instanceName: '', keepOpen: false, tabNavigation: false, status: '', Math, deadline: {},
         sshRunning: false, sshKnown: false, canReboot: false, canRemove: false, busy: false,
         clearConfirmation() {}, Maintenance: {request() {}, cancel() {}},
@@ -422,6 +422,11 @@ function tab(language) {
             displaySetting(key, value, callback, owner) { calls.setting.push({key, value, callback, owner}); },
         }});
     panel.panel = panel;
+    // The station measures the text in its own font; here every character is 9 px wide, 34 fill the value column.
+    panel.statusRows = {width: 456};
+    panel.gauge = {text: '', get paintedWidth() { return this.text.length * 9; }};
+    let address = '';
+    Object.defineProperty(panel, 'address', {get() { return address; }, set(value) { address = value; panel.fitAddress(); }});
     Object.defineProperty(panel, 'reachable', {get() { return panel.answered && panel.problem === ''; }});
     vm.runInContext(qml.slice(qml.indexOf('    function statusKey'), qml.indexOf('    onVisibleChanged')), panel);
     return {panel, calls, preferences};
@@ -511,7 +516,7 @@ for (const [age, text] of [[null, 'nie seit Start'], [undefined, 'nie seit Start
 assert.equal(tab('en').panel.contactText(600), '10 min ago');
 assert.equal(tab('it').panel.contactText(7200), '2 h fa');
 assert.equal(tab('fr').panel.contactText(null), 'jamais depuis le démarrage');
-for (const key of ['status_ok', 'status_down', 'status_checking', 'status_contact', 'contact_never',
+for (const key of ['status_ok', 'status_down', 'status_checking', 'status_address', 'status_contact', 'contact_never',
         'contact_now', 'contact_min', 'contact_hours', 'contact_days', 'section_display', 'section_station',
         'bridge_unreachable', 'bridge_not_registered', 'bridge_disabled']) {
     for (const language of ['de', 'en', 'it', 'fr']) assert.notEqual(texts.text(language, key), key, language + ' ' + key);
@@ -833,27 +838,168 @@ def test_integration_tab_rows_are_not_rebuilt_when_a_value_changes():
 
 
 def test_integration_tab_status_lines_fit_long_values():
-    """Measured in the station font at 18 px: the value column is 260 px wide.
+    """Measured in the station font at 18 px: the value column is 306 px wide.
 
-    "https://ha.example.duckdns.org:8123" is 298 px and the three versions in
-    one line were 435 px with "2.10.0b1" in a 400 px column, so both were cut.
-    The address has the full width and may wrap once; the versions are two rows.
+    "https://ha.example.duckdns.org:8123" is 298 px and fits in one line. A
+    longer address takes a second line, which the tab breaks itself; the
+    versions are two rows.
     """
     source = (ROOT / "device_qml/C300XSettings.qml").read_text(encoding="utf-8")
     assert "                model: 5\n" in source
-    assert "anchors.leftMargin: index === 1 ? 0 : 140" in source
-    assert "wrapMode: index === 1 ? Text.WrapAnywhere : Text.NoWrap" in source
-    assert "height: Math.max(23, statusValue.paintedHeight + 2)" in source
+    values = source[source.index("                model: 5\n"):source.index('objectName: "bridgeReason"')]
+    assert "wrapMode" not in values
+    # Qt 4.8 does not elide a single line once a line limit is set, whatever its value:
+    # "erreichbar (Mein sehr langer Instanzname hier)" is 373 px and ran off the screen.
+    assert "maximumLineCount" not in values and "elide: Text.ElideRight\n" in values
+    assert "anchors.right: parent.right\n" in values, "the value ends with its column"
+    assert "height: Math.max(26, statusValue.paintedHeight + 4)" in source
     assert 'row === 3 ? "Integration" : row === 4 ? "Agent"' in source
     assert '(agentVersion || "-") + " \\u00b7 Firmware " + (firmwareVersion || "-")' in source
     assert '"Integration " +' not in source
     assert "status_server" not in (ROOT / "device_qml/js/c300x_i18n.js").read_text(encoding="utf-8")
 
 
+def test_integration_tab_address_is_a_table_row_like_the_others():
+    """The address stood alone at the left edge, without a label, like a wrapped first line.
+
+    It has its own label in every display language and starts in the value
+    column like the other four values.
+    """
+    source = (ROOT / "device_qml/C300XSettings.qml").read_text(encoding="utf-8")
+    row = source[source.index("                model: 5\n"):source.index('objectName: "bridgeReason"')]
+    assert re.findall(r"anchors\.leftMargin: ([^\n]+)", row) == ["150"], "one value column for all five rows"
+    _run_tab_harness(r"""
+assert.deepEqual(['de', 'en', 'it', 'fr'].map(language => tab(language).panel.statusKey(1)),
+    ['Adresse', 'Address', 'Indirizzo', 'Adresse']);
+const {panel} = tab('de');
+assert.deepEqual([0, 1, 2, 3, 4].map(row => panel.statusKey(row) !== ''), [true, true, true, true, true]);
+assert.equal(panel.statusValue(1), '-');
+""")
+
+
+def test_integration_tab_address_shows_its_start_and_its_port():
+    """A long address lost its port: Qt wrapped it where it liked and cut the second line at the end.
+
+    "https://homeassistant.my-very-long-home-name.example.duckdns.org:8123"
+    broke after a hyphen and ended "...duckdns.org:..." without the port. The
+    tab measures the text and breaks it itself. Guaranteed: at most two
+    lines, none wider than the value column; an address that fits in two
+    lines is shown completely; a longer one keeps as much of its start as
+    the first line holds and as much of its end as the second line holds
+    behind an ellipsis, so the port always shows. The break follows a dot,
+    colon or hyphen where the rest then still fits, otherwise it falls
+    inside a name. The widths here are stand-ins (9 px per character); the
+    station's font is measured in tests/test_qt4_display_render.py.
+    """
+    source = (ROOT / "device_qml/C300XSettings.qml").read_text(encoding="utf-8")
+    assert "    onAddressChanged: fitAddress()\n" in source
+    assert "Text.Wrap\n" not in source and "u200b" not in source, "Qt no longer chooses the break"
+    assert "return gauge.paintedWidth <= statusRows.width - 150\n" in source, "measured against the value column"
+    gauge = source[source.index("        id: gauge\n"):source.index("    Flickable {")]
+    assert "visible: false\n" in gauge and "font.pixelSize: 18\n" in gauge
+    _run_tab_harness(r"""
+const {panel} = tab('de');
+const dots = '…';
+function shown(address) {
+    panel.address = address;
+    const lines = panel.statusValue(1).split('\n');
+    assert.ok(lines.length <= 2 && lines.every(line => line.length <= 34 && line.length > 0), JSON.stringify(lines));
+    return lines;
+}
+// Fits in one line: unchanged.
+for (const address of ['http://192.0.2.10:8123', 'https://ha.example.duckdns.org:443', 'http://homeassistant.local'])
+    assert.deepEqual(shown(address), [address]);
+// Fits in two lines: complete, broken after a separator when the rest then fits.
+assert.deepEqual(shown('http://[fd00:1234:5678:9abc:def0:1234:5678:9abc]:8123'),
+    ['http://[fd00:1234:5678:9abc:def0:', '1234:5678:9abc]:8123']);
+assert.deepEqual(shown('https://home.example-name.duckdns.org:8123'), ['https://home.example-name.duckdns.', 'org:8123']);
+assert.deepEqual(shown('http://averyveryverylonghostnamewithoutanydot:8123'),
+    ['http://averyveryverylonghostnamewi', 'thoutanydot:8123'], 'no separator in reach: broken inside the name, nothing lost');
+assert.deepEqual(shown('https://ha.averyveryverylongnamewithoutbreaks-x.example.org:8123'),
+    ['https://ha.averyveryverylongnamewi', 'thoutbreaks-x.example.org:8123'], 'the rest after the last separator would not fit');
+// Longer than two lines: start and end, the port never lost.
+for (const address of ['https://homeassistant.my-very-long-home-name.example.duckdns.org:8123',
+        'http://averyveryverylonghostnamewithoutanydotsatallinsideit-andmore:8123',
+        'https://' + 'a'.repeat(200) + ':8123', 'https://' + 'sub.'.repeat(40) + 'example.org']) {
+    const [first, second] = shown(address);
+    assert.equal(first, address.slice(0, 34), 'the first line is full');
+    assert.equal(second, dots + address.slice(-33), 'the second line is full and ends with the end of the address');
+}
+panel.address = '';
+assert.equal(panel.statusValue(1), '-');
+""")
+
+
+def test_integration_tab_message_has_a_line_that_stays_in_view():
+    """The message after a failed switch was the last item of the page, below the fold.
+
+    The page is 502 px high in a 378 px view: after a switch on the first
+    screen fell back, nothing was to be seen. The message has its own line
+    below the page, outside of what scrolls, on the dark panel and with the
+    inset of the rows; the page gives way to it and gets the room back.
+    """
+    source = (ROOT / "device_qml/C300XSettings.qml").read_text(encoding="utf-8")
+    page = source[source.index("    Flickable {"):source.index("        id: note\n")]
+    assert not re.search(r"panel\.status\b", page), "no message inside the page"
+    assert "        anchors.bottomMargin: note.visible ? note.height + 16 : 0\n" in page
+    note = source[source.index("        id: note\n"):source.index("        visible: scroller.contentHeight > scroller.height")]
+    for line in ('visible: panel.status !== ""', "anchors.bottom: parent.bottom", "anchors.bottomMargin: 8", "width: content.width",
+                 'source: "images/settings/act_btn.svg"', "x: statusRows.x", "width: parent.width - 2 * x",
+                 "wrapMode: Text.WordWrap", 'text: panel.status ? panel.label(panel.status) : ""'):
+        assert f"        {line}\n" in note, line
+    assert source.count("panel.label(panel.status)") == 1
+    _run_tab_harness(r"""
+for (const language of ['de', 'en', 'it', 'fr'])
+    for (const key of ['display_settings_error', 'maintenance_timeout', 'maintenance_accepted']) {
+        const text = texts.text(language, key);
+        assert.ok(text && text !== key && text.length <= 30, language + ' ' + key + ': one line of the 456 px the message has');
+    }
+const {panel, calls} = tab('de');
+panel.answered = true;
+panel.setDisplay('dashboard_prevent_return', 'on');
+calls.setting[0].callback(null);
+assert.deepEqual([panel.status, panel.saving, panel.keepOpen], ['display_settings_error', false, false]);
+""")
+
+
+def test_integration_tab_table_rows_and_buttons_share_their_edges():
+    """The status block was 400 px wide and indented, the rows were not, the buttons were 480 px wide.
+
+    One column as wide as the two buttons holds everything; the text of the
+    table, of the section titles and of the switch rows starts at the same
+    inset, and the switches end at that inset on the right.
+    """
+    source = (ROOT / "device_qml/C300XSettings.qml").read_text(encoding="utf-8")
+    column = source[source.index("            id: content\n"):]
+    assert "            width: 480\n" in column[:120]
+    assert "background.width: 236\n" in source and "spacing: 8\n" in source and 236 * 2 + 8 == 480
+    assert "                    x: 12\n                    y: 10\n                    width: parent.width - 24\n" in source
+    rows = source[source.index("                model: 6\n"):source.index('model: ["reboot", "remove"]')]
+    assert "anchors.leftMargin: statusRows.x\n" in rows and "anchors.rightMargin: statusRows.x\n" in rows
+    assert "anchors.horizontalCenter" not in rows, "the buttons start at the column edge, not centred on their own"
+
+
+def test_integration_tab_rows_have_air():
+    """The section title touched the status block, the switches touched each other.
+
+    The station's switch is 34 px high. A switch row is 48 px, a section
+    title has 44 px with its text in the lower part, and the buttons keep
+    14 px from the last switch row.
+    """
+    source = (ROOT / "device_qml/C300XSettings.qml").read_text(encoding="utf-8")
+    rows = source[source.index("                model: 6\n"):source.index('model: ["reboot", "remove"]')]
+    match = re.search(r"height: head \? (\d+) : (\d+)\n", rows)
+    assert match, "section titles and switch rows have fixed heights"
+    title, switch = int(match.group(1)), int(match.group(2))
+    assert switch - 34 >= 12 and title >= 40
+    assert "anchors.verticalCenterOffset: head ? 7 : 0\n" in rows
+    assert "            Item { width: 1; height: 14 }\n            Row {\n" in source
+
+
 def test_integration_tab_status_block_is_readable_on_a_bright_background():
     """Green and grey text straight on the sand-coloured wallpaper could not be read."""
     source = (ROOT / "device_qml/C300XSettings.qml").read_text(encoding="utf-8")
-    block = source[source.index("height: statusRows.height + 8"):source.index("                model: 6\n")]
+    block = source[source.index("height: statusRows.height + 20"):source.index("                model: 6\n")]
     assert 'source: "images/settings/act_btn.svg"' in block
     assert block.index("Image {") < block.index("id: statusRows") < block.index("model: 5")
     assert 'objectName: "bridgeReason"' in block, "the reason lies on the panel too"

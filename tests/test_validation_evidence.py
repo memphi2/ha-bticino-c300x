@@ -39,6 +39,7 @@ class FakeGitHub:
         self.ended = (self.now - timedelta(minutes=30)).isoformat()
         self.repository = {"id": 42, "full_name": REPO, "default_branch": "main"}
         self.main_sha = self.tag_sha = SHA
+        self.beta_sha = "b" * 40
         self.workflows, self.runs, self.jobs = {}, {}, {}
         self.artifacts, self.archives, self.payloads = [], {}, {}
         self.reads = []
@@ -82,8 +83,10 @@ class FakeGitHub:
         self.reads.append(path)
         if path == "":
             return copy.deepcopy(self.repository)
-        if path == "/branches/main":
-            return {"commit": {"sha": self.main_sha}}
+        if path.startswith("/git/matching-refs/heads/"):
+            branch = path.rsplit("/", 1)[1]
+            sha = getattr(self, f"{branch}_sha")
+            return [{"ref": f"refs/heads/{branch}", "object": {"type": "commit", "sha": sha}}] if sha else []
         if path.startswith("/git/ref/tags/"):
             return {"object": {"type": "commit", "sha": self.tag_sha}}
         return copy.deepcopy(self.workflows[path.split("/")[-1]])
@@ -116,7 +119,8 @@ def test_success_uses_actual_versions_and_records_all_trust_bindings(api):
         assert run["workflow_digest"] == evidence.workflow_digest(f".github/workflows/{name}")
         assert run["workflow_sha"] == SHA
     assert result["runs"]["validate.yml"]["artifacts"]["min-ha"]["digest"] == api.artifacts[0]["digest"]
-    assert sum(path == "/branches/main" for path in api.reads) == 2
+    assert result["source_branch"] == "main"
+    assert sum(path == "/git/matching-refs/heads/main" for path in api.reads) == 2
 
 
 @pytest.mark.parametrize("filename", verifier.REQUIRED_JOBS)
@@ -289,23 +293,32 @@ def test_metadata_consumes_exact_gate_bytes_and_records_run_bindings(api, tmp_pa
         writer._lts_evidence(tag="v2.8.2", native_agent_reused_from=None)
 
 
-def test_workflows_bind_evidence_and_preserve_full_pr_main_checks():
+def test_workflows_bind_evidence_and_preserve_full_pr_main_beta_checks():
     workflows = {name: yaml.safe_load((ROOT / f".github/workflows/{name}.yml").read_text()) for name in ("release", "validate", "browser", "codeql")}
     for name in ("validate", "browser", "codeql"):
         assert "pull_request" in workflows[name][True]
-        assert "main" in workflows[name][True]["push"]["branches"]
+        assert set(workflows[name][True]["push"]["branches"]) == {"main", "beta"}
     validate = workflows["validate"]["jobs"]
     assert set(validate) == {"validate", "hacs", "hassfest", "dependabot"}
     steps = validate["validate"]["steps"]
     names = [step.get("name") for step in steps]
     assert names.index("Validation gates") < names.index("Home Assistant container runtime") < names.index("Record validated HA version") < names.index("Upload validated HA evidence")
     upload = steps[names.index("Upload validated HA evidence")]
+    for name in ("Record validated HA version", "Upload validated HA evidence"):
+        step = steps[names.index(name)]
+        assert step["if"] == "github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/beta')"
+        assert not step.get("continue-on-error")
     assert upload["with"]["name"] == "ha-validation-${{ matrix.name }}-${{ github.run_attempt }}"
     assert upload["with"]["if-no-files-found"] == "error"
     assert not upload["with"].get("overwrite")
     screenshots = next(step for step in workflows["browser"]["jobs"]["browser"]["steps"] if step.get("uses", "").startswith("actions/upload-artifact@"))
     assert screenshots["with"]["name"] == "synthetic-card-screenshots-${{ github.run_attempt }}"
     jobs = workflows["release"]["jobs"]
+    gate_steps = jobs["main-validation"]["steps"]
+    setup = next(step for step in gate_steps if step.get("name") == "Install release channel policy tools")
+    verify = next(step for step in gate_steps if step.get("id") == "verified-main")
+    assert setup["run"] == "python -m pip install -c requirements-dev.txt packaging"
+    assert gate_steps.index(setup) < gate_steps.index(verify)
     assert set(jobs) == {"main-validation", "publish"}
     assert jobs["publish"]["needs"] == ["main-validation"]
     assert jobs["main-validation"]["steps"][0]["with"]["ref"] == "${{ github.sha }}"
@@ -322,7 +335,7 @@ def test_workflows_bind_evidence_and_preserve_full_pr_main_checks():
 
 
 @pytest.mark.parametrize("field,value", [
-    (None, None), ("GITHUB_REF", "refs/heads/beta"), ("GITHUB_EVENT_NAME", "pull_request"),
+    (None, None), ("GITHUB_REF", "refs/heads/topic"), ("GITHUB_EVENT_NAME", "pull_request"),
     ("GITHUB_WORKFLOW_SHA", "b" * 40), ("GITHUB_WORKFLOW_REF", "foreign"),
     ("installed", "2026.11.1"), ("checkout", "b" * 40),
 ])
@@ -350,26 +363,29 @@ def test_generator_only_records_actual_installed_main_push_version(tmp_path, mon
         assert not output.exists()
 
 
+@pytest.mark.parametrize("tag", ["v2.8.2", "v2.9.0b1", "v2.9.0b2"])
 @pytest.mark.parametrize("change", [
     None, "digest", "workflow-sha", "workflow-ref", "run-sha", "run-ref",
     "run-event", "dispatch", "summary-sha", "summary-minimum",
 ])
-def test_release_cli_and_metadata_digest_binding(api, tmp_path, monkeypatch, change):
+def test_release_cli_and_metadata_digest_binding(api, tmp_path, monkeypatch, change, tag):
+    if tag != "v2.8.2":
+        beta_api(api)
     monkeypatch.setenv("GITHUB_REPOSITORY", REPO)
     monkeypatch.setenv("GITHUB_SHA", "b" * 40 if change == "run-sha" else SHA)
-    monkeypatch.setenv("GITHUB_REF", "refs/heads/main" if change == "run-ref" else "refs/tags/v2.8.2")
+    monkeypatch.setenv("GITHUB_REF", "refs/heads/main" if change == "run-ref" else f"refs/tags/{tag}")
     monkeypatch.setenv("GITHUB_EVENT_NAME", {"run-event": "pull_request", "dispatch": "workflow_dispatch"}.get(change, "push"))
     monkeypatch.setenv("GITHUB_WORKFLOW_SHA", "b" * 40 if change == "workflow-sha" else SHA)
-    monkeypatch.setenv("GITHUB_WORKFLOW_REF", "foreign" if change == "workflow-ref" else f"{REPO}/.github/workflows/release.yml@refs/tags/v2.8.2")
+    monkeypatch.setenv("GITHUB_WORKFLOW_REF", "foreign" if change == "workflow-ref" else f"{REPO}/.github/workflows/release.yml@refs/tags/{tag}")
     monkeypatch.setattr(verifier.subprocess, "check_output", lambda *args, **kwargs: SHA)
     monkeypatch.setattr(verifier, "GitHub", lambda repository: api)
-    expected = verifier.verify(api, REPO, "v2.8.2", SHA)
+    expected = verifier.verify(api, REPO, tag, SHA)
     data = (json.dumps(expected, indent=2, sort_keys=True) + "\n").encode()
     digest = hashlib.sha256(data).hexdigest()
     output = tmp_path / "verified.json"
     github_output = tmp_path / "output"
     monkeypatch.setenv("GITHUB_OUTPUT", str(github_output))
-    monkeypatch.setattr(sys, "argv", ["verify", "--tag", "v2.8.2", "--output", str(output), "--expect-digest", "0" * 64 if change == "digest" else digest])
+    monkeypatch.setattr(sys, "argv", ["verify", "--tag", tag, "--output", str(output), "--expect-digest", "0" * 64 if change == "digest" else digest])
     if change in {"digest", "workflow-sha", "workflow-ref", "run-sha", "run-ref", "run-event"}:
         with pytest.raises(ValueError):
             verifier.main()
@@ -386,6 +402,173 @@ def test_release_cli_and_metadata_digest_binding(api, tmp_path, monkeypatch, cha
     digest = hashlib.sha256(output.read_bytes()).hexdigest()
     if change in {"summary-sha", "summary-minimum"}:
         with pytest.raises(ValueError):
-            evidence.load_verified_summary(output, digest, SHA, REPO)
+            evidence.load_verified_summary(output, digest, SHA, REPO, tag)
     else:
-        assert evidence.load_verified_summary(output, digest, SHA, REPO) == expected
+        assert evidence.load_verified_summary(output, digest, SHA, REPO, tag) == expected
+
+
+def beta_api(api):
+    api.beta_sha, api.main_sha = SHA, "b" * 40
+    for runs in api.runs.values():
+        runs[0]["head_branch"] = "beta"
+    for target in evidence.TARGETS:
+        api.payloads[target].update(evidence.identity(REPO, 42, SHA, 100, 1, "beta"))
+        api.repack(target)
+    for artifact in api.artifacts:
+        artifact["workflow_run"]["head_branch"] = "beta"
+    return api
+
+
+@pytest.mark.parametrize("tag", ["v2.9.0b1", "v2.9.0b2", "v2.9.0rc1"])
+def test_beta_exact_source_evidence_is_consumed_by_release_metadata(api, tmp_path, monkeypatch, tag):
+    beta_api(api)
+    summary = verifier.verify(api, REPO, tag, SHA)
+    assert summary["source_branch"] == "beta"
+    assert all("branch=beta&" in path for path in api.reads if "/runs?" in path)
+    path = tmp_path / "evidence.json"
+    path.write_text(json.dumps(summary))
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setenv("GITHUB_REPOSITORY", REPO)
+    monkeypatch.setenv("C300X_VALIDATION_EVIDENCE", str(path))
+    monkeypatch.setenv("C300X_VALIDATION_EVIDENCE_SHA256", digest)
+    monkeypatch.setattr(writer, "_git_output", lambda *args: SHA)
+    metadata = writer._lts_evidence(tag=tag, native_agent_reused_from=None)
+    assert metadata["validation_status"] == "canonical-beta-push"
+    assert metadata["validation_evidence"] == summary
+    assert metadata["validated_homeassistant"] == ["2026.10.0", "2026.12.2"]
+    with pytest.raises(writer.ReleaseAssetError, match="branch not authorized"):
+        writer._lts_evidence(tag="v2.9.0", native_agent_reused_from=None)
+
+
+@pytest.mark.parametrize("filename", verifier.REQUIRED_JOBS)
+def test_beta_cannot_reuse_main_runs_even_at_identical_sha(api, filename):
+    beta_api(api)
+    api.main_sha = SHA
+    api.runs[filename][0]["head_branch"] = "main"
+    with pytest.raises(ValueError, match="canonical branch push"):
+        verifier.verify(api, REPO, "v2.9.0b1", SHA)
+
+
+@pytest.mark.parametrize("mutation", [
+    lambda api: api.artifacts[0]["workflow_run"].update(head_branch="main"),
+    lambda api: api.payloads["min-ha"].update(ref="refs/heads/main"),
+    lambda api: api.payloads["min-ha"].update(workflow_ref=f"{REPO}/.github/workflows/validate.yml@refs/heads/main"),
+    lambda api: api.runs["browser.yml"][0].update(conclusion="failure"),
+    lambda api: api.jobs[100].pop(),
+])
+def test_beta_evidence_never_falls_back_to_main_on_failure(api, mutation):
+    beta_api(api)
+    api.main_sha = SHA
+    mutation(api)
+    api.repack("min-ha")
+    with pytest.raises(ValueError):
+        verifier.verify(api, REPO, "v2.9.0b1", SHA)
+    assert not any("branch=main&" in path for path in api.reads)
+
+
+@pytest.mark.parametrize("beta_sha", [None, "b" * 40])
+def test_prerelease_on_main_remains_supported_when_beta_does_not_match(api, beta_sha):
+    api.beta_sha = beta_sha
+    result = verifier.verify(api, REPO, "v2.9.0b1", SHA)
+    assert result["source_branch"] == "main"
+
+
+def test_beta_branch_cannot_switch_to_main_during_verification(api, monkeypatch):
+    beta_api(api)
+    api.main_sha = SHA
+    original = api.get
+
+    def changing(path):
+        if path.endswith("heads/beta") and path in api.reads:
+            api.beta_sha = "b" * 40
+        return original(path)
+
+    monkeypatch.setattr(api, "get", changing)
+    with pytest.raises(ValueError, match="branch changed"):
+        verifier.verify(api, REPO, "v2.9.0b1", SHA)
+
+
+def test_branch_prefix_matches_do_not_authorize_other_branches(api, monkeypatch):
+    original = api.get
+
+    def prefixed(path):
+        if path.endswith("heads/beta"):
+            return [{"ref": "refs/heads/beta-other", "object": {"type": "commit", "sha": SHA}}]
+        return original(path)
+
+    monkeypatch.setattr(api, "get", prefixed)
+    assert verifier.verify(api, REPO, "v2.9.0b1", SHA)["source_branch"] == "main"
+
+
+def test_beta_ref_api_error_is_not_main_fallback(api, monkeypatch):
+    original = api.get
+
+    def failing(path):
+        if path.endswith("heads/beta"):
+            raise OSError("API unavailable")
+        return original(path)
+
+    monkeypatch.setattr(api, "get", failing)
+    with pytest.raises(OSError, match="API unavailable"):
+        verifier.verify(api, REPO, "v2.9.0b1", SHA)
+
+
+@pytest.mark.parametrize("tag", ["v2.9.0-beta1", "v2.9.0b0", "v2.9.0b1/other", "2.9.0b1", "v2.9.0b1\n"])
+def test_invalid_channel_tags_fail_before_api_reads(api, tag):
+    with pytest.raises(ValueError):
+        verifier.verify(api, REPO, tag, SHA)
+    assert api.reads == []
+
+
+def test_beta_generator_records_its_actual_workflow_branch(tmp_path, monkeypatch):
+    for name, value in {
+        "GITHUB_REPOSITORY": REPO, "GITHUB_REPOSITORY_ID": "42", "GITHUB_SHA": SHA,
+        "GITHUB_RUN_ID": "100", "GITHUB_RUN_ATTEMPT": "2", "GITHUB_EVENT_NAME": "push",
+        "GITHUB_REF": "refs/heads/beta", "GITHUB_WORKFLOW_SHA": SHA,
+        "GITHUB_WORKFLOW_REF": f"{REPO}/.github/workflows/validate.yml@refs/heads/beta",
+    }.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setattr(evidence.importlib.metadata, "version", lambda name: "2026.12.2")
+    monkeypatch.setattr(evidence.subprocess, "check_output", lambda *args, **kwargs: SHA)
+    path = tmp_path / "evidence.json"
+    monkeypatch.setattr(sys, "argv", ["generator", "current-ha", "--version", "2026.12.2", "--output", str(path)])
+    evidence.main()
+    result = json.loads(path.read_text())
+    assert result["ref"] == "refs/heads/beta"
+    assert result["run_attempt"] == 2
+    assert result["workflow_ref"].endswith("@refs/heads/beta")
+
+
+@pytest.mark.parametrize("tag", ["v2.8.2", "v2.9.0"])
+def test_successful_beta_push_cannot_authorize_a_stable_release(api, tag):
+    beta_api(api)
+    # Complete, valid beta evidence is still not a stable release source.
+    assert verifier.verify(api, REPO, "v2.9.0b2", SHA)["source_branch"] == "beta"
+    api.reads.clear()
+    with pytest.raises(ValueError, match="authorized branch HEAD"):
+        verifier.verify(api, REPO, tag, SHA)
+    assert api.reads == ["/git/matching-refs/heads/main"]
+
+
+def test_stable_uses_main_even_when_beta_has_the_identical_commit(api):
+    api.beta_sha = SHA
+    assert verifier.verify(api, REPO, "v2.8.2", SHA)["source_branch"] == "main"
+    assert not any("heads/beta" in path or "branch=beta&" in path for path in api.reads)
+
+
+@pytest.mark.parametrize("filename", verifier.REQUIRED_JOBS)
+@pytest.mark.parametrize("event", ["pull_request", "workflow_dispatch", "schedule"])
+def test_b2_never_accepts_nonpush_beta_checks(api, filename, event):
+    beta_api(api)
+    api.runs[filename][0]["event"] = event
+    with pytest.raises(ValueError, match="canonical branch push"):
+        verifier.verify(api, REPO, "v2.9.0b2", SHA)
+
+
+@pytest.mark.parametrize("filename", verifier.REQUIRED_JOBS)
+def test_b2_cannot_reuse_a_successful_previous_beta_commit(api, filename):
+    beta_api(api)
+    api.runs[filename][0]["head_sha"] = "b" * 40
+    with pytest.raises(ValueError, match="canonical branch push"):
+        verifier.verify(api, REPO, "v2.9.0b2", SHA)

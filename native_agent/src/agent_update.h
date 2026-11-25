@@ -8,6 +8,7 @@ struct c300x_config;
 #define C300X_AGENT_UPDATE_STAGE ".update"
 #define C300X_AGENT_BUNDLE_MANIFEST "bundle.json"
 #define C300X_AGENT_BUNDLE_HASH_LEN 96
+#define C300X_AGENT_QT5_RECOVERY_VERSION 1
 #define C300X_AGENT_INIT_SCRIPT "/etc/init.d/c300x-native-agent"
 #define C300X_AGENT_INIT_LINK "/etc/rc5.d/S40c300x-native-agent"
 
@@ -27,6 +28,7 @@ struct agent_update_change_summary {
     int ipv6_firewall_patch_changed;
     int config_schema_changed;
     int manifest_changed;
+    int qt5_recovery_required;
 };
 
 int agent_update_error_status(enum agent_update_error error);

@@ -782,11 +782,53 @@ def render(args):
                             check("consumers unload on tab switch", any(item.objectName() == "energyConsumers" for item in walk(component)), False)
                             component.setProperty("view", "consumers")
                             settle()
+                            # The page hides its content under the notification list and the
+                            # "more pages" list. The view must survive that, hold a refresh
+                            # back while it is covered and show the newest data afterwards.
+                            kept = named(component, "energyConsumers")
+                            kept.setProperty("overlayProbe", "kept")
+                            engine.globalObject().setProperty("consumerProbe", engine.newQObject(kept))
+
+                            def view_state(engine=engine):
+                                return engine.evaluate("JSON.stringify([consumerProbe.rows, consumerProbe.statusText])").toString()
+
+                            component.setProperty("energy", copy.deepcopy(fixture["properties"]["energy"]))
+                            settle()
+                            snapshot("overlay-before")
+                            covered = view_state()
+                            old_high = engine.evaluate("consumerProbe.leftScale ? consumerProbe.leftScale.high : null").toVariant()
                             component.setProperty("visible", False)
                             settle()
-                            check("consumers unload when hidden", any(item.objectName() == "energyConsumers" for item in walk(component)), False)
+                            still = [item for item in walk(component) if item.objectName() == "energyConsumers"]
+                            check("consumers stay loaded under an overlay",
+                                  [item.property("overlayProbe") for item in still], ["kept"])
+                            refreshed = copy.deepcopy(fixture["properties"]["energy"])
+                            refreshed["consumers"]["status"] = "Refreshed under the overlay"
+                            for entry in refreshed["consumers"]["items"]:
+                                if entry["watts"]:
+                                    entry["watts"] /= 1000
+                                    entry["value"] = str(entry["watts"]) + " W"
+                            component.setProperty("energy", refreshed)
+                            settle()
+                            check("refresh under an overlay is held back", view_state(), covered)
+                            check("no timer under an overlay", [item.findChild(QObject, "consumersShrink").property("running")
+                                                               for item in still], [False])
                             component.setProperty("visible", True)
                             settle()
+                            shown_view = named(component, "energyConsumers")
+                            engine.globalObject().setProperty("consumerProbe", engine.newQObject(shown_view))
+                            check("same consumers view after the overlay",
+                                  [item.property("overlayProbe") for item in walk(component)
+                                   if item.objectName() == "energyConsumers"], ["kept"])
+                            check("newest data after the overlay", json.loads(view_state())[1], "Refreshed under the overlay")
+                            check("newest rows after the overlay", json.loads(view_state())[0] != json.loads(covered)[0],
+                                  any(entry["watts"] for entry in refreshed["consumers"]["items"]))
+                            if fixture["name"] == "consumers-normal":
+                                check("scale survives the overlay",
+                                      [engine.evaluate("consumerProbe.leftScale.high").toNumber(),
+                                       shown_view.findChild(QObject, "consumersShrink").property("running")],
+                                      [old_high, True])
+                            snapshot("overlay-closed")
                         elif fixture["component"] == "C300XAlerts":
                             def js(expression, engine=engine):
                                 value = engine.evaluate(expression)
@@ -829,6 +871,14 @@ def render(args):
                             grey = shot.pixelColor(panel.mapToScene(QPointF(5, 5)).toPoint())
                             check("grey panel pixels", 110 <= grey.red() <= 150 and
                                   max(grey.red(), grey.green(), grey.blue()) - min(grey.red(), grey.green(), grey.blue()) < 12, True)
+                            # Sheet and button are separated like two station popup buttons
+                            # (2 px); a wider strip shows the black backing as a band.
+                            column = panel.mapToScene(QPointF(5, 0)).toPoint()
+                            band = longest = 0
+                            for y in range(round(panel.height())):
+                                band = band + 1 if shot.pixelColor(column.x(), column.y() + y).lightness() < 60 else 0
+                                longest = max(longest, band)
+                            check("no black band above the button", longest <= 2, True)
                             # Severity is a small coloured marker; the box and its text keep their colours.
                             severity_item = named(component, "severityMark")
                             origin = severity_item.mapToScene(QPointF(0, 0)).toPoint()

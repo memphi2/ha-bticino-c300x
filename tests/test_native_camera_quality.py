@@ -379,7 +379,8 @@ def test_disabled_reboot_maintenance_saves_without_a_restart(lab: Lab) -> None:
 def test_firmware_3_sets_the_low_stream_its_only_stream(lab: Lab) -> None:
     body = lab.call()
     assert (body["stream"], body["bitrate_kbps"], body["fps"], body["size"]) == ("low", 180, 10, "400x288")
-    assert body["sizes"] == ["352x288", "400x288", "640x480", "704x576", "720x576"]
+    assert body["sizes"] == ["320x240", "352x288", "400x288", "480x288", "640x384",
+                             "640x480", "704x576", "720x432", "720x576"]
     assert body["running_size"] == "400x288"
     assert (body["bitrate_min"], body["bitrate_max"], body["fps_max"]) == (100, 2000, 25)
     body = lab.call({**CONFIRM, "bitrate_kbps": 600, "fps": 25, "size": "720x576"})

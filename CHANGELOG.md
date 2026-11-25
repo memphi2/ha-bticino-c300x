@@ -1,5 +1,88 @@
 # Changelog
 
+## v2.10.0 - 2026-11-25
+
+2.10.0 adds firmware 3.0.6 (Classe 300X hardware revision 4) to 1.7.x and
+2.0.2. Everything below is new against 2.9.2. On a 3.0.6 station a tester
+checked that the display pages load at start and that the Alarm and Home
+Assistant buttons sit in the right place; the rest of the 3.0.6 support is
+checked offline only, with the station's own display components.
+
+Firmware 3.0.6:
+
+- The **Display patch** works on 3.0.6, whose display program carries its
+  pages inside itself. The station gets the same pages as on 1.7.x and 2.0.2:
+  the **Alarm** and **Home Assistant** buttons with the house symbol on the
+  home page, the Alarm, Home Assistant and Energy pages and the
+  **Integration** tab in the station's **Settings**. **Home page buttons**
+  offers **Stock view** and **Fixed side by side** here too. The fix for lost taps
+  is not part of it on 3.0.6.
+- The display restarts after a change one restart at a time and only after
+  the old display has ended, with a pause of 5 s in between; several changes
+  close together end in one restart. A restart that takes longer than a
+  request is reported as running (`gui_restart: pending`), and Home
+  Assistant and the installers wait for its outcome instead of reporting a
+  failure. An agent update restarts the display once.
+- A display that fails with the pages is restarted once more and then starts
+  as shipped until the station restarts; the patch status reads **applied,
+  but the display started as shipped**. Turning the **Display patch** switch
+  on, the core hook Repair or an agent update tries the pages again; saving
+  the display settings does not.
+- A display step that fails during an install from Home Assistant or an agent
+  update no longer fails the install or update: the step stays owed, and the
+  core hook Repair stays until it has run again. A step that could not run at
+  all (no connection, agent busy, rejected key) still fails.
+- The agent knows the display program of firmware 3.0.6. On another build
+  it applies the pages only when it finds exactly one matching set of pages
+  in the program and the start script is the original one of 3.0.6;
+  otherwise the display stays as shipped, the agent runs without the display
+  pages and Repairs says why.
+- The camera's stream on 3.0.6 offers the sizes 320x240, 352x288, 400x288
+  (factory), 480x288, 640x384, 640x480, 704x576, 720x432 and 720x576. Sizes
+  other than the factory one are not yet tested on a station.
+- **Quick Start** also links Dave's guide for rooting a station on 2.0.2 or
+  3.0.6 ([davemajor/c300x-root](https://github.com/davemajor/c300x-root)), a
+  third-party project used at your own risk.
+
+Station (all firmwares):
+
+- The **Integration** tab is laid out as one aligned column. A long address
+  takes at most two lines and always keeps its start and its port in view;
+  the row is called **Address**. A message of the tab (a setting
+  not saved, SSH, restart, removal) shows at the foot of the tab, where it
+  stays in view, instead of at the end of the page.
+- The home page layout **Stock** is now called **Stock view** (de
+  **Werksansicht**, fr **Vue d'usine**, it **Vista di fabbrica**) in the
+  Display options.
+- **Energy**: the hour labels of the **Today** view sit below the bars, and
+  the flow arrows stay on their lines in every direction.
+- The consumers view of the Energy page is kept while the notification list
+  or the **More** list covers it: the bars are not built again and the
+  scales do not jump when the list closes.
+- A display notification no longer shows a black band above its button, and
+  its message area ends on a whole line.
+- Opening a dashboard page no longer writes two warnings into the station's
+  log.
+
+Home Assistant and agent:
+
+- **Save images** shows the cause of its last failure in words; the
+  attribute `last_failure` keeps its codes for automations and is absent
+  while images succeed.
+- A visitor image that is stored after the capture's time limit counts as
+  saved: it becomes the preview and is linked to the visit.
+- A display restart or a display repair that runs past its time limit
+  finishes instead of leaving the display off, and Home Assistant waits for
+  its answer. A write of the media-user label that hangs ends after its time
+  limit and is rolled back, and the agent stays responsive meanwhile. A
+  display step of the SSH install that runs past its time limit is rolled
+  back on the station.
+- A repair that was confirmed finishes even when the browser tab closes or
+  the connection drops meanwhile, the agent update with its reload included.
+  When Home Assistant stops while the station applies an agent update, the
+  next start still offers the repair that brings the display pages back.
+- The native agent is rebuilt as 2.10.0; an agent update is required.
+
 ## v2.9.2 - 2026-11-25
 
 Station:

@@ -15,6 +15,7 @@ from .capabilities import capability_is_supported, maintenance_action_is_adverti
 from .const import (
     CONF_ACTIONS,
     CONF_ALARM_ENTITY_ID,
+    CONF_DISPLAY_FOLLOWUP_PENDING,
     CONF_FRONTEND_CARD_SETUP_DISMISSED,
     CONF_FRONTEND_CARD_SETUP_REPAIR_VERSION,
     CONF_VIDEO_ENABLED,
@@ -22,6 +23,11 @@ from .const import (
     FRONTEND_CARD_SETUP_REPAIR_VERSION,
 )
 from .device_user import device_user_repair_reason
+from .display_activation import (
+    display_activation_confirmed,
+    display_restart_pending,
+    display_unsupported,
+)
 from .entry_config import entry_config_value
 from .entry_types import BticinoC300XConfigEntry
 from .media_readiness import media_readiness
@@ -48,6 +54,9 @@ DEVICE_AGENT_SELF_TEST_FAILED_ISSUE = "device_agent_self_test_failed"
 DEVICE_AGENT_UI_EVENT_WATCHDOG_ISSUE = "device_agent_ui_event_watchdog"
 UNSUPPORTED_CALLBACK_URL_ISSUE = "unsupported_callback_url"
 DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE = "device_core_qml_hook_required"
+# The core hook issue while an update or install owes display steps.
+DEVICE_DISPLAY_FOLLOWUP_TRANSLATION = "device_display_followup_pending"
+DEVICE_DISPLAY_UNSUPPORTED_ISSUE = "device_display_unsupported"
 DEVICE_QML_TRANSACTION_STUCK_ISSUE = "device_qml_transaction_stuck"
 DEVICE_USER_REQUIRED_ISSUE = "device_user_required"
 MEDIA_SETUP_REPAIR_REQUIRED_ISSUE = "media_setup_repair_required"
@@ -64,6 +73,7 @@ ALL_REPAIR_ISSUES = frozenset(
         DEVICE_AGENT_UI_EVENT_WATCHDOG_ISSUE,
         UNSUPPORTED_CALLBACK_URL_ISSUE,
         DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE,
+        DEVICE_DISPLAY_UNSUPPORTED_ISSUE,
         DEVICE_QML_TRANSACTION_STUCK_ISSUE,
         DEVICE_USER_REQUIRED_ISSUE,
         MEDIA_SETUP_REPAIR_REQUIRED_ISSUE,
@@ -391,6 +401,16 @@ def _sync_unsupported_callback_url_issue(
 
 def _sync_device_core_qml_hook_issue(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> None:
     runtime_data = getattr(entry, "runtime_data", None)
+    # A display the agent does not know: a notice instead of a hook to repair.
+    reason = display_unsupported(getattr(runtime_data, "qml_patch_status", None))
+    if reason is not None:
+        async_delete_repair_issue(hass, entry.entry_id, DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE)
+        _create_issue(
+            hass, entry, DEVICE_DISPLAY_UNSUPPORTED_ISSUE,
+            severity=ir.IssueSeverity.WARNING, placeholders={"reason": reason},
+        )
+        return
+    async_delete_repair_issue(hass, entry.entry_id, DEVICE_DISPLAY_UNSUPPORTED_ISSUE)
     connection_state = getattr(runtime_data, "connection_state", None)
     if connection_state is not None and not getattr(connection_state, "available", True):
         async_delete_repair_issue(
@@ -399,7 +419,10 @@ def _sync_device_core_qml_hook_issue(hass: HomeAssistant, entry: BticinoC300XCon
             DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE,
         )
         return
-    if not _entry_media_enabled(entry):
+    # Display steps an agent update or install still owes: offered whatever
+    # the status says, since pages left from the earlier agent look patched.
+    owed = CONF_DISPLAY_FOLLOWUP_PENDING in getattr(entry, "data", {})
+    if not owed and not _entry_media_enabled(entry):
         async_delete_repair_issue(
             hass,
             entry.entry_id,
@@ -423,12 +446,29 @@ def _sync_device_core_qml_hook_issue(hass: HomeAssistant, entry: BticinoC300XCon
             "original",
             "partial",
         }
+        # A restart still running decides nothing yet; the next read does.
+        if not display_activation_confirmed(status) and not display_restart_pending(status):
+            missing = True
+            overlay = status.get("qt5_overlay")
+            core_state = "qt5_gui_unconfirmed" if overlay == "active" else "qt5_" + str(overlay)
     diagnostics = (
         runtime_data.diagnostics.qml_patch_diagnostics
         if runtime_data is not None
         else None
     )
     failed = bool(getattr(diagnostics, "last_error", None))
+    if owed:
+        # Its own text: the Repair runs the whole display follow-up, with a
+        # display restart, not only the core hook.
+        _create_issue(
+            hass,
+            entry,
+            DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE,
+            severity=ir.IssueSeverity.WARNING,
+            is_fixable=True,
+            translation_key=DEVICE_DISPLAY_FOLLOWUP_TRANSLATION,
+        )
+        return
     if not missing and not failed:
         async_delete_repair_issue(
             hass,

@@ -62,3 +62,21 @@ def test_notification_looks_like_a_station_popup():
     # outside the panel may be covered.
     assert "width: Math.max(0, Math.min(parent.width - 24, 560))" in source
     assert "mouse.accepted = false" in source
+
+
+def test_notification_has_no_black_band_above_the_button():
+    """The sheet ends 2 px above the button and the message area holds whole lines."""
+    import re
+
+    source = (Path(__file__).resolve().parents[1] / "device_qml/C300XAlerts.qml").read_text(encoding="utf-8")
+    # Only the 90 % black backing shows between sheet and button. Station popups
+    # separate two buttons by 2 px; 10 px read as a band that cuts the text.
+    gap = int(re.search(r"id: sheet\n +width: parent\.width\n +height: Math\.max\(0, acknowledgeButton\.y - (\d+)\)", source).group(1))
+    assert gap <= 2
+    panel = int(re.search(r"height: Math\.max\(0, Math\.min\(parent\.height - 24, (\d+)\)\)", source).group(1))
+    button = int(re.search(r"id: acknowledgeButton\n +y: parent\.height - (\d+); width: parent\.width; height: \1\n", source).group(1))
+    top, margin = map(int, re.search(
+        r"id: messageScroll\n +x: 16; y: (\d+); width: parent\.width - 32\n +height: Math\.max\(0, sheet\.height - y - (\d+)\)", source).groups())
+    # Ubuntu Light at 18 px has a line pitch of 21 px on the station.
+    assert (panel - button - gap - top - margin) % 21 == 0
+    assert "clip: true" in source[source.index("id: messageScroll"):source.index("id: messageLabel")]

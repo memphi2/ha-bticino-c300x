@@ -33,14 +33,17 @@ def transaction(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     manifest_path = f"{remote_dir}/bundle.json"
     obsolete_path = f"{remote_dir}/qml/C300XEnergyDistribution.qml"
 
-    class Client:
+    class Client(installer._DeviceSshClient):
         failure: str | None = None
         closed = False
+        qt5 = False
 
         def __init__(self) -> None:
             self.files = {manifest_path: old_manifest, obsolete_path: b"old distribution"}
             self.operations: list[str] = []
             self.writes: list[str] = []
+            # The display steps run as display writes (SIGTERM and grace at the deadline).
+            self.display_writes: list[str] = []
 
         def stage(self, name: str) -> None:
             self.operations.append(name)
@@ -60,10 +63,14 @@ def transaction(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
             ))
             return self.write(path, source.read_bytes())
 
-        def run(self, command: str) -> str:
+        def run_display_write(self, command: str) -> str:
+            self.display_writes.append(command)
+            return self.run(command)
+
+        def run(self, command: str, input_data: bytes | None = None) -> str:
             if "libQt5Core" in command:
-                # A device with the Qt 4 display, which the Display patch edits.
-                return "no\n"
+                # By default a device with the Qt 4 display, which the Display patch edits.
+                return "yes\n" if self.qt5 else "no\n"
             if command.startswith("if [ -L ") and obsolete_path in command:
                 self.stage("cleanup-source")
                 self.files.pop(obsolete_path, None)
@@ -193,6 +200,23 @@ def test_source_cleanup_failure_is_not_install_success(transaction) -> None:
     assert transaction.client.operations[-2:] == ["manifest", "cleanup-source"]
 
 
+@pytest.mark.parametrize("qt5", [False, True])
+def test_the_display_steps_are_display_writes_with_the_same_limits_on_every_display(
+    transaction, qt5,
+) -> None:
+    """Every command 30 s; each display step a display write (30 s, SIGTERM,
+    15 s grace) on 1.7.x/2.0.2 and on the Qt 5 display alike."""
+    transaction.client.qt5 = qt5
+    transaction.install(apply_gui_patch=True)
+    assert (installer._SSH_COMMAND_TIMEOUT, installer._SSH_DISPLAY_WRITE_TIMEOUT,
+            installer._SSH_DISPLAY_WRITE_TERM_GRACE) == (30.0, 30.0, 15.0)
+    assert not hasattr(installer, "_SSH_COMMAND_TIMEOUT_QT5")
+    assert [command.rsplit(" ", 1)[1] for command in transaction.client.display_writes] == [
+        "core-apply", "apply"]
+    assert all(command.startswith("C300X_QML_SOURCE_DIR=") and " exec " in command
+               for command in transaction.client.display_writes)
+
+
 def test_native_metadata_reader_observes_manifest_commit_without_restart(tmp_path) -> None:
     """The function used by capabilities must reopen the manifest each time."""
     root = Path(__file__).resolve().parents[1]
@@ -209,6 +233,8 @@ def test_native_metadata_reader_observes_manifest_commit_without_restart(tmp_pat
 #include <string.h>
 #include "agent_update.h"
 #include "c300x_agent.h"
+
+int c300x_device_display_is_qt5(void) { return 0; }
 
 int main(int argc, char **argv)
 {

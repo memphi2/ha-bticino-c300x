@@ -1211,8 +1211,9 @@ def test_manual_setup_missing_agent_can_skip_installer(
     assert flow._setup_agent_needs_token is False
 
 
+@pytest.mark.parametrize("earlier_owed", [False, True])
 def test_bootstrap_install_success_continues_to_feature_step(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, earlier_owed: bool,
 ) -> None:
     calls: list[str] = []
     flow = BticinoC300XConfigFlow()
@@ -1223,6 +1224,9 @@ def test_bootstrap_install_success_continues_to_feature_step(
         CONF_AGENT_HOST: "c300x.local",
         CONF_AGENT_PORT: 8091,
     }
+    if earlier_owed:
+        # An earlier install in this flow left the display step owed.
+        flow._setup_connection["display_followup_pending"] = False
     flow.async_show_form = lambda **kwargs: kwargs  # type: ignore[method-assign]
     flow.async_set_unique_id = (  # type: ignore[method-assign]
         lambda *_args, **_kwargs: asyncio.sleep(0)
@@ -1293,6 +1297,7 @@ def test_bootstrap_install_success_continues_to_feature_step(
     assert result["step_id"] == "user_features"
     assert flow._setup_connection[CONF_AGENT_TOKEN] == "token-32"
     assert flow._setup_connection[CONF_MAINTENANCE_TOKEN] == "token-32"
+    assert "display_followup_pending" not in flow._setup_connection
     assert calls == [
         "abort_check",
         "ensure_deps",
@@ -2364,6 +2369,11 @@ def test_submitted_dashboard_clears_omitted_optional_fields():
         ({"available": True, "patched": False}, "original"),
         ({"available": True, "state": "partial", "patched": None}, "partial"),
         ({"available": True, "state": "restore_needed"}, "restore_needed"),
+        ({"available": True, "patched": True, "qt5_overlay": "active"}, "patched"),
+        ({"available": True, "patched": True, "qt5_overlay": "failed"}, "display_failed"),
+        ({"available": True, "patched": False, "qt5_overlay": "failed"}, "display_failed"),
+        ({"available": True, "patched": True, "qt5_overlay": "incomplete"}, "partial"),
+        ({"available": True, "patched": True, "qt5_overlay": "off"}, "partial"),
     ],
 )
 def test_qml_patch_status_label_is_concise(

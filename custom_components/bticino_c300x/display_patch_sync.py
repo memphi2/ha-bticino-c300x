@@ -22,10 +22,12 @@ from .agent_update import async_retry_update_maintenance_busy
 from .api import C300XAgentApiError
 from .capabilities import entry_device_ui_configured, maintenance_action_is_advertised
 from .const import (
+    CONF_DISPLAY_FOLLOWUP_PENDING,
     CONF_DISPLAY_SETTING_PENDING,
     HOME_BUTTONS_LAYOUTS,
     SIGNAL_QML_PATCH_CHANGED,
 )
+from .display_activation import display_activation_confirmed, display_unsupported
 from .entry_types import BticinoC300XConfigEntry
 from .error_text import compact_error_text
 from .qml_patch import (
@@ -46,10 +48,21 @@ def _differs(status: dict[str, Any], wanted: bool, home_buttons: str) -> bool | 
     taken at its patched state: asking it again would never end.
     """
 
+    if status.get("qt5_overlay") == "failed" or display_unsupported(status):
+        # Repeated setup/settings saves must not retry a quarantined overlay,
+        # nor a display the agent does not know.
+        return None
+    if status.get("qt5_overlay") == "incomplete" and not wanted:
+        # A restore keeps the core hook packed and writes the resource file
+        # back: after the way out of a restart loop (the file renamed) that
+        # starts the loop again. The core Repair is raised for it.
+        return None
     patched = status.get("patched")
     if isinstance(patched, bool):
         if patched is not wanted:
             return True
+        if not display_activation_confirmed(status, required=wanted):
+            return True if status.get("qt5_overlay") in ("incomplete", "off") and wanted else None
         installed = status.get("home_buttons")
         return wanted and installed in HOME_BUTTONS_LAYOUTS and installed != home_buttons
     # Only some of the files are there: neither the pages nor the original.
@@ -79,6 +92,11 @@ async def async_apply_display_setting(
     home_buttons = entry_home_buttons(entry)
     try:
         differs = _differs(await async_refresh_qml_patch_status(entry, wait_busy=True), wanted, home_buttons)
+        if differs is False and wanted and CONF_DISPLAY_FOLLOWUP_PENDING in entry.data:
+            # Pages of the earlier agent read as patched; an update or install
+            # still owes the new ones. A quarantined or unknown display (None)
+            # stays with the core Repair.
+            differs = True
         if not differs:
             return None if differs is None else False
         status = await async_retry_update_maintenance_busy(
@@ -121,6 +139,11 @@ def async_mark_display_setting(hass: HomeAssistant, entry: BticinoC300XConfigEnt
 async def async_settle_display_setting(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> None:
     """Apply the Display setting and keep it marked until the device followed."""
 
-    if await async_apply_display_setting(hass, entry) is not None:
+    applied = await async_apply_display_setting(hass, entry)
+    if applied is not None:
         async_mark_display_setting(hass, entry, pending=False)
+    if applied is True and entry_device_ui_configured(entry) and CONF_DISPLAY_FOLLOWUP_PENDING in entry.data:
+        data = dict(entry.data)
+        del data[CONF_DISPLAY_FOLLOWUP_PENDING]
+        hass.config_entries.async_update_entry(entry, data=data)
 

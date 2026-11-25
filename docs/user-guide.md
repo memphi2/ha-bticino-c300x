@@ -119,8 +119,12 @@ controls under it; they return when the panel closes.
   setting and succeeds only after reading the exact value back; otherwise the
   old value is put back. On a TVP5150 board contrast reads back from the
   driver's own copy, so a contrast write the decoder missed goes unnoticed.
-  Tested on 1.7.19; 2.0.2 and 3.0.6 are checked offline only. Changes last
-  until the video ends; the station starts each video with its own values.
+  That copy reads 0 after a station start until the station itself writes
+  the contrast once; until then the sliders icon does not appear for
+  on-demand video, and the controls may only work during a Ring Call
+  (through the display). Every 3.0.6 station has a TVP5150. Tested on
+  1.7.19; 2.0.2 and 3.0.6 are checked offline only. Changes last until the
+  video ends; the station starts each video with its own values.
 
 Automations use `bticino_c300x.camera_picture` in an active session: omit
 `control` and `value` to read, or send both (for example `control: contrast`,
@@ -140,9 +144,14 @@ choose a time without a call or recording, then open a new stream.
 | Firmware | Stream | Sizes | Bit rate | Frame rate |
 | --- | --- | --- | --- | --- |
 | 1.7.x, 2.0.2 | High | 688x480 (factory cut-out), 704x576 (full height), optional 960x576 | 300-3000 kbit/s (factory 800) | 5-24 fps (factory 15) |
-| 3.0.6 | Low | 352x288 to 720x576 (factory 400x288) | 100-2000 kbit/s (factory 180) | 5-25 fps (factory 10) |
+| 3.0.6 | Low | 320x240 to 720x576, including the 5:3 sizes 480x288, 640x384 and 720x432 (factory 400x288) | 100-2000 kbit/s (factory 180) | 5-25 fps (factory 10) |
 
-On 3.0.6 only the factory size is tested on a device. High video stops at
+On 3.0.6 only the factory size is tested on a device. The 5:3 sizes match the
+display's ratio, not its pixel count, and do not change its picture. Only the
+station's Low configuration changes; no program is patched. The other sizes,
+their framing and performance are checked offline only; keep the factory size
+unless you deliberately test another one
+([offline evidence and limits](dev/firmware-3.0.6-camera.md)). High video stops at
 **24 fps**: at 25 the older firmware turns its frame-rate control off and sends
 only about 8 fps. A higher bit rate reduces compression artifacts; lower it
 again if your network shows stalls or grey blocks.
@@ -233,10 +242,23 @@ including the history. Clips and clip automations are not affected; existing
 images stay until they expire.
 
 When an image cannot be taken, the last one stays, HA logs a warning once per
-cause, and the attribute `last_failure` of **Save images** names the cause
-(for example `snapshot_unavailable` when the station's display picture cannot
-be read) until the next image succeeds. On firmware 3.0.6 reading the display
-picture is checked offline only and may fail.
+cause, and **Save images** shows the cause as **Last failure** (attribute
+`last_failure`) until the next image succeeds; after a success the attribute
+is absent. The entity shows the text in your language, automations and
+templates read the code:
+
+| Code | Shown as |
+| --- | --- |
+| `snapshot_unavailable` | Display picture could not be read |
+| `snapshot_throttled` | Requested too soon after the previous image |
+| `invalid_snapshot_size` | Station rejected the image size |
+| `invalid_image` | Station delivered an invalid image |
+| `agent_unreachable` | Device agent not reachable |
+| `agent_error` | Device agent reported an error |
+| `save_failed` | Home Assistant could not save the image |
+
+The log names the code. On firmware 3.0.6 reading the display picture is
+checked offline only and may fail.
 
 ### Browsing in the Card
 
@@ -388,8 +410,10 @@ The attribute `last_result` reports the outcome:
 | `failed` | Broke off for another reason. |
 | `unknown` | The agent could not be asked or restarted during the sound. |
 
-Tested on firmware 1.7.19. Firmware 2.0.2 and 3.0.6 have the same sound parts,
-but playing is not yet tested on such a device.
+Tested on firmware 1.7.19. On firmware 2.0.2 and 3.0.6 the agent uses each
+station's own sound files, such as its speaker setup for playing messages; that
+file differs between firmware versions. Playing is not yet tested on such a
+device.
 
 ## Notifications
 

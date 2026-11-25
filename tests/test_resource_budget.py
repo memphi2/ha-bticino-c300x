@@ -38,7 +38,6 @@ def test_extracted_http_modules_have_separate_budgets() -> None:
         "http_maintenance.c": (8_000, 220),
         "qml_recovery.c": (1_000, 30),
         "http_device_user.c": (13_000, 340),
-        "command_transaction.c": (4_500, 120),
         "http_service_commands.c": (10_000, 285),
         "http_audio_codec.c": (4_500, 110),
         "http_camera_quality.c": (3_500, 85),

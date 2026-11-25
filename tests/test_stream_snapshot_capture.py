@@ -1,6 +1,8 @@
 """Framebuffer acquisition is event-driven, bounded, and generation-guarded."""
 
 import asyncio
+import contextlib
+import time
 from io import BytesIO
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
@@ -451,6 +453,69 @@ def test_a_visitor_image_save_that_runs_out_of_time_is_not_blamed_on_the_agent(t
     asyncio.run(run())
 
 
+def swallowed_limit(calls):
+    """Wait for the capture limit and turn its cancellation into a time-out,
+    as an HTTP client does when its own timer expires in the same loop pass.
+    The real asyncio.timeout is then expiring while the task runs on."""
+
+    async def wait(*args, **kwargs):
+        calls.append(args)
+        if len(calls) > 1:
+            return bmp(), "image/bmp"
+        try:
+            await asyncio.sleep(5)
+        except asyncio.CancelledError:
+            raise TimeoutError from None
+
+    return wait
+
+
+def test_a_capture_limit_reported_as_a_request_time_out_ends_the_capture(tmp_path, monkeypatch, caplog):
+    async def run():
+        manager = setup(tmp_path, monkeypatch)
+        calls = []
+        manager.entry.runtime_data.api.async_doorbell_snapshot = swallowed_limit(calls)
+        monkeypatch.setattr(capture, "CAPTURE_TIMEOUT", 0.05)
+        event(manager, "doorbell_pressed", "one")
+        task = manager.capture.task
+        await drain(manager)
+        # Over with the limit: no further attempt, a recorded cause, no crash.
+        assert task.exception() is None and len(calls) == 1
+        assert manager.capture.last_failure == "agent_unreachable"
+        assert manager.latest is None and manager.store.items(30) == []
+        assert "Unexpected snapshot acquisition failure" not in caplog.text
+        manager.close()
+
+    asyncio.run(run())
+
+
+def test_a_capture_limit_that_already_fired_stops_the_store_before_it_writes(tmp_path, monkeypatch, caplog):
+    async def run():
+        manager = setup(tmp_path, monkeypatch)
+        monkeypatch.setattr(capture, "CAPTURE_TIMEOUT", 0.05)
+        disk_job = manager.disk_job
+        waited = []
+        wait = swallowed_limit(waited)
+
+        async def conversion_outliving_the_limit(function, *args):
+            if function is capture.framebuffer_jpeg:
+                with contextlib.suppress(TimeoutError):
+                    await wait()
+            return await disk_job(function, *args)
+
+        monkeypatch.setattr(manager, "disk_job", conversion_outliving_the_limit)
+        event(manager, "doorbell_pressed", "one")
+        task = manager.capture.task
+        await drain(manager)
+        assert len(waited) == 1 and task.exception() is None
+        assert manager.capture.last_failure == "save_failed"
+        assert manager.latest is None and manager.store.items(30) == []
+        assert "Unexpected snapshot acquisition failure" not in caplog.text
+        manager.close()
+
+    asyncio.run(run())
+
+
 def test_a_slow_visit_link_after_the_image_is_stored_is_no_failure(tmp_path, monkeypatch):
     from custom_components.bticino_c300x import snapshot_capture
 
@@ -474,6 +539,71 @@ def test_a_slow_visit_link_after_the_image_is_stored_is_no_failure(tmp_path, mon
         await drain(manager)
         assert manager.latest is not None and attached == [manager.latest.name]
         assert manager.capture.last_failure is None
+        manager.close()
+
+    asyncio.run(run())
+
+
+def _store_on_threads(manager, monkeypatch, step, seconds):
+    """Run disk work on real threads and make one store step outlast the limit."""
+
+    manager.hass.async_add_executor_job = (
+        lambda function, *args: asyncio.get_running_loop().run_in_executor(None, function, *args)
+    )
+    original = getattr(manager.store, step)
+
+    def slow(*args, **kwargs):
+        time.sleep(seconds)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(manager.store, step, slow)
+
+
+def _recording_journal(manager):
+    attached = []
+
+    async def attach(visitor, name, image):
+        attached.append(name)
+
+    manager.journal = SimpleNamespace(
+        attach_snapshot=attach, close=lambda: None, invalidate=lambda: None,
+    )
+    return attached
+
+
+@pytest.mark.parametrize("step", ["read", "save"])
+def test_an_image_the_store_wrote_after_the_time_limit_counts_as_stored(tmp_path, monkeypatch, step):
+    """The limit ran out while the store wrote the file or HA read it back:
+    the file is there, so it is the preview and no failure."""
+
+    async def run():
+        manager = setup(tmp_path, monkeypatch)
+        monkeypatch.setattr(capture, "CAPTURE_TIMEOUT", 0.3)
+        _store_on_threads(manager, monkeypatch, step, 0.8)
+        attached = _recording_journal(manager)
+        event(manager, "doorbell_pressed", "one")
+        await drain(manager)
+        stored = manager.store.items(14)
+        assert len(stored) == 1
+        assert manager.capture.last_failure is None
+        assert manager.latest == stored[0] and manager.preview == manager.store.read("latest", 14)
+        assert attached == [stored[0].name]
+        manager.close()
+
+    asyncio.run(run())
+
+
+def test_waiting_for_the_store_beyond_the_time_limit_stores_nothing_and_is_reported(tmp_path, monkeypatch):
+    async def run():
+        manager = setup(tmp_path, monkeypatch)
+        monkeypatch.setattr(capture, "CAPTURE_TIMEOUT", 0.3)
+        attached = _recording_journal(manager)
+        async with manager.lock:
+            event(manager, "doorbell_pressed", "one")
+            await drain(manager)
+        assert manager.store.items(14) == [] and manager.latest is None
+        assert manager.capture.last_failure == "save_failed"
+        assert attached == []
         manager.close()
 
     asyncio.run(run())

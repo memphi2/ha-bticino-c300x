@@ -21,15 +21,20 @@ def _success(action: str) -> str:
 
 class FakeClient:
     def __init__(self) -> None:
-        self.responses = {action: _success(action) for action in ("core-apply", "apply")}
+        self.responses: dict[str, str | None] = {action: _success(action) for action in ("core-apply", "apply")}
         self.actions: list[str] = []
         self.closed = False
+        self.qt5 = False
 
     def run(self, command: str) -> str:
         if "qml_patch.sh " in command:
             action = command.rsplit(" ", 1)[1]
             self.actions.append(action)
+            if self.responses[action] is None:
+                raise installer.C300XDeviceInstallError("device_install_failed")
             return self.responses[action]
+        if installer._QT5_DISPLAY_MARKER in command:
+            return "yes\n" if self.qt5 else "no\n"
         if command == f"readlink {installer.REMOTE_INIT_LINK}":
             return installer.REMOTE_INIT_SCRIPT
         return ""
@@ -66,6 +71,9 @@ def _install(*, apply_gui_patch: bool = True) -> tuple[str, ...]:
     json.dumps({"ok": True, "core_patched": False, "gui_running": True, "patched": True}),
     json.dumps({"ok": True, "core_patched": True, "gui_running": False, "patched": True}),
     json.dumps({"ok": 1, "core_patched": True, "gui_running": True, "patched": True}),
+    *[json.dumps({"ok": True, "core_patched": True, "gui_running": True,
+                  "patched": True, "qt5_overlay": overlay})
+      for overlay in ("failed", "incomplete", "off", "unknown")],
 ])
 def test_unsuccessful_patch_cannot_report_install_success(
     client: FakeClient, action: str, response: str
@@ -99,3 +107,95 @@ def test_verified_core_and_optional_full_patch_succeed(
     assert _install(apply_gui_patch=apply_gui_patch) == ()
     assert client.closed
     assert client.actions == (["core-apply", "apply"] if apply_gui_patch else ["core-apply"])
+
+
+def test_verified_qt5_activation_succeeds(client: FakeClient) -> None:
+    for action in client.responses:
+        client.responses[action] = json.dumps({**json.loads(_success(action)), "qt5_overlay": "active"})
+    assert _install() == ()
+
+
+def _unsupported(reason: str = "display_program_unknown") -> str:
+    return json.dumps({"ok": False, "error": "display_unsupported", "qt5_unsupported": reason,
+                       "core_patched": False, "gui_running": True, "patched": False,
+                       "qt5_overlay": "off"})
+
+
+@pytest.mark.parametrize("apply_gui_patch", [False, True])
+def test_an_unknown_qt5_display_installs_the_agent_without_the_display_pages(
+    client: FakeClient, apply_gui_patch: bool
+) -> None:
+    client.responses["core-apply"] = _unsupported()
+    assert _install(apply_gui_patch=apply_gui_patch) == ()
+    assert client.closed
+    assert client.actions == ["core-apply"]
+
+
+@pytest.mark.parametrize("response", [
+    json.dumps({**json.loads(_unsupported()), "error": "reload_failed"}),
+    json.dumps({**json.loads(_unsupported()), "qt5_unsupported": ""}),
+])
+def test_only_a_reported_unknown_display_skips_the_display_steps(client: FakeClient, response: str) -> None:
+    client.responses["core-apply"] = response
+    with pytest.raises(installer.C300XDeviceInstallError, match="device_install_verify_failed"):
+        _install()
+
+
+@pytest.mark.parametrize("action", ["core-apply", "apply"])
+@pytest.mark.parametrize("response", [
+    json.dumps({"ok": False, "state": "reload_failed", "core_patched": None, "gui_running": False}),
+    json.dumps({"ok": True, "core_patched": True, "gui_running": True, "patched": True,
+                "qt5_overlay": "failed"}),
+])
+def test_a_failed_display_step_on_qt5_is_owed_not_an_install_failure(
+    client: FakeClient, action: str, response: str
+) -> None:
+    """The agent is installed; the step is reported as owed for HA to record."""
+
+    client.qt5 = True
+    for name in client.responses:
+        client.responses[name] = json.dumps({**json.loads(_success(name)), "qt5_overlay": "active"})
+    client.responses[action] = response
+    display = installer._DisplaySteps()
+    request = installer.C300XDeviceInstallRequest(
+        host="unused.local", ssh_username="root", ssh_password="unused",
+        apply_firewall_patch=False, apply_gui_patch=True,
+    )
+    assert installer._install_device_agent_sync(
+        request, installer._ResolvedBundle((), Path("unused-init")), b"{}", display) == ()
+    assert display.pending is True
+    assert client.closed
+    assert client.actions == (["core-apply"] if action == "core-apply" else ["core-apply", "apply"])
+
+
+@pytest.mark.parametrize("action", ["core-apply", "apply"])
+def test_a_display_step_that_could_not_run_still_fails_the_install(client: FakeClient, action: str) -> None:
+    """An SSH failure is not a display failure: nothing ran, the install fails as before."""
+
+    client.qt5 = True
+    for name in client.responses:
+        client.responses[name] = json.dumps({**json.loads(_success(name)), "qt5_overlay": "active"})
+    client.responses[action] = None
+    with pytest.raises(installer.C300XDeviceInstallError, match="device_install_failed"):
+        _install()
+
+
+def test_a_restart_still_running_is_waited_for(client: FakeClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(installer, "DISPLAY_RESTART_POLL_SECONDS", 0)
+    client.qt5 = True
+    active = {"ok": True, "core_patched": True, "gui_running": True, "patched": False,
+              "qt5_overlay": "active"}
+    client.responses["core-apply"] = json.dumps({**active, "gui_running": False, "gui_restart": "pending"})
+    reads = iter([{**active, "gui_running": False, "gui_restart": "pending"}, {**active, "gui_restart": "idle"}])
+    client.responses["status"] = None
+    original = client.run
+
+    def run(command: str) -> str:
+        if command.endswith("qml_patch.sh status"):
+            client.actions.append("status")
+            return json.dumps(next(reads))
+        return original(command)
+
+    client.run = run  # type: ignore[method-assign]
+    _install(apply_gui_patch=False)
+    assert client.actions == ["core-apply", "status", "status"]

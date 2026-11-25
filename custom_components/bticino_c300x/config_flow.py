@@ -191,6 +191,7 @@ from .const import (
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
     CONF_DEVICE_ACTIVATIONS,
     CONF_DEVICE_UI_ENABLED,
+    CONF_DISPLAY_FOLLOWUP_PENDING,
     CONF_DISPLAY_SETTING_PENDING,
     CONF_DOORSTATION_AUDIO_GAIN_DB,
     CONF_ENERGY_PAGE,
@@ -409,7 +410,7 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
             )
             try:
                 await async_ensure_installer_dependencies(self.hass)
-                await async_install_device_agent(
+                install_result = await async_install_device_agent(
                     request,
                     api_token=api_token,
                     maintenance_token=maintenance_token,
@@ -417,6 +418,13 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
             except C300XDeviceInstallError as err:
                 errors["base"] = err.reason
             else:
+                if getattr(install_result, "display_pending", False):
+                    # The core display step failed on the Qt 5 display: the
+                    # new entry records it for the core Repair.
+                    self._setup_connection[CONF_DISPLAY_FOLLOWUP_PENDING] = False
+                else:
+                    # A later install in this flow did what an earlier one owed.
+                    self._setup_connection.pop(CONF_DISPLAY_FOLLOWUP_PENDING, None)
                 self._setup_connection[CONF_AGENT_TOKEN] = api_token
                 self._setup_connection[CONF_MAINTENANCE_TOKEN] = maintenance_token
                 self._setup_bootstrapped = True

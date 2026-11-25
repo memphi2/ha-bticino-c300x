@@ -11,9 +11,8 @@ Install integration -> add the station -> install the device agent -> choose opt
 ## Requirements
 
 - Home Assistant `2026.10.0` or newer.
-- A BTicino Classe 300X / C300X on firmware `1.7.x` or `2.0.2`. Firmware
-  `3.0.6` is supported experimentally: without the Home Assistant pages on the
-  display and with the low-resolution camera stream.
+- A BTicino Classe 300X / C300X on firmware `1.7.x`, `2.0.2` or `3.0.6`
+  ([Firmware 3.0.6](#firmware-306)).
 - Root or SSH access on the station for the first agent installation.
 - A trusted local network between Home Assistant and the station.
 
@@ -24,8 +23,36 @@ vendor files. Rooting is described by the community project
 third-party project that is not part of this project and is used at your own
 risk; flashing a station can brick it. If a separate rooting or SSH-enablement
 workflow asks for a firmware target, use `1.7.19`. A station on `2.0.2` or
-`3.0.6` needs a workflow made for that firmware. Everything is used at your own
-risk and without warranty.
+`3.0.6` needs a workflow made for that firmware. Dave describes one in
+[davemajor/c300x-root](https://github.com/davemajor/c300x-root), also a
+third-party project used at your own risk; it works on the circuit board over
+a serial console and USB recovery and can destroy the station. Everything is
+used at your own risk and without warranty.
+
+### Firmware 3.0.6
+
+Everything works as on `1.7.x` and `2.0.2`, with these differences:
+
+- **Camera:** the station sends only its low-resolution stream, with other
+  sizes, bit rates and frame rates; there is no **Camera resolution** select
+  and no 960x576 ([Stream Settings](user-guide.md#stream-settings)).
+- **Picture controls:** until the station has written the contrast once after
+  a start, they may only work during a Ring Call
+  ([Picture Controls](user-guide.md#picture-controls)).
+- **Sound:** the station already uses PCMU from the factory, so **Audio codec**
+  needs no change.
+- **Display pages:** the same pages and buttons, loaded into the station's
+  display program at its start; the fix for lost taps is not available
+  ([Display Patch on Firmware 3.0.6](display.md#display-patch-on-firmware-306)).
+- **IPv6 firewall:** the station has no IPv6 firewall, so the switch is not
+  offered.
+
+Every release is tested on a station with `1.7.19`. On a `3.0.6` station,
+Ring Call, the camera at its factory size, the door and activations were
+tested with earlier releases, and the display pages loaded at start with the
+Alarm and Home Assistant buttons in place. The other display pages, the other camera sizes,
+picture controls, visitor images, Speex and announcements are checked offline
+only.
 
 ## Install the Integration
 
@@ -181,11 +208,35 @@ existing ones stay until they expire. See
 Keep the existing integration entry. The release archive contains the agent,
 its display files and the card; no separate card repository is needed.
 
+### Beta Versions
+
+Betas use versions such as `2.9.0b1`; release candidates use `2.9.0rc1`. A
+beta uses the same integration, card and packaged agent as a stable release,
+with no separate repository or second integration entry.
+
+To install a published beta:
+
+1. Back up Home Assistant and read the beta's release notes.
+2. In Marketplace, enable this repository's **Pre-release** switch. In HACS,
+   open **Redownload**, enable beta versions and select the beta.
+3. Follow the normal [update steps](#update), including the agent update
+   Repair. Installing the integration alone does not update the agent.
+
+Stable installations do not receive betas automatically. To leave the beta,
+disable pre-releases and select the stable release, or wait for the next one,
+then run the agent update Repair again. A Home Assistant backup does not
+restore the agent on the device.
+
+On firmware `3.0.6`, before going back to a release older than 2.10.0,
+remove the display pages completely as described in
+[Display Patch on Firmware 3.0.6](display.md#display-patch-on-firmware-306);
+older releases cannot remove them.
+
 ## Next Steps
 
 - [Using the Integration](user-guide.md): camera quality and picture size,
-  clearer sound with **Audio codec** on **PCMU** (the station restarts once;
-  firmware 3.0.6 already uses it), clips, announcements, notifications and
+  clearer sound with **Audio codec** on **PCMU** (the station restarts once),
+  clips, announcements, notifications and
   [blueprints](user-guide.md#blueprints).
 - [Station Display Pages](display.md): Home Assistant pages, tiles and
   notifications on the station display.

@@ -603,7 +603,7 @@ def test_release_assets_are_reproducible_for_same_zip(
         "current_homeassistant": "2026.11.1",
         "validated_homeassistant": [],
         "python": "3.14",
-        "firmware_target": "1.7.x, 2.0.2 or 3.0.6 (experimental)",
+        "firmware_target": "1.7.x, 2.0.2 or 3.0.6",
         "native_agent_rebuilt": True,
         "native_agent_reused_from": None,
         "native_agent_sysroot": {
@@ -1027,3 +1027,38 @@ def test_native_agent_startup_link_check_accepts_relative_rc_links() -> None:
     assert "realpath(C300X_AGENT_INIT_LINK, resolved)" in link_check
     assert "strcmp(resolved, C300X_AGENT_INIT_SCRIPT) == 0" in link_check
     assert "agent_init_link_matches()" in ensure_link
+
+
+@pytest.mark.parametrize(
+    ("tag", "tip_of", "branch"),
+    [
+        ("v2.9.0", ("main",), "main"),
+        ("v2.9.0", ("beta",), None),
+        ("v2.9.0b1", ("beta",), "beta"),
+        ("v2.9.0rc1", ("beta",), "beta"),
+        ("v2.9.0b1", ("main",), "main"),
+        ("v2.9.0b1", ("beta", "main"), "beta"),
+        ("v2.9.0b1", (), None),
+    ],
+)
+def test_a_beta_may_come_from_the_beta_branch_but_a_stable_release_only_from_main(
+    tag: str, tip_of: tuple[str, ...], branch: str | None
+) -> None:
+    from verify_main_validation import check_refs
+
+    sha = "a" * 40
+
+    class BranchRefs:
+        def get(self, path):
+            if path.startswith("/git/ref/tags/"):
+                return {"object": {"type": "commit", "sha": sha}}
+            name = path.rsplit("/", 1)[1]
+            return [{"ref": f"refs/heads/{name}", "object": {
+                "type": "commit", "sha": sha if name in tip_of else "b" * 40,
+            }}]
+
+    if branch is None:
+        with pytest.raises(ValueError, match="authorized branch HEAD"):
+            check_refs(BranchRefs(), tag, sha)
+    else:
+        assert check_refs(BranchRefs(), tag, sha) == branch

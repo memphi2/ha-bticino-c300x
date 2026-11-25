@@ -25,7 +25,8 @@ key. Limits and the cases that need **Reconfigure**:
 
 Use the firewall Repair when Media Readiness reports missing IPv4 media ports
 or talkback RTP readiness. Enable IPv6 firewall support only when Home
-Assistant reaches the C300X over stable IPv6.
+Assistant reaches the C300X over stable IPv6. Stations without an IPv6
+firewall script, such as firmware 3.0.6, have no IPv6 firewall switch.
 
 ### Core GUI Hook
 
@@ -40,6 +41,11 @@ The optional Display patch writes the files for the
 [station display pages](display.md#enable-the-display-pages) and reloads the
 device UI, which can take about a minute. Use Repairs instead of editing device
 files.
+
+On firmware 3.0.6 the display program loads the patched pages at its start;
+its files are not changed. Read
+[Display Patch on Firmware 3.0.6](display.md#display-patch-on-firmware-306)
+before going back to a release older than 2.10.0.
 
 ### Home Assistant Media User
 

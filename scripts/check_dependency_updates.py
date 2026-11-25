@@ -218,7 +218,7 @@ def _check(root: Path) -> list[str]:
         or publish.get("needs") != ["main-validation"]
         or any("if" in job or job.get("continue-on-error", False) for job in (gate, publish))
     ):
-        failures.append("release must require canonical main validation without a duplicate HA matrix")
+        failures.append("release must require canonical branch validation without a duplicate HA matrix")
     for job, ref in (
         (gate, "${{ github.sha }}"),
         (publish, "${{ needs.main-validation.outputs.commit }}"),

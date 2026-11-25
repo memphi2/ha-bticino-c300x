@@ -20,11 +20,22 @@ Development branches are not a shortcut around the release gate.
 ### Canonical CI Evidence
 
 Release tags do not repeat the full HA matrix, HACS, Hassfest or browser suite.
-PRs and pushes to `main` (and `beta`) still run all of them. Release requires
-successful **main push** runs of the canonical `validate.yml`, `browser.yml` and
-`codeql.yml` workflows for the exact released commit. Tag, checkout, release
-workflow source and current remote `main` must agree. A successful PR, beta,
-scheduled or manually dispatched run is not release evidence.
+PRs and pushes to `main` and `beta` still run all of them. Stable releases require
+the current `main` tip. Beta/RC tags retain the existing branch policy: use the
+current `beta` tip first, or `main` if only main matches the tagged commit.
+When both tips match, beta is selected and failed beta checks cannot fall back
+to main checks. Firmware 3.0.6 support became stable with 2.10.0 and is released from `main`
+like every stable release; the `v2.9.0_fw3.0.6` development branch is not a
+release source of its own.
+
+Local candidate metadata stays `local-unverified`; it must not claim CI success.
+
+Release requires successful **push runs on that selected branch** of the
+canonical `validate.yml`, `browser.yml` and `codeql.yml` workflows for the exact
+released commit. Tag, checkout, release workflow source and selected remote
+branch tip must agree. A successful PR, schedule, manually dispatched run, or
+run on the other branch is not interchangeable release evidence. Publication
+remains tag-bound; no branch override, merge bypass or firmware detection is added.
 The gate checks out the immutable release run SHA; publication checks out the
 commit emitted by that gate, never a newly resolved tag. Manual release retries
 must run from the release tag with the same run and workflow source SHA.
@@ -37,11 +48,12 @@ unexpected jobs fail closed. Partial reruns cannot combine jobs from different
 attempts; use **Re-run all jobs**. An older success cannot override a newer
 failure. Evidence must be no more than seven days old, including when retried.
 
-After each main-push HA leg has passed the full validation and official
+After each main/beta-push HA leg has passed the full validation and official
 container runtime checks, `scripts/validation_evidence.py` records the actual
 installed HA version and verifies it matches the resolved target. It uploads
 `ha-validation-<target>-<run_attempt>` with seven-day retention. Its small JSON
-binds repository, source SHA, workflow ref/SHA/content digest, run ID and attempt.
+binds repository, branch ref, source SHA, workflow ref/SHA/content digest, run ID
+and attempt.
 The minimum must equal the declared project minimum; current HA is the actual
 rolling version tested, not the local project baseline or a new PyPI query.
 
@@ -49,16 +61,17 @@ The release verifier downloads by artifact ID from that run, checks GitHub's
 SHA256 archive digest, size, expiry, run/repository binding and payload identity.
 It does not execute or extract artifact files. Missing, foreign, stale,
 conflicting or malformed evidence fails publication. GitHub Actions' read API,
-the reviewed workflows at the released main commit, and immutable uploaded
+the reviewed workflows at the released source commit, and immutable uploaded
 artifact bytes are the trust boundary, not artifact names or self-reported
 success. Workflow definitions and jobs are reviewed source; this gate does not
 replace branch protection, code review or security policy.
 
-The main gate emits a digest of the verified aggregate. The publish job fetches
-and verifies evidence again against that digest before building, and rechecks
-it immediately before publication. Concurrent reruns or movement of main/tag
-fail these checks. `build-metadata.json` embeds the exact versions, job IDs,
-workflow/run/attempt bindings and artifact IDs/digests. No fifth public asset
+The canonical branch gate emits a digest of the verified aggregate. The publish
+job fetches and verifies evidence again against that digest before building, and rechecks
+it immediately before publication. Concurrent reruns, a branch switch, or movement
+of the selected branch/tag fail these checks. `build-metadata.json` embeds the
+selected source branch, exact versions, job IDs, workflow/run/attempt bindings
+and artifact IDs/digests. No fifth public asset
 is added. CI metadata generation requires digest-pinned evidence; local metadata
 without evidence is explicitly `local-unverified` and claims no validated jobs
 or HA versions (the configured version baselines remain informational).
@@ -69,6 +82,10 @@ mandatory. No merge/admin bypass or device/HA activation is part of this gate.
 Artifact and attempt bindings use the documented
 [GitHub Actions artifact API](https://docs.github.com/en/rest/actions/artifacts)
 and [workflow jobs API](https://docs.github.com/en/rest/actions/workflow-jobs).
+Branch selection uses exact references from the
+[matching references API](https://docs.github.com/en/rest/git/refs#list-matching-references),
+not similarly named branches returned by its prefix lookup. A missing beta ref
+can fall back to main for prereleases; API failures cannot.
 
 New releases are drafts until their four downloaded assets match the validated
 local artifacts.
@@ -93,10 +110,10 @@ Creating a development branch does not publish a release.
 ## Isolated Integration Tests
 
 The HA matrix tests the fixed minimum from `project-versions.json` and the
-latest non-yanked stable release from PyPI on every Validate run. Preview releases are
-excluded. The resolver pins that exact version before installing tools, so a
+latest non-yanked stable release from PyPI on every Validate run. Preview releases
+are excluded. The resolver pins that exact version before installing tools, so a
 dependency conflict fails the job instead of silently testing an older HA.
-The resolved version is logged and passed from canonical main evidence into build
+The resolved version is logged and passed from canonical branch evidence into build
 metadata. `current_homeassistant` in the version file is the local validation
 baseline, not a cap on the rolling CI target. Raising the minimum remains manual.
 
@@ -145,8 +162,9 @@ applies only to the development shell and its children; start a fresh Python
 process after exporting it. Do not apply it to a running HA installation.
 
 Validate uses this setup in **both minimum/current HA matrix legs**; Release
-requires that exact main-run evidence. `--github-env` verifies the loaded cache path in a fresh subprocess before
-exporting it for later steps. `check_validate.py` also checks the default loader,
+requires that exact branch-run evidence. `--github-env` verifies the loaded cache
+path in a fresh subprocess before exporting it for later steps.
+`check_validate.py` also checks the default loader,
 TurboJPEG 3 API, actual mapped library, JPEG encode/decode pixels and HA camera
 singleton before other gates. Missing/incompatible libraries fail the gate;
 no warning filters or fallback-success exceptions are added. A supported system
@@ -234,8 +252,23 @@ python -m pytest tests/test_energy_consumers_layout.py::test_consumers_qt4_runti
 Setup builds and verifies the ARM probe in `$XDG_CACHE_HOME/c300x-dev/qt4-runtime`
 (default `~/.cache/c300x-dev/qt4-runtime`). Pytest discovers it automatically.
 Changed probe sources or damaged cache files fail explicitly: rerun setup.
-The existing `C300X_QT4_QEMU`, `C300X_QT4_ROOTFS`, `C300X_QT4_PROBE` and
-`C300X_QT4_IMPORTS` overrides remain supported when all four are set.
+`C300X_QT4_QEMU`, `C300X_QT4_ROOTFS`, `C300X_QT4_PROBE` and `C300X_QT4_IMPORTS`
+override the built setup; one that is not set comes from the built setup. An
+explicit `C300X_QT4_ROOTFS` is used as given, also with the built probe: it is
+not compared with the sysroot the probe was built and verified against.
+A variable that is set but does not point to an existing executable
+(`QEMU`, `PROBE`) or directory (`ROOTFS`, `IMPORTS`) is an error that names
+the variable; it never skips.
+
+Without a built setup:
+
+- none of the four set: the runtime is unconfigured and its tests skip;
+- `C300X_QT4_QEMU` and `C300X_QT4_ROOTFS` both set and valid: the same. The
+  two also belong to the compile and render checks below, which need no
+  runtime probe;
+- only one of those two, or `C300X_QT4_PROBE` or `C300X_QT4_IMPORTS` without
+  all the others: an error that names the missing variables.
+
 The separate compile-only checks use `C300X_QT4_COMPILE_PROBE` and
 `C300X_QT4_COMPILE_IMPORTS` for the compiler and its placeholder modules.
 Do not use the compile-only executable as the runtime probe.
@@ -269,13 +302,25 @@ Every generated source is compared with the package, then `restore-all` must
 recover the original GUI. The separate legacy-bootstrap test retains the inert
 Distribution input required by file-set 4; it must not become an active view.
 
-After every display change, run the compile-only probe
-(`C300X_QT4_COMPILE_PROBE`, `C300X_QT4_COMPILE_IMPORTS`): it compiles the
+After every display change, run the compile-only probe in
+`tests/test_device_qt4_grammar.py` (`C300X_QT4_COMPILE_PROBE`,
+`C300X_QT4_COMPILE_IMPORTS`, with `C300X_QT4_QEMU`, `C300X_QT4_ROOTFS` and
+`C300X_QT4_GUI`, a private copy of the firmware skin directory; the test must
+report passed, not skipped): it compiles the
 display components under QEMU ARM against the private firmware 1.7.19 Qt 4.8.7
 libraries and stock Styles module, with an import-only `BtObjects` placeholder,
 and must report `compile_failed=0`. It does not instantiate or render the GUI,
 execute the vendor plugin, or test device startup/reboot behaviour; it is
 separate from the Qt 6 layout checks and is not hardware validation.
+
+`tests/test_qt4_display_render.py` shows pages on those libraries with a GUI.
+It needs `C300X_QT4_QEMU`, `C300X_QT4_ROOTFS`, `C300X_QT4_COMPILE_IMPORTS` and
+`C300X_QT4_GUI`, but neither probe variable: it builds `tests/qml/qt4_render_probe.c`
+with `arm-linux-gnueabihf-gcc` into `~/.cache/c300x-dev/qt4-render`, writes the
+display files into a copy of the skin and draws into a file instead of a
+framebuffer. It checks positions the Qt 6 renderer gets right and Qt 4.8 does
+not, and that the pages print no QML warning. The data is test data; it is not
+hardware validation either.
 
 ## Clean Install Path
 
@@ -347,11 +392,14 @@ files. Before a release, and before a version of that kind is added:
 3. Apply `scripts/device_routing_builder.py` to the stock routing target of
    each of these versions. It must accept the file and report the patched hash.
 
-Firmware `3.0.6` (experimental) fails step 1, has its own routing table and
-no display files, so steps 1 to 3 do not apply; see
+Firmware `3.0.6` fails step 1, has its own routing table and
+keeps its display files as Qt resources in `BtClass`, so steps 1 to 3 do not
+apply; see
 [Supported Firmware Versions](native-agent.md#supported-firmware-versions).
 For it, run `armhf-abi-check` with its root file system in
-`C300X_ABI_SYSROOTS`, then the device tests below without the Display patch row.
+`C300X_ABI_SYSROOTS`, then the device tests below. On 3.0.6 the Display
+patch row checks the Qt 5 resource overlay; the status must show
+`qt5_overlay: active`.
 
 Device tests per firmware version, because the vendor media, SIP and D-Bus
 programs differ between versions:
@@ -463,6 +511,7 @@ The reviewed build lock covers these native and bundle input paths:
 
 - `native_agent/src`
 - `native_agent/scripts`
+- `native_agent/qt5`
 - `native_agent/VERSION`
 - `native_agent/Makefile`
 - `native_agent/config.example.json`

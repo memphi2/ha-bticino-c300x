@@ -24,6 +24,7 @@ from .display_activation import (
     display_restart_pending,
     display_step_failed,
     display_unsupported,
+    gui_reload_kwargs,
     require_display_activation,
 )
 from .entry_config import entry_config_value
@@ -188,7 +189,7 @@ async def async_restore_qml_patches_after_update(
                 action=lambda: busy_retry(full_patch),
                 refresh=lambda entry: async_refresh_qml_patch_status(entry, wait_busy=True),
             )
-        await busy_retry(api.async_reload_gui)
+        await busy_retry(lambda: api.async_reload_gui(**gui_reload_kwargs(entry)))
         status = await async_display_restart_settled(
             entry, await async_refresh_qml_patch_status(entry, wait_busy=True)
         )

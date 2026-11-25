@@ -495,15 +495,22 @@ class _ApiMaintenanceMixin(_C300XApiCore):
 
         return max(self._timeout, minimum)
 
-    async def async_reload_gui(self) -> dict[str, Any]:
-        """Reload the C300X graphical interface through the maintenance API."""
+    async def async_reload_gui(self, *, display_restart: bool = False) -> dict[str, Any]:
+        """Reload the C300X graphical interface through the maintenance API.
+
+        ``display_restart``: the station has the Qt 5 display of firmware
+        3.0.x, whose restart first waits for the old display program to end
+        (agent job limit 30 s there); the wait is then that of a display write.
+        """
 
         data = await self._request_json(
             "POST",
             "/api/v1/maintenance/gui/actions/reload",
             json_data={"confirm": "reload_gui"},
             extra_headers=self._maintenance_headers(),
-            request_timeout=self._job_timeout(_QML_WRITE_JOB_TIMEOUT),
+            request_timeout=self._job_timeout(
+                _QML_WRITE_JOB_TIMEOUT if display_restart else _MAINTENANCE_JOB_TIMEOUT
+            ),
         )
         return _ok_response(data)
 

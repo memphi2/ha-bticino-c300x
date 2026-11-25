@@ -36,6 +36,27 @@ def display_restart_pending(status: Mapping[str, Any] | None) -> bool:
     return isinstance(status, Mapping) and status.get("gui_restart") == "pending"
 
 
+def display_is_qt5(status: Mapping[str, Any] | None) -> bool:
+    """Whether a display status comes from the Qt 5 display of firmware 3.0.x.
+
+    Only qml_patch.sh on the Qt 5 display reports ``qt5_overlay``; on 1.7.x
+    and 2.0.2 it is None.
+    """
+
+    return isinstance(status, Mapping) and status.get("qt5_overlay") is not None
+
+
+def gui_reload_kwargs(entry: Any) -> dict[str, bool]:
+    """Keywords for ``async_reload_gui`` from the entry's cached display status.
+
+    The longer wait for the display restart only on the Qt 5 display; on
+    1.7.x/2.0.2 the call has no keyword.
+    """
+
+    status = getattr(getattr(entry, "runtime_data", None), "qml_patch_status", None)
+    return {"display_restart": True} if display_is_qt5(status) else {}
+
+
 def display_unsupported(status: Mapping[str, Any] | None) -> str | None:
     """Return why the display pages cannot run on this station, or None.
 

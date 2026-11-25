@@ -29,6 +29,7 @@ from .const import (
     EVENT_AGENT_EVENT_RECEIVED,
     SIGNAL_QML_PATCH_CHANGED,
 )
+from .display_activation import gui_reload_kwargs
 from .entity import C300XEntity, entry_video_enabled, supports_capability
 from .entry_types import BticinoC300XConfigEntry
 from .event_payload import agent_event_key
@@ -307,7 +308,7 @@ class C300XReloadGuiButton(C300XMaintenanceButton):
         """Reload the device GUI through the device-agent maintenance API."""
 
         try:
-            await self._entry.runtime_data.api.async_reload_gui()
+            await self._entry.runtime_data.api.async_reload_gui(**gui_reload_kwargs(self._entry))
         except C300XAgentApiUnsupportedError as err:
             raise HomeAssistantError(
                 "The installed C300X device agent does not support Display reload"

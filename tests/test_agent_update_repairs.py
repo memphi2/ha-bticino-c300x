@@ -110,8 +110,9 @@ class FakePatchApi:
             "core_state": "patched",
         }
 
-    async def async_reload_gui(self) -> dict[str, Any]:
+    async def async_reload_gui(self, *, display_restart: bool = False) -> dict[str, Any]:
         self.calls.append("reload_gui")
+        self.reload_display_restart = display_restart
         return {"ok": True, "action": "reload_gui"}
 
     async def async_firewall_status(self) -> dict[str, Any]:

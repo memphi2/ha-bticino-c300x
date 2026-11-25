@@ -78,8 +78,9 @@ class _FakeApi:
             raise RuntimeError("core apply failed")
         return self.core_apply_status
 
-    async def async_reload_gui(self) -> dict[str, Any]:
+    async def async_reload_gui(self, *, display_restart: bool = False) -> dict[str, Any]:
         self.calls.append("reload_gui")
+        self.reload_display_restart = display_restart
         return {"ok": True}
 
 
@@ -200,6 +201,8 @@ def test_agent_update_repatch_keeps_a_side_by_side_layout() -> None:
     asyncio.run(async_restore_qml_patches_after_update(entry, apply_full_patch=True))
 
     assert api.dynamic_homepage is False
+    # A Qt 4 status: the reload keeps 2.9.2's wait.
+    assert api.reload_display_restart is False
 
 
 def test_restore_qml_patch_keeps_action_status_when_confirmation_mismatches() -> None:
@@ -660,6 +663,8 @@ def test_the_update_followup_waits_for_a_pending_restart(monkeypatch):
     api = _RestartingApi(status=_ACTIVE, apply_status=pending, core_apply_status=pending, pending_reads=1)
     status = asyncio.run(async_restore_qml_patches_after_update(_entry(api), apply_full_patch=True))
     assert status["gui_running"] is True
+    # The Qt 5 display restart gets the longer reload wait.
+    assert api.reload_display_restart is True
 
 
 def test_a_busy_agent_during_the_restart_wait_does_not_end_it(monkeypatch):

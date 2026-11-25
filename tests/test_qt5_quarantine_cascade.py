@@ -53,7 +53,9 @@ class _ScriptApi:
         layout = {} if dynamic_homepage is None else {"C300X_QML_DYNAMIC_HOME_PAGE": "1" if dynamic_homepage else "0"}
         return self._run("apply", **layout)
 
-    async def async_reload_gui(self) -> dict[str, Any]:
+    async def async_reload_gui(self, *, display_restart: bool = False) -> dict[str, Any]:
+        # The Qt 5 display restart gets the longer wait.
+        assert display_restart
         self._run("reload")
         return {"ok": True}
 

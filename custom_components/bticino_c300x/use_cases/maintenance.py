@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..display_activation import gui_reload_kwargs
 from .common import ensure_maintenance_action, raise_agent_command_failed
 
 
@@ -23,4 +24,7 @@ class MaintenanceUseCase:
         """Reload the device GUI through the maintenance API."""
 
         ensure_maintenance_action(self._entry, "gui_reload")
-        await raise_agent_command_failed(self._entry.runtime_data.api.async_reload_gui(), entry=self._entry)
+        await raise_agent_command_failed(
+            self._entry.runtime_data.api.async_reload_gui(**gui_reload_kwargs(self._entry)),
+            entry=self._entry,
+        )

@@ -1721,7 +1721,7 @@ def test_reload_gui_sends_maintenance_confirmation() -> None:
 
 
 def test_reload_gui_waits_as_long_as_a_display_patch_write() -> None:
-    """A GUI restart first waits for the old display program to end."""
+    """A Qt 5 display restart first waits for the old display program to end."""
 
     calls: list[dict[str, object]] = []
     api = C300XAgentApi(
@@ -1737,7 +1737,7 @@ def test_reload_gui_waits_as_long_as_a_display_patch_write() -> None:
         return {"ok": True}
 
     api._request_json = request_json  # type: ignore[method-assign]
-    asyncio.run(api.async_reload_gui())
+    asyncio.run(api.async_reload_gui(display_restart=True))
     asyncio.run(api.async_apply_qml_core_patch())
     assert calls[0]["request_timeout"] == calls[1]["request_timeout"] == 50.0
 

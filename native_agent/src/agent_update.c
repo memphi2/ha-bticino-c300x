@@ -504,9 +504,7 @@ static int update_display_recovery_safe(const struct c300x_config *config, const
         || !S_ISREG(info.st_mode) || !(info.st_mode & 0111)
         || info.st_size <= 0 || info.st_size > 16384) return 0;
     return sha256_hex_matches(C300X_AGENT_GUI_WRAPPER,
-               "852a5b0f0755a738e4e25127cd10b903fbf9c2ebdb4109872d4e1d0aac13c59c")
-        || sha256_hex_matches(C300X_AGENT_GUI_WRAPPER,
-               "903eeca1eb142238f32345c6837125c29dcb2a5b63fb4eda935a82e70104229f");
+               "852a5b0f0755a738e4e25127cd10b903fbf9c2ebdb4109872d4e1d0aac13c59c");
 }
 
 int apply_agent_update_files(

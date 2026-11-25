@@ -208,9 +208,8 @@ def test_ambiguous_or_nested_capability_is_not_trusted(updater, device, declarat
     assert snapshot(device) == before
 
 
-@pytest.mark.parametrize("firmware", ["1.7.19", "2.0.2", "3.0.6"])
-def test_verified_stock_allows_target_without_qt5_capability(updater, device, firmware):
-    original_wrapper(device, firmware)
+def test_verified_stock_allows_target_without_qt5_capability(updater, device):
+    original_wrapper(device, "3.0.6")
     manifest(device)
     # Disposable extraction cache and original backup remain after restore-all.
     (device / "display-qt5/vendor").mkdir(parents=True)
@@ -218,6 +217,17 @@ def test_verified_stock_allows_target_without_qt5_capability(updater, device, fi
     body, _ = apply(updater, device, True)
     assert body["changed_files"] > 0
     assert apply(updater, device, True)[0]["changed_files"] == 0
+
+
+@pytest.mark.parametrize("firmware", ["1.7.19", "2.0.2"])
+def test_a_qt4_start_script_on_the_qt5_display_is_no_proof_of_removal(updater, device, firmware):
+    """Only 3.0.x has a Qt 5 display; a 1.7.x/2.0.x start script there is foreign."""
+
+    original_wrapper(device, firmware)
+    manifest(device)
+    before = snapshot(device)
+    assert "qt5_recovery_required" in apply(updater, device, False)[1]
+    assert snapshot(device) == before
 
 
 def test_declared_beta_recovery_allows_update_and_retry_with_quarantine(updater, device):

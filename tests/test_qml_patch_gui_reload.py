@@ -616,6 +616,39 @@ def test_a_display_that_writes_no_watchdog_file_falls_back_to_stock(overlay: Ove
     assert _starts(overlay)[-1] == "plain"
 
 
+def test_a_second_display_pid_late_in_the_start_wait_ends_with_the_stock_display(
+    overlay: OverlayStation, tmp_path: Path,
+) -> None:
+    """Kept on purpose: a changed PID set restarts the watchdog evidence, not the start
+    window. Past it the start counts as failed and the original display takes over,
+    one display at a time; testers measure whether BtClass ever shows a second PID."""
+
+    overlay.boot()
+    result = overlay.run("reload", C300X_QML_GUI_BUDGET_SECONDS="0", C300X_QML_QT5_START_SECONDS="4",
+                         C300X_QML_QT5_STABLE_SECONDS="12")
+    assert result["ok"] is True, result
+    assert _wait_for(lambda: overlay.phase() == "verify", 30), overlay.phase()
+    time.sleep(5.5)
+    # A second process under the display's name for a moment (a fork of it).
+    second = tmp_path / "fork" / DISPLAY_NAME
+    second.parent.mkdir()
+    second.write_text("#!/bin/sh\nsleep 3\n")
+    second.chmod(0o755)
+    fork = subprocess.Popen([str(second)], env=overlay.env, start_new_session=True)
+    try:
+        assert len(_settled(overlay)) == 1
+    finally:
+        fork.kill()
+        fork.wait()
+    assert overlay.mark.read_text() == "boot-1\n"
+    assert _starts(overlay) == ["overlay", "overlay", "plain"]
+    # Each display ended before the next one started.
+    events = overlay.events()
+    starts = [index for index, event in enumerate(events) if event.startswith("start ")]
+    for before, after in zip(starts, starts[1:], strict=False):
+        assert any(event.startswith("end ") for event in events[before:after]), events
+
+
 def test_a_write_during_a_restart_is_not_taken_for_a_failed_overlay(overlay: OverlayStation) -> None:
     """A write marks the overlay while it changes the files; a running cycle
     must neither read that as a failed start nor start the display meanwhile."""

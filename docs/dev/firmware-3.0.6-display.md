@@ -215,12 +215,18 @@ A request left by a worker that died is taken over by the next worker.
    that first write, so a display that crashes right after its first write is
    still seen. A program other than the one seen before, and the shipped
    display that the start script starts after a failed overlay, count only
-   on a write of their own (a fresh stamp), not on the crashed one's. A
-   writer's note counts only while its PID runs `qml_patch.sh`; the worker
-   removes any other. The overlay failed when the start script wrote this boot's
-   quarantine mark; failed when no start script and no `BtClass` run any
-   more, or when no watchdog write came within `C300X_QML_QT5_START_SECONDS`
-   (40). bt_daemon checks that file at least every 32 s and reboots the
+   on a write of their own (a fresh stamp), not on the crashed one's. The
+   40 s are counted from the start, not again for each program: a PID set
+   that changes late (a second `BtClass` PID for a moment) leaves too little
+   time for that write, and the start counts as failed. Kept on purpose: the
+   wait stays bounded, and the fallback below still leaves one display; the
+   mark holds until the station restarts or an apply-family action. Whether
+   `BtClass` ever shows a second PID is a tester measurement. A writer's
+   note counts only while its PID runs `qml_patch.sh` and is not the
+   worker's own; the worker removes any other. The overlay failed when the
+   start script wrote this boot's quarantine mark; failed when no start
+   script and no `BtClass` run any more, or when no watchdog write came
+   within `C300X_QML_QT5_START_SECONDS` (40). bt_daemon checks that file at least every 32 s and reboots the
    station without it, so a display that wrote none in 40 s is hung or far
    slower than the vendor tolerates; a slow but healthy cold start writes
    within one watchdog period. A failed start of the overlay start script is

@@ -1,6 +1,6 @@
 #include "../src/display_touch.h"
 
-#ifdef TEST_TERM_IN_WINDOW
+#if defined(TEST_TERM_IN_WINDOW) || defined(TEST_LOG_REMOUNTS)
 #include <signal.h>
 #include <stdio.h>
 #include <string.h>
@@ -14,13 +14,16 @@ int __wrap_statvfs(const char *path, struct statvfs *info)
     return 0;
 }
 
-/* The job is stopped right after / went writable. */
+/* Every remount is logged; with TEST_TERM_IN_WINDOW the job is also
+ * stopped right after / went writable. */
 int __wrap_system(const char *command)
 {
     fprintf(stderr, "%s\n", command);
+#ifdef TEST_TERM_IN_WINDOW
     if (strstr(command, "remount,rw") != NULL) {
         raise(SIGTERM);
     }
+#endif
     return 0;
 }
 #endif

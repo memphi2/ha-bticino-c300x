@@ -403,6 +403,48 @@ def test_a_cut_off_write_leaves_no_temporary_file_behind(device: _Device) -> Non
     assert device.target.read_bytes() == device.stock
 
 
+@pytest.mark.parametrize("leftover", ["none", "file", "link", "dangling-link"])
+def test_the_stale_file_is_checked_and_removed_through_the_same_directory(device: _Device, leftover: str) -> None:
+    binary = _build(device.target.parent.parent, {
+        "C300X_DISPLAY_TOUCH_TARGET_DIR": str(device.target.parent),
+        "C300X_DISPLAY_TOUCH_BACKUP_DIR": str(device.backup.parent),
+        "C300X_DISPLAY_TOUCH_STOCK_SHA256": _sha(device.stock),
+        "C300X_DISPLAY_TOUCH_PATCHED_SHA256": _sha(device.patched),
+        "C300X_DISPLAY_TOUCH_STOCK_RANGE_SHA256": _sha(device.stock[OFFSET:OFFSET + 8]),
+        "TEST_LOG_REMOUNTS": "1",
+    }, ("-Wl,--wrap=statvfs,--wrap=system",))
+    stale = device.target.parent / (NAME + ".tmp")
+    other = device.target.parent.parent / "elsewhere"
+    if leftover == "file":
+        stale.write_bytes(b"half a library")
+    elif leftover == "link":
+        other.write_bytes(b"not ours")
+        stale.symlink_to(other)
+    elif leftover == "dangling-link":
+        stale.symlink_to(other)
+    result = subprocess.run(
+        [str(binary), "restore"], capture_output=True, text=True,
+        env={k: v for k, v in os.environ.items() if k != "C300X_DEVICE_PATCH_NO_REMOUNT"},
+    )
+    assert json.loads(result.stdout)["ok"] is True
+    remounts = [line for line in result.stderr.splitlines() if "remount" in line]
+    # Nothing to remove: the root file system is not opened for writing.
+    assert remounts == ([] if leftover == "none" else [
+        "mount -o remount,rw / >/dev/null 2>&1", "mount -o remount,ro / >/dev/null 2>&1"])
+    # A link is removed itself; what it points to is not touched.
+    assert not stale.exists() and not stale.is_symlink()
+    if leftover == "link":
+        assert other.read_bytes() == b"not ours"
+    assert device.target.read_bytes() == device.stock
+    source = (NATIVE / "src/display_touch.c").read_text(encoding="utf-8")
+    body = source.split("static void drop_stale_temp(void)", 1)[1].split("\n}\n", 1)[0]
+    assert "O_DIRECTORY | O_NOFOLLOW" in body and "unlinkat(directory, name, 0)" in body
+    assert "touch_lstat_at(directory, name, &info) == 0" in body
+    # The station's libc exports no fstatat: the ARM build must not need it.
+    assert "syscall(SYS_fstatat64, (directory), (name), (info), AT_SYMLINK_NOFOLLOW)" in source
+    assert "access(" not in body and "unlink(tmp_path)" not in body
+
+
 def test_the_removal_restores_the_library_before_anything_it_cannot_undo() -> None:
     # A failed restore keeps the agent, its start and the backup of the library.
     script = (NATIVE / "scripts/remove_agent.sh").read_text(encoding="utf-8")

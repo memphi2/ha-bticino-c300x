@@ -32,6 +32,10 @@ void c300x_http_send_json(int fd, int status, const char *reason, const char *bo
 
 void close_agent_socket(int fd) { (void)fd; }
 
+/* Mode "reload-qt5" stands for the Qt 5 display of firmware 3.0.x. */
+static const char *test_mode = "";
+int c300x_device_display_is_qt5(void) { return strcmp(test_mode, "reload-qt5") == 0; }
+
 static int writes;
 static void record_write(void *context, const char *kind, const char *reason)
 {
@@ -94,6 +98,7 @@ int main(int argc, char **argv)
 {
     assert(argc == 3);
     const char *mode = argv[2];
+    test_mode = mode;
     struct c300x_config *config = calloc(1, sizeof(*config));
     struct request *request = calloc(1, sizeof(*request));
     struct c300x_http_maintenance owner;
@@ -110,6 +115,26 @@ int main(int argc, char **argv)
         c300x_copy_string(request->body, sizeof(request->body), "{\"confirm\":\"apply_qml_patch\"}");
     }
     c300x_http_maintenance_init(&owner, record_write, NULL);
+    if (strncmp(mode, "reload-", 7) == 0) {
+        /* A GUI reload: 10 s on Qt 4 as in 2.9.2, the write limit on Qt 5. */
+        int qt5 = strcmp(mode, "reload-qt5") == 0;
+        config->maintenance_gui_reload_enabled = 1;
+        c300x_copy_string(config->maintenance_gui_reload_script,
+            sizeof(config->maintenance_gui_reload_script), argv[1]);
+        c300x_copy_string(request->path, sizeof(request->path), "/api/v1/maintenance/gui/actions/reload");
+        c300x_copy_string(request->body, sizeof(request->body), "{\"confirm\":\"reload_gui\"}");
+        long long before = c300x_monotonic_ms();
+        assert(c300x_http_maintenance_route(&owner, 1234, config, request));
+        long long limit = owner.job.deadline_ms - before;
+        assert(owner.job.pid > 0 && responses == 0 && owner.gui_reload && !owner.records_write);
+        assert(qt5 ? limit >= C300X_QML_WRITE_TIMEOUT_MS && limit < C300X_QML_WRITE_TIMEOUT_MS + 1000
+                   : limit >= 10000 && limit < 11000);
+        assert(owner.job.term_grace_ms == 0);
+        c300x_http_maintenance_close(&owner);
+        free(request);
+        free(config);
+        return 0;
+    }
     if (strcmp(mode, "recover") == 0) {
         /* Agent start: a write-class job without a client holds the slot. */
         c300x_qml_recovery_start(&owner, config);

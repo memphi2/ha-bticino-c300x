@@ -26,6 +26,9 @@ static void shutdown_signal(int signo)
     shutdown_requested = 1;
 }
 
+/* The GUI reload job limit asks for the display; these routes never reload. */
+int c300x_device_display_is_qt5(void) { return 0; }
+
 long long c300x_monotonic_ms(void)
 {
     struct timespec now;

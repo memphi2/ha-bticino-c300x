@@ -26,8 +26,12 @@ static void shutdown_signal(int signo)
     shutdown_requested = 1;
 }
 
-/* The GUI reload job limit asks for the display; these routes never reload. */
-int c300x_device_display_is_qt5(void) { return 0; }
+/* The station's display: C300X_TEST_QT5=1 runs a case as on firmware 3.0.x. */
+int c300x_device_display_is_qt5(void)
+{
+    const char *qt5 = getenv("C300X_TEST_QT5");
+    return qt5 != NULL && strcmp(qt5, "1") == 0;
+}
 
 long long c300x_monotonic_ms(void)
 {

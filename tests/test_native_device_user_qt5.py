@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from tests.test_native_device_user_routes import route_binary as route_binary
+from tests.test_native_device_user_routes import test_route_state_machine
 from tests.test_qml_patch_qt5_overlay import Device
 from tests.test_qml_patch_qt5_overlay import programs as programs
 
@@ -140,3 +141,14 @@ def test_a_label_write_without_a_display_and_no_restart_is_refused(route_binary,
     script.write_text("#!/bin/sh\nprintf '%s\\n' '" + json.dumps(response) + "'\n")
     script.chmod(0o700)
     assert route(route_binary, script, "ensure")["status"] == 500
+
+
+@pytest.mark.parametrize("operation", ["ensure", "restore"])
+@pytest.mark.parametrize("case", ["success", "false", "label-timeout", "label-kill"])
+def test_the_label_write_is_the_same_job_on_the_qt5_display(route_binary, tmp_path, monkeypatch, operation, case):
+    """Firmware 3.0.x writes the label into its overlay through the base's job:
+    the same apply/restore, deadline, SIGTERM, grace and 504 as on 1.7.x/2.0.2
+    (the route asks no firmware question; the base skipped the label here)."""
+
+    monkeypatch.setenv("C300X_TEST_QT5", "1")
+    test_route_state_machine(route_binary, tmp_path, operation, case)

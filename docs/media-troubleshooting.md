@@ -295,9 +295,7 @@ the [tester guide](c100x-test-release.md#diagnostics-for-issue-51).
 
 | Message | Meaning |
 | --- | --- |
-| **This test package is for the Classe 100X only** (setup ends) | The station is a Classe 300X. Install the regular release; nothing was changed. |
-| **C300X device agent: use the regular package** (Repairs) | A Classe 300X entry met the C100X test package. Install the regular release; nothing on the device was changed. |
-| **This package does not support this device model** | The package and the station are different models. Install the matching package; no device files were replaced. |
+| **This package does not support this station** | A Classe 100X met a package that is not made for it, or the station's model could not be confirmed. No device files were replaced. |
 | `unsupported_active_route` | The station's active SIP route is not one of the stock route files, for example after BTicino Companion. Nothing was written; video and calls cannot be set up on that station. |
 
 ### Classe 100X Display Pages

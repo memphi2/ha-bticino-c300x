@@ -56,7 +56,7 @@ short table.
 | --- | --- | --- |
 | Classe 300X / C300X (`344642`, `344643`) | `1.7.x`, `2.0.2` | Supported; every release is tested on `1.7.19`. |
 | Classe 300X / C300X | `3.0.6` | Supported, with the low-resolution camera stream ([what differs](docs/quickstart.md#firmware-306)). |
-| Classe 100X / C100X | `1.5.8` | **In test** in [issue #51](https://github.com/memphi2/ha-bticino-c300x/issues/51), from the C100X test package. |
+| Classe 100X / C100X | `1.5.8` | **Experimental**, in test in [issue #51](https://github.com/memphi2/ha-bticino-c300x/issues/51); setup asks for an explicit confirmation. |
 
 | Feature | C300X | C100X 1.5.8 |
 | --- | --- | --- |
@@ -90,10 +90,9 @@ and without warranty.
 
 ## Installation
 
-**Classe 100X:** install the C100X test package by hand, as the
-[tester guide](docs/c100x-test-release.md#manual-ha-installation) describes,
-on a separate Home Assistant test instance. The package installs on a C100X
-only; it is handed out in issue #51, not through Marketplace or HACS.
+**Classe 100X:** the same package serves the C100X as an experiment. Setup
+recognises the station and asks for an explicit confirmation before anything is
+installed; the [tester guide](docs/c100x-test-release.md) has the details.
 Use stock firmware 1.5.8 with only the changes needed for root or SSH access;
 running alongside BTicino Companion is not supported.
 

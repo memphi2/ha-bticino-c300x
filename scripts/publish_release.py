@@ -68,8 +68,6 @@ def _transport_identity(release: dict[str, Any]) -> tuple[Any, ...]:
 def publish(repository: str, tag: str, directory: Path, *, finalize_transport_draft: bool = False) -> None:
     """Create a draft, verify downloads, then publish in the selected channel."""
 
-    if (ROOT / "c100x-test-policy.json").exists():
-        raise ValueError("C100X publication blocked: separate test channel and version need review")
     prerelease = is_prerelease(tag)
     if (not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]+", repository)
             or repository.split("/")[-1] in {".", ".."}):

@@ -726,6 +726,8 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
                             user_input, CONF_BOOTSTRAP_SSH_USERNAME, CONF_BOOTSTRAP_SSH_PASSWORD
                         ),
                         device_model=login_model(getattr(entry.runtime_data, "agent_info", None)),
+                        # The entry exists: its station was accepted at setup.
+                        c100x_confirmed=True,
                         agent_port=int(
                             entry_config_value(entry, CONF_AGENT_PORT, DEFAULT_AGENT_PORT)
                         ),

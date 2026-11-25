@@ -31,6 +31,13 @@
           "bootstrap_ssh_password": "Mot de passe SSH {model}"
         }
       },
+      "c100x_experimental": {
+        "title": "Classe 100X : prise en charge expérimentale",
+        "description": "Cette platine est un Classe 100X. Sa prise en charge est expérimentale : elle n'est testée qu'avec le firmware 1.5.8 et toutes les fonctions du Classe 300X ne sont pas disponibles. Rien n'est modifié sur la platine avant votre confirmation ; fermez cette fenêtre pour la laisser telle quelle.",
+        "data": {
+          "c100x_experimental": "Configurer la prise en charge expérimentale du Classe 100X"
+        }
+      },
       "agent_auth": {
         "title": "Identifiants de l'agent appareil",
         "description": "Saisissez les clés de l'agent natif joignable. Laissez la clé d'accès vide uniquement tant que l'agent est encore en mode bootstrap noAuth.",
@@ -718,7 +725,6 @@
       }
     },
     "abort": {
-      "c100x_package_only": "Ce paquet de test est uniquement pour le Classe 100X, et cette station est un Classe 300X. Installez la version normale de l'intégration pour la configurer. Rien n'a été modifié.",
       "model_mismatch": "Cette annonce provient d'un autre modèle de poste que l'entrée configurée avec la même identité. Rien n'a été modifié.",
       "already_configured": "BTicino C300X est déjà configure.",
       "reconfigure_successful": "BTicino {model} a été reconfigure. Mettez à jour la configuration locale de l'agent appareil ou du display bridge si vous avez renouvelé les identifiants.",
@@ -763,7 +769,8 @@
       "cannot_connect": "Le {model} n'a pas pu être vérifié. Vérifiez son adresse et sa connexion, puis réessayez.",
       "ssh_login_refused": "Le {model} a refusé la connexion SSH. Saisissez l'utilisateur et le mot de passe SSH de l'appareil.",
       "installer_firewall_hook_unsupported": "Impossible de vérifier le script de pare-feu en toute sécurité. Installation arrêtée avant toute modification. Vérifiez le type et les permissions du fichier, sans créer de script de substitution.",
-      "device_model_incompatible": "Ce paquet ne prend pas en charge ce modele. Les paquets de test C100X ne peuvent pas mettre a jour un C300X. Installez le paquet correspondant avant de mettre a jour ou de reinstaller l'agent. Aucun fichier de l'appareil n'a ete remplace."
+      "device_model_incompatible": "Ce paquet ne prend pas en charge cette platine, ou le modèle de la platine n'a pas pu être confirmé. Aucun fichier de l'appareil n'a été remplacé.",
+      "c100x_confirmation_required": "Cochez la case pour configurer le Classe 100X, ou fermez cette fenêtre pour laisser la platine inchangée."
     }
   },
   "options": {
@@ -1702,14 +1709,10 @@
         },
         "abort": {
           "entry_not_loaded": "L'entrée BTicino C300X n'est pas chargée.",
-          "device_model_incompatible": "Ce paquet ne prend pas en charge ce modele. Les paquets de test C100X ne peuvent pas mettre a jour un C300X. Installez le paquet correspondant avant de mettre a jour ou de reinstaller l'agent. Aucun fichier de l'appareil n'a ete remplace."
+          "device_model_incompatible": "Ce paquet ne prend pas en charge cette platine, ou le modèle de la platine n'a pas pu être confirmé. Aucun fichier de l'appareil n'a été remplacé."
         }
       },
       "description": "Installed: {installed_version}. Packaged: {available_version}. Update path: {update_path}. Reason: {reason}."
-    },
-    "device_agent_update_regular_package": {
-      "title": "Agent C300X : utilisez le paquet normal",
-      "description": "{entry_title} est un Classe 300X, mais l'intégration installée est le paquet de test pour le Classe 100X, prévu uniquement pour le C100X. Il ne met pas à jour et ne réinstalle pas un agent C300X. Installez plutôt la version normale de l'intégration ; rien n'a été modifié sur l'appareil.\n\nInstallé : {installed_version}. Dans le paquet : {available_version}."
     },
     "device_agent_startup_disabled": {
       "title": "L'agent {model} ne démarre pas après redémarrage",

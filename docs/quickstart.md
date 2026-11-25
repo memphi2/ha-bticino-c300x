@@ -81,16 +81,13 @@ only.
 Both ways install the same release archive. Moving from HACS to Marketplace
 keeps existing entries and cards.
 
-### Classe 100X: Test Package
+### Classe 100X: Experimental
 
-The C100X uses the C100X test package from issue #51 instead of Marketplace or
-HACS. Install it by hand on a separate Home Assistant test instance, after the
-private backup the [tester guide](c100x-test-release.md#private-pre-test-backup)
-describes; its [manual installation](c100x-test-release.md#manual-ha-installation)
-replaces the two ways above. The package installs on a C100X only: on a C300X
-the SSH installation stops before any write, and setup with a C300X agent ends
-with "This test package is for the Classe 100X only". The integration keeps its
-name **BTicino C300X**.
+The same package serves the C100X as an experiment. Make the private backup the
+[tester guide](c100x-test-release.md#private-pre-test-backup) describes first.
+Setup recognises the station and shows **Classe 100X: experimental support**;
+nothing is installed on the station until you tick the box there. A C300X is
+never asked. The integration keeps its name **BTicino C300X**.
 
 ### Add the Station
 
@@ -234,9 +231,8 @@ existing ones stay until they expire. See
 Keep the existing integration entry. The release archive contains the agent,
 its display files and the card; no separate card repository is needed.
 
-A C100X is updated only from a newer C100X test package, installed by hand as
-before. Home Assistant refuses to put a C300X package on a C100X, or the C100X
-package on a C300X, before anything is written.
+A C100X is updated the same way. Home Assistant refuses to put a release from
+before the joint package on a C100X, before anything is written.
 
 ### Beta Versions
 

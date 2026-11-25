@@ -151,12 +151,12 @@ GUI activation/readiness/recovery on the device remains unproven. See the
 
 | Boundary | Current protection and limitation |
 | --- | --- |
-| Local artifact name | Builder defaults to `ha-bticino-c100x-issue51-local.zip` and refuses the normal C300X asset name in this branch. |
-| Device bundle | `c100x_compatible: true` and `c100x_only: true` participate in the bundle hash. Neither is a hardware-support or signature assertion. |
-| HA update / SSH repair | This branch rejects the C100X-only package for C300X, including firmware 3.0.6, before upload/write. SSH installation requires a manifest, strict C100X declarations and matching agent hash; missing, invalid or relabelled metadata cannot relax the code-level C100X restriction. API updates also reject unknown model identity. |
-| Native updater | The new updater rejects C100X-only bundles on a non-C100X device and rejects unmarked incompatible bundles on C100X. Older updaters cannot enforce a field they never implemented: use the reviewed HA preflight, never a raw old updater upload. |
-| Legacy shell installer | Blocked in this checkout: its generic upload path has no C100X model preflight. Do not remove the policy file to enable it. |
-| Public publication | `publish_release.py` refuses this checkout while `c100x-test-policy.json` exists. There is no bypass flag. The existing workflow additionally requires canonical-main validation evidence; this branch is not a working alternate release channel. |
+| Package | One package serves the C300X and the C100X; it has the normal asset name. |
+| Device bundle | `c100x_compatible: true` participates in the bundle hash. It is no hardware-support or signature assertion. |
+| Setup | A C100X is recognised from the station itself (`webserver_type`, checked against the installed programs). Nothing is installed until the user confirms the experimental support in the setup dialog. A station whose two sources disagree is refused. A C300X is never asked. |
+| HA update / SSH repair | A C100X takes only a package with a manifest, the `c100x_compatible` declaration and a matching agent hash, checked before any upload or write. API updates also reject unknown model identity. |
+| Native updater | The updater rejects a package without the declaration on a C100X, and a package that names itself C100X-only on a C300X. Older updaters cannot enforce a field they never implemented: use the HA preflight, never a raw old updater upload. |
+| Legacy shell installer | Serves the C300X only; it refuses a C100X before the first write. |
 | HA integration | Domain and config-entry identity remain `bticino_c300x`; a C100X agent announces its own discovery service `_bticino-c100x-agent._tcp`. This package would replace the existing integration on the same HA instance. **Use a separate disposable HA test instance**, with no C300X stable or firmware-3.0.6 beta entries. Renaming the ZIP is not HA isolation. |
 
 These guards prevent accidental use through this branch's supported paths, not

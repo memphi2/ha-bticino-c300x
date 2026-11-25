@@ -279,7 +279,7 @@ def test_bootstrap_install_uses_python_ssh_client(
     monkeypatch: Any,
 ) -> None:
     # Exercise shared Qt4 installation mechanics, not C100X branch admission.
-    monkeypatch.setattr(device_installer, "_verify_c100x_bundle_sync", lambda *_: "qt4_ondisk")
+    monkeypatch.setattr(device_installer, "_admit_station_sync", lambda *_: "qt4_ondisk")
     remote_dir = "/home/bticino/cfg/extra/custom-agent"
 
     class FakeSshClient:
@@ -450,7 +450,7 @@ def test_bootstrap_install_fails_when_startup_link_is_missing(
     monkeypatch: Any,
 ) -> None:
     # Admission has its own real-stager tests; inject failure after that boundary.
-    monkeypatch.setattr(device_installer, "_verify_c100x_bundle_sync", lambda *_: "qt4_ondisk")
+    monkeypatch.setattr(device_installer, "_admit_station_sync", lambda *_: "qt4_ondisk")
     remote_dir = "/home/bticino/cfg/extra/custom-agent"
 
     class FakeSshClient:
@@ -1388,7 +1388,7 @@ def test_bootstrap_firewall_uses_final_device_video_config(monkeypatch, kind, ex
     commands, configs = [], []
     client = SimpleNamespace(run=commands.append, close=lambda: None)
     monkeypatch.setattr(device_installer, "_connect_device_client", lambda _: client)
-    monkeypatch.setattr(device_installer, "_verify_c100x_bundle_sync", lambda *_: kind)
+    monkeypatch.setattr(device_installer, "_admit_station_sync", lambda *_: kind)
     monkeypatch.setattr(device_installer, "_read_remote_config_sync", lambda *_: existing)
     monkeypatch.setattr(device_installer, "_firewall_hook_present_sync", lambda *_: True)
     monkeypatch.setattr(device_installer, "_write_remote_file_sync",
@@ -1437,7 +1437,7 @@ def test_install_reads_remote_config_and_writes_merged_result(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # Isolate configuration preservation from the C100X package admission test.
-    monkeypatch.setattr(device_installer, "_verify_c100x_bundle_sync", lambda *_: "qt4_ondisk")
+    monkeypatch.setattr(device_installer, "_admit_station_sync", lambda *_: "qt4_ondisk")
     old = json.dumps({"mqtt": {"enabled": True, "host": "broker.lan"}})
 
     class FakeSshClient:

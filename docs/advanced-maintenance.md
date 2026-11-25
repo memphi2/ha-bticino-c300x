@@ -18,11 +18,9 @@ Updating only the integration does not change the device. The agent-update
 Repair installs the agent and its display files together through the agent API
 and the saved maintenance key.
 
-Each package names the model it is for. The C100X test package updates only a
-C100X agent, and a C300X package never updates a C100X agent. Home Assistant
-refuses the other model before any upload and the Repair then asks for the
-matching package; a C100X agent's own updater also refuses a package not made
-for a C100X.
+One package updates both models. A C100X agent takes only a package that
+declares itself C100X-compatible: Home Assistant refuses any other before the
+upload, and the C100X agent's own updater refuses it as well.
 
 When the station gets a new IPv4 address, the agent announces itself again and
 Home Assistant follows it once the station has proved that it holds the access

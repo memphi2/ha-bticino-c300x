@@ -9,6 +9,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import C300XAgentApi, build_agent_base_url
 from .api_errors import C300XAgentApiAuthError, C300XAgentApiError
+from .config_flow_c100x import C100XOptInSteps
 from .config_flow_entry_update import (
     async_ensure_entry_reload,
     async_update_reconfigured_entry,
@@ -93,7 +94,7 @@ async def async_validate_entry_connection(
     return setup, errors
 
 
-class AuthFlowSteps:
+class AuthFlowSteps(C100XOptInSteps):
     """Share setup validation and reauth without expanding the main wizard."""
 
     _setup_unique_id: str | None
@@ -174,10 +175,9 @@ class AuthFlowSteps:
                 candidate = {**self._setup_connection, **auth_data}
                 setup, errors = await async_validate_connection(self.hass, candidate)
                 self._note_setup_rejection(errors, candidate)
-                if not errors and setup.get("model") == "C300X":
-                    # This test package is C100X-only; a C300X entry could
-                    # never take an agent update from it.
-                    return cast(ConfigFlowResult, self.async_abort(reason="c100x_package_only"))
+                if not errors and self._c100x_opt_in_missing(setup):
+                    # A Classe 100X is experimental: set up only when asked for.
+                    return cast(ConfigFlowResult, await self._async_ask_c100x_opt_in("agent_auth", user_input))
                 if not errors:
                     errors = self._setup_identity_error(setup)
                 if errors and self._setup_pending_features is not None and not self._setup_bootstrapped:

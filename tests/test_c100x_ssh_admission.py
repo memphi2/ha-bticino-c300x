@@ -1,4 +1,4 @@
-"""C100X branch admission with real staged payloads and no remote operations."""
+"""Which station the installer serves, with real staged payloads and no remote operations."""
 
 import asyncio
 import json
@@ -52,21 +52,27 @@ def connect(monkeypatch, identity):
     return client
 
 
-def request():
+def request(*, confirmed=True):
     # A caller-supplied model is not SSH identity evidence.
     return installer.C300XDeviceInstallRequest(
         host="unused.invalid", ssh_username="unused", ssh_password="unused",
-        remote_dir="/agent", device_model="C100X",
+        remote_dir="/agent", device_model="C100X", c100x_confirmed=confirmed,
     )
 
 
-@pytest.mark.parametrize("identity", ["qt4\nc300x\n", "qt5\nc300x\n", "", "qt5\nc100x\n"])
+C100X_STATIONS = ["qt5\nc100x\n", "qt5\nc100x\nnamed-C100X\n", "qt4\nc100x\n"]
+C300X_STATIONS = ["qt4\nc300x\n", "qt5\nc300x\n", "qt4\nc300x\nnamed-C300X\n", "qt5\nc300x\nnamed-C300X\n", ""]
+# The station's own model name and its display program disagree.
+MISMATCHED_STATIONS = ["qt5\nc100x\nnamed-C300X\n", "qt4\nc300x\nnamed-C100X\n", "qt5\nc300x\nnamed-C100X\n"]
+
+
+@pytest.mark.parametrize("identity", C100X_STATIONS)
 @pytest.mark.parametrize("damage", [
     "omitted", "deleted", "truncated", "invalid-json", "non-object", "unmarked",
-    "shared", "wrong-binary", "missing-binary", "duplicate-manifest", "duplicate-binary",
+    "not-compatible", "wrong-binary", "missing-binary", "duplicate-manifest", "duplicate-binary",
     "invalid-utf8", "missing-hash", "duplicate-hash",
 ])
-def test_invalid_identity_never_writes_starts_or_stops(package, monkeypatch, identity, damage):
+def test_a_c100x_takes_only_a_bound_compatible_package(package, monkeypatch, identity, damage):
     bundle = installer._resolve_bundle("/agent")
     manifest = package / "device_agent/bundle.json"
     document = json.loads(manifest.read_text())
@@ -84,10 +90,10 @@ def test_invalid_identity_never_writes_starts_or_stops(package, monkeypatch, ide
         manifest.write_bytes(b"\xff")
     elif damage == "non-object":
         manifest.write_text("[]")
-    elif damage in {"unmarked", "shared"}:
-        document.pop("c100x_only")
-        if damage == "shared":
-            document["c100x_only"] = False
+    elif damage in {"unmarked", "not-compatible"}:
+        document.pop("c100x_compatible")
+        if damage == "not-compatible":
+            document["c100x_compatible"] = False
         manifest.write_text(json.dumps(document))
     elif damage in {"wrong-binary", "missing-binary"}:
         binary = package / "device_agent/armhf/c300x-agent-native"
@@ -125,9 +131,53 @@ def test_missing_packaged_manifest_fails_before_ssh(package, monkeypatch, claime
         ))
 
 
-def test_complete_c100x_package_is_admitted_without_policy_file(package, monkeypatch):
-    assert not (package / "c100x-test-policy.json").exists()
+def test_the_joint_package_names_no_single_model(package):
+    manifest = json.loads((package / "device_agent/bundle.json").read_text())
+    assert manifest["c100x_compatible"] is True
+    assert "c100x_only" not in manifest
+    assert not (ROOT / "c100x-test-policy.json").exists()
+
+
+@pytest.mark.parametrize("identity", C100X_STATIONS)
+def test_a_c100x_is_refused_before_any_write_until_the_user_confirmed(package, monkeypatch, identity):
     bundle = installer._resolve_bundle("/agent")
-    client = ReadOnlyClient("qt5\nc100x\n")
-    installer._verify_c100x_bundle_sync(client, bundle, "/agent")
+    client = connect(monkeypatch, identity)
+    with pytest.raises(installer.C300XDeviceInstallError, match="c100x_confirmation_required"):
+        installer._install_device_agent_sync(request(confirmed=False), bundle, b"{}")
+    assert client.writes == [] and client.closed
+    # With the confirmation the complete package is admitted, still without a write.
+    client = ReadOnlyClient(identity)
+    assert installer._admit_station_sync(client, bundle, "/agent", True) == "qt5_ondisk"
+    assert client.writes == []
+
+
+@pytest.mark.parametrize("identity", MISMATCHED_STATIONS)
+@pytest.mark.parametrize("confirmed", [False, True])
+def test_a_station_with_a_contradictory_model_is_left_alone(package, monkeypatch, identity, confirmed):
+    bundle = installer._resolve_bundle("/agent")
+    client = connect(monkeypatch, identity)
+    with pytest.raises(installer.C300XDeviceInstallError, match="device_model_incompatible"):
+        installer._install_device_agent_sync(request(confirmed=confirmed), bundle, b"{}")
+    assert client.writes == [] and client.closed
+
+
+@pytest.mark.parametrize("identity", C300X_STATIONS)
+@pytest.mark.parametrize("confirmed", [False, True])
+@pytest.mark.parametrize("damage", [None, "deleted", "invalid-json", "unmarked"])
+def test_a_c300x_is_admitted_as_before_whatever_the_c100x_marks_say(package, identity, confirmed, damage):
+    """Release 2.10.0 had no admission step: a C300X passes without one."""
+
+    bundle = installer._resolve_bundle("/agent")
+    manifest = package / "device_agent/bundle.json"
+    if damage == "deleted":
+        manifest.unlink()
+    elif damage == "invalid-json":
+        manifest.write_text("not-json")
+    elif damage == "unmarked":
+        document = json.loads(manifest.read_text())
+        document.pop("c100x_compatible")
+        manifest.write_text(json.dumps(document))
+    client = ReadOnlyClient(identity)
+    expected = "qt5_rcc" if identity.startswith("qt5") else "qt4_ondisk"
+    assert installer._admit_station_sync(client, bundle, "/agent", confirmed) == expected
     assert client.writes == []

@@ -61,12 +61,6 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    isolated = (ROOT / "c100x-test-policy.json").exists()
-    default_output = (RELEASE_ROOT / "ha-bticino-c100x-issue51-local.zip"
-                      if isolated else RELEASE_ROOT / "ha-bticino-c300x.zip")
-    output = args.output or default_output
-    if isolated and (not output.name.startswith("ha-bticino-c100x-") or output.suffix != ".zip"):
-        parser.error("C100X test packages require a distinct ha-bticino-c100x-*.zip name")
     version = _integration_version()
     if args.reuse_agent_from_release_zip is not None:
         try:
@@ -93,6 +87,7 @@ def main() -> int:
         sys.stderr.write("Missing ARMHF agent binary. Run without --skip-build first.\n")
         return 1
 
+    output = args.output or RELEASE_ROOT / "ha-bticino-c300x.zip"
     _prepare_package(version)
     _write_zip(output)
     sys.stdout.write(f"{output}\n")

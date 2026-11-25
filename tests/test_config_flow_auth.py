@@ -247,28 +247,3 @@ def test_reauth_for_a_rejected_maintenance_key_requires_that_key(monkeypatch):
     assert result["step_id"] == "reauth_confirm"
     assert result["errors"] == {CONF_MAINTENANCE_TOKEN: "required"}
     validate.assert_not_called()
-
-
-@pytest.mark.parametrize("model", ["C300X", "C100X", None])
-def test_the_c100x_test_package_refuses_a_running_c300x_agent(monkeypatch, model):
-    flow = BticinoC300XConfigFlow()
-    flow.hass = SimpleNamespace()
-    flow.context = {}
-    flow.async_show_form = lambda **kwargs: kwargs
-    flow.async_abort = lambda **kwargs: {"type": "abort", **kwargs}
-    setup = {"device_id": "station"} | ({"model": model} if model else {})
-    monkeypatch.setattr(config_flow_auth, "async_validate_connection", AsyncMock(return_value=(setup, {})))
-    features = AsyncMock(return_value={"step_id": "user_features"})
-    flow.async_step_user_features = features
-    flow._setup_connection = {**CONNECTION, CONF_NAME: "Door"}
-    result = asyncio.run(flow.async_step_agent_auth({CONF_AGENT_TOKEN: "valid"}))
-    if model == "C300X":
-        assert result == {"type": "abort", "reason": "c100x_package_only"}
-        features.assert_not_awaited()
-        assert flow._setup_agent_info == {}
-    else:
-        assert result == {"step_id": "user_features"}
-    for name in ("strings.json", "translations/en.json", "translations/de.json",
-                 "translations/it.json", "translations/fr.json"):
-        texts = json.loads((Path(config_flow.__file__).parent / name).read_text())
-        assert "Classe 100X" in texts["config"]["abort"]["c100x_package_only"]

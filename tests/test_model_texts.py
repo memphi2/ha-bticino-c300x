@@ -55,19 +55,20 @@ def text(lang: str, *path: str, model: str) -> str:
 # Texts a C300X reads that 2.10.0 did not have. The C100X twins ("..._c100x")
 # are not his and need no entry here.
 ADDED_SINCE_2_10_0 = frozenset({
-    "config/abort/c100x_package_only",
     "config/abort/model_mismatch",
     "config/abort/unsupported_display",
+    "config/error/c100x_confirmation_required",
     "config/error/device_model_incompatible",
     "config/error/installer_firewall_hook_unsupported",
+    "config/step/c100x_experimental/data/c100x_experimental",
+    "config/step/c100x_experimental/description",
+    "config/step/c100x_experimental/title",
     "entity/button/activate_display_pages/name",
     "entity/button/restore_display_pages/name",
     "issues/c100x_display_boot_check_failed/description",
     "issues/c100x_display_boot_check_failed/title",
     "issues/c100x_display_rolled_back/description",
     "issues/c100x_display_rolled_back/title",
-    "issues/device_agent_update_regular_package/description",
-    "issues/device_agent_update_regular_package/title",
     "issues/device_agent_update_required/description",
     "issues/device_agent_update_required/fix_flow/abort/device_model_incompatible",
     "options/abort/unsupported_display",

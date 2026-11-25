@@ -57,7 +57,6 @@ FRONTEND_CARD_SETUP_HINT_ISSUE = "frontend_card_setup_hint"
 AGENT_CAPABILITY_MISMATCH_ISSUE = "agent_capability_mismatch"
 DEVICE_AGENT_UPDATE_REQUIRED_ISSUE = "device_agent_update_required"
 # Same issue, other text: a C300X entry met the C100X-only test package.
-DEVICE_AGENT_UPDATE_REGULAR_PACKAGE_ISSUE = "device_agent_update_regular_package"
 DEVICE_AGENT_STARTUP_DISABLED_ISSUE = "device_agent_startup_disabled"
 DEVICE_AGENT_SELF_TEST_FAILED_ISSUE = "device_agent_self_test_failed"
 DEVICE_AGENT_UI_EVENT_WATCHDOG_ISSUE = "device_agent_ui_event_watchdog"
@@ -268,11 +267,6 @@ def _sync_device_agent_update_issue(hass: HomeAssistant, entry: BticinoC300XConf
         DEVICE_AGENT_UPDATE_REQUIRED_ISSUE,
         severity=ir.IssueSeverity.WARNING,
         is_fixable=getattr(update_state, "repair_fixable", False),
-        translation_key=(
-            DEVICE_AGENT_UPDATE_REGULAR_PACKAGE_ISSUE
-            if getattr(update_state, "needs_regular_package", False) is True
-            else None
-        ),
         placeholders=agent_update_repair_placeholders(update_state, entry.runtime_data),
     )
 

@@ -385,6 +385,7 @@ class BticinoC300XConfigFlow(ModelTextConfigFlow, config_flow_auth.AuthFlowSteps
                     self._setup_connection.get(CONF_AGENT_PORT, DEFAULT_AGENT_PORT)
                 ),
                 apply_gui_patch=False,
+                c100x_confirmed=self._c100x_confirmed,
             )
             try:
                 await async_ensure_installer_dependencies(self.hass)
@@ -394,6 +395,8 @@ class BticinoC300XConfigFlow(ModelTextConfigFlow, config_flow_auth.AuthFlowSteps
                     maintenance_token=maintenance_token,
                 )
             except C300XDeviceInstallError as err:
+                if self._c100x_install_refused(err):
+                    return await self._async_ask_c100x_opt_in("install", user_input)
                 errors["base"] = err.reason
             else:
                 if getattr(install_result, "display_pending", False):
@@ -415,8 +418,6 @@ class BticinoC300XConfigFlow(ModelTextConfigFlow, config_flow_auth.AuthFlowSteps
                     errors["base"] = "device_install_verify_failed"
                 else:
                     await self._async_adopt_agent_unique_id(api_token=api_token)
-                    # The installer accepts only a C100X; a failed read keeps that.
-                    self._setup_agent_info.setdefault("model", "C100X")
                     try:
                         # Legacy MQTT is migrated on a C300X only; a C100X or
                         # an unknown model is no permission to stop a service.

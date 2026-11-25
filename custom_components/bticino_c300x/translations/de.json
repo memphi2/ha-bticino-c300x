@@ -31,6 +31,13 @@
           "bootstrap_ssh_password": "{model}-SSH-Passwort"
         }
       },
+      "c100x_experimental": {
+        "title": "Classe 100X: experimentelle Unterstützung",
+        "description": "Diese Station ist eine Classe 100X. Ihre Unterstützung ist experimentell: Sie ist nur mit Firmware 1.5.8 getestet, und nicht jede Funktion der Classe 300X ist verfügbar. Vor deiner Bestätigung wird an der Station nichts geändert; schließe diesen Dialog, um sie zu lassen, wie sie ist.",
+        "data": {
+          "c100x_experimental": "Experimentelle Unterstützung der Classe 100X einrichten"
+        }
+      },
       "agent_auth": {
         "title": "Device-Agent-Zugangsdaten",
         "description": "Gib die Schlüssel des erreichbaren nativen Agent ein. Lasse den Zugangsschlüssel nur leer, solange der Agent noch im noAuth-Bootstrap-Modus läuft.",
@@ -718,7 +725,6 @@
       }
     },
     "abort": {
-      "c100x_package_only": "Dieses Testpaket ist nur für die Classe 100X, diese Station ist eine Classe 300X. Installiere das reguläre Release der Integration, um sie einzurichten. Es wurde nichts geändert.",
       "model_mismatch": "Diese Ankündigung stammt von einem anderen Stationsmodell als der eingerichtete Eintrag mit derselben Identität. Es wurde nichts geändert.",
       "already_configured": "BTicino C300X ist bereits konfiguriert.",
       "reconfigure_successful": "BTicino {model} wurde neu konfiguriert. Aktualisiere die lokale Device-Agent- oder Display-Bridge-Konfiguration, falls Zugangsdaten rotiert wurden.",
@@ -763,7 +769,8 @@
       "cannot_connect": "Der {model} konnte nicht geprüft werden. Prüfe Adresse und Verbindung und versuche es erneut.",
       "ssh_login_refused": "Der {model} hat die SSH-Anmeldung abgelehnt. Gib den SSH-User und das Passwort des Geräts ein.",
       "installer_firewall_hook_unsupported": "Der Firewall-Hook lässt sich nicht sicher prüfen. Vor Änderungen am Gerät wurde abgebrochen. Bitte Dateityp und Berechtigungen prüfen und keinen Platzhalter anlegen.",
-      "device_model_incompatible": "Dieses Paket unterstuetzt dieses Geraetemodell nicht. C100X-Testpakete duerfen keine C300X-Geraete aktualisieren. Installiere vor dem Agent-Update oder der Neuinstallation das passende Paket. Es wurden keine Geraetedateien ersetzt."
+      "device_model_incompatible": "Dieses Paket unterstützt diese Station nicht, oder das Modell der Station konnte nicht bestätigt werden. Es wurden keine Gerätedateien ersetzt.",
+      "c100x_confirmation_required": "Setze den Haken, um die Classe 100X einzurichten, oder schließe diesen Dialog, um die Station unverändert zu lassen."
     }
   },
   "options": {
@@ -1702,14 +1709,10 @@
         },
         "abort": {
           "entry_not_loaded": "Der BTicino-C300X-Eintrag ist nicht geladen.",
-          "device_model_incompatible": "Dieses Paket unterstuetzt dieses Geraetemodell nicht. C100X-Testpakete duerfen keine C300X-Geraete aktualisieren. Installiere vor dem Agent-Update oder der Neuinstallation das passende Paket. Es wurden keine Geraetedateien ersetzt."
+          "device_model_incompatible": "Dieses Paket unterstützt diese Station nicht, oder das Modell der Station konnte nicht bestätigt werden. Es wurden keine Gerätedateien ersetzt."
         }
       },
       "description": "Installed: {installed_version}. Packaged: {available_version}. Update path: {update_path}. Reason: {reason}."
-    },
-    "device_agent_update_regular_package": {
-      "title": "C300X-Device-Agent: reguläres Paket verwenden",
-      "description": "{entry_title} ist eine Classe 300X, installiert ist aber das Testpaket für die Classe 100X, das nur für die C100X gedacht ist. Es aktualisiert oder installiert keinen C300X-Agenten. Installiere stattdessen das reguläre Release der Integration; am Gerät wurde nichts geändert.\n\nInstalliert: {installed_version}. Im Paket: {available_version}."
     },
     "device_agent_startup_disabled": {
       "title": "{model} Device-Agent startet nach Reboot nicht",

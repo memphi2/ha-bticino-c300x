@@ -45,7 +45,6 @@ INPUT_FILES = (
     "scripts/c100x_bundle_builder.py", "scripts/c100x_qml_builder.py",
     "scripts/build_hacs_release.py", "scripts/check_agent_abi.py",
     "scripts/native_build_lock.py",
-    "c100x-test-policy.json",
 )
 
 

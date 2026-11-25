@@ -15,7 +15,7 @@ from custom_components.bticino_c300x.agent_update import compare_agent_bundle
 def transaction(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     # Keep shared Qt4 transaction/failure coverage; C100X package admission is
     # exercised without this double in test_c100x_ssh_admission.py.
-    monkeypatch.setattr(installer, "_verify_c100x_bundle_sync", lambda *_: "qt4_ondisk")
+    monkeypatch.setattr(installer, "_admit_station_sync", lambda *_: "qt4_ondisk")
     component = tmp_path / "component"
     manifest = {
         "agent_version": "same-version", "api_version": "1",
@@ -172,7 +172,7 @@ def test_failed_install_preserves_manifest_and_retry_is_idempotent(
 
 
 def test_missing_hook_leaves_firewall_alone_and_completes_install(transaction, monkeypatch) -> None:
-    monkeypatch.setattr(installer, "_verify_c100x_bundle_sync", lambda *_: "qt5_ondisk")
+    monkeypatch.setattr(installer, "_admit_station_sync", lambda *_: "qt5_ondisk")
     transaction.client.failure = "missing-hook"
     transaction.install(apply_gui_patch=False)
     assert "firewall-preflight" in transaction.client.operations

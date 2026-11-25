@@ -15,8 +15,8 @@ stations:
   ([what differs](quickstart.md#firmware-306)).
 - **Classe 100X (C100X)** on firmware `1.5.8`, **in test** in
   [issue #51](https://github.com/memphi2/ha-bticino-c300x/issues/51). It
-  installs from the C100X test package, which runs on a C100X only; a C300X
-  keeps the regular release. Model notes: [Classe 100X](c100x-experimental.md).
+  installs from the same package, after an explicit confirmation at setup.
+  Model notes: [Classe 100X](c100x-experimental.md).
 
 The agent detects the model on the station and reports it with the features it
 offers. A feature the model does not offer creates no entity, option or

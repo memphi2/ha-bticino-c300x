@@ -3,11 +3,10 @@
 ## Supported Models
 
 - **Classe 300X (C300X):** the release lines below.
-- **Classe 100X (C100X), firmware 1.5.8:** in test in
-  [issue #51](https://github.com/memphi2/ha-bticino-c300x/issues/51), from the
-  C100X test package handed out there; it has no Marketplace, HACS or GitHub
-  release channel yet. The package installs on a C100X only, and a C300X
-  package must not be installed over a C100X agent. Features per model:
+- **Classe 100X (C100X), firmware 1.5.8:** experimental, in test in
+  [issue #51](https://github.com/memphi2/ha-bticino-c300x/issues/51). The same
+  package serves both models; setup of a C100X asks for an explicit
+  confirmation first. Features per model:
   [Models and Features](docs/feature-reference.md#models-and-features);
   C100X notes: [Classe 100X](docs/c100x-experimental.md).
 

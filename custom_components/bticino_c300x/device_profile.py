@@ -22,6 +22,9 @@ QT5_RCC = "qt5_rcc"
 QT5_ONDISK = "qt5_ondisk"
 CAMERA_HIGH_RES = "high_res"
 CAMERA_FIXED = "fixed"
+# A Classe 100X is experimental and set up only after the user asked for it:
+# the installer's refusal without that, and the error of the setup step.
+C100X_CONFIRMATION_REQUIRED = "c100x_confirmation_required"
 
 # The Qt 5 library is the mark, not a missing QML folder: on an older device a
 # missing folder is a fault the Display patch has to report. The display

@@ -27,9 +27,9 @@ C100X; everything else is in the main documentation:
 - **Stock firmware.** Use firmware 1.5.8 with only the changes needed for root
   or SSH access. Running alongside BTicino Companion, another controller, or
   custom SIP, media or display changes is not supported.
-- **The C100X package.** Use the C100X test package from issue #51 and keep a
-  copy for recovery. A C300X package is no substitute, even with the same or a
-  newer version number.
+- **The package.** One package serves the C300X and the C100X. Keep a copy of
+  the one you installed for recovery. A release from before the joint package
+  is no substitute: a C100X refuses it.
 
 ## What Is Different on the C100X
 
@@ -52,13 +52,14 @@ More pictures of the display pages:
 
 ## Package Protection
 
-The C100X test package declares itself C100X-only in its device bundle. The
+The package declares itself C100X-compatible in its device bundle. The
 declaration is part of the bundle hash; it marks package compatibility, not
 proven hardware features.
 
-- Home Assistant from this package refuses to install or update a C300X,
-  including firmware 3.0.6, before any upload or write, and tells a C300X entry
-  to use the regular release.
+- Setup recognises a C100X and installs nothing on it until you confirm the
+  experimental support in the setup dialog. A C300X is never asked.
+- Home Assistant refuses to install or update a C100X from a package without
+  the declaration, before any upload or write.
 - The C100X agent's own updater refuses a package that is not marked
   C100X-compatible, even when an older Home Assistant sends it. A refused upload
   can leave staging files, never replaced runtime files.

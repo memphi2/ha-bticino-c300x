@@ -244,7 +244,7 @@ def test_stager_declares_recovery_contract(bundle):
     body = json.loads((bundle / "device_agent/bundle.json").read_text())
     assert type(body.get("qt5_recovery_version")) is int
     assert body["qt5_recovery_version"] == 1
-    assert body["update_file_set_version"] == 6
+    assert body["update_file_set_version"] == 7
 
 
 def test_capability_is_part_of_bundle_identity(monkeypatch):

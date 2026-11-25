@@ -250,8 +250,14 @@ def test_an_unreadable_display_answer_counts_as_the_qt4_display():
 @pytest.mark.parametrize("qt5", [False, True])
 def test_a_c100x_gets_no_display_patch_and_the_low_stream_for_now(qt5):
     c100x = _Device(qt5=qt5, c100x=True)
-    assert installer._apply_display_step_sync(c100x, "/data/agent", "apply", qt5=False) is False
-    assert not any("qml_patch.sh" in command for command in c100x.commands)
+    kind = installer._device_display_kind(c100x)
+    assert installer._display_actions(kind, True) == installer._display_actions(kind, False) == ()
+    # Every C300X keeps the steps of 2.10.0.
+    for c300x in ("qt4_ondisk", "qt5_rcc"):
+        assert installer._display_actions(c300x, False) == ("core-apply",)
+        assert installer._display_actions(c300x, True) == ("core-apply", "apply")
+    source = Path(installer.__file__).read_text(encoding="utf-8")
+    assert "for action in _display_actions(kind, request.apply_gui_patch):" in source
     unset = json.dumps({"video": {"av": {}}}).encode()
     low = json.loads(installer._apply_qt5_low_res_video_default(installer._device_display_kind(c100x), unset))
     assert low["video"]["av"]["highResolution"] is False

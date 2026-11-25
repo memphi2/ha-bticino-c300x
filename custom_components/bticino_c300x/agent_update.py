@@ -50,7 +50,6 @@ class AgentUpdateState:
     payload_bootstrap_required: bool = False
     reason: str | None = None
     # A C300X entry met this C100X-only package: its advice is the regular one.
-    needs_regular_package: bool = False
 
     @property
     def update_required(self) -> bool:
@@ -116,11 +115,8 @@ async def async_load_packaged_bundle_metadata(
 
 
 def bundle_supports_device(setup_data: Mapping[str, Any], bundle: Mapping[str, Any]) -> bool:
-    """Check both compatibility and test-package isolation, never version order."""
+    """One package serves every station; a C100X agent takes only one that says so."""
 
-    only = bundle.get("c100x_only", False)
-    if not isinstance(only, bool) or (only and not setup_profile(setup_data).is_c100x):
-        return False
     return not setup_profile(setup_data).is_c100x or bundle.get("c100x_compatible") is True
 
 
@@ -166,9 +162,6 @@ def compare_agent_bundle(
     if not bundle_supports_device(setup_data, bundle):
         return AgentUpdateState(
             state=UPDATE_STATE_INCOMPATIBLE, reason="device_model_incompatible",
-            needs_regular_package=(
-                bundle.get("c100x_only") is True and setup_data.get("model") == "C300X"
-            ),
             **common,
         )
     if not installed_version or not available_version:
@@ -393,8 +386,6 @@ def _short_hash(value: str | None) -> str:
 
 def _update_path_label(update_state: AgentUpdateState) -> str:
     if update_state.reason == "device_model_incompatible":
-        if update_state.needs_regular_package:
-            return "blocked: install the regular release package"
         return "blocked: install a C100X-compatible integration package"
     if not update_state.update_required:
         return "none"

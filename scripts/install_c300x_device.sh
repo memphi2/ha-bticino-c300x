@@ -55,11 +55,6 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if [[ -e "$ROOT_DIR/c100x-test-policy.json" ]]; then
-    printf 'C100X test branch: this legacy installer has no model guard. Use the reviewed HA test installer; see docs/c100x-test-release.md.\n' >&2
-    exit 1
-fi
-
 for name in C300X_HOST C300X_USER C300X_PASSWORD; do
     if [[ -z "${!name:-}" ]]; then
         printf 'Missing required environment variable: %s\n' "$name" >&2
@@ -159,6 +154,13 @@ else
     QML_STAGE_DIR="$(mktemp -d)"
     trap 'rm -rf "$QML_STAGE_DIR"' EXIT
     "$ROOT_DIR/scripts/device_file_strip.py" --out "$QML_STAGE_DIR" >/dev/null
+fi
+
+# This installer knows the Classe 300X only. A Classe 100X is set up through
+# Home Assistant, which asks for it explicitly and installs its own display.
+if [[ "$(ssh_cmd "if [ -e /home/bticino/bin/gui/BtClass100 ] || grep -q '<webserver_type>[[:space:]]*C100X' /home/bticino/sp/dbfiles_ws.xml 2>/dev/null; then echo c100x; fi" || true)" == *c100x* ]]; then
+    printf 'This station is a Classe 100X. Set it up through the Home Assistant integration; this installer is for the Classe 300X only.\n' >&2
+    exit 1
 fi
 
 ssh_cmd "mkdir -p '$REMOTE_DIR/qml/js'"

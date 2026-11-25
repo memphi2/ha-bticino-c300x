@@ -32,6 +32,7 @@ from .const import (
 )
 from .device_activations import desired_activation_items
 from .device_profile import (
+    C100X_CONFIRMATION_REQUIRED,
     QT4_ONDISK,
     QT5_ONDISK,
     QT5_RCC,
@@ -131,6 +132,9 @@ class C300XDeviceInstallRequest:
     device_activations: tuple[dict[str, Any], ...] = ()
     factory_login: bool = False
     device_model: str = ""
+    # The user confirmed the experimental Classe 100X support, or the entry
+    # exists already. Without it a Classe 100X is refused before any write.
+    c100x_confirmed: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -277,7 +281,7 @@ def _install_device_agent_sync(
     try:
         config_path = f"{request.remote_dir}/{REMOTE_CONFIG_NAME}"
         existing = _read_remote_config_sync(client, config_path)
-        kind = _verify_c100x_bundle_sync(client, bundle, request.remote_dir)
+        kind = _admit_station_sync(client, bundle, request.remote_dir, request.c100x_confirmed)
         if request.apply_gui_patch and kind == QT5_ONDISK:
             raise C300XDeviceInstallError("device_install_verify_failed")
         manage_firewall = request.apply_firewall_patch and _firewall_hook_present_sync(client)
@@ -318,9 +322,8 @@ def _install_device_agent_sync(
         client.run(f"{_quote(REMOTE_INIT_SCRIPT)} restart")
         _verify_startup_sync(client)
 
-        actions = ("core-apply", "apply") if request.apply_gui_patch else ("core-apply",)
-        display_is_qt5 = _device_display_is_qt5(client)
-        for action in actions:
+        display_is_qt5 = kind == QT5_RCC
+        for action in _display_actions(kind, request.apply_gui_patch):
             step = _apply_display_step_sync(client, request.remote_dir, action, qt5=display_is_qt5)
             if step is None and display is not None:
                 display.pending = True
@@ -341,24 +344,32 @@ def _install_device_agent_sync(
     return tuple(changed_files)
 
 
-def _verify_c100x_bundle_sync(
-    client: _DeviceSshClient, bundle: _ResolvedBundle, remote_dir: str,
+def _admit_station_sync(
+    client: _DeviceSshClient, bundle: _ResolvedBundle, remote_dir: str, c100x_confirmed: bool,
 ) -> str:
-    """Require C100X identity and a bound package before any installer writes."""
+    """Decide before any installer write whether this station is served.
 
-    # This development branch is C100X-only even if package metadata is removed
-    # or relabelled. A mutable policy file must not relax its target restriction.
-    kind = _device_display_kind(client)
-    if kind != QT5_ONDISK:
+    Every Classe 300X is, as before. A Classe 100X needs the user's explicit
+    confirmation and a package bound to its agent binary that names itself
+    compatible. A station whose own model name and display program disagree
+    is left alone.
+    """
+
+    profile = _device_profile(client)
+    if not profile.model_confirmed:
         raise C300XDeviceInstallError("device_model_incompatible")
+    kind = profile.display
+    if kind != QT5_ONDISK:
+        return kind
+    if not c100x_confirmed:
+        raise C300XDeviceInstallError(C100X_CONFIRMATION_REQUIRED)
     manifests = [p for p in bundle.payload_files if p.remote_path == f"{remote_dir}/bundle.json"]
     binaries = [p for p in bundle.payload_files if p.remote_path == f"{remote_dir}/{REMOTE_AGENT_NAME}"]
     try:
         if len(manifests) != 1 or len(binaries) != 1:
             raise ValueError("ambiguous package identity")
         manifest = json.loads(manifests[0].source.read_text(encoding="utf-8"))
-        if (not isinstance(manifest, dict) or manifest.get("c100x_only") is not True
-                or manifest.get("c100x_compatible") is not True):
+        if not isinstance(manifest, dict) or manifest.get("c100x_compatible") is not True:
             raise ValueError("missing C100X package identity")
         files = manifest.get("files")
         if not isinstance(files, list):
@@ -1084,10 +1095,6 @@ def _device_profile(client: _DeviceSshClient) -> DeviceProfile:
     return station_profile(client.run, _quote)
 
 
-def _device_display_is_qt5(client: _DeviceSshClient) -> bool:
-    """Return whether the device has the Qt 5 display of C300X firmware 3.0.x."""
-
-    return _device_display_kind(client) == QT5_RCC
 
 
 def _device_display_kind(client: _DeviceSshClient) -> str:
@@ -1136,6 +1143,17 @@ def _apply_qt5_low_res_video_default(
     return (json.dumps(config, indent=2, sort_keys=True) + "\n").encode("utf-8")
 
 
+def _display_actions(kind: str, apply_gui_patch: bool) -> tuple[str, ...]:
+    """The Display patch steps of an install, from the station's display kind.
+
+    A C100X has no Display patch; its pages come with its own activation.
+    """
+
+    if kind == QT5_ONDISK:
+        return ()
+    return ("core-apply", "apply") if apply_gui_patch else ("core-apply",)
+
+
 def _apply_display_step_sync(
     client: _DeviceSshClient, remote_dir: str, action: str, *, qt5: bool
 ) -> bool | None:
@@ -1147,10 +1165,6 @@ def _apply_display_step_sync(
     still fails the install, as every failure does on firmware 1.7.x/2.0.x.
     """
 
-    if _device_display_kind(client) == QT5_ONDISK:
-        # A C100X has no Display patch; its pages come with its own activation.
-        _LOGGER.warning("C300X: the C100X display is not patched; skipping %s", action)
-        return False
     try:
         return _apply_qml_patch_sync(client, remote_dir, action)
     except C300XDeviceInstallError as err:

@@ -181,12 +181,8 @@ class TemporaryDisplayApi(FakePatchApi):
 )])
 def test_active_display_bootstrap_completes_before_gui_reload(tmp_path, monkeypatch, bootstrap_inputs, failure):
     monkeypatch.syspath_prepend(str(ROOT / "scripts"))
-    import stage_device_agent_bundle as stager
     from stage_device_agent_bundle import LEGACY_BOOTSTRAP_CONTENT, stage_bundle
 
-    # Exercise the shared Qt4 transaction, not C100X package admission.
-    # The real model guard is covered by test_c100x_update_compatibility.
-    monkeypatch.setattr(stager, "C100X_ONLY", False)
     package = tmp_path / "package"
     stage_bundle(package, version="2.7.0", skip_build=True, agent_binary=ROOT / "project-versions.json")
     manifest_path = package / "device_agent/bundle.json"

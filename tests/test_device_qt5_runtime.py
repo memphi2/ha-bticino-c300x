@@ -459,6 +459,10 @@ def test_the_integration_tab_shows_the_status_switches_and_asks_in_the_station_p
         if (n === 5) { popup(page).deleteClicked() }
         if (n === 6) {
             console.log("CHECK confirmed " + (popup(page) === null) + " " + panel.status + " " + panel.canReboot)
+            var note = harness.find(panel, "note"), box = note.parent
+            console.log("CHECK note " + box.visible + " " + (panel.height - box.y - box.height) + " "
+                + harness.onScreen(box) + " " + (note.paintedWidth <= note.width) + " " + (note.text !== ""))
+            shot("integration-note")
         }
         return n < 7
 """
@@ -492,6 +496,7 @@ def test_the_integration_tab_shows_the_status_switches_and_asks_in_the_station_p
         "navigation false Seitenwechsel: Pfeile ",
         "popup true Station jetzt neu starten?",
         "confirmed true maintenance_accepted false",
+        "note true 8 true true true",
     ]
     _, vendor = _split(_page(skin, "IntegrationHostVendor.qml", "run-integration-vendor", "        return n < 2"))
     assert _new_warnings(patched, vendor, "IntegrationHostVendor.qml", "IntegrationHost.qml") == []

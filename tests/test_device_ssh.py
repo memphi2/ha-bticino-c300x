@@ -182,6 +182,56 @@ def test_a_display_write_past_its_deadline_is_ended_by_sigterm_and_reported(
         client.close()
 
 
+@pytest.mark.parametrize("refusal", [None, OSError("Channel not open")])
+def test_a_display_write_whose_channel_closed_at_the_deadline_is_a_timeout(
+    ssh_server, monkeypatch, tmp_path: Path, refusal: OSError | None,
+) -> None:
+    """The channel can close in the loop pass in which the deadline fires.
+    The signal then has nowhere to go: the pinned AsyncSSH drops it silently,
+    its documentation announces OSError. Either way the write ran past its
+    deadline and its outcome on the station is unknown, which is the display
+    time-out and not a general install failure; nothing waits for the grace."""
+
+    script = tmp_path / "qml_patch.sh"
+    script.write_text(DISPLAY_STAND_IN.format(trap=""))
+    script.chmod(0o700)
+    grace = 30.0
+    monkeypatch.setattr(installer, "_device_display_is_qt5", lambda client: False)
+    monkeypatch.setattr(installer, "_SSH_DISPLAY_WRITE_TIMEOUT", 0.5)
+    monkeypatch.setattr(installer, "_SSH_DISPLAY_WRITE_TERM_GRACE", grace)
+    client = installer._connect_device_client(ssh_server)
+    create_process = client._client.create_process
+    signalled: list[bool] = []
+
+    async def closing_process(*args, **kwargs):
+        process = await create_process(*args, **kwargs)
+        terminate = process.terminate
+
+        def closed_then_terminate() -> None:
+            # The real channel is closed before the signal is attempted.
+            process.close()
+            signalled.append(True)
+            if refusal is not None:
+                raise refusal
+            terminate()
+
+        process.terminate = closed_then_terminate
+        return process
+
+    client._client.create_process = closing_process
+    started = time.monotonic()
+    try:
+        with pytest.raises(installer.C300XDeviceInstallError) as result:
+            installer._apply_qml_patch_sync(client, str(tmp_path), "core-apply")
+        assert signalled == [True]
+        assert result.value.reason == "device_display_timeout"
+        assert time.monotonic() - started < grace
+        client._client.create_process = create_process
+        assert client.run("true") == ""
+    finally:
+        client.close()
+
+
 def test_upload_hash_skip_mode_repair_and_replace(ssh_server, tmp_path: Path):
     source = tmp_path / "source"
     destination = tmp_path / "target with spaces"

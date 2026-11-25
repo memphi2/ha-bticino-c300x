@@ -676,7 +676,10 @@ class _AsyncSshDeviceSshClient(_DeviceSshClient):
                     result = await process.wait(check=True)
             except TimeoutError:
                 # The channel stays open: the trap's messages must not kill it.
-                process.terminate()
+                # A channel that closed right at the deadline takes no signal
+                # (AsyncSSH documents OSError); it is a time-out all the same.
+                with suppress(OSError):
+                    process.terminate()
                 with suppress(TimeoutError):
                     async with asyncio.timeout(_SSH_DISPLAY_WRITE_TERM_GRACE):
                         await process.wait()

@@ -234,8 +234,17 @@ class SnapshotCapture:
                 )
                 image = await self.manager.disk_job(framebuffer_jpeg, content, content_type, stamp)
                 if self._current(generation):
+                    try:
+                        item = await self.manager.save(image, identity, is_current=lambda: self._current(generation))
+                    except OSError:
+                        # The image was taken; only HA could not store it.
+                        _LOGGER.debug("Could not store C300X visitor image", exc_info=True)
+                        self._failed("save_failed")
+                        return
+                    except ValueError:
+                        # The capture became stale while storing: nothing failed.
+                        return
                     self._failed(None)
-                    item = await self.manager.save(image, identity, is_current=lambda: self._current(generation))
                     if self._current(generation) and self.manager.journal is not None:
                         # Read now: a ring during the settling delay adopts this image.
                         await self.manager.journal.attach_snapshot(self.visitor_id, item.name, image)

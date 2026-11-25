@@ -365,3 +365,45 @@ def test_a_failing_visitor_image_is_reported_once_per_cause(tmp_path, monkeypatc
         manager.close()
 
     asyncio.run(run())
+
+
+def test_a_visitor_image_that_cannot_be_stored_is_not_blamed_on_the_agent(tmp_path, monkeypatch, caplog):
+    async def run():
+        manager = setup(tmp_path, monkeypatch)
+        api = manager.entry.runtime_data.api.async_doorbell_snapshot
+        api.return_value = (bmp(), "image/bmp")
+        changes = []
+        original_notify = manager.notify
+        manager.notify = lambda: (changes.append(manager.capture.last_failure), original_notify())
+
+        async def full_disk(*args, **kwargs):
+            raise OSError(28, "No space left on device")
+
+        monkeypatch.setattr(manager, "save", full_disk)
+        event(manager, "doorbell_pressed", "one")
+        await drain(manager)
+        assert manager.capture.last_failure == "save_failed"
+        assert changes == ["save_failed"]
+        warnings = [record for record in caplog.records if record.levelname == "WARNING"]
+        assert len(warnings) == 1 and "save_failed" in warnings[0].getMessage()
+        manager.close()
+
+    asyncio.run(run())
+
+
+def test_a_visitor_image_that_became_stale_while_storing_is_no_failure(tmp_path, monkeypatch):
+    async def run():
+        manager = setup(tmp_path, monkeypatch)
+        api = manager.entry.runtime_data.api.async_doorbell_snapshot
+        api.return_value = (bmp(), "image/bmp")
+
+        async def stale(*args, **kwargs):
+            raise ValueError("Snapshot capture became stale during storage")
+
+        monkeypatch.setattr(manager, "save", stale)
+        event(manager, "doorbell_pressed", "one")
+        await drain(manager)
+        assert manager.capture.last_failure is None
+        manager.close()
+
+    asyncio.run(run())

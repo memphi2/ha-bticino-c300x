@@ -1600,7 +1600,10 @@ with `status_known`, `busy`, `phase` (`unknown`, `stock`, `installed`,
 `prepared`, `trial`, `stale`), `trial_switched`, `confirmed`, `generation`,
 `available`, `last_result`, `last_error`, `reboot_pending`, `reboot_blocked`,
 `activate`, `restore`, `alert_sound` (always false) and `boot_check`. The same
-object is the `c100x_display` capability.
+object is the `c100x_display` capability. `available` is the adapter next to
+the agent, `generation` the installed one; `activate` is true for a stock
+display and for confirmed pages of another adapter. After an agent update the
+adapter is read again, and `busy` is true until that has ended.
 
 `POST /api/v1/maintenance/c100x-display/actions/activate`
 

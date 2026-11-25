@@ -53,6 +53,13 @@ void c100x_activation_init(struct c100x_activation *activation, const char *bund
     activation->boot_check = c100x_boot_check();
 }
 
+void c100x_activation_payload_changed(struct c100x_activation *activation)
+{
+    if (activation->enabled) {
+        activation->refresh = 1;
+    }
+}
+
 int c100x_activation_busy(const struct c100x_activation *activation)
 {
     return activation->job.pid > 0 || activation->queued != C100X_ACTION_NONE;
@@ -381,7 +388,7 @@ int c100x_activation_json(const struct c100x_activation *activation, char *out, 
         "\"last_error\":\"%s\",\"reboot_pending\":%s,\"reboot_blocked\":\"%s\","
         "\"activate\":%s,\"restore\":%s,\"alert_sound\":false,\"boot_check\":\"%s\"}",
         activation->known ? "true" : "false",
-        c100x_activation_busy(activation) ? "true" : "false",
+        c100x_activation_busy(activation) || activation->refresh ? "true" : "false",
         phase_names[activation->known ? activation->phase : C100X_PHASE_UNKNOWN],
         activation->known && activation->switched ? "true" : "false",
         c100x_activation_confirmed(activation) ? "true" : "false",

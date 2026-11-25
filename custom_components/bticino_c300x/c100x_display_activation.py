@@ -27,6 +27,8 @@ POLL_SECONDS = 30.0
 MAX_POLLS = 120
 ROLLED_BACK_ISSUE = "c100x_display_rolled_back"
 BOOT_CHECK_ISSUE = "c100x_display_boot_check_failed"
+UPDATE_POLLS = 10
+UPDATE_POLL_SECONDS = 3.0
 _PENDING_PHASES = frozenset({"prepared", "trial", "stale"})
 _COMPARED = ("status_known", "phase", "confirmed")
 
@@ -134,6 +136,42 @@ async def _async_follow(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> 
         if any(status.get(key) != start.get(key) for key in _COMPARED):
             hass.config_entries.async_schedule_reload(entry.entry_id)
         return
+
+
+async def async_renew_c100x_display_after_update(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> None:
+    """After an update: confirmed pages go to the adapter the update brought.
+
+    The agent reads its adapter again after the update. Pages that are active
+    and confirmed are activated again when the agent offers that, as with the
+    button: the agent reboots the station once it is idle. An original display
+    stays as it is, and a station that does not answer is left alone.
+    """
+
+    runtime = entry.runtime_data
+    if c100x_display_status(getattr(runtime, "capabilities", None)) is None:
+        return
+    for attempt in range(UPDATE_POLLS):
+        if attempt:
+            await asyncio.sleep(UPDATE_POLL_SECONDS)
+        try:
+            status = (await runtime.api.async_c100x_display_status()).get("c100x_display")
+        except C300XAgentApiError as err:
+            _LOGGER.debug("C300X C100X display status not readable after the update: %s", err)
+            continue
+        if not isinstance(status, Mapping):
+            return
+        if status.get("status_known") is True and status.get("busy") is not True:
+            break
+    else:
+        return
+    if status.get("confirmed") is not True or status.get("activate") is not True:
+        return
+    try:
+        await runtime.api.async_c100x_display_activate()
+    except C300XAgentApiError as err:
+        _LOGGER.warning("C100X display pages were not renewed after the update: %s", err)
+        return
+    async_follow_c100x_display(hass, entry)
 
 
 @callback

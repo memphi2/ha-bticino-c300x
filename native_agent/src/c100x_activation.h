@@ -84,6 +84,8 @@ struct c100x_activation {
 };
 
 void c100x_activation_init(struct c100x_activation *activation, const char *bundle);
+/* An update put another adapter there: what it offers is read again. */
+void c100x_activation_payload_changed(struct c100x_activation *activation);
 /* Why the station may not be rebooted now, or NULL (c100x_reboot_gate.c). */
 const char *c100x_reboot_gate(const struct c100x_activation *activation,
     const struct c100x_activation_inputs *inputs);

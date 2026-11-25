@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from types import MappingProxyType, SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
@@ -229,3 +230,63 @@ def test_display_setting_off_restores_a_confirmed_c100x_display(monkeypatch, wan
     assert result is restored
     assert api.async_c100x_display_restore.await_count == int(restored)
     assert followed == ([entry] if restored else [])
+
+
+def renew(monkeypatch, start: Any, replies: list[Any], *, refused: bool = False) -> tuple[Any, list[Any], list[float]]:
+    entry = tracked_entry(start, replies)
+    if start is None:
+        entry.runtime_data.capabilities = {}
+    activate = AsyncMock(side_effect=C300XAgentApiError("busy") if refused else None)
+    entry.runtime_data.api.async_c100x_display_activate = activate
+    followed: list[Any] = []
+    waits: list[float] = []
+
+    async def wait(seconds: float) -> None:
+        waits.append(seconds)
+
+    monkeypatch.setattr(tracker.asyncio, "sleep", wait)
+    monkeypatch.setattr(tracker, "async_follow_c100x_display", lambda hass, entry: followed.append(entry))
+    asyncio.run(tracker.async_renew_c100x_display_after_update(_Hass(), entry))  # type: ignore[arg-type]
+    return activate, followed, waits
+
+
+def test_update_renews_confirmed_pages_once_the_agent_has_read_the_new_adapter(monkeypatch) -> None:
+    current = status(phase="installed", confirmed=True, activate=False, restore=True)
+    activate, followed, waits = renew(monkeypatch, current, [
+        C300XAgentApiError("restarting"), status(status_known=False, activate=False),
+        {**current, "busy": True}, {**current, "activate": True, "available": "b" * 64},
+    ])
+    activate.assert_awaited_once()
+    assert len(followed) == 1 and waits == [tracker.UPDATE_POLL_SECONDS] * 3
+
+
+@pytest.mark.parametrize("reply", [
+    status(phase="installed", confirmed=True, activate=False, restore=True),
+    status(phase="stock", confirmed=False, activate=True),
+    status(phase="prepared", confirmed=False, activate=False),
+])
+def test_update_leaves_current_pages_an_original_display_and_an_open_trial_alone(monkeypatch, reply) -> None:
+    activate, followed, _ = renew(monkeypatch, status(), [reply])
+    activate.assert_not_awaited()
+    assert followed == []
+
+
+def test_update_asks_no_c300x_and_gives_up_on_a_silent_or_refusing_station(monkeypatch) -> None:
+    replies: list[Any] = [status()]
+    activate, followed, _ = renew(monkeypatch, None, replies)
+    assert replies and not activate.await_count and followed == []
+    silent: list[Any] = [C300XAgentApiError("down")] * tracker.UPDATE_POLLS
+    activate, followed, waits = renew(monkeypatch, status(), silent)
+    assert not silent and not activate.await_count and len(waits) == tracker.UPDATE_POLLS - 1
+    offered = status(phase="installed", confirmed=True, activate=True, restore=True)
+    activate, followed, _ = renew(monkeypatch, offered, [offered], refused=True)
+    activate.assert_awaited_once()
+    assert followed == []
+
+
+def test_both_update_paths_renew_the_c100x_pages_after_the_display_follow_up() -> None:
+    source = (Path(__file__).resolve().parents[1] / "custom_components/bticino_c300x/repairs.py").read_text(
+        encoding="utf-8")
+    settled = "_settle_display_followup(self.hass, entry, display, full=display_full)\n"
+    renewed = "            await async_renew_c100x_display_after_update(self.hass, entry)\n"
+    assert source.count(settled) == source.count(settled + renewed) == 2

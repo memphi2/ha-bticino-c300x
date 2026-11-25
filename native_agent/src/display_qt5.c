@@ -456,9 +456,10 @@ static int write_whole_file(const char *path, const unsigned char *data, size_t 
     }
     ok = fwrite(data, 1, len, file) == len;
     ok = fflush(file) == 0 && ok;
+    ok = fchmod(fileno(file), 0644) == 0 && ok;
     ok = fsync(fileno(file)) == 0 && ok;
     ok = fclose(file) == 0 && ok;
-    if (!ok || chmod(temp, 0644) != 0 || rename(temp, path) != 0) {
+    if (!ok || rename(temp, path) != 0) {
         unlink(temp);
         return 0;
     }

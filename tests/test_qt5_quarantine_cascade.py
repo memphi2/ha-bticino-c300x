@@ -97,7 +97,8 @@ def test_the_agent_update_follow_up_completes(quarantined: tuple[Device, SimpleN
     device, entry = quarantined
     status = asyncio.run(async_restore_qml_patches_after_update(entry, apply_full_patch=full))
     assert display_activation_confirmed(status)
-    assert entry.runtime_data.api.calls[:2] == ["core-apply", "apply" if full else "reload"]
+    expected = ["apply", "reload"] if full else ["core-apply", "reload"]
+    assert entry.runtime_data.api.calls[:2] == expected
 
 
 def test_a_display_that_fails_again_stays_reported_as_failed(

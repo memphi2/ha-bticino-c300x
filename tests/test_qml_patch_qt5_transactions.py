@@ -357,3 +357,20 @@ def test_a_rollback_leaves_an_unchanged_start_script_in_place(device, monkeypatc
     # The label is packed into the resource file: the write changes it, not the start script.
     assert device.ok("media-user-label-apply")["state"] == "reload_failed"
     assert {path: path.stat().st_ino for path in before} == before
+
+
+def test_a_display_started_while_the_files_change_starts_as_shipped(device):
+    """The quarantine mark is set before the first activation file changes: a start
+    script run in that window (a working-mode switch of bt_daemon) skips the overlay."""
+
+    device.ok("apply")
+    # Force a new start script so the publish renames one into place.
+    device.wrapper.write_text(device.wrapper.read_text() + "# previous version\n")
+    seen = device.root / "mark-during-publish"
+    env = command_failure(
+        device, "mv", f'[ "$2" = "{device.wrapper}.c300x.tmp" ]',
+        effect=f'cat "{device.rcc}.failed" > "{seen}" 2>/dev/null || : > "{seen}"',
+    )
+    device.ok("apply", **env)
+    assert seen.read_text() == "boot-1\n"
+    assert not Path(f"{device.rcc}.failed").exists()

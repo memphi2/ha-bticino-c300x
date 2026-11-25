@@ -820,3 +820,27 @@ def test_an_overlay_that_fails_before_the_first_look_is_still_retried(overlay: O
     assert len(_settled(overlay)) == 1
     assert not overlay.mark.exists()
     assert _starts(overlay) == ["overlay", "overlay", "plain", "overlay"]
+
+
+def test_a_request_still_being_filed_waits_and_one_left_by_a_dead_requester_is_removed(
+    station: Station,
+) -> None:
+    """A request is written as <pid>.<n>.tmp and then renamed: the worker never takes
+    the half-written file, and drops it once the process that wrote it is gone."""
+
+    station.boot(C300X_TEST_TEARDOWN="1")
+    requests = station.run_dir / "requests"
+    requests.mkdir(parents=True)
+    ended = subprocess.Popen(["true"])
+    ended.wait()
+    filing = requests / f"{os.getpid()}.1.tmp"
+    filing.write_text("retry\n")
+    dead = requests / f"{ended.pid}.1.tmp"
+    dead.write_text("retry\n")
+    result = station.reload()
+    assert result.returncode == 0, result.stderr
+    assert len(_settled(station)) == 1
+    assert _kinds(station).count("wrapper") == 2
+    assert filing.read_text() == "retry\n"
+    assert not dead.exists()
+    assert not any(path.name.endswith(".tmp") for path in (station.run_dir / "done").iterdir())

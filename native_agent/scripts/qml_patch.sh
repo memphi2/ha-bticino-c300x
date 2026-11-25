@@ -627,7 +627,12 @@ gui_worker() {
         gui_mode=
         for gui_request in "$GUI_RUN_DIR"/requests/*; do
             case "$gui_request" in
-                *.tmp) continue ;;
+                *.tmp)
+                    # Still being filed, or left by a requester that ended while filing it.
+                    gui_owner="${gui_request##*/}"
+                    kill -0 "${gui_owner%%.*}" 2>/dev/null || rm -f "$gui_request"
+                    continue
+                    ;;
             esac
             [ -f "$gui_request" ] || continue
             if [ "$(cat "$gui_request")" = "retry" ]; then
@@ -751,8 +756,11 @@ gui_restart() {
         GUI_REQUESTS=$((GUI_REQUESTS + 1))
         gui_id="$$.$GUI_REQUESTS"
         rm -f "$GUI_RUN_DIR/done/$gui_id"
-        printf '%s\n' "$1" > "$GUI_RUN_DIR/requests/$gui_id.tmp" || return 1
-        mv -f "$GUI_RUN_DIR/requests/$gui_id.tmp" "$GUI_RUN_DIR/requests/$gui_id" || return 1
+        if ! printf '%s\n' "$1" > "$GUI_RUN_DIR/requests/$gui_id.tmp" \
+            || ! mv -f "$GUI_RUN_DIR/requests/$gui_id.tmp" "$GUI_RUN_DIR/requests/$gui_id"; then
+            rm -f "$GUI_RUN_DIR/requests/$gui_id.tmp"
+            return 1
+        fi
     fi
     GUI_PENDING_ID="$gui_id"
     gui_until=$((SCRIPT_STARTED + GUI_BUDGET_SECONDS))

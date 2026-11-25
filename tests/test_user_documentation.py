@@ -396,6 +396,26 @@ def test_the_api_lists_every_error_the_agent_update_answers_with():
     assert "missing, empty or only line breaks, unreadable or 8 KiB or larger" in row
 
 
+def test_the_label_write_is_documented_as_the_qml_write_job_it_is():
+    """The label apply/restore runs with the QML write deadline and grace
+    period; no part of the developer texts may still call it synchronous."""
+
+    label = (ROOT / "native_agent/src/device_user_label.c").read_text()
+    start = label.split("int c300x_label_job_start(", 1)[1].split("\n}", 1)[0]
+    assert "C300X_QML_WRITE_TIMEOUT_MS" in start and "C300X_QML_WRITE_TERM_GRACE_MS" in start
+    api = " ".join((ROOT / "native_agent/API.md").read_text().split())
+    architecture = " ".join((ROOT / "docs/dev/architecture.md").read_text().split())
+    for stale in (
+        "label apply/restore are **synchronous**", "without an execution deadline",
+        "block HTTP dispatch and graceful shutdown indefinitely",
+        "synchronous label transaction", "exit-status-only",
+        "| Label apply/restore | none",
+    ):
+        assert stale not in api and stale not in architecture, stale
+    assert "Label apply/restore is not: it is a QML write job" in api
+    assert "| Label apply/restore (QML write jobs, see below) | 30 s |" in architecture
+
+
 def test_every_display_call_follows_the_ui_port_as_the_api_says():
     api = (ROOT / "native_agent/API.md").read_text()
     listeners = api.split("## Listeners", 1)[1].split("\n## ", 1)[0]

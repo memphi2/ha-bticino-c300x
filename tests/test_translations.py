@@ -906,9 +906,9 @@ def _flow_reported_errors() -> set[str]:
     # errors["base"] = err.reason reports the reason the device installer raised.
     assert any(flow.reason for flow in flows)
     integration = "\n".join(path.read_text(encoding="utf-8") for path in INTEGRATION.glob("*.py"))
-    constants = dict(re.findall(r'^([A-Z][A-Z0-9_]*) = "([a-z_]+)"$', integration, re.MULTILINE))
+    constants = dict(re.findall(r'^([A-Z][A-Z0-9_]*) = "([a-z0-9_]+)"$', integration, re.MULTILINE))
     installer = (INTEGRATION / "device_installer.py").read_text(encoding="utf-8")
-    for key, constant in re.findall(r'C300XDeviceInstallError\((?:"([a-z_]+)"|([A-Z][A-Z0-9_]*))\)', installer):
+    for key, constant in re.findall(r'C300XDeviceInstallError\((?:"([a-z0-9_]+)"|([A-Z][A-Z0-9_]*))\)', installer):
         reported.add(key or constants[constant])
     return reported
 

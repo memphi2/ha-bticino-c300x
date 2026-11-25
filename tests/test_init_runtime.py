@@ -201,7 +201,7 @@ def test_setup_entry_builds_runtime_and_forwards_platforms(
     monkeypatch.setattr(
         capabilities,
         "gate_capabilities",
-        lambda caps, *, doorbell_video_enabled: caps,
+        lambda caps, *, doorbell_video_enabled, c100x=False: caps,
     )
     monkeypatch.setattr(
         events,

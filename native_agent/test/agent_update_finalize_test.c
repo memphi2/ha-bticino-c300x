@@ -116,8 +116,10 @@ static void assert_committed(const struct c300x_config *config, const char *mani
         const char *name = C300X_AGENT_UPDATE_FILES[i].path;
         assert(agent_update_target_path(config, name, target, sizeof(target)));
         assert(read_bounded_text_file(target, content, sizeof(content), NULL));
+        /* This driver is a C300X: the C100X adapter is validated but never written there. */
         const char *wanted = !strcmp(name, "device_agent/init/c300x-native-agent") ? expected
-            : !strcmp(name, "device_agent/bundle.json") ? manifest : "new-payload";
+            : !strcmp(name, "device_agent/bundle.json") ? manifest
+            : C300X_AGENT_UPDATE_FILES[i].optional == C300X_UPDATE_FILE_C100X ? "old-payload" : "new-payload";
         assert(!strcmp(content, wanted));
     }
     assert(agent_init_link_matches());

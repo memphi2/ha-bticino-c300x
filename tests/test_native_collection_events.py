@@ -78,6 +78,15 @@ class CollectionLab:
                 write_memo(staging, entry, kind=kind, read=read, unix_time=1710000000)
             (staging / entry).rename(self.roots[kind] / entry)
 
+    def mark_read(self, kind, entry):
+        # Replace the info file in one step: rewriting it in place lets a
+        # loaded agent scan the truncated file in between and report it.
+        info = self.roots[kind] / entry / "msg_info.ini"
+        with tempfile.TemporaryDirectory(dir=self.roots[kind].parent) as directory:
+            staged = Path(directory) / info.name
+            staged.write_text(info.read_text(encoding="utf-8").replace("Read=0", "Read=1"), encoding="utf-8")
+            staged.replace(info)
+
     def assert_quiet(self, start):
         for event_type in EVENTS:
             assert_no_callback_type(self.callback, event_type, start)
@@ -481,8 +490,7 @@ def test_actual_add_read_and_delete_remain_live(collection_lab, kind):
     assert lab.event(kind, start)["snapshot"] is False
     lab.assert_quiet(len(lab.callback.requests))
     start = len(lab.callback.requests)
-    info = lab.roots[kind] / "item_2" / "msg_info.ini"
-    info.write_text(info.read_text(encoding="utf-8").replace("Read=0", "Read=1"), encoding="utf-8")
+    lab.mark_read(kind, "item_2")
     read_event = lab.event(kind, start)
     assert read_event["snapshot"] is False
     assert collection_data(read_event, kind)["read"] == 1

@@ -13,7 +13,10 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from test_native_device_identity import XML, station  # noqa: F401 - the fixture builds the agent's detection
+from test_native_device_identity import (  # noqa: F401 - the fixture builds the agent's detection
+    XML,
+    station,
+)
 from test_qml_patch_qt5 import _qt5_import_dir
 from test_qml_patch_script import (
     _run_qml_patch,

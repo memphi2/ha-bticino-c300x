@@ -5,16 +5,15 @@ import subprocess
 from http.client import HTTPConnection
 
 import pytest
+from native_build import default_host_build
 from test_native_media_control_offload import NATIVE, TOKEN, Lab
-from test_native_media_control_offload import binary as media_binary
 from test_native_media_control_offload import lab as lab
 
 
 @pytest.fixture(scope="module")
 def binary(tmp_path_factory):
-    media = media_binary.__wrapped__(tmp_path_factory)
-    objects = sorted((media.parent / "host").glob("*.o"))
-    target = media.parent / "agent-with-update-errors"
+    objects = sorted((default_host_build(tmp_path_factory) / "host").glob("*.o"))
+    target = tmp_path_factory.mktemp("update-errors-build") / "agent-with-update-errors"
     result = subprocess.run([
         "cc", "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
         "-D_DEFAULT_SOURCE", "-D_POSIX_C_SOURCE=200809L",

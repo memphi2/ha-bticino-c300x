@@ -66,7 +66,7 @@ static int service_query(const char *name, const struct c300x_config *config)
     assert(mdns_put_name(query, sizeof(query), &size, name));
     assert(mdns_put_u16(query, sizeof(query), &size, 12));
     assert(mdns_put_u16(query, sizeof(query), &size, 1));
-    return mdns_relevant_query(query, size, config);
+    return mdns_relevant_query(query, size, config, TEST_ID);
 }
 
 static void check_identity(void)
@@ -78,7 +78,7 @@ static void check_identity(void)
     for (int c100x = 0; c100x <= 1; c100x++) {
         model = c100x ? C300X_DEVICE_MODEL_C100X : C300X_DEVICE_MODEL_C300X;
         strcpy(config.mdns_name, "BTicino C300X");
-        int size = mdns_build_response(&config, "instance-1", packet, sizeof(packet), 120);
+        int size = mdns_build_response(&config, "instance-1", TEST_ID, packet, sizeof(packet), 120);
         assert(size > 0);
         assert(contains(packet, size, c100x ? "model=C100X" : "model=C300X"));
         assert(contains(packet, size, c100x ? "name=BTicino C100X" : "name=BTicino C300X"));
@@ -91,7 +91,7 @@ static void check_identity(void)
         mdns_instance_name(&config, "c300x-001122334455", label, sizeof(label));
         assert(strcmp(label, c100x ? "BTicino C100X 334455" : "BTicino C300X 334455") == 0);
         strcpy(config.mdns_name, "Front door");
-        size = mdns_build_response(&config, "instance-1", packet, sizeof(packet), 120);
+        size = mdns_build_response(&config, "instance-1", TEST_ID, packet, sizeof(packet), 120);
         assert(size > 0 && contains(packet, size, "name=Front door"));
         mdns_instance_name(&config, "c300x-001122334455", label, sizeof(label));
         assert(strcmp(label, "Front door 334455") == 0);

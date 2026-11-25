@@ -350,7 +350,11 @@ Important top-level fields:
 - `device.model_check`: `ok` (both sources agree), `unread` (the station names
   no model; the display program decided) or `mismatch` (they disagree; the
   display program decided, and neither the Display patch nor the C100X display
-  activation is written).
+  activation is written). On a mismatch the `maintenance` Display patch
+  members (`qml_patch`, `qml_core_patch` and the others) are false and the
+  Home Assistant media user is set up without its label on the display; a
+  patch that is already there is removed over SSH with
+  `qml_patch.sh restore-all`.
 - `device.display_kind`: `qt4_ondisk` (C300X 1.7.x/2.0.x), `qt5_rcc` (C300X
   3.0.x, display files built into the program) or `qt5_ondisk` (C100X)
 - `device.camera`: `high_res` when the camera resolution can be switched,

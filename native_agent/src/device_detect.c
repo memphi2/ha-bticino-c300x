@@ -225,7 +225,8 @@ int c300x_device_memo_led_known(void)
 
 int c300x_device_display_files_patchable(void)
 {
-    return c300x_device_display_kind() != C300X_DISPLAY_QT5_ONDISK;
+    struct c300x_device_profile profile = c300x_device_profile();
+    return profile.display != C300X_DISPLAY_QT5_ONDISK && profile.model_check != C300X_MODEL_CHECK_MISMATCH;
 }
 
 static int display_adapter_confirmed;

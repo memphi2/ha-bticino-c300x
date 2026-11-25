@@ -9,6 +9,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from native_build import default_host_agent
 from test_native_agent_removal import ROOT, _assert_kept, _assert_removed, _remove
 from test_native_agent_removal import device as device
 from test_native_routing_firmware_restore import (
@@ -30,12 +31,7 @@ FAULTS = (
 
 @pytest.fixture(scope="module")
 def removal_binary(tmp_path_factory):
-    build = tmp_path_factory.mktemp("stock-removal-build")
-    result = subprocess.run([
-        "make", "-C", str(ROOT / "native_agent"), f"BUILD_DIR={build}", "-j2", "all",
-    ], capture_output=True, text=True)
-    assert result.returncode == 0, result.stdout + result.stderr
-    return build / "host/c300x-agent-native"
+    return default_host_agent(tmp_path_factory)
 
 
 def _firmware_device(env, routing_binary, firmware):

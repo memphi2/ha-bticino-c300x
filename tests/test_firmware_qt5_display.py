@@ -21,6 +21,7 @@ def config_probe(tmp_path_factory):
     folder = tmp_path_factory.mktemp("qt5")
     marker = folder / "libQt5Core.so.5"
     c100x = folder / "BtClass100"
+    named = folder / "dbfiles_ws.xml"
     binary = folder / "probe"
     curl = os.environ.get("CURL_INCLUDE_DIR", "")
     sources = [str(path) for path in sorted((NATIVE / "src").glob("*.c")) if path.name != "main.c"]
@@ -31,6 +32,7 @@ def config_probe(tmp_path_factory):
             *([f"-idirafter{curl}"] if curl else []),
             f"-DC300X_QT5_DISPLAY_MARKER={json.dumps(str(marker))}",
             f"-DC300X_C100X_DISPLAY_MARKER={json.dumps(str(c100x))}",
+            f"-DC300X_DEVICE_INFO_XML={json.dumps(str(named))}",
             str(NATIVE / "test/qt5_display_test.c"), *sources,
             "-o", str(binary), "-pthread", "-ldl",
         ],
@@ -39,10 +41,13 @@ def config_probe(tmp_path_factory):
 
     def run(
         *, qt5: bool, high_resolution: bool | None = None, display_patch: bool = False,
-        save: bool | None = None, c100x_display: bool = False,
+        save: bool | None = None, c100x_display: bool = False, names_itself: str | None = None,
     ) -> dict:
         marker.unlink(missing_ok=True)
         c100x.unlink(missing_ok=True)
+        named.unlink(missing_ok=True)
+        if names_itself is not None:
+            named.write_text(f"<root><webserver_type>{names_itself}</webserver_type></root>\n", encoding="utf-8")
         if qt5:
             marker.write_bytes(b"")
         if c100x_display:
@@ -200,6 +205,21 @@ def test_the_agent_offers_the_display_patch_on_both_displays(config_probe):
     # On a Qt 5 display the patch script works through the preloaded resource file.
     assert config_probe(qt5=False, high_resolution=None, display_patch=True)["display_patch"] == 1
     assert config_probe(qt5=True, high_resolution=None, display_patch=True)["display_patch"] == 1
+
+
+@pytest.mark.parametrize("qt5", [False, True], ids=["qt4", "qt5"])
+def test_a_station_whose_name_contradicts_its_display_is_offered_no_display_patch(config_probe, qt5):
+    """The patch script refuses to write there: an offered patch or a label write could only fail."""
+
+    for names_itself in (None, "C300X"):
+        agreed = config_probe(qt5=qt5, display_patch=True, names_itself=names_itself)
+        assert agreed["files_patchable"] == agreed["display_patch"] == 1
+    mismatch = config_probe(qt5=qt5, display_patch=True, names_itself="C100X")
+    assert (mismatch["model"], mismatch["display_kind"]) == ("C300X", "qt5_rcc" if qt5 else "qt4_ondisk")
+    assert mismatch["files_patchable"] == mismatch["display_patch"] == 0
+    # The display program can still be restarted, and nothing else of the configuration changes.
+    assert mismatch["restartable"] == mismatch["gui_reload"] == 1
+    assert {**mismatch, "files_patchable": 1, "display_patch": 1} == agreed
 
 
 def test_the_agent_asks_the_patch_script_for_the_label_on_both_displays():

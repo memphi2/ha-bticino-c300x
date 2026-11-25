@@ -11,6 +11,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from native_build import default_host_agent
 
 from native_agent.test.smoke import (
     TOKEN,
@@ -28,11 +29,6 @@ AUTH_HEADERS = {"Authorization": f"Bearer {TOKEN}",
 @pytest.fixture(scope="module")
 def native_preferences_binary(tmp_path_factory):
     build = tmp_path_factory.mktemp("preferences-native-build")
-    result = subprocess.run(
-        ["make", "-C", str(ROOT / "native_agent"), f"BUILD_DIR={build}", "-j2", "all"],
-        capture_output=True, text=True, timeout=120,
-    )
-    assert result.returncode == 0, result.stderr
     # Fault only the config writer's temporary-file creation, not the HTTP stack.
     source = build / "fail_config.c"
     source.write_text('''#define _GNU_SOURCE
@@ -54,7 +50,7 @@ int mkstemp(char *path) {
     preload = build / "fail_config.so"
     subprocess.run(["cc", "-shared", "-fPIC", str(source), "-ldl", "-o", str(preload)],
                    check=True, capture_output=True, text=True, timeout=30)
-    return build / "host/c300x-agent-native", preload
+    return default_host_agent(tmp_path_factory), preload
 
 
 def request(port, method="GET", body=None, headers=None, path="/ui/preferences", source=None):

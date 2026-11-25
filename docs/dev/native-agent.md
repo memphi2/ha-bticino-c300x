@@ -464,8 +464,10 @@ Firmware `3.0.6` fails this check and is supported experimentally:
   before giving pointers to Qt. Rejected resources are quarantined and the
   stock resources remain available. See the
   [firmware display audit](firmware-3.0.6-display.md) for original-library
-  evidence, the per-path matrix and device-only gaps. Not yet tested on a 3.0.6
-  device; process presence is not proof of QML readiness or watchdog safety.
+  evidence, the per-path matrix and device-only gaps. On a 3.0.6 station only
+  the start with the pages and the home page buttons were checked; the other
+  pages, the restart and recovery paths are offline only. Process presence is
+  not proof of QML readiness or watchdog safety.
 - Its vendor media process forwards only the low-resolution stream. The camera
   is fixed to that stream (`video.av.highResolution: false`) and the Camera
   resolution entity is not offered. Camera quality sets the low stream

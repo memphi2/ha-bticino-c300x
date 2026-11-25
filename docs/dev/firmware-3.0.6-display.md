@@ -1,7 +1,7 @@
 # Firmware 3.0.6 Display Audit
 
-Offline audit of beta `2.9.0b1`, 2026-11-22. The comparison firmware is
-1.7.19. No device, HA instance, vendor executable or hardware plugin was
+Offline audit of beta `2.9.0b1`, 2026-11-22, kept current up to `2.10.0b2`
+(which includes stable 2.9.2). The comparison firmware is 1.7.19. No device, HA instance, vendor executable or hardware plugin was
 started. Model detection is deliberately outside this beta.
 
 ## Evidence Levels
@@ -77,7 +77,7 @@ HTTP handler in the isolated fixture; device writes are substitutes.
 
 | Path | Support and offline proof | Remaining uncertainty |
 | --- | --- | --- |
-| Extract original resources | **F** pinned real executable, six edited vendor files; complete resource manifest inspected | Different firmware builds need their own validation; scanner acceptance is not a support declaration |
+| Extract original resources | **F** pinned real executable, seven edited vendor files; complete resource manifest inspected | Different firmware builds need their own validation; scanner acceptance is not a support declaration |
 | Shared QML generation | **F/H** actual 3.0.6 resources normalize and patch; 1.7.19 file patch restores byte-for-byte | Native context-object behavior during GUI startup: **D** |
 | Pack/preload precedence | **F** original ARM QtCore reads valid overlay before the original resource tables; rejected overlay falls through to stock | Actual executable constructor sequence/complete boot: **D** |
 | RCC validation | **F/H** bad internal offsets, lengths, cycles, short tables, headers, symlinks and all control-file truncations | Storage failure/power loss and concurrent external modification: **D** |
@@ -91,7 +91,7 @@ HTTP handler in the isolated fixture; device writes are substitutes.
 | GUI versus agent restart | **F/H** bt_daemon starts the wrapper once and never again; one detached restart worker stops the old display completely before it starts exactly one new wrapper | Display release timing on eglfs/Vivante: **D** |
 | Self-update | **H** changed QML and runtime-only preload reconciliation, optional pages on/off; a display follow-up that ran and failed on the Qt 5 display completes the update and stays owed (`display_followup_pending`, core Repair runs it all again); a step that never ran keeps the update pending | Complete update/reconnect on firmware: **D** |
 | Downgrade | **F/H** stable 2.8.2 payload refused without verified full removal; actual 3.0.6 restore-all then accepts it; Qt4 originals accepted | Guard requires this running updater; old agents and SSH/manual replacement bypass it; stock GUI restart: **D** |
-| Python/shell installers | **H** require successful core/full status, GUI presence and Qt5 activation for the display steps; the HA installer on the Qt 5 display: a step that ran and failed is owed (recorded by HA, core Repair), one that could not run fails the install; the shell installer waits out a restart still running and otherwise stops with the error as in 2.9.1; an unknown display (below) ends only the display steps | Neither installer proves every page rendered |
+| Python/shell installers | **H** require successful core/full status, GUI presence and Qt5 activation for the display steps; the HA installer on the Qt 5 display: a step that ran and failed is owed (recorded by HA, core Repair), one that could not run fails the install; the shell installer waits out a restart still running and otherwise stops with the error as in the stable release; an unknown display (below) ends only the display steps | Neither installer proves every page rendered |
 | Unknown display | **H** an unknown program or start script leaves everything as shipped and reports `display_unsupported`; install, update and media user go on without the display pages (see Unknown Display) | A later vendor firmware build on a device: **D** |
 | HA options/switch/sync | **H** quarantine/incomplete status is not success; optional-page setting is distinct from core hooks; no quarantine auto-retry | State freshness after spontaneous device failure: **D** |
 | HA services/buttons/Repairs | **H** shared GUI action gates and core Repair honor Qt5 activation; notification storage is distinct from popup delivery | End-to-end physical action results: **D** |
@@ -184,7 +184,8 @@ The first restart (`3876e2b4`) grew by patching and kept drawing findings: a
 during the wrapper's `sleep 3` armed the vendor SIGTERM trap, which fired only
 after that sleep and killed the next display, and back-to-back restarts left a
 quarantine mark behind. It is replaced as a whole. Firmware 1.7.19 and 2.0.2
-keep the restart of release 2.9.1 (`reload_gui_qt4`), unchanged.
+keep the restart of the stable release (`reload_gui_qt4`, byte-identical to
+2.9.2's `reload_gui`), unchanged.
 
 **One restart worker.** Every Qt 5 restart (`reload`, a write's restart, the
 rollback restart, `recover`) only files a request and waits for its answer.
@@ -301,7 +302,7 @@ HA's follow-up anyway), and the owed record is what keeps a display that did
 not follow visible. The shell installer (`scripts/install_c300x_device.sh`)
 is run by a person at the console: it waits out a restart still running
 (status poll, 180 s) and otherwise stops with the display step's error as
-in 2.9.1 and publishes no identity; the person sees the error and runs it
+in the stable release and publishes no identity; the person sees the error and runs it
 again or uses the HA Repair.
 
 | Scenario | Behaviour |
@@ -619,6 +620,36 @@ The original-QtQml runtime probe emits `FIRMWARE_QT_VERSION=5.15.7`,
 content with `display_wrapper_unknown`; tests require nonzero restore exit and
 unchanged recovery artifacts on failed restoration, not merely a diagnostic.
 
+## Shared Code On 1.7.19 And 2.0.2
+
+The branch takes the stable release over completely; on 1.7.19 and 2.0.2 it
+must behave like it (2.10.0b2: like 2.9.2). Every wait or tolerance the Qt 5
+restart needs is therefore behind the firmware check, in the agent
+`c300x_device_display_is_qt5()` and in Home Assistant the cached display
+status (`qt5_overlay`, sent by `qml_patch.sh` only on the Qt 5 display):
+
+| Where | Qt 5 display | 1.7.19 / 2.0.2 (as stable) |
+| --- | --- | --- |
+| Agent job limit of a GUI reload (`http_maintenance.c`) | 30 s (display write limit) | 10 s |
+| HA wait for the GUI reload answer (`display_restart` keyword) | 50 s | 15 s |
+| SSH command limit of the HA installer | 60 s from the Qt 5 probe on | 30 s |
+| Display after a runtime-only agent update (`repairs.py`) | display follow-up from the cached status, owed on failure | one GUI reload when the patch is required |
+| Station-launch check (`gui_peer.c`) | the start script's subshell forks are accepted | only the start script itself |
+| Updater recovery guard (`agent_update.c`, `qt5_recovery_required`) | runs | not run |
+
+Each gate has a test for both sides. Offline proofs for 2.10.0b2:
+`qml_patch.sh` from this branch and from 2.9.2 give byte-identical station
+files and backups on the 1.7.19 and 2.0.2 skins, both home layouts, through
+core apply, apply, label apply, layout switch, partial restores and
+`restore-all`, which leaves the stock files. Remaining shared differences are
+inert on Qt 4: the Qt 5 status fields (absent there), the overlay library
+carried in the agent, `qt5_recovery_version` in the bundle manifest (bundle
+identity), and the release tooling that allows a beta from this branch.
+
+On 3.0.6 the firmware has no `/etc/network/if-pre-up.d/iptables6`, so the
+agent reports `ipv6_firewall_hook: false` and the IPv6 firewall switch is not
+offered, as on any station without that script.
+
 ## Known Trap: One Marker For Camera And Display
 
 `/usr/lib/libQt5Core.so.5` is the only firmware marker on this branch, and it
@@ -654,6 +685,14 @@ anything new.
    protected screens, user interaction, clock changes and network loss.
 7. Remove optional pages, label, core and then the complete agent; verify
    originals, modes/ownership, read-only remount and stock GUI operation.
-8. Repeat the affected startup, removal, calls, ringer and touch paths on
+8. Measure the restart timing against the watchdog: how often `BtClass`
+   writes `/var/tmp/bticino/bt_wd/BtClass_qws`, the gap between the old
+   program's last write and the new one's first in each restart cycle
+   (reload, apply, core Repair, agent update, with and without the retry),
+   whether `BtClass` ever shows a second PID, and the durations of the GUI
+   reload job (agent limit, HA 50 s wait) and of the installer's display
+   steps (60 s SSH limit). The station must not reboot (uptime unchanged) and
+   exactly one display must run after each.
+9. Repeat the affected startup, removal, calls, ringer and touch paths on
    1.7.19. Stable downgrade on 3.0.6 requires complete beta overlay removal
    first; stable 2.8.2 has no Qt5 recovery support.

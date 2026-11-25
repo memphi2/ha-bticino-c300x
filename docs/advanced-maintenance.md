@@ -25,7 +25,8 @@ key. Limits and the cases that need **Reconfigure**:
 
 Use the firewall Repair when Media Readiness reports missing IPv4 media ports
 or talkback RTP readiness. Enable IPv6 firewall support only when Home
-Assistant reaches the C300X over stable IPv6.
+Assistant reaches the C300X over stable IPv6. Stations without an IPv6
+firewall script, such as firmware 3.0.6, have no IPv6 firewall switch.
 
 ### Core GUI Hook
 

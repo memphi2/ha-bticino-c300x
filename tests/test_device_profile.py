@@ -72,9 +72,13 @@ def test_an_agent_without_a_display_answer_is_judged_by_the_display_status(info)
 
 
 def test_a_mismatch_the_agent_reports_is_kept():
-    mismatch = setup_profile({"model": "C300X", "display_kind": "qt5_ondisk", "model_check": "mismatch"})
-    assert mismatch == DeviceProfile("C100X", "qt5_ondisk", "fixed", False)
+    # The agent answers with what its display program says and reports the disagreement.
+    mismatch = setup_profile({"model": "C300X", "display_kind": "qt4_ondisk", "model_check": "mismatch"})
+    assert mismatch == DeviceProfile("C300X", "qt4_ondisk", "high_res", False)
     assert not mismatch.has_display_patch
+    mismatch = setup_profile({"model": "C100X", "display_kind": "qt5_ondisk", "model_check": "mismatch"})
+    assert mismatch == DeviceProfile("C100X", "qt5_ondisk", "fixed", False)
+    assert not mismatch.has_display_patch and C300X_QT4.has_display_patch
     for check in ("ok", "unread", None):
         assert setup_profile({"model": "C300X", "display_kind": "qt4_ondisk", "model_check": check}) == C300X_QT4
 
@@ -98,9 +102,10 @@ def test_the_agents_answer_decides_before_the_display_status():
     ("qt5\nc100x\n", C100X),
     ("qt4\nc100x\n", C100X),
     ("", C300X_QT4),
-    # They disagree: the station's name is the model, and no Display patch.
-    ("qt5\nc100x\nnamed-C300X\n", DeviceProfile("C300X", "qt5_ondisk", "fixed", False)),
-    ("qt4\nc300x\nnamed-C100X\n", DeviceProfile("C100X", "qt5_ondisk", "fixed", False)),
+    # They disagree: the display program decides, unconfirmed, and no Display patch.
+    ("qt5\nc100x\nnamed-C300X\n", DeviceProfile("C100X", "qt5_ondisk", "fixed", False)),
+    ("qt4\nc300x\nnamed-C100X\n", DeviceProfile("C300X", "qt4_ondisk", "high_res", False)),
+    ("qt5\nc300x\nnamed-C100X\n", DeviceProfile("C300X", "qt5_rcc", "fixed", False)),
 ])
 def test_the_installer_probe_reads_the_same_profile_on_the_station(answer, profile):
     commands = []

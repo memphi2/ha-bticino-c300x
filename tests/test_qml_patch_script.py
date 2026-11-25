@@ -1851,6 +1851,29 @@ def test_qml_patch_restore_refuses_to_delete_stock_files_without_backups(
 
 
 
+def test_a_station_whose_model_sources_disagree_gets_no_new_display_patch(tmp_path: Path) -> None:
+    """Its display program says C300X, its own name says C100X: restore yes, write no."""
+
+    gui_dir = tmp_path / "gui"
+    backup_dir = tmp_path / "backups"
+    gui_dir.mkdir()
+    _write_original_gui(gui_dir)
+    named = tmp_path / "dbfiles_ws.xml"
+    named.write_text("<webserver_type>C300X</webserver_type>\n")
+    env = {"C300X_QML_DEVICE_INFO_XML": str(named)}
+    # Both sources agree: the patch is written as always.
+    assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "apply", env_overrides=env)["state"] == "patched"
+    patched = {path: path.read_bytes() for path in gui_dir.rglob("*") if path.is_file()}
+    named.write_text("<webserver_type>C100X</webserver_type>\n")
+    for action in ("apply", "core-apply", "media-user-label-apply"):
+        result = _run_qml_patch_raw(tmp_path, gui_dir, backup_dir, action, env_overrides=env)
+        assert result.returncode == 3, (action, result.stdout, result.stderr)
+        assert json.loads(result.stdout) == {"ok": False, "available": False, "state": "unsupported_display"}
+        assert {path: path.read_bytes() for path in gui_dir.rglob("*") if path.is_file()} == patched
+    assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "status", env_overrides=env)["state"] == "patched"
+    assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "restore-all", env_overrides=env)["state"] == "original"
+
+
 @pytest.mark.parametrize(
     ("marker", "action"),
     [

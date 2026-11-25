@@ -58,9 +58,12 @@ class DeviceProfile:
 
     @property
     def has_display_patch(self) -> bool:
-        """The Display patch exists on every C300X; the C100X has its own activation."""
+        """The Display patch exists on every C300X; the C100X has its own activation.
 
-        return self.display != QT5_ONDISK
+        A station whose own model name and display program disagree gets neither.
+        """
+
+        return self.display != QT5_ONDISK and self.model_confirmed
 
     @property
     def camera_fixed(self) -> bool:
@@ -68,20 +71,13 @@ class DeviceProfile:
 
 
 def _profile(
-    c100x: bool, qt5: bool, camera: Any = None, *,
-    c100x_program: bool | None = None, confirmed: bool = True,
+    c100x: bool, qt5: bool, camera: Any = None, *, confirmed: bool = True,
 ) -> DeviceProfile:
-    """The camera follows the display unless the agent names it.
+    """The camera follows the display unless the agent names it."""
 
-    Whatever names a C100X, the station itself or its display program, keeps
-    the C300X Display patch away.
-    """
-
-    display = QT5_ONDISK if c100x or c100x_program else QT5_RCC if qt5 else QT4_ONDISK
+    display = QT5_ONDISK if c100x else QT5_RCC if qt5 else QT4_ONDISK
     if camera not in (CAMERA_HIGH_RES, CAMERA_FIXED):
         camera = CAMERA_HIGH_RES if display == QT4_ONDISK else CAMERA_FIXED
-    if c100x_program is not None and c100x_program is not c100x:
-        confirmed = False
     return DeviceProfile(C100X if c100x else C300X, display, camera, confirmed)
 
 
@@ -98,8 +94,6 @@ def setup_profile(setup: Any, display_status: Any = None) -> DeviceProfile:
     kind = info.get("display_kind")
     confirmed = info.get("model_check") != "mismatch"
     if info.get("model") == C100X or kind == QT5_ONDISK:
-        # A station whose own name and display program disagree is treated as
-        # a C100X here: no Display patch; the agent refuses its activation.
         return _profile(True, True, info.get("camera"), confirmed=confirmed)
     if kind in (QT4_ONDISK, QT5_RCC):
         return _profile(False, kind == QT5_RCC, info.get("camera"), confirmed=confirmed)
@@ -119,9 +113,10 @@ def entry_profile(entry: Any) -> DeviceProfile:
 def station_profile(run: Callable[[str], str], quote: Callable[[str], str]) -> DeviceProfile:
     """Profile read on the station before an agent runs.
 
-    As in the agent: the station names its model itself, its display program
-    is the cross-check and decides alone where the station names none. An
-    unreadable answer counts as the C300X with the Qt 4 display.
+    As in the agent: the station names its model itself; where that name is
+    missing or disagrees with the display program, the program decides model
+    and display and the profile is not confirmed. An unreadable answer counts
+    as the C300X with the Qt 4 display.
     """
 
     words = run(
@@ -132,6 +127,4 @@ def station_profile(run: Callable[[str], str], quote: Callable[[str], str]) -> D
     ).split()
     program = "c100x" in words
     named = next((word[6:] for word in words if word in ("named-C300X", "named-C100X")), None)
-    if named is None:
-        return _profile(program, "qt5" in words)
-    return _profile(named == C100X, "qt5" in words, c100x_program=program)
+    return _profile(program, "qt5" in words, confirmed=named is None or (named == C100X) is program)

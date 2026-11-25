@@ -159,9 +159,10 @@ def test_the_scripts_ask_one_profile_block_for_the_station():
     (None, True, False, "C300X unread qt5_rcc"),
     (None, True, True, "C100X unread qt5_ondisk"),
     ("C500X", True, False, "C300X unread qt5_rcc"),
-    ("C300X", True, True, "C300X mismatch qt5_ondisk"),
-    ("C100X", True, False, "C100X mismatch qt5_ondisk"),
-    ("C100X", False, False, "C100X mismatch qt5_ondisk"),
+    # They disagree: the display program decides, as in 2.10.0.
+    ("C300X", True, True, "C100X mismatch qt5_ondisk"),
+    ("C100X", True, False, "C300X mismatch qt5_rcc"),
+    ("C100X", False, False, "C300X mismatch qt4_ondisk"),
 ])
 def test_the_script_profile_block_reads_the_station_like_the_agent(tmp_path, named, qt5, c100x, expected):
     """The same table as tests/test_native_device_identity.py for the agent."""

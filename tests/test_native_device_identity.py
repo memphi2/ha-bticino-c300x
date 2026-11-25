@@ -80,10 +80,11 @@ def station(tmp_path_factory):
     (None, True, True, ("C100X", "unread", "qt5_ondisk", "1", "0")),
     ("C500X", False, False, ("C300X", "unread", "qt4_ondisk", "0", "1")),
     ("", False, True, ("C100X", "unread", "qt5_ondisk", "1", "0")),
-    # They disagree: the station's name is the model, and no display is written.
-    ("C300X", True, True, ("C300X", "mismatch", "qt5_ondisk", "1", "0")),
-    ("C100X", False, False, ("C100X", "mismatch", "qt5_ondisk", "1", "0")),
-    ("C100X", True, False, ("C100X", "mismatch", "qt5_ondisk", "1", "0")),
+    # They disagree: the display program decides model and display, as in
+    # 2.10.0, and the disagreement is reported.
+    ("C300X", True, True, ("C100X", "mismatch", "qt5_ondisk", "1", "0")),
+    ("C100X", False, False, ("C300X", "mismatch", "qt4_ondisk", "0", "1")),
+    ("C100X", True, False, ("C300X", "mismatch", "qt5_rcc", "1", "1")),
 ])
 def test_the_station_names_its_model_and_the_display_program_checks_it(station, xml, qt5, c100x, expected):
     answer = station(

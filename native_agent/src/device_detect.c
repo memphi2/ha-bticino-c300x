@@ -113,14 +113,15 @@ struct c300x_device_profile c300x_device_profile(void)
 
     if (named == 3) {
         profile.model_check = C300X_MODEL_CHECK_UNREAD;
-        named = c100x_program ? 2 : 1;
     } else if ((named == 2) != c100x_program) {
         profile.model_check = C300X_MODEL_CHECK_MISMATCH;
     }
-    profile.model = named == 2 ? C300X_DEVICE_MODEL_C100X : C300X_DEVICE_MODEL_C300X;
-    /* Whatever names a C100X keeps the C300X Display patch away, whatever
-     * libraries the station carries. */
-    if (named == 2 || c100x_program) {
+    /* Where the station's own name is missing or disagrees, its display
+     * program decides model and display, as it always did. The disagreement
+     * is reported; neither the Display patch nor the C100X activation is
+     * written on such a station. */
+    profile.model = c100x_program ? C300X_DEVICE_MODEL_C100X : C300X_DEVICE_MODEL_C300X;
+    if (c100x_program) {
         profile.display = C300X_DISPLAY_QT5_ONDISK;
     } else if (access(C300X_QT5_DISPLAY_MARKER, F_OK) == 0) {
         profile.display = C300X_DISPLAY_QT5_RCC;

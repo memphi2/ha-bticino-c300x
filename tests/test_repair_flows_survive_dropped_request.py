@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import types
 from typing import Any
 
 import pytest
@@ -22,12 +23,14 @@ from test_repair_survives_dropped_request import _ReloadingConfigEntries, _settl
 from custom_components.bticino_c300x import repair_work, repairs
 from custom_components.bticino_c300x.const import CONF_CALLBACK_BASE_URL
 from custom_components.bticino_c300x.repair_issues import (
+    DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE,
     UNSUPPORTED_CALLBACK_URL_ISSUE,
     repair_issue_id,
 )
 
 CREATED = {"type": "create_entry", "data": {}}
 CALLBACK_ISSUE = repair_issue_id(UNSUPPORTED_CALLBACK_URL_ISSUE, "entry-1")
+CORE_HOOK_ISSUE = repair_issue_id(DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE, "entry-1")
 
 
 def _prepare(flow: Any) -> Any:
@@ -63,6 +66,23 @@ def issue_registry(monkeypatch) -> set[str]:
     monkeypatch.setattr(repairs.ir, "async_get", lambda _hass: Registry())
     monkeypatch.setattr(repairs, "async_dispatcher_send", lambda *_: None)
     return issues
+
+
+class _GatedApi(FakePatchApi):
+    """A station whose named request is answered only when the gate opens."""
+
+    def __init__(self, gated: str) -> None:
+        super().__init__()
+        self.started = asyncio.Event()
+        self.gate = asyncio.Event()
+        answer = getattr(self, gated)
+
+        async def held(*args: Any, **kwargs: Any) -> Any:
+            self.started.set()
+            await self.gate.wait()
+            return await answer(*args, **kwargs)
+
+        setattr(self, gated, held)
 
 
 def _callback_entry(monkeypatch) -> FakeEntry:
@@ -151,5 +171,36 @@ def test_second_flow_shows_its_form_when_the_issue_is_still_open(
         assert result["type"] == "form"
         assert result["step_id"] == "configure"
         assert hass.config_entries.reloads == []
+
+    asyncio.run(scenario())
+
+
+def test_core_hook_repair_finishes_after_the_station_write(issue_registry) -> None:
+    async def scenario() -> None:
+        api = _GatedApi("async_apply_qml_core_patch")
+        api.qml_status = {"available": True, "core_patched": True, "core_state": "patched"}
+        runtime = FakeRuntimeData(api)
+        runtime.capabilities = {"maintenance": {"supported": True, "qml_core_patch": True}}
+        marked: list[Any] = []
+        runtime.diagnostics = types.SimpleNamespace(
+            qml_patch_diagnostics=types.SimpleNamespace(
+                mark_success=marked.append, mark_failure=lambda *_: None,
+            )
+        )
+        hass = FakeHass(FakeEntry(runtime_data=runtime))
+        issue_registry.add(CORE_HOOK_ISSUE)
+        flow = _prepare(repairs.DeviceCoreQmlHookRepairFlow(hass, "entry-1"))
+
+        request = asyncio.create_task(flow.async_step_confirm({}))
+        await api.started.wait()
+        await _drop(request)
+        api.gate.set()
+        await _settle()
+
+        # The station did the write either way; Home Assistant now knows it.
+        assert CORE_HOOK_ISSUE not in issue_registry
+        assert marked
+        assert await flow.async_step_confirm({}) == CREATED
+        assert api.calls.count("apply_qml_core") == 1
 
     asyncio.run(scenario())

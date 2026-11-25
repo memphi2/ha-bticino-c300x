@@ -383,6 +383,7 @@ class DeviceCoreQmlHookRepairFlow(RepairsFlow):
 
         self.hass = hass
         self._entry_id = entry_id
+        self._work = RepairStepWork(hass, entry_id)
 
     async def async_step_init(
         self,
@@ -398,6 +399,11 @@ class DeviceCoreQmlHookRepairFlow(RepairsFlow):
     ) -> Any:
         """Apply the minimal core QML hook after explicit confirmation."""
 
+        return await async_run_repair_step(
+            self, self._work, DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE, self._async_confirm, user_input
+        )
+
+    async def _async_confirm(self, user_input: dict[str, Any] | None) -> Any:
         entry = self.hass.config_entries.async_get_entry(self._entry_id)
         if entry is None or not hasattr(entry, "runtime_data"):
             return self.async_abort(reason="entry_not_loaded")

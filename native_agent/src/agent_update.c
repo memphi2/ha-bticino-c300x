@@ -534,7 +534,9 @@ int apply_agent_update_files(
     if (!validate_agent_update_files(config, manifest) || !update_recover_interrupted(config, installed_manifest, summary)) {
         return 0;
     }
-    if (!update_display_recovery_safe(config, manifest)) {
+    /* Only the Qt 5 display (firmware 3.0.x) can hold an overlay that an
+     * older agent could not take away again. */
+    if (c300x_device_display_is_qt5() && !update_display_recovery_safe(config, manifest)) {
         if (summary != NULL) summary->qt5_recovery_required = 1;
         fprintf(stderr, "qt5_recovery_required: target lacks Qt5 recovery; verify complete display removal before downgrade\n");
         return 0;

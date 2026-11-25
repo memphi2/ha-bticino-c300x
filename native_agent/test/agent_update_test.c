@@ -9,6 +9,9 @@
 #include "../src/agent_update.h"
 #include "../src/file_io.h"
 
+/* The agent's Qt 5 display check; the updates here run on a Qt 4 station. */
+int c300x_device_display_is_qt5(void) { return 0; }
+
 static char test_init_script[512], test_init_link[512];
 static char fail_target[512];
 static int activation_calls;

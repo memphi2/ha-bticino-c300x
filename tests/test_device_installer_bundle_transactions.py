@@ -210,6 +210,8 @@ def test_native_metadata_reader_observes_manifest_commit_without_restart(tmp_pat
 #include "agent_update.h"
 #include "c300x_agent.h"
 
+int c300x_device_display_is_qt5(void) { return 0; }
+
 int main(int argc, char **argv)
 {
     assert(argc == 4);

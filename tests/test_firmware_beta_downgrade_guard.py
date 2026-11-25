@@ -108,9 +108,10 @@ def snapshot(agent):
     return result
 
 
-def apply(updater, agent, expected):
+def apply(updater, agent, expected, *, qt5=True):
     result = subprocess.run([str(updater), str(agent), str(agent / ".update/device_agent/bundle.json"),
-                             str(int(expected))], capture_output=True, text=True, timeout=15)
+                             str(int(expected))], capture_output=True, text=True, timeout=15,
+                            env={**os.environ, "C300X_TEST_QT5": "1" if qt5 else "0"})
     assert result.returncode == 0, result.stdout + result.stderr
     body = json.loads(result.stdout)
     if not expected:
@@ -136,6 +137,29 @@ def test_unsupported_target_cannot_replace_any_overlay_recovery(updater, device,
     assert "qt5_recovery_required" in error
     assert snapshot(device) == before
     assert not list(device.rglob("*.update-backup"))
+
+
+@pytest.mark.parametrize("artifact", ["display-qt5.rcc", "c300x-qrc-overlay.so", "display-qt5.rcc.failed", None])
+def test_a_qt4_station_updates_as_in_292(updater, device, artifact):
+    """Firmware 1.7.x/2.0.2 hold no Qt 5 overlay: no recovery guard, as in 2.9.2.
+
+    Neither a stray overlay file nor a start script of unknown content stops
+    an update to a bundle without the Qt 5 recovery capability there.
+    """
+    wrapper = device / "BtClass_qws"
+    wrapper.write_bytes(b"#!/bin/sh\n# a Qt 4 start script\nexit 0\n")
+    wrapper.chmod(0o755)
+    manifest(device)
+    if artifact is not None:
+        (device / artifact).write_bytes(b"left over")
+    body, error = apply(updater, device, True, qt5=False)
+    assert body["changed_files"] > 0 and body["activation_calls"] == 1
+    assert "qt5_recovery_required" not in error
+    # The same station with the Qt 5 display refuses it.
+    if artifact is not None:
+        (device / artifact).write_bytes(b"left over")
+        manifest(device)
+        assert "qt5_recovery_required" in apply(updater, device, False)[1]
 
 
 @pytest.mark.parametrize("state", ["missing", "unknown", "same-size", "no-execute", "symlink", "fifo"])

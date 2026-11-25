@@ -31,6 +31,13 @@ int simulated_statvfs(const char *path, struct statvfs *info)
 #define C300X_AGENT_INIT_SCRIPT init_script
 #define C300X_AGENT_INIT_LINK init_link
 #define C300X_AGENT_GUI_WRAPPER gui_wrapper
+/* C300X_TEST_QT5=1: the station has the Qt 5 display of firmware 3.0.x. */
+int c300x_device_display_is_qt5(void)
+{
+    const char *qt5 = getenv("C300X_TEST_QT5");
+    return qt5 != NULL && strcmp(qt5, "1") == 0;
+}
+
 #define system simulated_remount
 #define statvfs(path, info) simulated_statvfs(path, info)
 #include "../src/agent_update.c"

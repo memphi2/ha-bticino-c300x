@@ -37,4 +37,9 @@ def test_home_assistant_outwaits_a_qml_write_and_its_rollback() -> None:
     # A GUI reload: 10 s, then the same grace; its request waits for the answer.
     assert 10 + grace_ms / 1000 + 5 <= _GUI_RELOAD_JOB_TIMEOUT < MAINTENANCE_BUSY_WAIT_SECONDS
     assert '"recover", -1, C300X_QML_WRITE_TIMEOUT_MS' in recovery
+    # The device-user label writes are such jobs too; their requests wait 50 s.
+    label = (SRC / "device_user_label.c").read_text(encoding="utf-8")
+    assert "out, out_len, C300X_QML_WRITE_TIMEOUT_MS" in label
+    assert "term_grace_ms = C300X_QML_WRITE_TERM_GRACE_MS" in label
+    assert "command_transaction" not in (SRC / "http_device_user.c").read_text(encoding="utf-8")
     assert "term_grace_ms = C300X_QML_WRITE_TERM_GRACE_MS" in recovery

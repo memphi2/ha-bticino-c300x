@@ -1253,6 +1253,25 @@ reboot makes it read-only. The agent remembers that root as its own, also
 across an agent restart, and its next device write or agent update tries the
 read-only remount again.
 
+The label is then written by `qml_patch.sh media-user-label-apply` (not on a
+Qt 5 display), as a QML write job: the request stays open, other maintenance
+requests get `409 maintenance_busy`, and the agent keeps serving everything
+else. A script that fails, or reports `"ok":false`, is answered `500` with
+`media_user_label_setup_failed`. A script still running after the 30-second
+QML write deadline gets `SIGTERM` for its process group and the same 15
+seconds for its rollback trap before `SIGKILL`; the request is answered once
+the script has ended, with `504`:
+
+```json
+{"ok": false, "error": "media_user_label_timeout", "rolled_back": true}
+```
+
+`rolled_back` has the meaning it has for `qml_patch_timeout`: `true` only for
+exit status 130, the label files as before and `/` read-only. The media user
+and the routing set up by this request stay; a repeated ensure writes the
+label. Agent shutdown during the label write sends the `SIGTERM` once and
+waits up to the 15 seconds; the request is closed without an answer.
+
 ### `POST /api/v1/maintenance/device-user/actions/restore-homeassistant-setup`
 
 Authentication: maintenance.
@@ -1265,6 +1284,9 @@ that script fails, or exits zero and reports `"ok":false` (a display restart
 that failed, after which it put the labelled files back), the agent answers
 `500` with `media_user_label_restore_failed` and leaves the media user and the
 routing as they are. A script that prints no JSON counts by its exit status.
+The script runs as the same QML write job as the label write of ensure: past
+30 seconds it is answered `504` with `media_user_label_timeout` as described
+there, and the media user and the routing are left as they are.
 
 Request fields:
 
@@ -1395,7 +1417,9 @@ enabled and the script exists: a job without a client, with the QML write
 deadline and grace period. It finishes a transaction that a power loss, a
 crash or a killed write left behind (see QML Patch) and returns at once when
 there is none. Meanwhile other maintenance requests get `409
-maintenance_busy`, like during any other job. The deadline's `SIGTERM` does
+maintenance_busy`, like during any other job. The device-user label writes
+(ensure, restore) are QML write jobs with the same deadline and grace period.
+The deadline's `SIGTERM` does
 not stop a recovery half-way, neither this job nor the recovery that runs
 ahead of every QML write: the script repeats the recovery once from its
 start, which finishes the step the signal cut (files back in place, GUI

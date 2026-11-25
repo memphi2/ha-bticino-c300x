@@ -35,7 +35,9 @@ def transaction_env(tmp_path, *, succeeds_on, hold_on):
     probe = pidof.read_text().removeprefix("#!/bin/sh\n")
     pidof.write_text(
         '#!/bin/sh\n'
-        'if [ "$(cat "$C300X_TEST_OBSERVATIONS/count")" = "$C300X_TEST_HOLD_ON" ]; then\n'
+        # Once only: a step repeated after the agent's SIGTERM is not held again.
+        'if [ "$(cat "$C300X_TEST_OBSERVATIONS/count")" = "$C300X_TEST_HOLD_ON" ] && '
+        '[ ! -e "$C300X_TEST_OBSERVATIONS/held" ]; then\n'
         '  touch "$C300X_TEST_OBSERVATIONS/held"\n'
         '  while [ ! -e "$C300X_TEST_OBSERVATIONS/release" ]; do sleep 0.02; done\n'
         'fi\n' + probe
@@ -54,11 +56,14 @@ def transaction_env(tmp_path, *, succeeds_on, hold_on):
 
 
 @pytest.mark.parametrize("operation", ["ensure", "restore"])
-@pytest.mark.parametrize("outcome,hold_on", [("success", 1), ("rollback", 1), ("rollback", 2)])
-def test_label_shutdown_finishes_commit_or_rollback(route_binary, tmp_path, operation, outcome, hold_on):
-    gui, backup, env, observations = transaction_env(
-        tmp_path, succeeds_on=1 if outcome == "success" else 2, hold_on=hold_on,
-    )
+@pytest.mark.parametrize("succeeds_on,hold_on", [(1, 1), (2, 1), (2, 2)])
+def test_label_shutdown_ends_the_write_by_its_rollback(route_binary, tmp_path, operation, succeeds_on, hold_on):
+    """Agent shutdown during the label write (in the GUI restart of the write,
+    or of its own rollback): one SIGTERM for the script, whose trap puts the
+    files back and remounts read-only. The agent waits for that, not for a
+    script that hangs, and never kills the write half-way."""
+
+    gui, backup, env, observations = transaction_env(tmp_path, succeeds_on=succeeds_on, hold_on=hold_on)
     if operation == "restore":
         _run_qml_patch_raw(tmp_path, gui, backup, "media-user-label-apply").check_returncode()
     before = snapshot(gui)
@@ -71,21 +76,13 @@ def test_label_shutdown_finishes_commit_or_rollback(route_binary, tmp_path, oper
         if hold_on == 1:
             assert list(gui.glob(".c300x-qml-transaction.*"))
         process.terminate()
-        time.sleep(0.1)
-        assert process.poll() is None, "shutdown interrupted the label transaction"
-        (observations / "release").touch()
-        stdout, stderr = process.communicate(timeout=5)
+        # The held command is never released: the shutdown does not depend on it.
+        stdout, stderr = process.communicate(timeout=14)
         assert process.returncode == 0, stderr
-        result = json.loads(stdout)
-        assert result["writes"] == int(outcome == "success")
-        assert result["restored"] == int(operation == "restore" and outcome == "success")
-        # Shutdown cancels the follow-up status query after a successful commit.
-        assert result["status"] == (0 if outcome == "success" else 500)
-        if outcome == "rollback":
-            assert snapshot(gui) == before
-            assert snapshot(observations / "2", gui_only=True) == before
-        else:
-            assert snapshot(gui) != before
+        # No write recorded, routing not restored, request closed without an answer.
+        assert json.loads(stdout) == {"writes": 0, "restored": 0, "status": 0}
+        assert snapshot(gui) == before
+        assert snapshot(observations / "2", gui_only=True) == before
         assert not list(gui.glob(".c300x-qml-transaction.*"))
         assert not (tmp_path / "stage").exists()
         assert (observations / "mounts").read_text().splitlines() == [
@@ -99,6 +96,10 @@ def test_label_shutdown_finishes_commit_or_rollback(route_binary, tmp_path, oper
 
 
 def test_label_write_has_no_ten_second_kill_deadline(route_binary, tmp_path):
+    """The label write is not the 10 s read job: after ten seconds the script
+    and its transaction are alive, and it then finishes on its own (here: a
+    failed GUI start, its rollback, and the route's 500)."""
+
     gui, _, env, observations = transaction_env(tmp_path, succeeds_on=2, hold_on=1)
     before = snapshot(gui)
     process = subprocess.Popen([str(route_binary), "transaction", str(SCRIPT), "ensure"],
@@ -107,14 +108,12 @@ def test_label_write_has_no_ten_second_kill_deadline(route_binary, tmp_path):
     try:
         wait_for(observations / "held", process)
         time.sleep(10.2)
-        # Shutdown must still find a live transaction, not an orphaned backup.
-        process.terminate()
-        time.sleep(0.1)
         assert process.poll() is None
+        assert list(gui.glob(".c300x-qml-transaction.*"))
         (observations / "release").touch()
-        stdout, stderr = process.communicate(timeout=5)
+        stdout, stderr = process.communicate(timeout=10)
         assert process.returncode == 0, stderr
-        assert json.loads(stdout)["writes"] == 0
+        assert json.loads(stdout) == {"writes": 0, "restored": 0, "status": 500}
         assert snapshot(gui) == before
         assert not list(gui.glob(".c300x-qml-transaction.*"))
         assert (observations / "mounts").read_text().splitlines()[-1] == "-o remount,ro /"

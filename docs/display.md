@@ -163,11 +163,24 @@ touch fix for lost taps is not part of it; it changes a Qt 4 library that
   start script remain. It leaves the installed agent and recovery untouched.
   Older agents and direct SSH/manual installations do not have this guard;
   complete removal and checking the running stock GUI remain mandatory.
-- **If the station keeps restarting:** if the station keeps restarting after
-  an update, rename `/home/bticino/cfg/extra/c300x-native-agent/display-qt5.rcc`
-  over SSH; the next start uses the original display. Then turn off
-  **Home Assistant pages on the display** and do not run the core hook Repair,
-  so that Home Assistant does not write the file back, and report it.
+- **If the station keeps restarting** after an install, an update or saving
+  the display settings:
+  1. Over SSH, between two restarts, rename the display resource file:
+     `mv /home/bticino/cfg/extra/c300x-native-agent/display-qt5.rcc /home/bticino/cfg/extra/c300x-native-agent/display-qt5.rcc.hang`.
+     The next start uses the original display.
+  2. Once the original display runs, remove the pages and the core hook over
+     SSH: `/home/bticino/cfg/extra/c300x-native-agent/qml_patch.sh restore-all`.
+     Its last line contains `"qt5_overlay":"off"`; the display restarts once,
+     as shipped. If it answers `An unfinished GUI write is still in place`,
+     wait a minute and run it again.
+  3. If the restarts began with an install from Home Assistant or after
+     saving the display settings, also turn off **Home Assistant pages on the
+     display** (this discards the page settings); otherwise Home Assistant
+     applies the pages again at its next start. After step 2 this writes
+     nothing to the station.
+  4. Until you have reported it, do not run the core hook Repair, the
+     **Display patch** switch or an agent update: each writes the resource
+     file again. Keep `display-qt5.rcc.hang` for the report.
 - **What to report:** the Display patch status, the integration diagnostics
   and, if you can reach the device, `/tmp/c300x-display-qt5.log` (the display's
   error output, at most 64 KB, cleared by a restart of the device).

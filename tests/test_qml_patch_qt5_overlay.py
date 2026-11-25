@@ -434,3 +434,40 @@ def test_the_daemons_signals_still_reach_the_display_started_with_the_overlay(de
         other.wait()
     assert starts.read_text().splitlines() == [str(device.lib), "usr1"]
     assert device.ok("status")["qt5_overlay"] == "active"
+
+
+def _rename_resource_file(device: Device, tmp_path: Path) -> Path:
+    """The first step of the way out of a restart loop: the next start is the shipped one."""
+
+    device.ok("apply")
+    kept = Path(f"{device.rcc}.hang")
+    device.rcc.rename(kept)
+    assert _start_display(device, tmp_path, 0) == ["plain"]
+    status = device.ok("status")
+    assert (status["patched"], status["core_patched"], status["qt5_overlay"]) == (True, True, "incomplete")
+    return kept
+
+
+def test_turning_the_pages_off_after_the_rename_writes_the_resource_file_back(device: Device, tmp_path: Path) -> None:
+    """Why the way out does not use the Display setting or switch: restore keeps the core hook packed."""
+
+    _rename_resource_file(device, tmp_path)
+    status = device.ok("restore")
+    assert (status["patched"], status["core_patched"], status["qt5_overlay"]) == (False, True, "active")
+    assert device.rcc.exists()
+    assert "c300x-qrc-overlay" in device.wrapper.read_text()
+
+
+def test_the_way_out_of_a_restart_loop_ends_with_the_display_as_shipped(device: Device, tmp_path: Path) -> None:
+    """docs/display.md, "If the station keeps restarting": rename the file, then restore-all."""
+
+    kept = _rename_resource_file(device, tmp_path)
+    status = device.ok("restore-all")
+    assert (status["patched"], status["core_patched"], status["qt5_overlay"]) == (False, False, "off")
+    assert not device.rcc.exists() and not device.lib.exists()
+    assert not Path(f"{device.rcc}.failed").exists()
+    assert device.wrapper.read_text() == WRAPPER
+    # The renamed file stays for the report; nothing reads it.
+    assert kept.exists()
+    assert device.ok("status")["qt5_overlay"] == "off"
+    assert _start_display(device, tmp_path, 0)[1:] == ["plain"]

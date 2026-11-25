@@ -540,3 +540,20 @@ def test_the_3_0_6_beta_texts_say_what_ran_on_a_station():
         flat = " ".join(text.split())
         assert "not yet tested on a device" not in flat, name
         assert "offline only" in flat, name
+
+
+def test_the_way_out_of_a_restart_loop_removes_the_overlay_before_the_setting():
+    """Turning the pages off while the overlay is left writes the resource file back
+    (tests/test_qml_patch_qt5_overlay.py); restore-all gives the display back as shipped."""
+
+    agent = "/home/bticino/cfg/extra/c300x-native-agent"
+    for name, path in (("display.md", DOCS / "display.md"),
+                       ("v2.10.0b1.md", ROOT / ".github/release-notes/v2.10.0b1.md")):
+        text = path.read_text(encoding="utf-8")
+        way_out = " ".join(text.split("keeps restarting", 1)[1].split("\n## ", 1)[0].split())
+        rename = way_out.index(f"`mv {agent}/display-qt5.rcc {agent}/display-qt5.rcc.hang`")
+        removal = way_out.index(f"`{agent}/qml_patch.sh restore-all`")
+        pages_off = way_out.index("turn off **Home Assistant pages on the display**")
+        assert rename < removal < pages_off, name
+        for control in ("core hook Repair", "**Display patch** switch", "agent update"):
+            assert control in way_out[pages_off:], (name, control)

@@ -18,11 +18,11 @@ Firmware 3.0.6:
   offers **Stock** and **Fixed side by side** here too. The fix for lost taps
   is not part of it on 3.0.6.
 - The display restarts after a change one restart at a time and only after
-  the old display has ended; several changes close together end in one
-  restart. A restart that takes longer than a request is reported as running
-  (`gui_restart: pending`), and Home Assistant and the installers wait for
-  its outcome instead of reporting a failure. An agent update restarts the
-  display once.
+  the old display has ended, with a pause of 5 s in between; several changes
+  close together end in one restart. A restart that takes longer than a
+  request is reported as running (`gui_restart: pending`), and Home
+  Assistant and the installers wait for its outcome instead of reporting a
+  failure. An agent update restarts the display once.
 - A display that fails with the pages is restarted once more and then starts
   as shipped until the station restarts; the patch status reads **applied,
   but the display started as shipped**. Turning the **Display patch** switch

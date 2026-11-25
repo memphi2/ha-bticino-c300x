@@ -209,8 +209,8 @@ A request left by a worker that died is taken over by the next worker.
    A start script that does not end, for example one of an earlier beta
    sleeping before its retry, gets SIGKILL and cannot run its trap later. If a
    process survives that, nothing is started and the cycle fails.
-2. Settle `C300X_QML_GUI_RELOAD_DELAY_SECONDS` (2) for eglfs/Vivante to release
-   the framebuffer.
+2. Settle `C300X_QML_GUI_RELOAD_DELAY_SECONDS` (5 on Qt 5; Qt 4 keeps 2) for
+   eglfs/Vivante to release the framebuffer.
 3. Start the installed start script once, executed directly, in its own
    session, without the worker's lock descriptor.
 4. Verify: ready when `BtClass` has written its watchdog file after the start

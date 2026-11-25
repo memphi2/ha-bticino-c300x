@@ -22,6 +22,7 @@ from tests.test_qml_patch_gui_reload import (
     OverlayStation,
     Station,
     _kinds,
+    _restart_pause,
     _settled,
     _starts,
     _wait_for,
@@ -126,3 +127,14 @@ def test_an_apply_retries_the_overlay_under_the_firmware_shell(
         assert _starts(station) == ["overlay", "overlay", "plain", "overlay"]
     finally:
         station.stop_all()
+
+
+def test_the_qt5_display_starts_after_a_pause_of_5_s(station: Station, shell: Path) -> None:
+    station.boot(C300X_TEST_TEARDOWN="0")
+
+    def run(env: dict[str, str]) -> None:
+        process = _run(station, shell, "reload", env)
+        _, stderr = process.communicate(timeout=120)
+        assert process.returncode == 0, stderr
+
+    assert 4.7 <= _restart_pause(station, run, qt5=True) < 6.5

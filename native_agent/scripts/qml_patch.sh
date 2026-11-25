@@ -38,6 +38,8 @@ if [ -e "${C300X_QML_QT5_MARKER:-/usr/lib/libQt5Core.so.5}" ]; then
     QT5_WRAPPER_BACKUP="${C300X_QML_QT5_WRAPPER_BACKUP:-$QT5_BACKUP_ROOT/original/bin/BtClass_qws}"
     QT5_LOG="${C300X_QML_QT5_LOG:-/tmp/c300x-display-qt5.log}"
     QT5_BOOT_ID="${C300X_QML_BOOT_ID:-/proc/sys/kernel/random/boot_id}"
+    # eglfs/Vivante gets 5 s to release the framebuffer of the display that ended.
+    GUI_RELOAD_DELAY_SECONDS="${C300X_QML_GUI_RELOAD_DELAY_SECONDS:-5}"
     QT5_UPTIME="${C300X_QML_UPTIME:-/proc/uptime}"
     # bt_daemon checks the watchdog file at least every 32 s and reboots
     # without it: a display that wrote none within 40 s is not starting.

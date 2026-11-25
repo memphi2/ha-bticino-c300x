@@ -20,6 +20,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import threading
 import time
 import uuid
 from collections.abc import Callable, Iterator
@@ -865,3 +866,42 @@ def test_a_write_says_that_it_restarted_the_display(overlay: OverlayStation) -> 
     unchanged = overlay.run("apply", C300X_QML_DYNAMIC_HOME_PAGE="0")
     assert unchanged["changed_files"] == 0 and "gui_restarted" not in unchanged, unchanged
     assert _starts(overlay) == ["overlay", "overlay"]
+
+
+def _restart_pause(station: Station, run: Callable[[dict[str, str]], object], *, qt5: bool) -> float:
+    """Seconds from the end of the old display to the start of the new one, at the default pause."""
+
+    env = station.script_env(qt5=qt5)
+    del env["C300X_QML_GUI_RELOAD_DELAY_SECONDS"]
+    ended: list[float] = []
+    started: list[float] = []
+
+    def watch() -> None:
+        while not started:
+            kinds = _kinds(station)
+            if not ended and "end" in kinds:
+                ended.append(time.monotonic())
+            if ended and kinds.count("start") == 2:
+                started.append(time.monotonic())
+            time.sleep(0.05)
+
+    watcher = threading.Thread(target=watch, daemon=True)
+    watcher.start()
+    run(env)
+    watcher.join(60)
+    assert ended and started, station.events()
+    return started[0] - ended[0]
+
+
+@pytest.mark.parametrize(("qt5", "pause"), [(True, 5), (False, 2)])
+def test_the_display_starts_after_the_pause_of_its_firmware(station: Station, qt5: bool, pause: int) -> None:
+    """The Qt 5 display (eglfs/Vivante) gets 5 s to release the framebuffer; 1.7.x and 2.0.x keep 2 s."""
+
+    station.boot(C300X_TEST_TEARDOWN="0")
+
+    def run(env: dict[str, str]) -> None:
+        result = subprocess.run([str(SCRIPT), "reload"], capture_output=True, text=True,
+                                env=env, check=False, timeout=90)
+        assert result.returncode == 0, result.stderr
+
+    assert pause - 0.3 <= _restart_pause(station, run, qt5=qt5) < pause + 1.5

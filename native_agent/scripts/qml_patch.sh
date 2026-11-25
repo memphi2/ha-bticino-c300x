@@ -2225,7 +2225,8 @@ qt5_prepare_or_report() {
     exit 0
 }
 
-# The internal Qt 5 steps are no actions on firmware 1.7.x and 2.0.x.
+# The restart worker and the Qt 5 preparation are no actions on firmware 1.7.x
+# and 2.0.x. qt5-import stays: it only copies display files into GUI_DIR.
 qt5_only_action() {
     [ "$QT5_DISPLAY" = "1" ] && return 0
     printf '{"ok":false,"available":false,"state":"invalid_action"}\n'
@@ -3191,7 +3192,6 @@ case "$ACTION" in
         gui_worker
         ;;
     qt5-import)
-        qt5_only_action
         qt5_import "${2:?}"
         json_status
         ;;

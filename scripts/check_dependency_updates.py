@@ -26,6 +26,7 @@ TOOL_NAMES = {
     "pyturbojpeg",
     "pytest",
     "pytest-cov",
+    "pytest-xdist",
     "pyyaml",
     "ruff",
     "spdx-tools",

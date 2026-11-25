@@ -32,6 +32,8 @@ def test_validation_runs_pytest_once_with_coverage(monkeypatch, pytest_result):
     assert len(commands) == 1
     command = list(commands[0])
     assert command[:3] == [check_validate.sys.executable, "-m", "pytest"]
+    assert "--numprocesses=logical" in command
+    assert "--dist=worksteal" in command
     assert "--cov=custom_components/bticino_c300x" in command
     assert f"--cov-fail-under={check_coverage.MINIMUM_COVERAGE}" in command
     assert check_coverage.MINIMUM_COVERAGE == 95

@@ -10,6 +10,7 @@ PyTurboJPEG==2.4.0
 PyYAML==6.0.3
 pytest==9.1.1
 pytest-cov==7.1.0
+pytest-xdist==3.8.0
 ruff==0.15.20
 spdx-tools==0.8.5
 voluptuous-serialize==2.7.0

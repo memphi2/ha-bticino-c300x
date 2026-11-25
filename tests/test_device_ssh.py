@@ -141,6 +141,7 @@ def test_command_timeout_closes_channel(ssh_server, monkeypatch):
 
 DISPLAY_STAND_IN = """#!/bin/sh
 {trap}
+[ "$C300X_QML_SOURCE_DIR" = "${{0%/*}}/qml" ] || exit 9
 : > "$0.started"
 i=0
 while [ $i -lt 400 ]; do sleep 0.02; i=$((i + 1)); done

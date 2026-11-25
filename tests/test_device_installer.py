@@ -414,8 +414,8 @@ def test_bootstrap_install_uses_python_ssh_client(
     assert any(
         command[0]
         == (
-            f"exec env C300X_QML_SOURCE_DIR={remote_dir}/qml "
-            f"{remote_dir}/qml_patch.sh core-apply"
+            f"C300X_QML_SOURCE_DIR={remote_dir}/qml "
+            f"exec {remote_dir}/qml_patch.sh core-apply"
         )
         for command in fake_client.commands
     )
@@ -432,8 +432,8 @@ def test_bootstrap_install_uses_python_ssh_client(
     assert any(
         command[0]
         == (
-            f"exec env C300X_QML_SOURCE_DIR={remote_dir}/qml "
-            f"{remote_dir}/qml_patch.sh apply"
+            f"C300X_QML_SOURCE_DIR={remote_dir}/qml "
+            f"exec {remote_dir}/qml_patch.sh apply"
         )
         for command in fake_client.commands
     )

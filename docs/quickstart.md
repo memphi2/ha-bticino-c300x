@@ -232,8 +232,8 @@ older releases cannot remove them.
 ## Next Steps
 
 - [Using the Integration](user-guide.md): camera quality and picture size,
-  clearer sound with **Audio codec** on **PCMU** (the station restarts once;
-  firmware 3.0.6 already uses it), clips, announcements, notifications and
+  clearer sound with **Audio codec** on **PCMU** (the station restarts once),
+  clips, announcements, notifications and
   [blueprints](user-guide.md#blueprints).
 - [Station Display Pages](display.md): Home Assistant pages, tiles and
   notifications on the station display.

@@ -844,3 +844,13 @@ def test_a_request_still_being_filed_waits_and_one_left_by_a_dead_requester_is_r
     assert filing.read_text() == "retry\n"
     assert not dead.exists()
     assert not any(path.name.endswith(".tmp") for path in (station.run_dir / "done").iterdir())
+
+
+@pytest.mark.parametrize("action", [["gui-worker"], ["qt5-prepare"], ["qt5-import", "/nonexistent"]])
+def test_the_internal_qt5_steps_are_refused_on_firmware_1_7_and_2_0(station: Station, action: list[str]) -> None:
+    result = subprocess.run([str(SCRIPT), *action], capture_output=True, text=True,
+                            env=station.script_env(qt5=False), check=False, timeout=30)
+    assert result.returncode == 2
+    assert json.loads(result.stdout) == {"ok": False, "available": False, "state": "invalid_action"}
+    assert "unbound" not in result.stderr
+    assert not station.run_dir.exists()

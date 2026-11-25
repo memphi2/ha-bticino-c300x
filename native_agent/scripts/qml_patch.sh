@@ -2225,6 +2225,13 @@ qt5_prepare_or_report() {
     exit 0
 }
 
+# The internal Qt 5 steps are no actions on firmware 1.7.x and 2.0.x.
+qt5_only_action() {
+    [ "$QT5_DISPLAY" = "1" ] && return 0
+    printf '{"ok":false,"available":false,"state":"invalid_action"}\n'
+    exit 2
+}
+
 qt5_boot_id() {
     cat "$QT5_BOOT_ID" 2>/dev/null || true
 }
@@ -3180,13 +3187,16 @@ case "$ACTION" in
         json_status
         ;;
     gui-worker)
+        qt5_only_action
         gui_worker
         ;;
     qt5-import)
+        qt5_only_action
         qt5_import "${2:?}"
         json_status
         ;;
     qt5-prepare)
+        qt5_only_action
         qt5_prepare
         qt5_wrapper_supported
         ;;

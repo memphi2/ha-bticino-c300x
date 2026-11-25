@@ -222,7 +222,6 @@ ASan/UBSan; symbol contracts limit each module's exports and dependencies.
 | `http_camera_quality.c` | Camera quality routes, like the codec. `camera_quality.c` reads the state and runs an apply under the update lock; `camera_files.c` and `camera_update.c` own the file transaction (backup, write, verify, rollback), `camera_settings.c` and `camera_crop.c` the key edits, `camera_sizes.c` the offered sizes and limits; `camera_quality_body.c` only formats the response. |
 | `http_clients.c`, `http_client_input.c` | Bounded slot admission and deferred dispatch; request receive, framing and deadline. |
 | `command_job.c` | Spawn, bounded nonblocking pipe reads, monotonic deadline, process-group cancellation and reap. Capture buffers are borrowed, never freed by the job. |
-| `command_transaction.c` | Synchronous label-write spawn, bounded output drain and reap. No deadline, cancellation, worker or timer; signal interruptions retry the read/wait so commit/rollback cleanup can finish. |
 
 ### Jobs and Deadlines
 
@@ -303,8 +302,6 @@ failure and single-slot ownership.
   GUI files; shutdown during the write's and the rollback's GUI start ends in
   the script's rollback, read-only remount cleanup, writes longer than ten
   seconds are not killed.
-- `test_native_command_transaction.py`: output bounds, interrupted reads and
-  waits, early stdout close, child and FD cleanup.
 
 ## Request Workers
 

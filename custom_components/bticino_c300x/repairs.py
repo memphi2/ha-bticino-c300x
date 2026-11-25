@@ -22,7 +22,11 @@ from .agent_update import (
     compare_agent_bundle,
 )
 from .api import C300XAgentApiError
-from .api_errors import C300XAgentApiUnsupportedError, C300XAgentUpdateError
+from .api_errors import (
+    C300XAgentApiConnectionError,
+    C300XAgentApiUnsupportedError,
+    C300XAgentUpdateError,
+)
 from .callback_url import async_suggest_callback_base_url
 from .callback_url import (
     validated_callback_base_url as _validated_callback_base_url,
@@ -567,28 +571,50 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
             )
         try:
             patch_state = await _async_capture_external_patch_state(entry, require_reliable=True)
-            if getattr(update_state, "payload_bootstrap_required", False):
+            bootstrap = getattr(update_state, "payload_bootstrap_required", False)
+            # The station applies the update by itself once it has the files,
+            # whether or not Home Assistant lives to see the answer. An active
+            # Display patch is noted as due before that, so a start after a
+            # lost answer still offers this repair and re-applies the pages.
+            noted_now = (
+                patch_state.qml_patch_required
+                and CONF_AGENT_UPDATE_QML_PENDING not in entry.data
+            )
+            pending: dict[str, bool] = {}
+            if patch_state.qml_patch_required:
+                pending[CONF_AGENT_UPDATE_QML_PENDING] = True
+            if bootstrap:
                 # Between the two passes the display counts as partly
                 # patched, which no longer tells whether the patch was
-                # active. Note that now, in case this flow does not see the
-                # first pass return.
-                pending = {CONF_AGENT_UPDATE_PAYLOAD_PENDING: True}
-                if patch_state.qml_patch_required:
-                    pending[CONF_AGENT_UPDATE_QML_PENDING] = True
+                # active.
+                pending[CONF_AGENT_UPDATE_PAYLOAD_PENDING] = True
+            if pending:
                 self.hass.config_entries.async_update_entry(
                     entry, data={**entry.data, **pending}
                 )
-            update_result = await async_apply_packaged_agent_update(
-                self.hass,
-                entry.runtime_data.api,
-            )
+            try:
+                update_result = await async_apply_packaged_agent_update(
+                    self.hass,
+                    entry.runtime_data.api,
+                )
+            except Exception as err:
+                if noted_now and not bootstrap and not _station_answer_lost(err):
+                    # The station refused, or nothing was sent: no update, so
+                    # nothing is due. Only an answer that never came leaves
+                    # open whether the station applied the update.
+                    _clear_qml_followup(self.hass, entry)
+                raise
+            if noted_now and not bootstrap and update_result.get("qml_patch_changed") is not True:
+                # The station's answer says it changed no display file: the
+                # note of this run is not needed. One from an earlier run stays.
+                _clear_qml_followup(self.hass, entry)
             _remember_qml_followup(self.hass, entry, patch_state, update_result)
             setup_data = await _async_verify_agent_after_update(
                 self.hass,
                 entry.runtime_data.api,
                 update_result,
             )
-            if getattr(update_state, "payload_bootstrap_required", False):
+            if bootstrap:
                 target_bundle = await async_load_packaged_bundle_metadata(self.hass)
                 if not target_bundle or compare_agent_bundle(
                     setup_data, target_bundle
@@ -1011,6 +1037,12 @@ class _ExternalPatchChanges:
             ipv6_firewall_patch_changed=config_changed or firewall_source_changed,
             config_schema_changed=config_changed,
         )
+
+
+def _station_answer_lost(err: Exception) -> bool:
+    """Whether a request ended without the station's answer (transport, time-out)."""
+
+    return isinstance(err, C300XAgentApiConnectionError) and err.__cause__ is not None
 
 
 def _remember_qml_followup(hass: HomeAssistant, entry: Any,

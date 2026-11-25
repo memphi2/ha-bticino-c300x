@@ -31,15 +31,14 @@ Firmware 3.0.6:
   update no longer fails the install or update: the step stays owed, and the
   core hook Repair stays until it has run again. A step that could not run at
   all (no connection, agent busy, rejected key) still fails.
-- On a display program the agent does not know, the display stays as
-  shipped, the agent runs without the display pages and Repairs says why.
+- The agent knows the display program of firmware 3.0.6. On another build
+  it applies the pages only when it finds exactly one matching set of pages
+  in the program and the start script is the original one of 3.0.6;
+  otherwise the display stays as shipped, the agent runs without the display
+  pages and Repairs says why.
 - The camera's stream on 3.0.6 offers the sizes 320x240, 352x288, 400x288
   (factory), 480x288, 640x384, 640x480, 704x576, 720x432 and 720x576. Sizes
   other than the factory one are not yet tested on a station.
-- Picture controls: until the station has written the contrast once after a
-  start, they may only work during a ring call.
-- The IPv6 firewall switch is not offered on a station without an IPv6
-  firewall (3.0.6).
 
 Station (all firmwares):
 

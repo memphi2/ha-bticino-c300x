@@ -21,6 +21,7 @@ from .const import (
 )
 from .display_activation import (
     display_activation_confirmed,
+    display_is_qt5,
     display_restart_pending,
     display_step_failed,
     display_unsupported,
@@ -171,6 +172,11 @@ async def async_restore_qml_patches_after_update(
     after a write. With ``reload_unchanged`` False the restart at the end is
     left out when every apply answered that it changed no file: a check that
     found the pages current does not restart the display.
+
+    On the Qt 5 display of firmware 3.0.x every restart risks the display
+    race, so there is at most one: the full apply carries the core files and
+    replaces the core apply, and the restart at the end runs only when no
+    write restarted the display already and ``reload_unchanged`` asks for one.
     """
 
     api = entry.runtime_data.api
@@ -182,9 +188,14 @@ async def async_restore_qml_patches_after_update(
         answers.append(answer)
         return answer
 
+    async def core_patch() -> dict[str, Any]:
+        answer: dict[str, Any] = await busy_retry(api.async_apply_qml_core_patch)
+        answers.append(answer)
+        return answer
+
+    qt5 = display_is_qt5(_qml_patch_status(entry))
     async with _qml_patch_lock(entry):
-        core_status: dict[str, Any] = await busy_retry(api.async_apply_qml_core_patch)
-        answers.append(core_status)
+        core_status = await (full_patch() if qt5 and apply_full_patch else core_patch())
         _store_qml_patch_status(entry, core_status)
         core_status = await async_display_restart_settled(entry, core_status)
         if display_unsupported(core_status):
@@ -193,7 +204,7 @@ async def async_restore_qml_patches_after_update(
         require_display_activation(core_status)
         if core_status.get("qt5_overlay") is not None and core_status.get("core_patched") is not True:
             raise C300XAgentApiError("Qt 5 display core patch is not confirmed")
-        if apply_full_patch:
+        if apply_full_patch and not qt5:
             await _async_run_qml_patch_action_unlocked(
                 entry,
                 status_changed=None,
@@ -202,7 +213,11 @@ async def async_restore_qml_patches_after_update(
                 action=full_patch,
                 refresh=lambda entry: async_refresh_qml_patch_status(entry, wait_busy=True),
             )
-        if reload_unchanged or not all(_wrote_no_file(answer) for answer in answers):
+        if qt5:
+            reload = reload_unchanged and not any(_restarted(answer) for answer in answers)
+        else:
+            reload = reload_unchanged or not all(_wrote_no_file(answer) for answer in answers)
+        if reload:
             await busy_retry(lambda: api.async_reload_gui(**gui_reload_kwargs(entry)))
         status = await async_display_restart_settled(
             entry, await async_refresh_qml_patch_status(entry, wait_busy=True)
@@ -250,6 +265,15 @@ async def async_restore_display_after_update(
             await async_refresh_qml_patch_status(entry, wait_busy=True)
         return False
     return True
+
+
+def _restarted(answer: Any) -> bool:
+    """Whether a Qt 5 apply says it filed a display restart itself."""
+
+    if not isinstance(answer, dict):
+        return False
+    raw = answer.get("raw")
+    return (raw if isinstance(raw, dict) else answer).get("gui_restarted") is True
 
 
 def _wrote_no_file(answer: Any) -> bool:

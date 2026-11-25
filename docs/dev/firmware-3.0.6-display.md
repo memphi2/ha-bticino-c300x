@@ -311,6 +311,11 @@ the core hook only), and:
 - the Display setting sync applies the pages when the record exists and
   clears it once the device followed.
 
+The follow-up restarts the Qt 5 display at most once: with the full Display
+patch the apply (it carries the core files) replaces core-apply, and HA files
+its own restart only when no write answered `"gui_restarted":true` and the
+runtime changed, the answer was lost or steps were owed.
+
 A step that never ran (no connection, a rejected key, the agent busy until
 the wait ended, an SSH failure) fails the update or install as before and
 leaves the update follow-up pending, as does every display failure on

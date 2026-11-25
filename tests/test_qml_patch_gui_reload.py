@@ -854,3 +854,14 @@ def test_the_internal_qt5_steps_are_refused_on_firmware_1_7_and_2_0(station: Sta
     assert json.loads(result.stdout) == {"ok": False, "available": False, "state": "invalid_action"}
     assert "unbound" not in result.stderr
     assert not station.run_dir.exists()
+
+
+def test_a_write_says_that_it_restarted_the_display(overlay: OverlayStation) -> None:
+    """Home Assistant files no second restart after a write that restarted the display."""
+
+    overlay.boot()
+    written = overlay.run("apply", C300X_QML_DYNAMIC_HOME_PAGE="0")
+    assert written["changed_files"] and written["gui_restarted"] is True, written
+    unchanged = overlay.run("apply", C300X_QML_DYNAMIC_HOME_PAGE="0")
+    assert unchanged["changed_files"] == 0 and "gui_restarted" not in unchanged, unchanged
+    assert _starts(overlay) == ["overlay", "overlay"]

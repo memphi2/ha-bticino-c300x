@@ -127,6 +127,10 @@ json_status() {
         # pending: a display restart is still queued or running; its outcome
         # (gui_running, qt5_overlay) shows in a status read after it.
         qt5_fields=",\"qt5_overlay\":\"$qt5_overlay\",\"gui_restart\":\"$gui_restart\""
+        # This run filed a display restart: Home Assistant needs no extra one.
+        if [ "${GUI_RESTART_FILED:-0}" = "1" ]; then
+            qt5_fields="$qt5_fields,\"gui_restarted\":true"
+        fi
         if [ -s "$QT5_UNSUPPORTED" ]; then
             qt5_fields="$qt5_fields,\"qt5_unsupported\":\"$(tr -cd 'a-z0-9_' < "$QT5_UNSUPPORTED" | head -c 48)\""
         fi
@@ -841,6 +845,7 @@ reload_gui() {
         reload_mode=retry
     fi
     reload_rc=0
+    GUI_RESTART_FILED=1
     gui_restart "$reload_mode" || reload_rc=$?
     if [ "$reload_rc" = "1" ]; then
         printf 'No display program could be started\n' >&2

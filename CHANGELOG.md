@@ -21,7 +21,8 @@ Firmware 3.0.6:
   the old display has ended; several changes close together end in one
   restart. A restart that takes longer than a request is reported as running
   (`gui_restart: pending`), and Home Assistant and the installers wait for
-  its outcome instead of reporting a failure.
+  its outcome instead of reporting a failure. An agent update restarts the
+  display once.
 - A display that fails with the pages is restarted once more and then starts
   as shipped until the station restarts; the patch status reads **applied,
   but the display started as shipped**. Turning the **Display patch** switch

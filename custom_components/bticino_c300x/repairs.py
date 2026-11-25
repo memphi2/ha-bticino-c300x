@@ -1187,7 +1187,11 @@ async def _async_restore_external_patch_state(
 
     if changed.qml_patch_changed or (changed.runtime_changed and qt5):
         return await async_restore_display_after_update(
-            entry, apply_full_patch=await full_patch_due()
+            entry,
+            apply_full_patch=await full_patch_due(),
+            # Qt 5: a write restarts the display itself; only a new runtime
+            # without such a write still needs the one restart.
+            reload_unchanged=not qt5 or changed.runtime_changed,
         )
     if changed.display_unconfirmed or owed:
         full_patch = await full_patch_due()

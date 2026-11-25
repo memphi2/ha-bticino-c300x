@@ -638,6 +638,26 @@ class _Qt5Station(_Station):
         assert display_restart
         return await super().async_reload_gui()
 
+    @staticmethod
+    def _restarted(status: dict[str, Any]) -> dict[str, Any]:
+        # A write that changed files filed its own display restart.
+        if status["raw"]["changed_files"]:
+            status["raw"]["gui_restarted"] = True
+        return status
+
+    async def async_apply_qml_core_patch(self) -> dict[str, Any]:
+        return self._restarted(await super().async_apply_qml_core_patch())
+
+    async def async_apply_qml_patch(self, *, dynamic_homepage: bool = False) -> dict[str, Any]:
+        # The full apply carries the core files: one write, one restart.
+        self.stop("full_apply")
+        changed = int(self.full != self.source or self.core != self.source)
+        if changed:
+            self.core = self.full = self.source
+            self.writes.append("full")
+            self.restarts += 1
+        return self._restarted(self._status(changed))
+
 
 def _qt5(entry: FakeEntry) -> None:
     # The status read at setup names the Qt 5 overlay.
@@ -678,4 +698,21 @@ def test_a_lost_answer_on_the_qt5_display_restarts_it_once(restarted) -> None:
     assert _confirm(flow) == DONE
 
     assert (station.writes, station.restarts) == ([], 1)
+    _assert_settled(station, entry)
+
+
+@pytest.mark.parametrize(("display", "written"), [(True, ["full"]), (False, ["core"])])
+def test_an_update_with_new_pages_restarts_the_qt5_display_once(display, written) -> None:
+    """Every live restart on 3.0.6 risks the display race: the full apply carries
+    the core files, and its own restart is the only one."""
+
+    station = _Qt5Station(full=display)
+    station.update_changes_display = True
+    entry, flow = _start(station, display=display)
+    _qt5(entry)
+
+    assert _confirm(flow) == DONE
+
+    assert station.writes == written
+    assert station.restarts == 1
     _assert_settled(station, entry)

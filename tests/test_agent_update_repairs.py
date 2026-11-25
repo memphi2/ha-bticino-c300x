@@ -2813,11 +2813,8 @@ def test_restore_external_patch_state_reconciles_qt5_runtime_even_without_option
     asyncio.run(_async_restore_external_patch_state(
         entry, state, _ExternalPatchChanges(runtime_changed=True),
     ))
-    assert api.calls == [
-        "apply_qml_core",
-        *(["apply_qml", "qml_status"] if full_patch else []),
-        "reload_gui", "qml_status",
-    ]
+    # Qt 5: the full apply carries the core files; one restart for the new runtime.
+    assert api.calls == ["apply_qml" if full_patch else "apply_qml_core", "reload_gui", "qml_status"]
 
 
 @pytest.mark.parametrize("full_patch", [False, True])
@@ -3264,7 +3261,7 @@ def test_display_restore_follows_the_new_agent_capabilities(monkeypatch, mainten
                                firewall_status_known=True, ipv6_firewall_patched=False)
     calls = []
 
-    async def restore(_entry, *, apply_full_patch):
+    async def restore(_entry, *, apply_full_patch, reload_unchanged=True):
         calls.append(apply_full_patch)
 
     monkeypatch.setattr(repairs, "async_restore_display_after_update", restore)

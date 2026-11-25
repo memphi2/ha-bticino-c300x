@@ -378,6 +378,14 @@ reload_gui() {
     pidof BtClass >/dev/null 2>&1
 }
 
+# The agent's SIGTERM at the job deadline can fall between the stop and the
+# start of the GUI. The restart is repeated once, so the display is not left off.
+abort_reload() {
+    trap : HUP INT TERM
+    reload_gui || true
+    exit 131
+}
+
 remount_rw() {
     if [ "$NO_REMOUNT" = "1" ]; then
         return 0
@@ -2148,7 +2156,9 @@ case "$ACTION" in
         json_write_status
         ;;
     reload)
+        trap abort_reload HUP INT TERM
         reload_gui
+        trap - HUP INT TERM
         json_status
         ;;
     *)

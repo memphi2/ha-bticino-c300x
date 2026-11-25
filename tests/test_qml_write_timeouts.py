@@ -30,6 +30,6 @@ def test_home_assistant_outwaits_a_qml_write_and_its_rollback() -> None:
     maintenance = (SRC / "http_maintenance.c").read_text(encoding="utf-8")
     recovery = (SRC / "qml_recovery.c").read_text(encoding="utf-8")
     assert "C300X_QML_WRITE_TIMEOUT_MS : 10000" in maintenance
-    assert "records_write ? C300X_QML_WRITE_TERM_GRACE_MS : 0" in maintenance
+    assert "records_write || gui_reload ? C300X_QML_WRITE_TERM_GRACE_MS : 0" in maintenance
     assert '"recover", -1, C300X_QML_WRITE_TIMEOUT_MS' in recovery
     assert "term_grace_ms = C300X_QML_WRITE_TERM_GRACE_MS" in recovery

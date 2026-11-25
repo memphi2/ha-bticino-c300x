@@ -295,6 +295,28 @@ def test_a_sigterm_during_the_rollback_gui_restart_still_restarts_the_gui_and_re
     assert not (tmp_path / "c300x-qml-root-rw").exists()
 
 
+def test_a_sigterm_during_a_standalone_gui_restart_repeats_the_restart(tmp_path: Path) -> None:
+    """The reload job's deadline SIGTERM falls between the GUI's stop and its
+    start: the script must not go with the display off."""
+
+    gui, backup = tmp_path / "gui", tmp_path / "backup"
+    gui.mkdir()
+    _write_original_gui(gui)
+    env = _commands(tmp_path, ("killall", "*"))
+    log = tmp_path / "calls.log"
+    # The GUI is down after the cut stop and up after the repeated restart.
+    (tmp_path / "recovery-commands" / "pidof").write_text(
+        f'#!/bin/sh\nprintf "%s\\n" "pidof $*" >> "{log}"\n'
+        f'[ "$(grep -c "^killall" "{log}")" -ge 2 ]\n')
+    log.unlink(missing_ok=True)
+    result = qml._terminate_when_held(tmp_path, gui, backup, "reload", env)
+    assert result.returncode == 131, result.stderr
+    assert result.stdout == ""
+    assert _calls(tmp_path, "killall") == ["killall BtClass"] * 2
+    assert log.read_text().splitlines()[-1] == "pidof BtClass"
+    assert _calls(tmp_path, "mount") == []
+
+
 def test_a_sigterm_during_the_final_remount_retries_it_and_exits_131(tmp_path: Path) -> None:
     """A committed write is not a rollback: exit 131, and / still goes read-only."""
 

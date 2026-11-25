@@ -1353,7 +1353,8 @@ new busy status or execution deadline. The 500ms receive deadline applies to
 incomplete input, not a complete deferred SSH request. Unauthorized and disabled
 SSH requests are not deferred. Retrying a busy request must wait for completion.
 
-QML status and standalone GUI reload retain a 10-second script deadline; QML
+QML status and standalone GUI reload retain a 10-second script deadline (the
+reload is not killed at it, see below); QML
 writes retain 30 seconds for a failed start, rollback and restart of the previous
 GUI. Their failed execution, timeout and overflowing 4096-byte output retain
 the existing `502` responses, with one exception: a QML write (apply,
@@ -1493,7 +1494,15 @@ Restarts the native agent.
 {"confirm": "reload_gui"}
 ```
 
-Reloads the C300X graphical interface.
+Reloads the C300X graphical interface. Failures are answered `502` with
+`{"ok": false, "error": "reload_failed"}` (`reload_script_missing` without the
+script). A reload past its 10 seconds gets `SIGTERM` for its process group and
+the 15-second grace period of a QML write, not `SIGKILL` at once: the signal
+can fall between the stop and the start of the GUI, so the script repeats the
+restart once and exits 131. The request stays open until the script has ended
+and is then answered with the same `502 reload_failed`, up to 25 seconds after
+it was sent; `gui_running` of `GET /api/v1/maintenance/qml-patch` says whether
+the display is up.
 
 ### Agent Self-Update
 

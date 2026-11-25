@@ -93,8 +93,11 @@ def test_snapshot_switch_names_why_the_last_visitor_image_failed(monkeypatch) ->
                               capture=SimpleNamespace(last_failure="snapshot_unavailable"))
     monkeypatch.setattr(module, "get_snapshots", lambda *_: manager)
     assert switch.extra_state_attributes == {"last_failure": "snapshot_unavailable"}
+    # A null attribute reads "Unknown" in the frontend; no failure shows no row.
     manager.capture.last_failure = None
-    assert switch.extra_state_attributes == {"last_failure": None}
+    assert switch.extra_state_attributes == {}
+    monkeypatch.setattr(module, "get_snapshots", lambda *_: None)
+    assert switch.extra_state_attributes == {}
 
 
 pytestmark = pytest.mark.usefixtures("entity_ha_boundary")

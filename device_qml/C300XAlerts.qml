@@ -244,7 +244,7 @@ Item {
         Rectangle {
             id: sheet
             width: parent.width
-            height: Math.max(0, acknowledgeButton.y - 10)
+            height: Math.max(0, acknowledgeButton.y - 2)
             color: "white"
             opacity: 0.5
         }

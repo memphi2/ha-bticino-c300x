@@ -153,9 +153,9 @@ int main(int argc, char **argv)
     assert(c300x_http_maintenance_prepare(&owner, &fd) == -1 && fd.fd == -1);
     assert(c300x_http_device_user_route(&owner, 1234, config, request));
     if (transaction_test) {
-        /* Mirror HTTP shutdown: finish dispatch, then close the job owner.
-         * The pre-fix route returns early and kills its still-writing child. */
-        while (!shutdown_requested) {
+        /* Mirror HTTP shutdown: serve the job, then close the job owner. The
+         * close ends a label write by SIGTERM and waits for its rollback. */
+        while (!shutdown_requested && c300x_http_maintenance_busy(&owner)) {
             c300x_http_maintenance_tick(&owner);
             (void)poll(NULL, 0, 10);
         }
@@ -172,9 +172,36 @@ int main(int argc, char **argv)
     assert(strcmp(test_case, "qt5") != 0 || !asynchronous);
     if (asynchronous) {
         assert(responses == 0 && owner.client_fd == 1234);
-        assert(owner.job.capture_size == 4096);
+        /* The label write first: a QML write job, never the 10 s read job. */
+        int label = strcmp(operation, "status") != 0;
+        assert(owner.job.capture_size == (label ? 8192 : 4096));
+        assert(owner.job.term_grace_ms == (label ? C300X_QML_WRITE_TERM_GRACE_MS : 0));
         long long remaining = owner.job.deadline_ms - c300x_monotonic_ms();
-        assert(remaining > 9000 && remaining <= 10000);
+        long long limit = label ? C300X_QML_WRITE_TIMEOUT_MS : 10000;
+        assert(remaining > limit - 1000 && remaining <= limit);
+    }
+    if (strncmp(test_case, "label-", 6) == 0) {
+        /* A label script that hangs: the route has returned, the loop runs.
+         * Past the write deadline SIGTERM, and no answer before the script ends. */
+        char marker[C300X_MAX_PATH_LEN + 16];
+        pid_t child = owner.job.pid;
+        assert(asynchronous && child > 0);
+        snprintf(marker, sizeof(marker), "%s.started", argv[2]);
+        for (int waited = 0; access(marker, F_OK) != 0; waited++) {
+            assert(waited < 500);
+            c300x_http_maintenance_tick(&owner);
+            (void)poll(NULL, 0, 10);
+        }
+        time_offset = 10001;
+        c300x_http_maintenance_tick(&owner);
+        assert(responses == 0 && owner.job.kill_ms == 0);
+        time_offset = C300X_QML_WRITE_TIMEOUT_MS + 1;
+        c300x_http_maintenance_tick(&owner);
+        assert(responses == 0 && owner.job.pid == child && kill(child, 0) == 0);
+        assert(owner.job.kill_ms > 0 && c300x_http_maintenance_busy(&owner));
+        if (strcmp(test_case, "label-kill") == 0) {
+            time_offset += C300X_QML_WRITE_TERM_GRACE_MS + 1;
+        }
     }
     if (strcmp(test_case, "shutdown") == 0) {
         pid_t child = owner.job.pid;
@@ -213,6 +240,14 @@ int main(int argc, char **argv)
         assert(response_status == 200 && writes == 0 && reads == 1);
         assert(strstr(response_body, "\"status_available\":true") != NULL);
         assert(strstr(response_body, "\"account_label\":\"A \\\"quoted\\\" label\"") != NULL);
+    } else if (strncmp(test_case, "label-", 6) == 0) {
+        char marker[C300X_MAX_PATH_LEN + 16];
+        int rolled = strcmp(test_case, "label-timeout") == 0;
+        snprintf(marker, sizeof(marker), "%s.rolled", argv[2]);
+        assert(response_status == 504 && writes == 0 && !restored);
+        assert(strstr(response_body, "\"error\":\"media_user_label_timeout\"") != NULL);
+        assert(strstr(response_body, rolled ? "\"rolled_back\":true" : "\"rolled_back\":false") != NULL);
+        assert((access(marker, F_OK) == 0) == rolled);
     } else if (strcmp(test_case, "success") == 0 || strcmp(test_case, "overflow") == 0
         || strcmp(test_case, "qt5") == 0
         || strcmp(test_case, "busy-root") == 0

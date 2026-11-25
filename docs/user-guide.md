@@ -255,10 +255,23 @@ including the history. Clips and clip automations are not affected; existing
 images stay until they expire.
 
 When an image cannot be taken, the last one stays, HA logs a warning once per
-cause, and the attribute `last_failure` of **Save images** names the cause
-(for example `snapshot_unavailable` when the station's display picture cannot
-be read) until the next image succeeds. On firmware 3.0.6 reading the display
-picture is checked offline only and may fail.
+cause, and **Save images** shows the cause as **Last failure** (attribute
+`last_failure`) until the next image succeeds; after a success the attribute
+is absent. The entity shows the text in your language, automations and
+templates read the code:
+
+| Code | Shown as |
+| --- | --- |
+| `snapshot_unavailable` | Display picture could not be read |
+| `snapshot_throttled` | Requested too soon after the previous image |
+| `invalid_snapshot_size` | Station rejected the image size |
+| `invalid_image` | Station delivered an invalid image |
+| `agent_unreachable` | Device agent not reachable |
+| `agent_error` | Device agent reported an error |
+| `save_failed` | Home Assistant could not save the image |
+
+The log names the code. On firmware 3.0.6 reading the display picture is
+checked offline only and may fail.
 
 ### Browsing in the Card
 

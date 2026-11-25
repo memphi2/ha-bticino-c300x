@@ -282,6 +282,14 @@ and must report `compile_failed=0`. It does not instantiate or render the GUI,
 execute the vendor plugin, or test device startup/reboot behaviour; it is
 separate from the Qt 6 layout checks and is not hardware validation.
 
+With the same variables, without the compile probe, `tests/test_qt4_display_render.py`
+shows pages on those libraries with a GUI: it builds `tests/qml/qt4_render_probe.c`
+with `arm-linux-gnueabihf-gcc` into `~/.cache/c300x-dev/qt4-render`, writes the
+display files into a copy of the skin and draws into a file instead of a
+framebuffer. It checks positions the Qt 6 renderer gets right and Qt 4.8 does
+not, and that the pages print no QML warning. The data is test data; it is not
+hardware validation either.
+
 ## Clean Install Path
 
 - Marketplace or HACS install/update succeeds on the corresponding HA version.

@@ -7,7 +7,8 @@ This is not a C300X stable update or the firmware-3.0.6 beta. Use a separate HA
 test instance: the integration domain is shared and cannot coexist as a second
 version on a production HA instance.
 
-The package includes the stable release 2.9.2 completely; its changes are in
+The package includes the stable release 2.9.2 completely, plus the fixes made
+after it that have no release of their own yet; the changes of 2.9.2 are in
 `CHANGELOG.md`. The points below are only what this branch adds for the C100X.
 
 The attachment contains the complete HA integration, freshly built ARM agent,

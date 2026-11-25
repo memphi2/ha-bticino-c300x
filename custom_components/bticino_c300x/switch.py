@@ -128,10 +128,15 @@ class C300XSnapshotSwitch(C300XEntity, SwitchEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Why the last visitor image could not be taken; None after a success."""
+        """Why the last visitor image could not be taken; absent after a success.
+
+        The frontend shows a null attribute as "Unknown", which a working
+        capture is not. The codes are translated under ``state_attributes``.
+        """
 
         manager = get_snapshots(self.hass, self._entry.entry_id) if self.hass else None
-        return {"last_failure": manager.capture.last_failure if manager else None}
+        cause = manager.capture.last_failure if manager else None
+        return {"last_failure": cause} if cause else {}
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         await self._set_enabled(True)

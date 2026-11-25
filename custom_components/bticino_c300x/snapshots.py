@@ -165,13 +165,21 @@ class StreamSnapshots:
 
     async def save(
         self, content: bytes, session: str, *, is_current: Callable[[], bool] | None = None,
+        writing: Callable[[], None] | None = None,
     ) -> StoredSnapshot:
-        """Store one image per capture identity without device I/O."""
+        """Store one image per capture identity without device I/O.
+
+        ``writing`` is called once the store is about to write. Up to then the
+        caller only waits and may give up; from then on the executor work runs
+        to its end whatever the caller does, so its result is the outcome.
+        """
 
         async with self.lock:
             options = snapshot_options(self.entry)
             if self.closed or not self.enabled or (is_current is not None and not is_current()):
                 raise ValueError("Stream images are disabled")
+            if writing is not None:
+                writing()
             def store_current() -> StoredSnapshot:
                 # Executor jobs may wait behind unrelated HA work. Recheck at
                 # execution time, not just when submitting the job.

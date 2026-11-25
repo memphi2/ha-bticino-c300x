@@ -3,7 +3,8 @@
 The texts name the model through ``{model}``. Rendered for a C300X, each area
 must stay byte-identical to the texts before the change; the pinned digests
 were taken from the translations of 04a99ea6, the exceptions with the
-"station_busy" message of release 2.9.2 added.
+"station_busy" message of release 2.9.2 and the
+"device_display_timeout" texts of the fixes after it added.
 """
 
 from __future__ import annotations
@@ -83,11 +84,11 @@ def c300x_digest(lang: str, area: str) -> str:
 
 HEAD_DIGESTS = {
     "setup": {
-        "base": "38771bea91f301392fd6a5013116e111f9c95564a7f059a39525cb3577749cc5",
-        "en": "38771bea91f301392fd6a5013116e111f9c95564a7f059a39525cb3577749cc5",
-        "de": "502d7b381e3abfe9edbb80ed3a9886be132704f2b0b04fc9ae5fbabcdc40a6e2",
-        "it": "2c570e6a47606e5ce67f2eea249b06cd152652275334ad6bbf88559b18141956",
-        "fr": "b7e855791009e532b07926124bd6a782567c087c6d6c3f9071e70d89ec9da503",
+        "base": "ee8bbdcaeed7a396d914cb89434052e8610c2d4e1cfb49b039d9896a0819870d",
+        "en": "ee8bbdcaeed7a396d914cb89434052e8610c2d4e1cfb49b039d9896a0819870d",
+        "de": "26ef6e5549d11f42a755c280f03a03c1e3a5c64697a7cbb3d34a40e08ec956df",
+        "it": "8d669738eac667722a490f1f6dad94c709ba75730cea9a9ff89c72960c5d56a7",
+        "fr": "efcf0e32be661c23658cf42a4eea87cb6748ccea4d8784d63f7c86ba93880a1d",
     },
     "reconfigure": {
         "base": "eb919185d61b32f7d46b3491e3338277a36b4ce309196ec8db83f307d1f14985",
@@ -97,11 +98,11 @@ HEAD_DIGESTS = {
         "fr": "15ba9bfbfdac812fedb6933627f0de149147a01290ffd48c5312d71b9424052f",
     },
     "repairs": {
-        "base": "43b7ff850b321f32ebdc34fdbdff952449f708478fba878f11a112363779cfa0",
-        "en": "43b7ff850b321f32ebdc34fdbdff952449f708478fba878f11a112363779cfa0",
-        "de": "99de99c4b2b81b67dffe438c5985734cefe3b601dc6eccdf2168c2679f32d4db",
-        "it": "b4bd8338d3d102247f744012ccb462cee2860480c4cc925437b1601042ad70ac",
-        "fr": "ed1022d9229a880b0eb484f2c7a8523975b1cbbd1a67240941228203d53fb1df",
+        "base": "9cedea8a6a95514e60b9306551dd27c1d445f8788e2551973cd528276ce2f07e",
+        "en": "9cedea8a6a95514e60b9306551dd27c1d445f8788e2551973cd528276ce2f07e",
+        "de": "b3583647b21d9ece2d971be18b22072bce436c52537334293d9c7c795eb4fe4d",
+        "it": "086eab017ffc0d02a9ff5badb6aaf9633d097ae88535f57509a6bacdc48c1478",
+        "fr": "866da3f59a13d7a408422153e14eb2219b0799391e15fa1729072876450892c3",
     },
     "exceptions": {
         "base": "d1682fd87a2f26b1065134323ba5f007cd87bbb75d9ee2f18573248b1f1b4f78",

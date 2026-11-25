@@ -53,6 +53,7 @@ Page {
     property string weatherColor: "#58d68d"
     property variant selectedItem: null
     property bool detailOpen: selectedItem ? true : false
+    property bool selectedUsable: selectedItem ? selectedItem.available !== false : false
     property string detailSection: ""
     property string armedCommand: ""
     property variant detailSections: Api.dashboardDetailSections(selectedItem)
@@ -839,7 +840,7 @@ Page {
             Rectangle { anchors.fill: parent; color: "transparent"; border.color: "#c7d0d9"; border.width: 3 }
             Item {
                 anchors.fill: parent; anchors.margins: 5; clip: true
-                visible: selectedItem && selectedItem.available !== false && entitySummary.summary.position !== null && entitySummary.summary.position !== undefined
+                visible: selectedUsable && entitySummary.summary.position !== null && entitySummary.summary.position !== undefined
                 opacity: dashboardOnline ? 1 : 0.45
                 Item {
                     width: parent.width
@@ -893,7 +894,7 @@ Page {
                 visible: hasToggle && (entitySummary.summary.type === "light" || entitySummary.summary.type === "fan" || entitySummary.summary.type === "media_player" || entitySummary.summary.type === "humidifier")
                 anchors.right: parent.right; anchors.top: parent.top; anchors.topMargin: 24
                 width: 104; height: 56
-                enabled: dashboardOnline && selectedItem && selectedItem.available !== false && controlFree(selectedItem)
+                enabled: dashboardOnline && selectedUsable && controlFree(selectedItem)
                 opacity: enabled ? 1 : 0.45
                 checkable: false
                 checked: selectedItem && selectedItem.state === true ? true : false
@@ -915,13 +916,13 @@ Page {
                     Item {
                         property variant control: modelData
                         width: (summaryActions.width - 16) / 3; height: 56
-                        opacity: dashboardOnline && selectedItem && selectedItem.available !== false && controlFree(selectedItem) ? 1 : 0.45
+                        opacity: dashboardOnline && selectedUsable && controlFree(selectedItem) ? 1 : 0.45
                         Image { anchors.fill: parent; source: coverControlMouse.pressed ? "images/settings/list_btn_p.svg" : "images/settings/list_btn.svg"; fillMode: Image.Stretch }
                         UbuntuLightText { anchors.centerIn: parent; text: controlLabel(control); font.pixelSize: 26; color: "white" }
                         BeepingMouseArea {
                             id: coverControlMouse
                             anchors.fill: parent
-                            enabled: dashboardOnline && selectedItem && selectedItem.available !== false && controlFree(selectedItem)
+                            enabled: dashboardOnline && selectedUsable && controlFree(selectedItem)
                             onClicked: Api.dashboardControl(selectedItem, control, null, status, page)
                         }
                     }
@@ -985,7 +986,7 @@ Page {
                 wrapMode: Text.Wrap
             }
             Repeater {
-                model: selectedItem && selectedItem.available !== false && selectedItem.details ? (selectedItem.details.fields || []) : []
+                model: selectedUsable && selectedItem.details ? (selectedItem.details.fields || []) : []
                 Row {
                     width: controlColumn.width; height: 44; spacing: 12
                     UbuntuLightText { width: (parent.width - 12) / 2; height: 44; text: uiText(modelData.label); textFormat: Text.PlainText; font.pixelSize: 18; color: "#c7d0d9"; elide: Text.ElideRight }
@@ -1005,7 +1006,7 @@ Page {
                         property variant control: actionRow.actions[index]
                         width: (actionRow.width - (actionRow.actions.length - 1) * 8) / actionRow.actions.length
                         height: 56
-                        opacity: dashboardOnline && selectedItem && selectedItem.available !== false && controlFree(selectedItem) ? 1 : 0.45
+                        opacity: dashboardOnline && selectedUsable && controlFree(selectedItem) ? 1 : 0.45
                         Image { anchors.fill: parent; source: actionMouse.pressed ? "images/settings/list_btn_p.svg" : "images/settings/list_btn.svg"; fillMode: Image.Stretch }
                         UbuntuLightText {
                             anchors.fill: parent; anchors.margins: 6
@@ -1018,7 +1019,7 @@ Page {
                         BeepingMouseArea {
                             id: actionMouse
                             anchors.fill: parent
-                            enabled: dashboardOnline && selectedItem && selectedItem.available !== false && controlFree(selectedItem)
+                            enabled: dashboardOnline && selectedUsable && controlFree(selectedItem)
                             onClicked: pressAction(selectedItem, control)
                         }
                     }
@@ -1031,7 +1032,7 @@ Page {
                     hostPage: page
                     paletteTab: control.command === "color" && detailSections.length > 0
                     width: controlColumn.width
-                    enabled: dashboardOnline && selectedItem && selectedItem.available !== false && controlFree(selectedItem)
+                    enabled: dashboardOnline && selectedUsable && controlFree(selectedItem)
                     onSubmitted: Api.dashboardControl(selectedItem, control, value, status, page)
                     onAdjusted: adjustControl(selectedItem, control, direction)
                     onRefreshRequested: Api.dashboard(status, page)

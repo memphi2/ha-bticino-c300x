@@ -231,7 +231,7 @@ reserved for the status page.
 
 <table>
   <tr>
-    <td align="center"><strong>Favourites bar</strong><br><img src="images/readme/display-start-en.webp" alt="Start page with the favourites bar along the bottom edge" width="360"></td>
+    <td align="center"><strong>Favourites bar</strong><br><img src="images/readme/display-start-en.webp" alt="Start page with status, weather and the favourites bar along the bottom edge" width="360"></td>
     <td align="center"><strong>More: the other pages</strong><br><img src="images/readme/display-more-en.webp" alt="The list of further pages that More opens" width="360"></td>
   </tr>
 </table>
@@ -254,8 +254,8 @@ pages uses the data already loaded and requests nothing new.
     <td align="center"><strong>Light overview</strong><br><img src="images/readme/display-lights-en.webp" alt="Eight light tiles with state, brightness and on-off controls" width="360"></td>
   </tr>
   <tr>
-    <td align="center"><strong>Brightness and color</strong><br><img src="images/readme/display-light-detail-en.webp" alt="Light detail page with brightness slider and color presets" width="360"></td>
-    <td align="center"><strong>Media player</strong><br><img src="images/readme/display-media-player-en.webp" alt="Media player with current program, pause, volume, mute and shuffle" width="360"></td>
+    <td align="center"><strong>Brightness and color</strong><br><img src="images/readme/display-light-detail-en.webp" alt="Light detail page with brightness slider and color presets; the list scrolls" width="360"></td>
+    <td align="center"><strong>Media player</strong><br><img src="images/readme/display-media-player-en.webp" alt="Media player with current program, previous, pause and next, volume and mute; further controls follow below" width="360"></td>
   </tr>
 </table>
 
@@ -414,7 +414,7 @@ between them; all views off hides the page and keeps its settings.
 
 ## Agenda
 
-<p align="center"><img src="images/readme/display-appointments-en.webp" alt="Agenda page with two upcoming events" width="480"></p>
+<p align="center"><img src="images/readme/display-appointments-en.webp" alt="Agenda page with four upcoming events and the scroll bar for the further ones" width="480"></p>
 
 Turn on **Show Agenda** and select up to eight Home Assistant calendars. The
 page shows up to five ongoing or upcoming events within the next seven days,
@@ -463,7 +463,7 @@ action, does not wake the display and never changes the page by itself.
 
 ## Alarm Page (Alarmo)
 
-<p align="center"><img src="images/readme/display-alarmo-en.webp" alt="Alarm page while arming: Away and Night modes, PIN keypad with a PIN being entered, countdown and a Leaving Home shortcut" width="480"></p>
+<p align="center"><img src="images/readme/display-alarmo-en.webp" alt="Alarm page while arming: Away and Night modes, PIN keypad with a PIN being entered, countdown, a Leaving Home shortcut and the status line below it" width="480"></p>
 
 The Alarm page is a subpage in the station's original blue design, opened by
 the Alarm button on the home page. It is not one of the numbered pages. Set it
@@ -544,8 +544,8 @@ maintenance operations the agent has enabled are offered.
 
 <table>
   <tr>
-    <td align="center"><strong>Integration tab</strong><br><img src="images/readme/display-settings-home-assistant-en.webp" alt="Station Settings, Integration tab with SSH, Status messages, Reboot station and Remove agent" width="360"></td>
-    <td align="center"><strong>Generals: Tone buttons</strong><br><img src="images/readme/display-settings-tone-buttons-en.webp" alt="Station Settings, Generals tab with the Tone buttons switch" width="360"></td>
+    <td align="center"><strong>Integration tab</strong><br><img src="images/readme/display-settings-home-assistant-en.webp" alt="Station Settings, Integration tab: status block with Home Assistant, Address, Last contact, Integration and Agent, then the Display switches Status messages, Keep page open in standby and Page change; the Station section with SSH, Reboot station and Remove agent follows when scrolling" width="360"></td>
+    <td align="center"><strong>Generals: Tone buttons</strong><br><img src="images/readme/display-settings-tone-buttons-en.webp" alt="Station Settings, Generals tab with the Tone buttons switch; the tab list ends with Integration" width="360"></td>
   </tr>
 </table>
 
@@ -554,7 +554,7 @@ The tab starts with a short status block:
 | Line | Meaning |
 | --- | --- |
 | **Home Assistant** | **reachable** with the name of the Home Assistant instance, or **not reachable** with the reason underneath (see [Home Assistant not reachable](#home-assistant-not-reachable)). |
-| Second line | The address the station calls Home Assistant at: `http` or `https`, host and port, on a line of its own so that long names fit. Nothing else of the address is shown. |
+| **Address** | The address the station calls Home Assistant at: `http` or `https`, host and port. A long address takes a second line. Nothing else of the address is shown. |
 | **Last contact** | How long ago the agent and Home Assistant last exchanged a request, or **never since start**. Read when the tab opens, and once more after Home Assistant has answered. |
 | **Integration**, **Agent** | The version of the integration, and of the agent with the station firmware. The integration version is known only while Home Assistant answers. |
 

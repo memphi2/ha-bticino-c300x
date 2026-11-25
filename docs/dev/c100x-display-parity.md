@@ -24,16 +24,21 @@ contract. No device/HA access is authorized by this offline work.
 | Patched General settings | Vendor beep setting plus HA feedback preference | Stock beep control untouched; one on/off item **Status messages** in the stock Settings carousel before its EXIT |
 | Patched MemoPage and `c300x_memos.js` | None: text memos are not offered on a C100X | No page, no menu entry, no list request; HA creates no memo entities and refuses `write_text_memo` |
 
-Where the C100X pages differ from the C300X pages of release 2.9.2:
+Where the C100X pages differ from the C300X pages of release 2.9.2 and the
+fixes after it:
 
-| C300X 2.9.2 | C100X |
+| C300X | C100X |
 | --- | --- |
 | Notification as a station popup: grey panel on black, severity marker, scroll bar | Unchanged C100X notice: whole screen on the station background, accent line and label, scroll arrows, Return marks it read. The popup is a touch window the C100X does not have. |
 | Thin scroll bar on **Agenda**, **Leave home** and **Situations** | The adapter's arrows above and below, as in the station's own lists; the lists keep their full width. Whole rows and the fixed actions under **Leave home** are taken over. |
 | Status line of the **Alarm** page on a dark panel with a colour marker | Taken over; the panel is the adapter's see-through panel on the station background. |
 | **Status messages** also covers the Alarm page; an error line is held 30 seconds | Taken over with the shared pages. |
-| **Integration** tab: status block, reboot and removal questions, two Display options | No counterpart: the C100X has no such tab. Its Settings carousel keeps the one item **Status messages**. |
+| **Integration** tab: status block with the station's address, reboot and removal questions, two Display options | No counterpart: the C100X has no such tab. Its Settings carousel keeps the one item **Status messages**. |
 | House symbol on the home page for the connection to Home Assistant | No counterpart: without a connection the **Home Assistant** and **Alarmo** items leave the main menu, as before. |
+| Notification popup: text sheet reaches down to the button | No effect: the C100X notice does not show that sheet. |
+| **Energy**: the **Consumers** view stays loaded while the page is left and takes new readings only while it is shown | Taken over with the shared page. |
+| **Energy**: flow arrows turned through a holder item, hour labels placed by position under the bars | Taken over with the shared page; on the C100X's Qt 5 the arrows and labels sit as before. |
+| Display write and label write with a time limit, display reload repeated after a late stop | Not reached: a C100X has no Display patch, no account label and no display reload. |
 
 Shared JS retains the existing HA snapshot, allowlisted command, confirmation,
 timeout and sleeping-event-request contracts. No display refresh polling is

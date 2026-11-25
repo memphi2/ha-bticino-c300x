@@ -3165,3 +3165,19 @@ def test_ssh_install_uses_the_factory_login_and_asks_only_after_a_refusal(monkey
     assert logins[-1] == ("admin", "typed")
     # The fields stay once asked for, also after another kind of failure.
     assert set(asyncio.run(flow.async_step_ssh_install(None))["data_schema"]({})) == set(asked)
+
+
+def test_a_display_write_timeout_of_the_ssh_install_keeps_its_own_error() -> None:
+    import json
+    from pathlib import Path
+
+    from custom_components.bticino_c300x import repairs
+    from custom_components.bticino_c300x.device_installer import C300XDeviceInstallError
+
+    assert repairs._ssh_install_error(C300XDeviceInstallError("device_display_timeout")) == (
+        "device_display_timeout")
+    assert repairs._ssh_install_error(C300XDeviceInstallError("ssh_login_refused")) == "ssh_login_refused"
+    assert repairs._ssh_install_error(C300XDeviceInstallError("device_install_failed")) == "ssh_install_failed"
+    assert repairs._ssh_install_error(RuntimeError("x")) == "ssh_install_failed"
+    strings = json.loads((Path(repairs.__file__).parent / "strings.json").read_text(encoding="utf-8"))
+    assert "device_display_timeout" in strings["config"]["error"]

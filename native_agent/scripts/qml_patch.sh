@@ -194,6 +194,8 @@ full_patch_present() {
         && file_contains "$GUI_DIR/MainApp.qml" 'alarmPage,' \
         && file_contains "$GUI_DIR/MainApp.qml" 'haPage,' \
         && file_contains "$GUI_DIR/MainApp.qml" 'id: c300xDisplayPreferences' \
+        && file_contains "$GUI_DIR/MainApp.qml" 'property string bridgeProblem' \
+        && file_contains "$GUI_DIR/Settings.qml" 'c300xIntegrationButton.checked = true' \
         && feature_port="$(station_ui_port)" \
         && file_contains "$GUI_DIR/MainApp.qml" "property string uiBaseUrl: \"http://127.0.0.1:$feature_port\"" \
         && file_contains "$GUI_DIR/MainApp.qml" 'id: c300xAlerts' \
@@ -266,6 +268,7 @@ home_page_feature_patch_present() {
     file_contains "$GUI_DIR/HomePage.qml" 'page.startMessageNotificationWatch()' || return 1
     file_contains "$GUI_DIR/HomePage.qml" 'id: buttonRetryTimer' || return 1
     file_contains "$GUI_DIR/HomePage.qml" 'if (registrationPossible) page.buttonRetries = 0' || return 1
+    file_contains "$GUI_DIR/HomePage.qml" 'id: c300xBridgeHint' || return 1
     file_contains "$GUI_DIR/HomePage.qml" 'id: displayBridgeButtonRow' \
         || (
             file_contains "$GUI_DIR/HomePage.qml" 'HAConfig.homeButtons' \
@@ -1400,6 +1403,14 @@ render_settings() {
         $0 == "    function handleScreenOff() {" {
             print; print "        if (c300xSettings.item) c300xSettings.item.clearConfirmation()"; screen++; next
         }
+        $0 == "    function aboutToShow() {" {
+            print
+            print "        if (typeof c300xDisplayPreferences !== \"undefined\" && c300xDisplayPreferences.openIntegration) {"
+            print "            c300xDisplayPreferences.openIntegration = false"
+            print "            c300xIntegrationButton.checked = true"
+            print "        }"
+            shows++; next
+        }
         $0 == "                configurationChoice" {
             print $0 ","; print "                c300xSettings"; tabs++; next
         }
@@ -1410,13 +1421,14 @@ render_settings() {
             print "        anchors.right: column.right"
             print "        anchors.top: column.bottom"
             print "        anchors.topMargin: 4"
+            print "        id: c300xIntegrationButton"
             print "        property Item tab: c300xSettings"
             print "        checkable: true"
             print "        exclusiveGroup: menuGroup"
             print "        style: CheckableButtonStyle {"
             print "            defaultImage: \"images/settings/settings-menu_btn.svg\""
             print "            checkedImage: \"images/settings/settings-menu_btn_p.svg\""
-            print "            description: \"Home Assistant\""
+            print "            description: (trsl.language === \"it\" ? \"Integrazione\" : \"Integration\") + trsl.empty"
             print "        }"
             print "    }"
             print "    PageLoader {"
@@ -1428,7 +1440,7 @@ render_settings() {
         }
         /append\(\{label: QT_TR_NOOP\("Configuration"\), tab: configurationChoice,/ { config++ }
         { print }
-        END { if (imports != 1 || last != "}" || screen != 1 || tabs != 1 || groups != 1 || gaps != 1 || config != 1) {
+        END { if (imports != 1 || last != "}" || screen != 1 || shows != 1 || tabs != 1 || groups != 1 || gaps != 1 || config != 1) {
             print "Unsupported Settings.qml layout" > "/dev/stderr"; exit 12
         } }
     ' "$1"
@@ -1534,22 +1546,60 @@ patch_home_page() {
             print "        if (!page.visible) return"
             print "        buttonRetryTimer.stop()"
             print "        var generation = ++page.buttonReadGeneration"
-            print "        HAConfig.homeButtons(function(alarmConfigured, dashboardAvailable, valid) {"
+            print "        HAConfig.homeButtons(function(alarmConfigured, dashboardAvailable, valid, reason, pages) {"
             print "            if (!page.visible || generation !== page.buttonReadGeneration) return"
             print "            if (!valid) {"
             print "                if (page.buttonRetries < 6) {"
             print "                    buttonRetryTimer.interval = 1000 * Math.pow(2, page.buttonRetries++)"
-            print "                    buttonRetryTimer.restart()"
+            print "                } else {"
+            print "                    c300xDisplayPreferences.bridgeProblem = reason"
+            print "                    buttonRetryTimer.interval = 300000"
             print "                }"
+            print "                buttonRetryTimer.restart()"
             print "                return"
             print "            }"
             print "            page.buttonRetries = 0"
+            print "            c300xDisplayPreferences.bridgeProblem = \"\""
+            print "            c300xDisplayPreferences.bridgeShown = pages !== false"
             print "            page.alarmButtonVisible = alarmConfigured"
             print "            page.haButtonVisible = dashboardAvailable"
-            print "        }, page)"
+            print "        }, page, function() { return page.visible && generation === page.buttonReadGeneration })"
+            print "    }"
+            print ""
+            print "    Image {"
+            print "        id: c300xBridgeHint"
+            print "        objectName: \"bridgeHint\""
+            print "        visible: c300xDisplayPreferences.bridgeShown"
+            print "        source: \"images/call/icon_call-home.svg\""
+            print "        anchors.verticalCenter: header.verticalCenter"
+            print "        x: (datecert.visible ? datecert.x + datecert.width : off.x + off.width) + page.width / 100 * 2"
+            print "        Rectangle {"
+            print "            visible: c300xDisplayPreferences.bridgeProblem !== \"\""
+            print "            anchors.horizontalCenter: parent.right"
+            print "            anchors.verticalCenter: parent.bottom"
+            print "            width: 16"
+            print "            height: 16"
+            print "            radius: 8"
+            print "            color: \"#f1c40f\""
+            print "            Text {"
+            print "                anchors.centerIn: parent"
+            print "                text: \"!\""
+            print "                color: \"#0a1c8c\""
+            print "                font.pixelSize: 13"
+            print "                font.bold: true"
+            print "            }"
+            print "        }"
+            print "        BeepingMouseArea {"
+            print "            anchors.fill: parent"
+            print "            anchors.margins: -6"
+            print "            onPressed: {"
+            print "                c300xDisplayPreferences.openIntegration = true"
+            print "                tabView.activateTab(settingsPage)"
+            print "            }"
+            print "        }"
             print "    }"
         }
-        function print_home_assistant_button(name, flag, icon, description, target) {
+        function print_home_assistant_button(name, flag, icon, size, description, target) {
             print "            BasicButton {"
             if (layout == "stock") {
                 print "                id: " name
@@ -1564,12 +1614,30 @@ patch_home_page() {
                     print "                x: buttonPrototype.width + foobar.spacing"
                 }
             }
-            print "                style: HomePageButtonStyle {"
-            print "                    pressedImage: \"images/function_btn_p.svg\""
-            print "                    pressedIcon: \"images/" icon "_p.svg\""
-            print "                    defaultIcon: \"images/" icon ".svg\""
-            print "                    defaultImage: \"images/function_btn.svg\""
-            print "                    description: " description
+            print "                style: Item {"
+            print "                    width: bg.width"
+            print "                    height: bg.height + label.height"
+            print "                    Image {"
+            print "                        id: bg"
+            print "                        source: control.pressed ? \"images/function_btn_p.svg\" : \"images/function_btn.svg\""
+            print "                    }"
+            print "                    Image {"
+            print "                        anchors.centerIn: bg"
+            print "                        source: control.pressed ? \"images/" icon "_p.svg\" : \"images/" icon ".svg\""
+            print "                        " size
+            print "                    }"
+            print "                    UbuntuLightText {"
+            print "                        id: label"
+            print "                        anchors.top: bg.bottom"
+            print "                        anchors.topMargin: 2"
+            print "                        anchors.horizontalCenter: bg.horizontalCenter"
+            print "                        width: bg.width + foobar.spacing"
+            print "                        horizontalAlignment: Text.AlignHCenter"
+            print "                        elide: Text.ElideRight"
+            print "                        color: \"white\""
+            print "                        font.pixelSize: 18"
+            print "                        text: " description
+            print "                    }"
             print "                }"
             print "                onTouched: tabView.activateTab(" target ")"
             print "            }"
@@ -1582,9 +1650,9 @@ patch_home_page() {
                 print "                width: buttonPrototype.width * 2 + foobar.spacing"
                 print "                height: buttonPrototype.height"
             }
-            print_home_assistant_button("alarmButton", "alarmButtonVisible", "keylock_icon-small", "trsl.language === \"de\" ? \"Alarmanlage\" : (trsl.language === \"it\" ? \"Allarme\" : (trsl.language === \"fr\" ? \"Alarme\" : \"Alarm\"))", "alarmPage")
+            print_home_assistant_button("alarmButton", "alarmButtonVisible", "keylock_icon-small", "sourceSize.width: 46", "trsl.language === \"de\" ? \"Alarmanlage\" : (trsl.language === \"it\" ? \"Allarme\" : (trsl.language === \"fr\" ? \"Alarme\" : \"Alarm\"))", "alarmPage")
             print ""
-            print_home_assistant_button("haButton", "haButtonVisible", "call/icon_call-home", "\"Home Assistant\"", "haPage")
+            print_home_assistant_button("haButton", "haButtonVisible", "call/icon_call-home", "sourceSize.height: 41", "\"Home Assistant\"", "haPage")
             if (layout != "stock") {
                 print "            }"
             }
@@ -1737,6 +1805,7 @@ patch_home_page() {
             'property string uiBaseUrl: c300xDisplayPreferences.uiBaseUrl' \
             'onTriggered: MemoSync.retryEventWatch()' \
             'HAConfig.homeButtons' \
+            'id: c300xBridgeHint' \
             '+ (page.alarmButtonVisible ? 1 : 0) + (page.haButtonVisible ? 1 : 0) + 2' \
             'visible: page.alarmButtonVisible' \
             'visible: page.haButtonVisible' \
@@ -1754,6 +1823,7 @@ patch_home_page() {
             'property string uiBaseUrl: c300xDisplayPreferences.uiBaseUrl' \
             'onTriggered: MemoSync.retryEventWatch()' \
             'HAConfig.homeButtons' \
+            'id: c300xBridgeHint' \
             'id: displayBridgeButtonRow' \
             '+ (homeLinksModel.count > 0 ? 4 : 2)' \
             'flow: homeLinksModel.count > 0 ? Flow.LeftToRight : Flow.TopToBottom' \
@@ -1832,7 +1902,7 @@ patch_call_block_popup() {
     require_clean_call_block_popup "$source_popup"
     awk '
         /message: qsTr\("Calls forwarded to the smartphones in the home"\)/ {
-            sub(/message: qsTr\("Calls forwarded to the smartphones in the home"\) \+ trsl.empty/, "message: (trsl.language === \"de\" ? \"Anrufe an Home Assistant weitergeleitet\" : (trsl.language === \"it\" ? \"Chiamate inoltrate a Home Assistant\" : (trsl.language === \"fr\" ? \"Appels renvoyes vers Home Assistant\" : \"Calls forwarded to Home Assistant\"))) + trsl.empty")
+            sub(/message: qsTr\("Calls forwarded to the smartphones in the home"\) \+ trsl.empty/, "message: (trsl.language === \"de\" ? \"Anrufe an Home Assistant weitergeleitet\" : (trsl.language === \"it\" ? \"Chiamate inoltrate a Home Assistant\" : (trsl.language === \"fr\" ? \"Appels renvoyés vers Home Assistant\" : \"Calls forwarded to Home Assistant\"))) + trsl.empty")
             print
             message_patched=1
             next
@@ -2649,6 +2719,9 @@ patch_main_app() {
             print "        id: c300xDisplayPreferences"
             print "        property string uiBaseUrl: \"http://127.0.0.1:" port "\""
             print "        property bool feedbackEnabled: true"
+            print "        property string bridgeProblem: \"\""
+            print "        property bool bridgeShown: true"
+            print "        property bool openIntegration: false"
             print "        property bool ready: false"
             print "        property bool busy: false"
             print "        property bool stopped: false"

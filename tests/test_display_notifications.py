@@ -191,7 +191,6 @@ def test_unicode_payload_is_bounded_for_native_bridge():
         {"notification_id": "x" * 65},
         {"title": ""},
         {"title": "x" * 81},
-        {"message": "x" * 501},
         {"icon": "https://host/a"},
         {"priority": "critical"},
         {"expires_in": 0},
@@ -399,3 +398,29 @@ def test_concurrent_action_is_single_flight(context):
         assert not entry.runtime_data.display_notifications.busy
 
     asyncio.run(run())
+
+
+def test_a_long_message_is_shortened_instead_of_refused():
+    long_text = "Paket an der Tür abgegeben. " * 21
+    assert len(long_text.strip()) == 587
+    message = data(message=long_text)["message"]
+    assert len(message) == 500
+    assert message.endswith("…")
+    assert long_text.strip().startswith(message[:-1])
+    assert not message[:-1].endswith(" ")
+
+
+def test_a_message_of_exactly_500_characters_stays_as_it_is():
+    text = "x" * 500
+    assert data(message=text)["message"] == text
+
+
+def test_shortening_counts_characters_not_bytes():
+    message = data(message="\U0001f4c5" * 600)["message"]
+    assert message == "\U0001f4c5" * 499 + "…"
+
+
+def test_an_empty_message_and_a_long_title_are_still_refused():
+    for bad in ({"message": "   "}, {"title": "T" * 81}):
+        with pytest.raises(vol.Invalid):
+            data(**bad)

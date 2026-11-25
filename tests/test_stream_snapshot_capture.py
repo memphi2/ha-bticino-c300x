@@ -365,3 +365,139 @@ def test_a_failing_visitor_image_is_reported_once_per_cause(tmp_path, monkeypatc
         manager.close()
 
     asyncio.run(run())
+
+
+def test_a_visitor_image_that_cannot_be_stored_is_not_blamed_on_the_agent(tmp_path, monkeypatch, caplog):
+    async def run():
+        manager = setup(tmp_path, monkeypatch)
+        api = manager.entry.runtime_data.api.async_doorbell_snapshot
+        api.return_value = (bmp(), "image/bmp")
+        changes = []
+        original_notify = manager.notify
+        manager.notify = lambda: (changes.append(manager.capture.last_failure), original_notify())
+
+        async def full_disk(*args, **kwargs):
+            raise OSError(28, "No space left on device")
+
+        monkeypatch.setattr(manager, "save", full_disk)
+        event(manager, "doorbell_pressed", "one")
+        await drain(manager)
+        assert manager.capture.last_failure == "save_failed"
+        assert changes == ["save_failed"]
+        warnings = [record for record in caplog.records if record.levelname == "WARNING"]
+        assert len(warnings) == 1 and "save_failed" in warnings[0].getMessage()
+        manager.close()
+
+    asyncio.run(run())
+
+
+def test_a_visitor_image_that_became_stale_while_storing_is_no_failure(tmp_path, monkeypatch):
+    async def run():
+        manager = setup(tmp_path, monkeypatch)
+        api = manager.entry.runtime_data.api.async_doorbell_snapshot
+        api.return_value = (bmp(), "image/bmp")
+
+        async def stale(*args, **kwargs):
+            manager.capture.generation += 1
+            raise ValueError("Snapshot capture became stale during storage")
+
+        monkeypatch.setattr(manager, "save", stale)
+        event(manager, "doorbell_pressed", "one")
+        await drain(manager)
+        assert manager.capture.last_failure is None
+        manager.close()
+
+    asyncio.run(run())
+
+
+def test_a_visitor_image_the_store_refuses_is_reported(tmp_path, monkeypatch, caplog):
+    async def run():
+        manager = setup(tmp_path, monkeypatch)
+        api = manager.entry.runtime_data.api.async_doorbell_snapshot
+        api.return_value = (bmp(), "image/bmp")
+
+        async def refused(*args, **kwargs):
+            raise ValueError("Snapshot directory must not be a symlink")
+
+        monkeypatch.setattr(manager, "save", refused)
+        event(manager, "doorbell_pressed", "one")
+        await drain(manager)
+        assert manager.capture.last_failure == "save_failed"
+        warnings = [record for record in caplog.records if record.levelname == "WARNING"]
+        assert len(warnings) == 1 and "save_failed" in warnings[0].getMessage()
+        manager.close()
+
+    asyncio.run(run())
+
+
+def test_a_visitor_image_save_that_runs_out_of_time_is_not_blamed_on_the_agent(tmp_path, monkeypatch):
+    from custom_components.bticino_c300x import snapshot_capture
+
+    async def run():
+        manager = setup(tmp_path, monkeypatch)
+        api = manager.entry.runtime_data.api.async_doorbell_snapshot
+        api.return_value = (bmp(), "image/bmp")
+        monkeypatch.setattr(snapshot_capture, "CAPTURE_TIMEOUT", 0.2)
+
+        async def slow(*args, **kwargs):
+            await asyncio.sleep(5)
+
+        monkeypatch.setattr(manager, "save", slow)
+        event(manager, "doorbell_pressed", "one")
+        await drain(manager)
+        assert manager.capture.last_failure == "save_failed"
+        manager.close()
+
+    asyncio.run(run())
+
+
+def test_a_slow_visit_link_after_the_image_is_stored_is_no_failure(tmp_path, monkeypatch):
+    from custom_components.bticino_c300x import snapshot_capture
+
+    async def run():
+        manager = setup(tmp_path, monkeypatch)
+        api = manager.entry.runtime_data.api.async_doorbell_snapshot
+        api.return_value = (bmp(), "image/bmp")
+        monkeypatch.setattr(snapshot_capture, "CAPTURE_TIMEOUT", 0.3)
+        journal = SimpleNamespace()
+
+        attached = []
+
+        async def slow_attach(*args, **kwargs):
+            attached.append(args[1])
+            await asyncio.sleep(5)
+
+        journal.attach_snapshot = slow_attach
+        journal.close = journal.invalidate = lambda: None
+        manager.journal = journal
+        event(manager, "doorbell_pressed", "one")
+        await drain(manager)
+        assert manager.latest is not None and attached == [manager.latest.name]
+        assert manager.capture.last_failure is None
+        manager.close()
+
+    asyncio.run(run())
+
+
+def test_a_conversion_that_runs_out_of_time_is_not_blamed_on_the_agent(tmp_path, monkeypatch):
+    from custom_components.bticino_c300x import snapshot_capture
+
+    async def run():
+        manager = setup(tmp_path, monkeypatch)
+        api = manager.entry.runtime_data.api.async_doorbell_snapshot
+        api.return_value = (bmp(), "image/bmp")
+        monkeypatch.setattr(snapshot_capture, "CAPTURE_TIMEOUT", 0.2)
+        original = manager.disk_job
+
+        async def slow_job(function, *args):
+            if function is snapshot_capture.framebuffer_jpeg:
+                await asyncio.sleep(5)
+            return await original(function, *args)
+
+        monkeypatch.setattr(manager, "disk_job", slow_job)
+        event(manager, "doorbell_pressed", "one")
+        await drain(manager)
+        assert manager.capture.last_failure == "save_failed"
+        manager.close()
+
+    asyncio.run(run())

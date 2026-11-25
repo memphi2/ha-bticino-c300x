@@ -226,6 +226,10 @@ int main(int argc, char **argv)
             : strcmp(operation, "restore") == 0 ? "media_user_label_restore_failed"
             : "media_user_label_setup_failed";
         assert(response_status == 500 && writes == 0 && strstr(response_body, error) != NULL);
+        /* A label the script did not put back keeps the user and the routing. */
+        if (strcmp(operation, "restore") == 0 && strcmp(test_case, "restore-failure") != 0) {
+            assert(!restored);
+        }
         /* A user that could not be set up leaves the routing as it was. */
         if (strncmp(test_case, "user-failure", 12) == 0) {
             assert(restored == (strcmp(test_case, "user-failure") == 0));

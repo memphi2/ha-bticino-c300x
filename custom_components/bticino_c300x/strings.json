@@ -1415,6 +1415,9 @@
     "agent_command_failed": {
       "message": "The C300X device-agent command failed or is not supported by the installed agent."
     },
+    "station_busy": {
+      "message": "The station is busy with a call. Try again after it ends."
+    },
     "gui_function_patch_required": {
       "message": "This action requires the C300X Display patch. Enable and apply the Display patch in the integration options first."
     },

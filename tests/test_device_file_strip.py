@@ -131,8 +131,10 @@ def test_every_display_file_keeps_exactly_its_code_lines(relative: str) -> None:
     assert stripped.splitlines() == expected
     assert stripped.endswith("\n")
     assert len(stripped) < len(source)
-    # Device files are plain ASCII; the strip must not change that.
-    assert stripped.isascii()
+    # Display texts carry umlauts and accents as UTF-8; the strip keeps every
+    # character and writes UTF-8 again.
+    assert [char for char in stripped if not char.isascii()] == [char for char in source if not char.isascii()]
+    assert stripped.encode("utf-8").decode("utf-8") == stripped
     if relative == "js/c300x_ringer.js":
         # The request must belong to one QML instance, not a shared JS library.
         assert ".pragma library" not in stripped

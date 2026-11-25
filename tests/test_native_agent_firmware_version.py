@@ -20,7 +20,7 @@ def test_native_agent_uses_configured_firmware_before_stock_fallback() -> None:
     source = FIRMWARE_C.read_text(encoding="utf-8")
     resolver = source.rsplit("void resolve_device_firmware(", 1)[1].split("\n}", 1)[0]
 
-    configured_index = resolver.index("config->device_firmware[0] != '\\0'")
+    configured_index = resolver.index("firmware_version_is_safe(config->device_firmware")
     fallback_index = resolver.index("read_firmware_from_webserver_db(out, out_len)")
 
     assert configured_index < fallback_index

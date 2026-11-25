@@ -200,6 +200,7 @@ def lab(native_binary, tmp_path, auth_config):
                 held=held,
                 release=release,
                 config_path=config_path,
+                callback=server.server_address[1],
             )
         finally:
             release.set()
@@ -312,3 +313,54 @@ def test_complete_api_request_arriving_during_unlock_is_not_expired(lab):
     finally:
         first.close()
         second.close()
+
+
+def test_local_status_shows_the_home_assistant_origin_and_last_contact(lab):
+    """The Integration tab reads this while Home Assistant cannot be reached."""
+
+    status, body = request(lab.ui, "/ui/status")
+    assert status == 200
+    assert isinstance(body.pop("firmware"), str)
+    assert body == {
+        "ok": True,
+        "version": (ROOT / "native_agent/VERSION").read_text().strip(),
+        "registered": True,
+        "disabled": False,
+        # Scheme, host and port only: the path carries the webhook id.
+        "home_assistant": f"http://127.0.0.1:{lab.callback}",
+        "last_contact_age": None,
+    }
+    text = json.dumps(body)
+    assert "/display" not in text and "synthetic-secret" not in text and TOKEN not in text
+    assert request(lab.ui, target("switch.ok"))[0] == 200
+    age = request(lab.ui, "/ui/status")[1]["last_contact_age"]
+    assert isinstance(age, int) and 0 <= age <= 5
+    conn = http.client.HTTPConnection("127.0.0.1", lab.ui, timeout=5)
+    try:
+        conn.request("POST", "/ui/status", body="{}")
+        assert conn.getresponse().status == 405
+    finally:
+        conn.close()
+    assert request(lab.api, "/api/v1/display-bridge", {"enabled": False})[0] == 200
+    status, body = request(lab.ui, "/ui/status")
+    assert status == 200 and body["registered"] is False and body["home_assistant"] == ""
+    assert body["disabled"] is True, "switched off by Home Assistant, not merely never registered"
+
+
+def test_display_setting_is_forwarded_as_its_own_type(lab):
+    def setting(key, value):
+        return request(
+            lab.ui,
+            "/homeassistant?domain=c300x&service=setting&entities=" + quote(key, safe="") + "&option=" + quote(value, safe=""),
+        )
+
+    assert setting("dashboard_navigation", "tabs") == (
+        200, {"type": "display_setting", "key": "dashboard_navigation", "value": "tabs"}
+    )
+    count = len(lab.received)
+    for key, value in [
+        ("dashboard_navigation", ""), ("", "tabs"), ("dashboard_navigation", 'x","type":"action'),
+        ('a","b":"c', "on"), ("dashboard navigation", "tabs"), ("k" * 49, "on"), ("key", "v" * 49),
+    ]:
+        assert setting(key, value)[0] == 400, (key, value)
+    assert len(lab.received) == count

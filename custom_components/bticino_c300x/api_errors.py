@@ -52,6 +52,13 @@ class C300XDeviceNotRegisteredError(C300XAgentApiConnectionError):
     """
 
 
+class C300XStationBusyError(C300XAgentApiConnectionError):
+    """The agent answered `409 station_busy`: a call or stream is running.
+
+    The station does not run the command meanwhile; nothing was changed.
+    """
+
+
 class C300XAgentApiAuthError(C300XAgentApiError):
     """A credential was rejected, independently of transport availability."""
 

@@ -206,6 +206,11 @@ class SnapshotCapture:
         return entry_video_enabled(entry) and supports_capability(entry, "doorbell_video")
 
     async def _capture(self, generation: int, identity: str) -> None:
+        # Where a failure happens decides its cause: "agent" until the station
+        # delivered the image, "convert" and "save" while HA turns it into a
+        # JPEG and stores it, "stored" once it is kept (only the visit link
+        # is left, nothing counts as failed any more).
+        stage = "agent"
         try:
             options = snapshot_options(self.manager.entry)
             await asyncio.sleep(options.delay_seconds)
@@ -228,23 +233,33 @@ class SnapshotCapture:
                         await asyncio.sleep(RETRY_DELAY)
                 if not self._current(generation):
                     return
+                stage = "convert"
                 stamp = (
                     dt_util.now().strftime("%Y-%m-%d %H:%M:%S")
                     if options.timestamp else None
                 )
                 image = await self.manager.disk_job(framebuffer_jpeg, content, content_type, stamp)
-                if self._current(generation):
-                    self._failed(None)
-                    item = await self.manager.save(image, identity, is_current=lambda: self._current(generation))
-                    if self._current(generation) and self.manager.journal is not None:
-                        # Read now: a ring during the settling delay adopts this image.
-                        await self.manager.journal.attach_snapshot(self.visitor_id, item.name, image)
+                if not self._current(generation):
+                    return
+                stage = "save"
+                item = await self.manager.save(image, identity, is_current=lambda: self._current(generation))
+                stage = "stored"
+                self._failed(None)
+                if self._current(generation) and self.manager.journal is not None:
+                    # Read now: a ring during the settling delay adopts this image.
+                    await self.manager.journal.attach_snapshot(self.visitor_id, item.name, image)
         except asyncio.CancelledError:
             raise
         except (C300XAgentApiError, ClientConnectionError, OSError, TimeoutError, ValueError) as err:
             # Failed reads must never replace a previously useful preview.
-            _LOGGER.debug("Could not acquire C300X framebuffer snapshot", exc_info=True)
-            self._failed(snapshot_failure_cause(err))
+            _LOGGER.debug("C300X visitor image failed while %s", stage, exc_info=True)
+            if stage == "agent":
+                self._failed(snapshot_failure_cause(err))
+            elif stage == "convert":
+                self._failed("invalid_image" if isinstance(err, ValueError) else "save_failed")
+            elif stage == "save" and self._current(generation):
+                # A capture that went stale while storing is no failure.
+                self._failed("save_failed")
 
     def _failed(self, cause: str | None) -> None:
         """Record the outcome; warn once per cause until an image succeeds again."""

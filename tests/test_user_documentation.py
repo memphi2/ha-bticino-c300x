@@ -97,6 +97,21 @@ def test_setup_docs_link_policy_and_removal_guides(document):
     assert "## Remove Home Assistant Integration" in (DOCS / REMOVAL_LINK.split("#")[0]).read_text()
 
 
+def test_quickstart_names_where_rooting_is_described_as_a_third_party_project():
+    requirements = " ".join(section("quickstart.md", "Requirements").split())
+    assert "This project provides no firmware images" in requirements
+    assert "rooting instructions" in requirements
+    # The one link out of the requirements goes to a rooting guide of others.
+    links = re.findall(r"\]\((https?://[^)]+)\)", requirements)
+    assert len(links) == 1
+    assert links[0].startswith("https://github.com/") and "ha-bticino-c300x" not in links[0]
+    sentence = next(part for part in requirements.split(". ") if links[0] in part)
+    assert sentence.startswith("Rooting is described by the community project [")
+    for phrase in ("third-party project", "not part of this project", "at your own risk",
+                   "flashing a station can brick it"):
+        assert phrase in sentence, phrase
+
+
 def test_removal_docs_distinguish_entry_package_device_and_retained_data():
     text = " ".join(section("advanced-maintenance.md", "Remove Home Assistant Integration").split())
     for phrase in (

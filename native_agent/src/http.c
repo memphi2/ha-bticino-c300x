@@ -13,6 +13,7 @@
 #include "http_camera_quality.h"
 #include "http_announce.h"
 #include "camera_quality.h"
+#include "camera_update_guard.h"
 #include "display_callback.h"
 #include "event_payload.h"
 #include "file_io.h"
@@ -50,6 +51,7 @@
 #include "signal_wakeup.h"
 #include "time_util.h"
 #include "ui_homeassistant.h"
+#include "ui_status.h"
 #include "ui_events.h"
 #include "touch_tone.h"
 #include "setting_state.h"
@@ -204,6 +206,7 @@ struct agent_runtime {
     int display_client_fd;
     int home_assistant_connected_this_run;
     time_t home_assistant_last_seen_at;
+    time_t home_assistant_last_seen_monotonic;
     long long home_assistant_request_ms;
     int display_bridge_registered;
     struct c300x_memo_led memo_led;
@@ -786,6 +789,7 @@ static void mark_home_assistant_callback_seen(struct agent_runtime *runtime, tim
     }
     runtime->home_assistant_connected_this_run = 1;
     runtime->home_assistant_last_seen_at = now;
+    runtime->home_assistant_last_seen_monotonic = c300x_monotonic_seconds();
 }
 
 static int address_is_valid(const char *value)
@@ -7019,6 +7023,12 @@ static void handle_text_memo_create(
     memo.text = text;
     result = c300x_memo_vendor_create_text(config, &memo, error, sizeof(error));
     if (result == C300X_MEMO_VENDOR_REFUSED) {
+        /* The station saves no memo during a call. Its refusal names no
+         * reason, so the agent's own view of calls and streams does. */
+        if (c300x_camera_update_media_busy(runtime->video)) {
+            send_json(client_fd, 409, "Conflict", "{\"ok\":false,\"error\":\"station_busy\"}\n");
+            return;
+        }
         send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"memo_create_refused\"}\n");
         return;
     }
@@ -9122,6 +9132,24 @@ static int handle_ui_request(
 
     if (strcmp(request->method, "GET") == 0 && strcmp(request->path, "/health") == 0) {
         send_json(client_fd, 200, "OK", "{\"ok\":true,\"bridge\":\"native-c\",\"version\":\"" C300X_NATIVE_AGENT_VERSION "\"}\n");
+        return 1;
+    }
+
+    if (strcmp(request->path, "/ui/status") == 0) {
+        char body[512];
+        char firmware[64];
+
+        resolve_device_firmware(config, firmware, sizeof(firmware));
+        if (!client_is_loopback(client_fd)) {
+            send_loopback_required(client_fd);
+        } else if (c300x_ui_status_json(C300X_NATIVE_AGENT_VERSION, firmware, display_bridge_webhook_url(config, runtime),
+                runtime->home_assistant_connected_this_run, runtime->display_bridge_disabled,
+                (long)runtime->home_assistant_last_seen_monotonic,
+                (long)c300x_monotonic_seconds(), body, sizeof(body))) {
+            send_json(client_fd, 200, "OK", body);
+        } else {
+            send_response_too_large(client_fd);
+        }
         return 1;
     }
 

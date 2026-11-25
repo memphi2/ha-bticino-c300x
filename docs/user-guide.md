@@ -443,9 +443,10 @@ The target is fixed to the entry, so do not set `target`; `title` defaults to
 | `tts_engine`, `language` | Engine and language for the speech. Only with `tts`. |
 | `mode` | Legacy; see below. |
 
-Title and message allow 80 and 500 characters; no URLs, audio files or
-executable actions. This is supplementary information, **not a fire alarm or
-other life-safety alerting system**.
+The title allows 80 characters. A longer message is cut to 500 characters
+and ends with "…". No URLs, audio files or executable actions. This is
+supplementary information, **not a fire alarm or other life-safety alerting
+system**.
 
 Each switch turns on one channel; combine them freely, at least one on:
 

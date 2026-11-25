@@ -95,6 +95,7 @@ from .dashboard_select_texts import apply_select_texts
 from .dashboard_situations import situations_dashboard_page
 from .dashboard_weather import async_dashboard_weather_payload
 from .display_notifications import notification_payload
+from .display_settings import display_status_details
 from .entry_types import BticinoC300XConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
@@ -176,7 +177,7 @@ async def async_status(
             or configured_situations_page(entry)["enabled"]
             or bool(notification_payload(entry))
         ),
-        "preventReturnToHomepage": configured_dashboard_prevent_return(entry),
+        **display_status_details(hass, entry),
         "device_ui_enabled": device_ui_enabled,
         "actions": sorted(actions.keys()) if device_ui_enabled else [],
     }

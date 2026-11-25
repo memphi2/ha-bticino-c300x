@@ -819,16 +819,24 @@ def render(args):
                             check("severity symbol and label", named(component, "severityLabel").property("text"), label)
                             check("acknowledgement label", any(text["text"] == fixture["properties"]["acknowledgeLabel"]
                                                               for text in case["snapshots"][-1]["texts"]), True)
-                            check("native blue panel", panel.property("color").name(), "#176196")
+                            # The look of the station's own popups: a sheet of half
+                            # transparent white on 90 % black, which gives mid grey.
+                            sheet = named(component, "sheet")
+                            check("station popup sheet", [sheet.property("color").name(), sheet.property("opacity")],
+                                  ["#ffffff", 0.5])
                             check("severity accent", component.property("accent").name(), accent)
                             shot = window.grabWindow()
-                            center = panel.mapToScene(QPointF(5, 5)).toPoint()
-                            check("blue panel pixels", shot.pixelColor(center).name(), "#176196")
-                            severity_item = named(component, "severityLabel")
+                            grey = shot.pixelColor(panel.mapToScene(QPointF(5, 5)).toPoint())
+                            check("grey panel pixels", 110 <= grey.red() <= 150 and
+                                  max(grey.red(), grey.green(), grey.blue()) - min(grey.red(), grey.green(), grey.blue()) < 12, True)
+                            # Severity is a small coloured marker; the box and its text keep their colours.
+                            severity_item = named(component, "severityMark")
                             origin = severity_item.mapToScene(QPointF(0, 0)).toPoint()
                             colored = sum(shot.pixelColor(origin.x() + x, origin.y() + y).name() == accent
                                           for x in range(round(severity_item.width())) for y in range(round(severity_item.height())))
-                            check("severity label pixels", colored > 5, True)
+                            check("severity marker pixels", colored > 5, True)
+                            check("severity marker stays small", severity_item.width() * severity_item.height() <= 200, True)
+                            check("severity text is white", named(component, "severityLabel").property("color").name(), "#ffffff")
                             if fixture["name"].endswith("-long"):
                                 check("long message scrollable", scroll.property("contentHeight") > scroll.height(), True)
                                 first_image = snapshot("long-top")

@@ -128,7 +128,7 @@ Key sections:
 - `systemMetrics`: optional low-frequency push of load and temperature
 - `video`: optional local doorstation media
 - `displayBridge`: optional dashboard proxy for QML; `feedbackEnabled` stores
-  the local **Settings > Home Assistant > HA feedback** choice (default true).
+  the local **Settings > Integration > Status messages** choice (default true).
   Changing it needs no HA connection or GUI restart and writes config only when
   the value changes.
 

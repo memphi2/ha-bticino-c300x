@@ -537,7 +537,7 @@ function assertDisarmRequiresConfiguredPin() {{
 
   page.selectCommand("disarm");
   assert.strictEqual(page.feedbackTitle(), "Abwesend");
-  assert.strictEqual(statusItem.text, "PIN benoetigt: Aus");
+  assert.strictEqual(statusItem.text, "PIN benötigt: Aus");
       assert.strictEqual(JSON.stringify(calls), JSON.stringify(["/ui/state"]));
   page.appendDigit("1");
   page.appendDigit("2");

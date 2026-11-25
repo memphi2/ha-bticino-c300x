@@ -109,6 +109,7 @@ Page {
     function aboutToShow() {
         c300xDisplayPreferences.load()
         pageActive = true
+        status.held = false
         Api.dashboard(status, page)
         startWatch()
     }
@@ -148,7 +149,7 @@ Page {
             if (event.topic === "connection.error") {
                 watchFailed = true
                 dashboardOnline = false
-                Api.setStatus(status, uiText("stale_state"), "#f1c40f")
+                Api.setStatus(status, uiText("stale_state"), "#f1c40f", false, true)
             } else {
                 Api.dashboard(status, page)
             }
@@ -1061,7 +1062,7 @@ Page {
         anchors.margins: 24
         anchors.bottomMargin: 12
         height: 36
-        text: selectedItem ? feedbackText(selectedItem) : status.text
+        text: selectedItem ? feedbackText(selectedItem) : statusText()
         textFormat: Text.PlainText
         color: selectedItem ? feedbackColor(selectedItem) : statusColor()
         font.pixelSize: 16
@@ -1934,6 +1935,7 @@ Page {
         property string text: ""
         property color color: "#c7d0d9"
         property bool optionalFeedback: false
+        property bool held: false
         UbuntuLightText {
             anchors.fill: parent
             text: statusText()
@@ -1943,5 +1945,6 @@ Page {
             horizontalAlignment: Text.AlignRight
             elide: Text.ElideRight
         }
+        Timer { interval: 30000; running: status.held; onTriggered: status.held = false }
     }
 }

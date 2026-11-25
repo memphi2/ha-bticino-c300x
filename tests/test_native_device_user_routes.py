@@ -36,7 +36,8 @@ def route_binary(request, tmp_path_factory):
     for operation in ("ensure", "restore")
     for case in ("unauthorized", "unconfirmed")
 ] + [("ensure", case) for case in ("routing-failure", "user-failure", "user-failure-patched", "invalid", "false")]
-  + [("restore", "restore-failure"),
+  + [("restore", "restore-failure"), ("restore", "false"),
+     ("restore", "invalid-json"), ("ensure", "invalid-json"),
      ("ensure", "busy-root"), ("restore", "busy-root")])
 def test_route_state_machine(route_binary, tmp_path, operation, case):
     script = tmp_path / "job.sh"
@@ -53,6 +54,8 @@ def test_route_state_machine(route_binary, tmp_path, operation, case):
         body = "printf invalid\n"
     elif case == "false":
         body = 'printf \'{"ok":false}\'\n'
+    elif case == "invalid-json":
+        body = 'printf \'{"ok":true\'\n'
     elif case == "overflow":
         body += "head -c 12000 /dev/zero | tr '\\000' ' '\n"
     if case != "missing":

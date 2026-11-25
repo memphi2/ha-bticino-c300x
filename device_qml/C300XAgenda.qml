@@ -20,9 +20,11 @@ Item {
     }
 
     ListView {
+        id: list
         anchors.top: errorLabel.bottom
-        anchors.bottom: parent.bottom
-        width: parent.width
+        width: parent.width - (contentHeight > height ? 9 : 0)
+        height: Math.floor(Math.max(0, root.height - errorLabel.height) / 70) * 70
+        snapMode: ListView.SnapToItem
         clip: true
         interactive: contentHeight > height
         model: root.events
@@ -58,6 +60,15 @@ Item {
                 opacity: 0.25
             }
         }
+    }
+    Rectangle {
+        anchors.right: parent.right
+        y: list.y + list.visibleArea.yPosition * list.height
+        width: 3
+        height: list.visibleArea.heightRatio * list.height
+        visible: list.contentHeight > list.height
+        color: "white"
+        opacity: 0.6
     }
     UbuntuLightText {
         anchors.fill: parent

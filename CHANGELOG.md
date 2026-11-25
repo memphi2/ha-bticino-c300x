@@ -53,6 +53,38 @@ Station:
   in the station's own confirmation window with **Yes** and **No**, and say
   what happens, instead of showing a second button further down the tab.
 
+Notifications and card:
+
+- A display notification whose message is longer than 500 characters is now
+  shown, cut to 500 characters and ending with "…", instead of being refused
+  with an error. Spoken notifications keep the full text.
+- With a camera picture that is not 5:3 (for example 688x480 or 704x576),
+  the doorbell card no longer changes its height at every stream start and
+  stop while it shows a visitor snapshot. The card keeps the shape of the
+  camera picture; a snapshot of another shape is shown inside it.
+
+Fixed:
+
+- **Restore Home Assistant media-user setup** no longer removes the user and
+  the call routing when the label could not be taken off the display (for
+  example after a failed display restart); it reports the failure and leaves
+  the setup complete.
+- Setting up or restoring the media user is no longer reported as failed
+  while the station is still writing the label.
+- Writing a text memo while a call or stream is running fails with a clear
+  message ("The station is busy with a call. Try again after it ends.")
+  instead of the general agent error.
+- A visitor image that could not be taken now logs a warning with the cause,
+  and the **Save images** switch shows it as the attribute `last_failure`
+  until an image succeeds again.
+- The IPv6 firewall switch is offered only on stations that have the IPv6
+  firewall start script.
+
+Documentation:
+
+- **Quick Start** links the community project that describes rooting a
+  station (third party, at your own risk).
+
 ## v2.9.1 - 2026-11-24
 
 Station:

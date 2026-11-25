@@ -1,6 +1,6 @@
 # Changelog
 
-## v2.10.0b1 - 2026-11-24
+## v2.10.0b1 - 2026-11-25
 
 Firmware 3.0.6 beta. On a 3.0.6 station (Dave, PR #126) the display pages
 loaded at start, the Alarm and Home Assistant buttons sat in the right place

@@ -485,6 +485,75 @@ static void ha_answer(void) {
     assert(atomic_load(&ondemand_invites) == 0);
 }
 
+/* An API request to the call routes; returns the HTTP status. */
+static int calls_api(const char *method, const char *path, const char *body, char *out, size_t out_len) {
+    int fds[2];
+    static struct request request;
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, fds) == 0);
+    memset(&request, 0, sizeof(request));
+    snprintf(request.method, sizeof(request.method), "%s", method);
+    snprintf(request.path, sizeof(request.path), "%s", path);
+    snprintf(request.body, sizeof(request.body), "%s", body);
+    request.body_len = strlen(request.body);
+    struct c300x_call_routes routes = {&runtime->calls, &runtime->video_control, runtime->video};
+    assert(c300x_http_calls_route(fds[0], &routes, &request));
+    close(fds[0]);
+    ssize_t n = recv(fds[1], out, out_len - 1, 0);
+    close(fds[1]);
+    assert(n > 0);
+    out[n] = '\0';
+    int code = 0;
+    assert(sscanf(out, "HTTP/1.1 %d", &code) == 1);
+    return code;
+}
+
+/* Two units ring within a second (frames of a three-unit installation):
+ * each gets its own call, a hang-up for the older call id is refused. */
+static void two_units(void) {
+    char data[4096], first[32] = "", second[32] = "", path[96];
+    int preview;
+    ring_starts(&preview);
+    bus("*8*9#1#4*21##");
+    wait_event("call.caller_identified", 1, data, sizeof(data));
+    assert(strstr(data, "\"unit\":\"21\"") && strstr(data, "\"attribution\":\"caller_frame\""));
+    sscanf(strstr(data, "\"call_id\":\"") + 11, "%31[^\"]", first);
+    bus("*8*1#1#4#21*11##");
+    bus("*8*9#1#4*22##");
+    wait_event("doorbell.pressed", 2, data, sizeof(data));
+    assert(strstr(data, "\"unit\":\"22\""));
+    sscanf(strstr(data, "\"call_id\":\"") + 11, "%31[^\"]", second);
+    assert(strcmp(first, second) != 0);
+    wait_event("call.caller_identified", 2, data, sizeof(data));
+    assert(count_events("doorbell.pressed") == 2);
+    assert(count_events("outdoor_units.changed") == 2);
+
+    snprintf(path, sizeof(path), "/api/v1/calls/%s/actions/hangup", first);
+    assert(calls_api("POST", path, "", data, sizeof(data)) == 409);
+    assert(strstr(data, "\"error\":\"call_not_current\"") && strstr(data, second));
+    assert(calls_api("POST", "/api/v1/calls/0badc0de-1/actions/answer", "", data, sizeof(data)) == 409);
+    assert(calls_api("GET", "/api/v1/calls", "", data, sizeof(data)) == 200);
+    assert(strstr(data, first) && strstr(data, second));
+    assert(calls_api("GET", "/api/v1/outdoor-units", "", data, sizeof(data)) == 200);
+    assert(strstr(data, "\"id\":\"21\",\"where\":\"21\"") && strstr(data, "\"source\":\"seen\""));
+    assert(calls_api("POST", "/api/v1/video/doorbell/actions/activate", "{\"unit\":\"21\"}", data, sizeof(data)) == 409);
+    assert(strstr(data, "unit_video_unsupported"));
+    snprintf(path, sizeof(path), "{\"call_id\":\"%s\"}", first);
+    assert(calls_api("POST", "/api/v1/outdoor-units/22/actions/unlock", path, data, sizeof(data)) == 409);
+
+    bus("*8*19*22##");
+    wait_event("door_unlock.started", 1, data, sizeof(data));
+    assert(strstr(data, "\"unit\":\"22\"") && strstr(data, second));
+    bus("*8*100#1#4*21##");
+    wait_event("call.ended", 1, data, sizeof(data));
+    assert(strstr(data, first) && strstr(data, "\"reason\":\"hangup_frame\""));
+    station_send("CANCEL", 1, NULL);
+    wait_ring_code(200, 1);
+    wait_event("call.ended", 2, data, sizeof(data));
+    assert(strstr(data, second) && strstr(data, "\"reason\":\"media_closed\""));
+    close(preview);
+    assert(atomic_load(&ondemand_invites) == 0);
+}
+
 /* (d) The station answers 486 Busy with no external marker (here: no bus
  * frame announced the call). One INVITE, then no SIP until it is free. */
 static void station_busy_case(bool freed_by_bus) {
@@ -589,6 +658,7 @@ int main(int argc, char **argv) {
     runtime = calloc(1, sizeof(*runtime));
     assert(runtime != NULL);
     runtime->config = &config;
+    c300x_call_hub_init(&runtime->calls, &config, dispatch_call_event, runtime);
     runtime->video = c300x_video_create(&config, NULL, 0);
     assert(runtime->video != NULL);
     c300x_video_set_event_callback(runtime->video, dispatch_video_event, runtime);
@@ -605,6 +675,7 @@ int main(int argc, char **argv) {
     else if (strcmp(argv[1], "display_answer_end_lost") == 0) display_answer(true);
     else if (strcmp(argv[1], "unanswered") == 0) unanswered();
     else if (strcmp(argv[1], "ha_answer") == 0) ha_answer();
+    else if (strcmp(argv[1], "two_units") == 0) two_units();
     else if (strcmp(argv[1], "station_busy_bus_end") == 0) station_busy_case(true);
     else if (strcmp(argv[1], "station_busy_timeout") == 0) station_busy_case(false);
     else if (strcmp(argv[1], "station_freed_before_486") == 0) station_freed_during_start(true);

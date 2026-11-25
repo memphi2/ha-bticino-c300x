@@ -10,9 +10,10 @@
 void c300x_http_doorbell_video_activate(int client_fd, struct c300x_video_control *control,
                                         struct c300x_video *video, const struct request *request);
 void c300x_http_doorbell_video_stop(int client_fd, struct c300x_video_control *control, struct c300x_video *video);
-void c300x_http_doorbell_call_answer(int client_fd, struct c300x_video_control *control,
-                                     struct c300x_video *video, const struct request *request);
-void c300x_http_doorbell_call_hangup(int client_fd, struct c300x_video_control *control, struct c300x_video *video);
+/* Answer and hang-up return 1 when they answered the request with success. */
+int c300x_http_doorbell_call_answer(int client_fd, struct c300x_video_control *control,
+                                    struct c300x_video *video, const struct request *request);
+int c300x_http_doorbell_call_hangup(int client_fd, struct c300x_video_control *control, struct c300x_video *video);
 void c300x_http_home_call_start(int client_fd, struct c300x_video_control *control,
                                 struct c300x_video *video, const struct request *request);
 void c300x_http_home_call_stop(int client_fd, struct c300x_video_control *control, struct c300x_video *video);

@@ -36,7 +36,8 @@ def test_native_capabilities_contract(tmp_path: Path) -> None:
         caps = document["capabilities"]
         pcmu = bool(index % 2)
         maintenance = bool(index // 2)
-        assert document["api_version"] == "1"
+        assert document["api_version"] == "2"
+        assert caps["outdoor_units"] is caps["calls"] is True
         assert document["device"] == {
             # The model is the detected one, not the configured C300X.
             "id": "synthetic-id", "model": "C100X", "display_kind": "qt5_ondisk", "camera": "high_res",

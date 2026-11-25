@@ -19,7 +19,7 @@ WRAPPED = (
     "c300x_video_bridge_station_busy",
 )
 CASES = {
-    "display_answer": 0, "display_answer_end_lost": 1, "unanswered": 0, "ha_answer": 0,
+    "display_answer": 0, "display_answer_end_lost": 1, "unanswered": 0, "ha_answer": 0, "two_units": 0,
     "station_busy_bus_end": 2, "station_busy_timeout": 2,
     "station_freed_before_486": 2, "station_freed_after_486": 2,
 }

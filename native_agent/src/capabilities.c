@@ -58,8 +58,8 @@ int c300x_capabilities_json(
         body,
         body_len,
         "{"
-        "\"api_version\":\"1\","
-        "\"agent\":{\"implementation\":\"native-c\",\"version\":\"%s\",\"api_version\":\"1\",\"bundle_hash\":%s,\"self_update_supported\":%s,\"self_update_file_set_version\":7},"
+        "\"api_version\":\"2\","
+        "\"agent\":{\"implementation\":\"native-c\",\"version\":\"%s\",\"api_version\":\"2\",\"bundle_hash\":%s,\"self_update_supported\":%s,\"self_update_file_set_version\":7},"
         "\"device\":{\"id\":\"%s\",\"model\":\"%s\",\"display_kind\":\"%s\",\"camera\":\"%s\",\"model_check\":\"%s\",\"board\":%s,\"article\":%s,\"firmware\":\"%s\"},"
         "\"capabilities\":{"
         "\"doorbell_events\":true,"
@@ -74,7 +74,7 @@ int c300x_capabilities_json(
         "\"stair_light\":{\"supported\":true,\"default_address\":\"%s\"},"
         "\"locks\":{\"supported\":true,\"default_id\":\"%s\",\"locks\":[{\"id\":\"%s\",\"name\":\"%s\"}]},"
         "\"activations\":{\"supported\":%s,\"count\":%d},"
-        "\"call_events\":false,"
+        "\"outdoor_units\":true,\"calls\":true,"
         "\"announcements\":{\"supported\":%s},"
         "\"ringer\":{\"supported\":true,\"mute\":%s,\"volume\":true,\"min_volume\":%d,\"max_volume\":%d,\"step\":%d},"
         "\"smartphone_forwarding\":{\"supported\":true,\"modes\":[\"enabled\",\"homeassistant\",\"blocked\"]},"

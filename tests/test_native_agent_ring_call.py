@@ -1083,11 +1083,11 @@ def test_native_agent_exposes_explicit_doorbell_call_api_without_new_sip_path() 
     actions = (ROOT / "native_agent" / "src" / "http_media_actions.c").read_text(encoding="utf-8")
     control = (ROOT / "native_agent" / "src" / "video_control.c").read_text(encoding="utf-8")
     answer_http_body = actions[
-        actions.index("void c300x_http_doorbell_call_answer") :
-        actions.index("void c300x_http_doorbell_call_hangup")
+        actions.index("int c300x_http_doorbell_call_answer") :
+        actions.index("int c300x_http_doorbell_call_hangup")
     ]
     hangup_http_body = actions[
-        actions.index("void c300x_http_doorbell_call_hangup") :
+        actions.index("int c300x_http_doorbell_call_hangup") :
         actions.index("void c300x_http_home_call_start")
     ]
     router_body = http[
@@ -1116,11 +1116,14 @@ def test_native_agent_exposes_explicit_doorbell_call_api_without_new_sip_path() 
     assert "c300x_video_doorbell_call_hangup(job->video);" in control
     for path in (
         "/api/v1/calls/doorbell/status",
-        "/api/v1/calls/doorbell/actions/answer",
-        "/api/v1/calls/doorbell/actions/hangup",
         "/api/v1/calls/doorbell/actions/capture",
     ):
         assert path in router_body
+    # Answer and hang-up name the call: /api/v1/calls/{call_id}/actions/...
+    call_routes = (ROOT / "native_agent" / "src" / "http_calls.c").read_text(encoding="utf-8")
+    assert '#define CALLS_PREFIX "/api/v1/calls/"' in call_routes
+    assert '"/actions/answer"' in call_routes and '"/actions/hangup"' in call_routes
+    assert "/api/v1/calls/doorbell/actions/answer" not in http
     assert '\\"capture_supported\\":false' in http
     assert '\\"capture_not_supported\\"' in http
     capabilities = (ROOT / "native_agent" / "src" / "capabilities.c").read_text(encoding="utf-8")
@@ -1142,10 +1145,6 @@ def test_native_agent_doorbell_events_include_device_media_state() -> None:
     dispatch_body = http[
         http.index("static int dispatch_event_internal") :
         http.index("static int dispatch_event(", http.index("static int dispatch_event_internal"))
-    ]
-    dedupe_body = video[
-        video.index("int c300x_video_should_dispatch_event") :
-        video.index("void c300x_video_note_event")
     ]
 
     assert 'strcmp(event_type, "doorbell.pressed") == 0' in event_payload
@@ -1179,14 +1178,10 @@ def test_native_agent_doorbell_events_include_device_media_state() -> None:
     assert "c300x_event_payload_needs_doorbell_state" in payload_builder_body
     assert "c300x_event_payload_build_data_json(" in dispatch_body
     assert "runtime != NULL ? runtime->video : NULL" in dispatch_body
-    assert "#define C300X_DOORBELL_PRESSED_DEDUPE_MS 1000" in video
-    assert "long long last_doorbell_pressed_ms;" in video
-    assert 'strcmp(event_type, "doorbell.pressed") != 0' in dedupe_body
-    assert "previous = video->last_doorbell_pressed_ms;" in dedupe_body
-    assert "now - previous < C300X_DOORBELL_PRESSED_DEDUPE_MS" in dedupe_body
-    assert "video->last_doorbell_pressed_ms = now;" in dedupe_body
-    assert "c300x_video_should_dispatch_event(runtime->video, event_type)" in dispatch_body
-    assert dispatch_body.index("c300x_video_should_dispatch_event") < dispatch_body.index(
+    # Ring copies are dropped per call by the call table, not by one global window.
+    assert "last_doorbell_pressed_ms" not in video
+    assert "c300x_call_hub_event(&runtime->calls, event_type, data_json" in dispatch_body
+    assert dispatch_body.index("c300x_call_hub_event") < dispatch_body.index(
         "c300x_video_note_event(runtime->video, event_type, ttl_seconds)"
     )
     assert dispatch_body.index(

@@ -29,6 +29,7 @@
 #include "http_clients.h"
 #include "http_media_actions.h"
 #include "http_ring_status.h"
+#include "http_calls.h"
 #include "picture_worker.h"
 #include "openwebnet_async.h"
 #include "http_file_transfers.h"
@@ -204,6 +205,7 @@ struct voicemail_runtime {
 };
 struct agent_runtime {
     const struct c300x_config *config;
+    struct c300x_call_hub calls;
     struct subscription subscriptions[C300X_MAX_SUBSCRIPTIONS];
     int subscription_count;
     unsigned long callback_generation;
@@ -4167,15 +4169,15 @@ static int dispatch_event_internal(
     char merged_json[4096];
     char event_json[8192];
     char event_type_json[C300X_JSON_QUOTED_LEN(64)];
+    char call_json[1024];
     int written;
     int delivered = 1;
+    int call_result = c300x_call_hub_event(&runtime->calls, event_type, data_json, call_json, sizeof(call_json));
 
-    if (
-        runtime->video != NULL
-        && !c300x_video_should_dispatch_event(runtime->video, event_type)
-    ) {
+    if (call_result == 0) {
         return 0;
     }
+    data_json = call_result == 2 ? call_json : data_json;
     if (update_video_state && runtime->video != NULL) {
         c300x_video_note_event(runtime->video, event_type, ttl_seconds);
     }
@@ -4258,6 +4260,12 @@ static void dispatch_event_snapshot(
 )
 {
     dispatch_event_internal(config, runtime, event_type, data_json, ttl_seconds, 1, 1);
+}
+
+static void dispatch_call_event(void *user_data, const char *type, const char *data_json)
+{
+    struct agent_runtime *runtime = user_data;
+    dispatch_event(runtime->config, runtime, type, data_json, 30);
 }
 
 static void dispatch_video_event(
@@ -4939,6 +4947,7 @@ static void handle_udp_event(
     memcpy(msg, buffer + msg_start, (size_t)(msg_end - msg_start));
     msg[msg_end - msg_start] = '\0';
     c300x_announce_door_frame(&runtime->announce, msg);
+    c300x_call_hub_frame(&runtime->calls, msg);
     c100x_activation_door_frame(&runtime->c100x_activation, msg, c300x_monotonic_ms());
     int confirmed_muted;
     if (c300x_ringer_muted_from_reply(msg, &confirmed_muted)) {
@@ -8786,8 +8795,8 @@ static void handle_api_request(
         handle_doorbell_snapshot(client_fd, request);
         return;
     }
-    if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/video/doorbell/actions/activate") == 0) {
-        c300x_http_doorbell_video_activate(client_fd, &runtime->video_control, runtime->video, request);
+    struct c300x_call_routes call_routes = {&runtime->calls, &runtime->video_control, runtime->video};
+    if (c300x_http_calls_route(client_fd, &call_routes, request)) {
         return;
     }
     if (c300x_try_handle_doorbell_video_audio_settings_route(
@@ -8810,14 +8819,6 @@ static void handle_api_request(
             || strcmp(request->path, "/api/v1/calls/doorbell/status") == 0)
     ) {
         c300x_http_doorbell_call_get(client_fd, config->video_enabled, runtime != NULL ? runtime->video : NULL);
-        return;
-    }
-    if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/calls/doorbell/actions/answer") == 0) {
-        c300x_http_doorbell_call_answer(client_fd, &runtime->video_control, runtime->video, request);
-        return;
-    }
-    if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/calls/doorbell/actions/hangup") == 0) {
-        c300x_http_doorbell_call_hangup(client_fd, &runtime->video_control, runtime->video);
         return;
     }
     if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/calls/doorbell/actions/capture") == 0) {
@@ -9403,6 +9404,7 @@ int c300x_run(struct c300x_config *config)
         return 2;
     }
     runtime->config = config;
+    c300x_call_hub_init(&runtime->calls, config, dispatch_call_event, runtime);
     struct http_context http = {.config = config, .runtime = runtime};
     c300x_http_clients_init(&runtime->http_clients);
     c300x_http_file_transfers_init(&runtime->file_transfers);
@@ -9678,6 +9680,7 @@ int c300x_run(struct c300x_config *config)
             poll_timeout_ms,
             c300x_ui_events_timeout_ms(&runtime->ui_events, now)
         );
+        poll_timeout_ms = min_timeout_ms(poll_timeout_ms, c300x_call_hub_timeout_ms(&runtime->calls));
         runtime->loop_iterations++;
         runtime->last_poll_timeout_ms = poll_timeout_ms;
         runtime->last_poll_count = (int)poll_count;
@@ -9714,6 +9717,7 @@ int c300x_run(struct c300x_config *config)
             c300x_memo_led_update(&runtime->memo_led, runtime->memo_led.claimed);
         }
         c300x_http_outputs_handle(&poll_fds[output_poll_index]);
+        c300x_call_hub_tick(&runtime->calls);
         c300x_http_maintenance_tick(&runtime->maintenance);
         c300x_announce_tick(&runtime->announce);
         c300x_openwebnet_async_tick(&runtime->openwebnet, &poll_fds[openwebnet_poll_index]);

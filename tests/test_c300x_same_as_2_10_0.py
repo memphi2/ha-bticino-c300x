@@ -258,6 +258,16 @@ ROUTES_ADDED = frozenset({
     "/ui/c100x/presence/next",
     "/ui/c100x/presence/probe",
     "/ui/c100x/presence/status",
+    # 3.1.0: outdoor units and calls, see docs/dev/multi-outdoor-units.md.
+    "/api/v1/calls",
+    "/api/v1/calls/",
+    "/api/v1/outdoor-units",
+    "/api/v1/outdoor-units/",
+})
+# 3.1.0: answer and hang-up name the call (/api/v1/calls/{call_id}/actions/...).
+ROUTES_REMOVED = frozenset({
+    "/api/v1/calls/doorbell/actions/answer",
+    "/api/v1/calls/doorbell/actions/hangup",
 })
 _ROUTE = re.compile(r'"(/(?:api/v1|ui)/[A-Za-z0-9_/.{}-]*)"')
 
@@ -266,7 +276,7 @@ def test_the_agent_serves_every_route_of_2_10_0() -> None:
     current = set()
     for source in (NATIVE / "src").glob("*.c"):
         current.update(_ROUTE.findall(source.read_text(encoding="utf-8")))
-    assert set(ROUTES_2_10_0) - current == set()
+    assert set(ROUTES_2_10_0) - current == ROUTES_REMOVED
     assert current - set(ROUTES_2_10_0) == ROUTES_ADDED
 
 
@@ -307,6 +317,12 @@ def test_a_c300x_answers_capabilities_as_2_10_0(tmp_path: Path, display_kind: st
             del device[name]
         assert document["agent"].pop("self_update_file_set_version") == 7
         assert "c100x_display" not in document["capabilities"]
+        # 3.1.0: API version 2 with outdoor units and calls; nothing else differs.
+        assert document["api_version"] == document["agent"]["api_version"] == "2"
+        document["api_version"] = document["agent"]["api_version"] = "1"
+        capabilities = document["capabilities"]
+        assert capabilities.pop("outdoor_units") is True and capabilities.pop("calls") is True
+        capabilities["call_events"] = False
     assert hashlib.sha256(
         json.dumps(documents, sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest() == CAPABILITIES_2_10_0

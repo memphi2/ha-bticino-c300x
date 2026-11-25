@@ -95,7 +95,7 @@ void c300x_http_doorbell_video_stop(int client_fd, struct c300x_video_control *c
     c300x_http_send_json(client_fd, 200, "OK", "{\"ok\":true}\n");
 }
 
-void c300x_http_doorbell_call_answer(
+int c300x_http_doorbell_call_answer(
     int client_fd,
     struct c300x_video_control *control, struct c300x_video *video,
     const struct request *request
@@ -108,10 +108,10 @@ void c300x_http_doorbell_call_answer(
     (void)request;
     if (video == NULL) {
         c300x_http_send_json(client_fd, 503, "Service Unavailable", "{\"ok\":false,\"error\":\"video_unavailable\"}\n");
-        return;
+        return 0;
     }
     if (!ran(client_fd, control, video, C300X_VIDEO_CONTROL_ANSWER, 0, &done)) {
-        return;
+        return 0;
     }
     if (!done) {
         c300x_video_status(video, &video_status);
@@ -124,27 +124,25 @@ void c300x_http_doorbell_call_answer(
             video_status.ring_answered ? "true" : "false"
         );
         c300x_http_send_json(client_fd, 409, "Conflict", body);
-        return;
+        return 0;
     }
     c300x_video_status(video, &video_status);
-    snprintf(
-        body,
-        sizeof(body),
+    snprintf(body, sizeof(body),
         "{\"ok\":true,\"audio\":true,\"answer_requested\":%s,\"answered\":%s,\"media_owner\":\"ring\"}\n",
-        video_status.ring_answer_requested ? "true" : "false",
-        video_status.ring_answered ? "true" : "false"
-    );
+        video_status.ring_answer_requested ? "true" : "false", video_status.ring_answered ? "true" : "false");
     c300x_http_send_json(client_fd, 200, "OK", body);
+    return 1;
 }
 
-void c300x_http_doorbell_call_hangup(int client_fd, struct c300x_video_control *control, struct c300x_video *video)
+int c300x_http_doorbell_call_hangup(int client_fd, struct c300x_video_control *control, struct c300x_video *video)
 {
     int done;
 
     if (video != NULL && !ran(client_fd, control, video, C300X_VIDEO_CONTROL_HANGUP, 0, &done)) {
-        return;
+        return 0;
     }
     c300x_http_send_json(client_fd, 200, "OK", "{\"ok\":true}\n");
+    return 1;
 }
 
 void c300x_http_home_call_start(

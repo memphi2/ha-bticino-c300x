@@ -43,7 +43,8 @@ caller frame, but its lock and video use the plain `20`
   first `#` (`20#2` -> `20`).
 - Home Assistant devices:
   - station: identifiers `{(bticino_c300x, <station_id>)}`, connections
-    `{(mac, <device.mac>)}` when the agent reports it;
+    `{(mac, <mac>)}` when `station_id` carries the MAC (`c300x-` and twelve
+    hex digits, as the agent builds it from the network interface);
   - outdoor unit: identifiers `{(bticino_c300x, "<station_id>:unit:<unit_id>")}`,
     `via_device` the station, model `Outdoor unit`.
 - Entity unique ids: station `"<station_id>_<key>"`, unit
@@ -74,8 +75,8 @@ Sources, in this order:
    frame with its `action_where` (its `unit_id` stays), instead of creating a
    second unit.
 
-The topology is read at agent start and whenever `GET /api/v1/outdoor-units`
-finds the archive's modification time changed. At most 16 units.
+The topology is read with the first bus frame or request that needs it and
+again on every `GET /api/v1/outdoor-units`. At most 16 units.
 
 ## Calls
 
@@ -145,8 +146,8 @@ The timer exists only while a call is live; an idle agent has no extra wakeup.
 
 ## Agent API
 
-Capabilities add `api_version: "2"`, `device.mac` (`aa:bb:cc:dd:ee:ff` or
-absent), `capabilities.outdoor_units: true` and `capabilities.calls: true`.
+Capabilities report `api_version: "2"` and `capabilities.outdoor_units: true`,
+`capabilities.calls: true`; the unused `capabilities.call_events` is gone.
 
 ### `GET /api/v1/outdoor-units`
 

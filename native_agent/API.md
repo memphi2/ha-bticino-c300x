@@ -231,8 +231,11 @@ for example `config_error`, `api_token_missing`, `api_bind_failed`,
 | `GET`, `POST` | `/api/v1/video/picture` | API | GET reads brightness, contrast and saturation; POST changes one of them on the active video source. |
 | `GET` | `/api/v1/calls/doorbell` | API | None. |
 | `GET` | `/api/v1/calls/doorbell/status` | API | None. |
-| `POST` | `/api/v1/calls/doorbell/actions/answer` | API | Answers active ring-call media locally. |
-| `POST` | `/api/v1/calls/doorbell/actions/hangup` | API | Hangs up active ring-call media. |
+| `GET` | `/api/v1/calls` | API | None. |
+| `POST` | `/api/v1/calls/{call_id}/actions/answer` | API | Answers the current ring call locally. |
+| `POST` | `/api/v1/calls/{call_id}/actions/hangup` | API | Hangs up the current ring call. |
+| `GET` | `/api/v1/outdoor-units` | API | None (reads the station's archive when it changed). |
+| `POST` | `/api/v1/outdoor-units/{unit_id}/actions/unlock` | API | Sends the lock command of that outdoor unit. |
 | `POST` | `/api/v1/calls/doorbell/actions/capture` | API | Marks native capture action accepted. |
 | `GET` | `/api/v1/calls/home` | API | None. |
 | `GET` | `/api/v1/calls/home/status` | API | None. |
@@ -1168,18 +1171,33 @@ PLAY. HA waits for this before sending an announcement. This field uses the same
 peer-admission check as UDP media; it does not reserve a connection or replace
 per-packet checks. Older agents omit it and retain their legacy readiness behavior.
 
-### `POST /api/v1/calls/doorbell/actions/answer`
+### Outdoor units and calls
 
-Authentication: normal API token.
+Several outdoor units per station: units, calls, timing and identities are
+specified in [Outdoor Units and Calls](../docs/dev/multi-outdoor-units.md).
+Capabilities report `api_version: "2"`, `capabilities.outdoor_units` and
+`capabilities.calls`.
 
-Side effects: answers the active doorbell ring call locally through the native
-media path.
+- `GET /api/v1/outdoor-units`: the units (`id`, `where`, `action_where`,
+  `lock_where`, `name`, `source`, `default`), `default_unit` and `archive`.
+- `GET /api/v1/calls`: `boot_id`, `current_call_id` and live calls plus calls
+  ended in the last 60 s.
+- `POST /api/v1/calls/{call_id}/actions/answer`, `.../hangup`: answer or hang
+  up the current ring call. A call id that is unknown, ended or not current
+  gets `409 call_not_current` with `current_call_id`; nothing reaches the
+  station. Success bodies are those of the 2.x unscoped routes, which are gone.
+- `POST /api/v1/outdoor-units/{unit_id}/actions/unlock`, `{unit_id}` may be
+  `current`; optional body `{"call_id": "..."}`, which must be a call of that
+  unit, live or ended less than 60 s ago (else `409 call_not_current`).
+  `404 unknown_unit` for an unknown unit.
+- `POST /api/v1/video/doorbell/actions/activate` takes an optional `unit`;
+  on-demand video of a unit other than the default one answers
+  `409 unit_video_unsupported`.
 
-### `POST /api/v1/calls/doorbell/actions/hangup`
-
-Authentication: normal API token.
-
-Side effects: hangs up the active doorbell ring call.
+Events: `doorbell.pressed` carries `call_id`, `unit` and `attribution`; new are
+`call.caller_identified`, `call.answered`, `call.view_started`, `call.ended`
+and `outdoor_units.changed`; `door_unlock.*` and `doorbell.view_requested`
+carry `unit` and `call_id` when they belong to a unit.
 
 ### `POST /api/v1/calls/doorbell/actions/capture`
 

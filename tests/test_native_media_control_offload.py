@@ -20,14 +20,15 @@ from native_agent.test.smoke import (
     TOKEN,
     api_get,
     free_tcp_ports,
+    free_udp_port,
     managed_tcp_server,
+    send_udp_event,
     wait_for_health,
 )
 
 NATIVE = Path(__file__).resolve().parents[1] / "native_agent"
 ACTIVATE = "/api/v1/video/doorbell/actions/activate"
 STOP = "/api/v1/video/doorbell/actions/stop"
-HANGUP = "/api/v1/calls/doorbell/actions/hangup"
 HOME_START = "/api/v1/calls/home/actions/start"
 HOME_STOP = "/api/v1/calls/home/actions/stop"
 
@@ -178,8 +179,20 @@ def test_operations_run_one_after_the_other_and_once_each(lab: Lab) -> None:
     assert lab.log() == ["stop begin", "stop end", "home_start 7", "home_stop"]
 
 
+EVENT_PORT = free_udp_port()
+
+
+@pytest.mark.parametrize(
+    "lab", [{"events": {"udp": {"enabled": True, "group": "239.255.76.67", "port": EVENT_PORT}}}],
+    indirect=True,
+)
 def test_an_activation_answers_with_its_own_result(lab: Lab) -> None:
-    hangup = lab.held_stop(HANGUP)
+    send_udp_event(EVENT_PORT, "*8*1#1#4#21*11##")
+    deadline = time.monotonic() + 5
+    while (call_id := api_get(lab.api_port, "/api/v1/calls")["current_call_id"]) is None:
+        assert time.monotonic() < deadline
+        time.sleep(0.02)
+    hangup = lab.held_stop(f"/api/v1/calls/{call_id}/actions/hangup")
     activate = lab.post(ACTIVATE, {"audio": False})
     lab.health_ms()
 

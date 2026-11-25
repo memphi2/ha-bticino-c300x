@@ -41,25 +41,19 @@ cd64c8c333ae2cfde2f32a8681054c1a5755a2edafadec1183501cd774088834
 
 ## No firmware or APK payloads
 
-Documentation illustrations under `docs/images/readme/` come from the
-maintainer's own C300X and Home Assistant test instance. None of them are
-extracted firmware assets, and their values are examples.
+Documentation illustrations under `docs/images/readme/` show the maintainer's
+own setup or renders of the integration's pages. None of them are extracted
+firmware assets, and their values are examples.
 
-- `display-lights-en`, `-light-detail-en` and `-media-player-en` are device
-  photographs with AI-assisted English localization and color matching,
-  display-only crops and perspective correction. They are not pixel-exact.
-- `display-start-en`, `-general-en`, `-more-en`, `-camera-en`,
-  `-appointments-en`, `-energy-flow-en`, `-energy-power-en` and
-  `-energy-consumers-en` are read-only captures of the display framebuffer
-  from 2026-11-20. Their German texts were replaced by the display's English
-  texts, and private content by examples: appointments and consumer names are
-  example text, and the two camera pictures are AI-generated views of an
-  entrance and a garden, supplied by the maintainer, cropped and softened.
-- `display-c300x-dashboard-en`, `-alarmo-en`, `-settings-home-assistant-en`
-  and `-settings-tone-buttons-en` are read-only framebuffer captures from
-  2026-11-23, taken with the station set to English and left unchanged.
-- `display-home-stock-en` is a read-only framebuffer capture from 2026-11-24,
-  taken with the station set to English and left unchanged.
+- The `display-*-en` images are renders, not captures from a station. The
+  display pages of the release run on the station's own Qt 4.8 libraries with
+  the skin of firmware 1.7.19 in an emulator on a PC, in English, 800 x 480
+  pixels. Station pages such as Settings and the home page are the station's
+  own pages with the integration's changes applied.
+- The contents of the rendered pages are examples: the integration builds the
+  page data from example entities, appointments, energy values and consumer
+  names. The two camera pictures are AI-generated views of an entrance and a
+  garden, supplied by the maintainer, cropped and softened.
 - The `ha-*-en` images are browser captures of the Home Assistant test
   instance from 2026-11-23, in English and dark mode. The picture in the
   doorbell card is an earlier visitor image from the maintainer's own station,

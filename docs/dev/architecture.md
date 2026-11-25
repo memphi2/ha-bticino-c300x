@@ -3,7 +3,8 @@
 Internal ownership, data flow, resource limits and open design work. For what
 users see, read the [Reference](../feature-reference.md); the HTTP contract is in
 the [Native Agent API](../../native_agent/API.md); runtime packaging is in
-[Native Agent](native-agent.md).
+[Native Agent](native-agent.md). Outdoor units, calls and their identities are
+fixed in [Outdoor Units and Calls](multi-outdoor-units.md).
 
 ## Operating Model
 

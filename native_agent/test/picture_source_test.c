@@ -58,10 +58,11 @@ static int listed;
 DIR *__wrap_opendir(const char *name)
 {
     static const char root[] = "/sys/bus/i2c/drivers/";
-    assert(!strncmp(name, root, sizeof(root) - 1));
+    const size_t root_len = sizeof(root) - 1;
+    assert(!strncmp(name, root, root_len));
     ++dirs;
     listed = 0;
-    if (!decoder || strcmp(name + sizeof(root) - 1, decoder)) { errno = ENOENT; return NULL; }
+    if (!decoder || strcmp(&name[root_len], decoder)) { errno = ENOENT; return NULL; }
     return (DIR *)&dir_token;
 }
 struct dirent *__wrap_readdir(DIR *dir)

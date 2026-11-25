@@ -8,10 +8,11 @@
 void c100x_display_capability(const struct c100x_activation *activation, char *out, size_t out_len)
 {
     static const char key[] = ",\"c100x_display\":";
+    const size_t key_len = sizeof(key) - 1;
     out[0] = '\0';
     if (activation->enabled && out_len > sizeof(key)) {
         memcpy(out, key, sizeof(key));
-        if (!c100x_activation_json(activation, out + sizeof(key) - 1, out_len - sizeof(key) + 1)) {
+        if (!c100x_activation_json(activation, &out[key_len], out_len - key_len)) {
             out[0] = '\0';
         }
     }
@@ -29,19 +30,21 @@ int c100x_display_route(struct c100x_activation *activation, int fd, const struc
     const struct request *request)
 {
     static const char root[] = "/api/v1/maintenance/c100x-display";
+    const size_t root_len = sizeof(root) - 1;
     char body[768];
-    const char *action = NULL, *confirmation = NULL, *error;
+    const char *action = NULL, *confirmation = NULL, *error, *rest;
     int restore;
 
-    if (!activation->enabled || strncmp(request->path, root, sizeof(root) - 1) != 0) {
+    if (!activation->enabled || strncmp(request->path, root, root_len) != 0) {
         return 0;
     }
-    if (!strcmp(request->method, "GET") && !strcmp(request->path + sizeof(root) - 1, "")) {
+    rest = &request->path[root_len];
+    if (!strcmp(request->method, "GET") && !strcmp(rest, "")) {
         action = "status";
-    } else if (!strcmp(request->method, "POST") && !strcmp(request->path + sizeof(root) - 1, "/actions/activate")) {
+    } else if (!strcmp(request->method, "POST") && !strcmp(rest, "/actions/activate")) {
         action = "activate";
         confirmation = "activate_c100x_display";
-    } else if (!strcmp(request->method, "POST") && !strcmp(request->path + sizeof(root) - 1, "/actions/restore")) {
+    } else if (!strcmp(request->method, "POST") && !strcmp(rest, "/actions/restore")) {
         action = "restore";
         confirmation = "restore_c100x_display";
     } else {

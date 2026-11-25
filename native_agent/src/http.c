@@ -6298,12 +6298,13 @@ static void handle_ringer_get(
         remember_ringer_volume(runtime, volume, volume_raw[0] ? volume_raw : NULL);
         /* Report the setting, not the call's mute, so a reading client keeps it. */
         static const char call_muted[] = "{\"ok\":true,\"muted\":true,";
-        if (strncmp(body, call_muted, sizeof(call_muted) - 1) == 0) {
+        const size_t call_muted_len = sizeof(call_muted) - 1;
+        if (strncmp(body, call_muted, call_muted_len) == 0) {
             char reported[sizeof(body)];
             const char *setting = !runtime->ringer_muted_state.known ? "null"
                 : runtime->ringer_muted_state.last_valid ? "true" : "false";
             int length = snprintf(reported, sizeof(reported), "{\"ok\":true,\"muted\":%s,%s",
-                                  setting, body + sizeof(call_muted) - 1);
+                                  setting, &body[call_muted_len]);
             if (length > 0 && (size_t)length < sizeof(reported)) memcpy(body, reported, (size_t)length + 1);
         }
     } else {

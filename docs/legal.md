@@ -32,8 +32,8 @@ concept. They are not BTicino, Legrand, Home Assistant, HACS, Nabu Casa, or
 third-party logos, and they are not copied from firmware, APKs, product images,
 or controller repositories.
 
-`icon.png` and `logo.png` currently contain the same 256x256 PNG artwork. Their
-SHA-256 hash is:
+`icon.png` is a 256x256 PNG and also serves as the logo; there is no separate
+`logo.png`. Its SHA-256 hash is:
 
 ```text
 cd64c8c333ae2cfde2f32a8681054c1a5755a2edafadec1183501cd774088834

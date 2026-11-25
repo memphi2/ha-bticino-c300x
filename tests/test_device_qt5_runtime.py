@@ -382,6 +382,14 @@ def test_the_home_page_adds_both_buttons_and_the_agents_message_counts(
     assert _new_warnings(patched, vendor, "HomePageVendor.qml", "HomePage.qml") == []
 
 
+# The base's Qt 4.8 render cases (tests/test_qt4_display_render.py).
+LONG_ADDRESSES = (
+    "https://homeassistant.my-very-long-home-name.example.duckdns.org:8123",
+    "http://[fd00:1234:5678:9abc:def0:1234:5678:9abc]:8123",
+    "http://averyveryverylonghostnamewithoutanydotsatallinsideit-andmore:8123",
+    "https://ha.example.duckdns.org:8123",
+)
+
 INTEGRATION_HOST = """import QtQuick 2.7
 Page {
     property variant panel: integration
@@ -416,6 +424,24 @@ def test_the_integration_tab_shows_the_status_switches_and_asks_in_the_station_p
             for (var r = 0; r < 5; r++) rows.push(harness.find(panel, "statusValue" + r).text)
             console.log("CHECK status " + rows.join(" | "))
             console.log("CHECK reason " + harness.find(panel, "bridgeReason").visible)
+            var keys = [], columns = []
+            for (var k = 0; k < 5; k++) {
+                keys.push(panel.statusKey(k))
+                columns.push(harness.find(panel, "statusValue" + k).x)
+            }
+            console.log("CHECK rows " + keys.join(" | ") + " at " + columns.join(","))
+            var address = harness.find(panel, "statusValue1"), state = harness.find(panel, "statusValue0")
+            var addresses = @ADDRESSES@
+            for (var a = 0; a < addresses.length; a++) {
+                panel.address = addresses[a]
+                console.log("ADDRESS " + JSON.stringify({address: addresses[a], text: address.text,
+                    lines: address.lineCount, painted: address.paintedWidth, width: address.width}))
+            }
+            panel.address = "http://homeassistant.local:8123"
+            var name = panel.instanceName
+            panel.instanceName = "Mein sehr langer Instanzname hier"
+            console.log("CHECK long name " + state.lineCount + " " + state.truncated + " " + (state.paintedWidth <= state.width))
+            panel.instanceName = name
             console.log("CHECK maintenance " + panel.canReboot + " " + panel.canRemove + " " + panel.sshKnown + " " + panel.sshRunning)
             console.log("CHECK navigation " + panel.tabNavigation + " " + panel.rowText(3))
             shot("integration")
@@ -436,12 +462,31 @@ def test_the_integration_tab_shows_the_status_switches_and_asks_in_the_station_p
         }
         return n < 7
 """
-    checks, patched = _split(_page(skin, "IntegrationHost.qml", "run-integration", steps))
+    output = _page(skin, "IntegrationHost.qml", "run-integration", steps.replace("@ADDRESSES@", json.dumps(LONG_ADDRESSES)))
+    shown = {}
+    for line in output:
+        if "ADDRESS " in line:
+            value = json.loads(line.split("ADDRESS ", 1)[1])
+            shown[value["address"]] = value["text"]
+            # Broken by the tab itself, in the station's font: two lines in the column, the port at the end.
+            assert value["lines"] <= 2 and value["painted"] <= value["width"] + 0.5, value
+            if "\u2026" not in value["text"]:
+                assert value["text"].replace("\n", "") == value["address"], value
+            else:
+                start, end = value["text"].split("\n\u2026")
+                assert value["address"].startswith(start) and value["address"].endswith(end), value
+                assert end.endswith(":8123") and len(start) >= 30 and len(end) >= 30, value
+    assert list(shown) == list(LONG_ADDRESSES)
+    assert shown[LONG_ADDRESSES[3]] == LONG_ADDRESSES[3], "an address that fits stays in one line"
+    assert "\u2026" in shown[LONG_ADDRESSES[2]], "the host without a dot is longer than two lines"
+    checks, patched = _split([line for line in output if "ADDRESS " not in line])
     assert checks == [
         "loaded true",
         "status erreichbar (Zuhause) | http://homeassistant.local:8123 | gerade eben | "
         f"{_integration_version()} | 2.10.0b2 \u00b7 Firmware 3.0.6",
         "reason false",
+        "rows Home Assistant | Adresse | Letzter Kontakt | Integration | Agent at 150,150,150,150,150",
+        "long name 1 true true",
         "maintenance true true true false",
         "navigation true Seitenwechsel: Favoritenleiste",
         "navigation false Seitenwechsel: Pfeile ",
@@ -456,6 +501,71 @@ def test_the_integration_tab_shows_the_status_switches_and_asks_in_the_station_p
 
 def _integration_version() -> str:
     return json.loads((ROOT / "custom_components/bticino_c300x/manifest.json").read_text())["version"]
+
+
+def _qt4_probe(skin: Path, source: str, name: str, quit_ms: int, **replace: str) -> list[str]:
+    """One of the base's Qt 4.8 render probes (tests/qml) on the Qt 5 display."""
+    text = (ROOT / "tests/qml" / source).read_text()
+    assert text.startswith("import QtQuick 1.1\n")
+    text = "import QtQuick 2.7\n" + text[len("import QtQuick 1.1\n"):]
+    for old, new in replace.items():
+        text = text.replace(old, new)
+    end = text.rstrip().rindex("}")
+    text = text[:end] + f"    Timer {{ interval: {quit_ms}; running: true; onTriggered: Qt.quit() }}\n}}\n"
+    return _run(skin, text, name)
+
+
+def _probe_warnings(lines: list[str]) -> list[str]:
+    return [line for line in lines if "qml: C300X_" not in line]
+
+
+def test_the_energy_views_lay_out_on_the_qt5_display_as_on_qt4(skin: Path, agent: list[str]) -> None:
+    """The base's Qt 4.8 energy probe: Today's hour labels below the bars, each
+    flow arrow centred on its line in every direction, all four views."""
+    lines = _qt4_probe(skin, "energy_render_qt4.qml", "ProbeEnergy", 4000, **{"@VIEW@": "now"})
+    assert [line for line in lines if "QT4_FAIL" in line] == []
+    assert any("C300X_ENERGY_QT4_PASS 27" in line for line in lines), lines
+    assert _probe_warnings(lines) == []
+
+
+def test_the_consumers_view_keeps_its_data_under_an_overlay_on_qt5(skin: Path, agent: list[str]) -> None:
+    """The base's overlay probe: refreshes held back while hidden, the newest on show."""
+    lines = _qt4_probe(skin, "energy_overlay_qt4.qml", "ProbeOverlay", 2000)
+    assert any("C300X_OVERLAY_QT4_PASS 8" in line for line in lines), lines
+    assert _probe_warnings(lines) == []
+
+
+@pytest.mark.parametrize("host", ["HomeAssistant", "Alarm"])
+def test_a_page_opens_before_any_data_without_warnings_on_qt5(skin: Path, agent: list[str], host: str) -> None:
+    """The base's page probe: opened before an answer, no missing value is assigned."""
+    lines = _qt4_probe(skin, "page_load_qt4.qml", f"ProbePage{host}", 2500, **{"@HOST@": host})
+    assert any(f"C300X_PAGE_QT4_SHOWN {host}" in line for line in lines), lines
+    assert _probe_warnings(lines) == []
+
+
+def test_the_notification_sheet_ends_2_px_above_its_button_on_qt5(skin: Path, agent: list[str]) -> None:
+    """No black band between the message sheet and the button (base 4e6c0c70)."""
+    steps = """
+        if (n === 1) {
+            page.blocked = false
+            page.notice = {severity: "warning", title: "Titel", message: "Zeile ", id: "n1"}
+        }
+        if (n === 2) {
+            var panel = null, sheet = null, button = null
+            for (var i = 0; i < page.children.length; i++) if (page.children[i].clip) panel = page.children[i]
+            for (var j = 0; j < panel.children.length; j++) {
+                var c = panel.children[j]
+                if (c.y === panel.height - 44 && c.height === 44) button = c
+                else if (c.opacity === 0.5 && c.y === 0 && c.height < panel.height) sheet = c
+            }
+            console.log("CHECK sheet " + panel.visible + " " + (button.y - sheet.height))
+            shot("notification")
+        }
+        return n < 3
+"""
+    checks, warnings = _split(_page(skin, "C300XAlerts.qml", "run-alerts-band", steps))
+    assert checks == ["loaded true", "sheet true 2"]
+    assert warnings == []
 
 
 def test_the_general_settings_keep_the_touch_tone_and_add_the_feedback_switch(skin: Path, agent: list[str]) -> None:

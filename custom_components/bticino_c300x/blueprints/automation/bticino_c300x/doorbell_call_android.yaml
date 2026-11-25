@@ -61,7 +61,7 @@ blueprint:
     active_call_channel:
       name: Active-call notification channel
       description: Android notification channel for the quiet in-call Hang Up notification after Answer.
-      default: Door station call
+      default: C300X Call
       selector:
         text:
     notification_timeout_seconds:

@@ -71,6 +71,23 @@ def test_no_notify_registration_bridge_or_patch_io_for_unsupported_display(monke
     setup.assert_not_called()
 
 
+@pytest.mark.parametrize("info,model", [(INFO, "C100X"), ({"model": "C300X"}, "C300X")])
+def test_notification_refusals_name_the_model_of_the_entry(info, model):
+    device = entry()
+    device.runtime_data.agent_info = info
+    with pytest.raises(ServiceValidationError, match=f"^Invalid {model} display notification: "):
+        asyncio.run(async_send_display_alert(None, device, "test", data={"mode": "unknown"}))
+    with pytest.raises(ServiceValidationError, match=f"^Invalid {model} display notification: "):
+        asyncio.run(async_send_display_alert(None, device, "test", data={"display": False}))
+    service = notify.C300XNotificationService.__new__(notify.C300XNotificationService)
+    service.closed, service.entry = False, device
+    with pytest.raises(ServiceValidationError, match=f"^Invalid {model} display notification: "):
+        asyncio.run(service.async_send_message("test", data={"mode": "unknown"}))
+    if model == "C100X":
+        with pytest.raises(ServiceValidationError, match="^C100X display integration is disabled$"):
+            asyncio.run(async_send_display_alert(None, device, "test"))
+
+
 def test_remembered_exclusion_survives_offline_without_erasing_preferences():
     device = entry()
     before = dict(device.options)

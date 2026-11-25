@@ -19,6 +19,7 @@ from .display_notifications import (
     show_notification,
 )
 from .entry_types import BticinoC300XConfigEntry
+from .model_names import C300X, entry_model
 from .schema_compat import vol
 
 _LOGGER = logging.getLogger(__name__)
@@ -69,39 +70,42 @@ ALERT_DATA_SCHEMA = vol.Schema(
 )
 
 
-def _invalid(reason: str) -> ServiceValidationError:
-    return ServiceValidationError(f"Invalid C300X display notification: {reason}")
+def _invalid(reason: str, model: str) -> ServiceValidationError:
+    return ServiceValidationError(f"Invalid {model} display notification: {reason}")
 
 
-def _switch_channels(data: dict[str, Any], options: dict[str, Any]) -> set[str]:
+def _switch_channels(data: dict[str, Any], options: dict[str, Any], model: str) -> set[str]:
     """The switched-on channels; fields of a channel that is off are refused."""
 
     if "mode" in data:
         raise _invalid(
             "mode conflicts with the switches display, tts and led; "
-            "use only the switches"
+            "use only the switches",
+            model,
         )
     channels = {channel for channel in CHANNELS if options.get(channel)}
     if not channels:
-        raise _invalid("switch on at least one of display, tts and led")
+        raise _invalid("switch on at least one of display, tts and led", model)
     if "display" not in channels and (
         data.get("wake_duration") or data.get("sound_duration")
     ):
         raise _invalid(
             "wake_duration and sound_duration need display: true; "
-            "leave them out or set them to 0"
+            "leave them out or set them to 0",
+            model,
         )
     if "tts" not in channels and ("tts_engine" in data or "language" in data):
-        raise _invalid("tts_engine and language need tts: true")
+        raise _invalid("tts_engine and language need tts: true", model)
     if channels == {"tts"} and any(field in data for field in _NOTICE_FIELDS):
         raise _invalid(
             "severity, expires_in and notification_id need display or led; "
-            "a message that is only spoken stores no notice"
+            "a message that is only spoken stores no notice",
+            model,
         )
     return channels
 
 
-def alert_options(data: dict[str, Any] | None) -> dict[str, Any]:
+def alert_options(data: dict[str, Any] | None, model: str = C300X) -> dict[str, Any]:
     """Check the data of a notification before anything is shown or spoken.
 
     The result names the channels: display, tts and led (the stored notice
@@ -112,9 +116,9 @@ def alert_options(data: dict[str, Any] | None) -> dict[str, Any]:
     try:
         options = dict(ALERT_DATA_SCHEMA(data))
     except vol.Invalid as err:
-        raise _invalid(str(err)) from err
+        raise _invalid(str(err), model) from err
     if any(channel in data for channel in CHANNELS):
-        channels = _switch_channels(data, options)
+        channels = _switch_channels(data, options, model)
         mode, led = None, "led" in channels
     else:
         mode = options.get("mode", "display")
@@ -125,7 +129,8 @@ def alert_options(data: dict[str, Any] | None) -> dict[str, Any]:
     ):
         raise _invalid(
             "mode led does not wake, play sound "
-            "or speak; omit positive durations and TTS settings"
+            "or speak; omit positive durations and TTS settings",
+            model,
         )
     options.update(
         mode=mode, display="display" in channels, tts="tts" in channels, led=led,
@@ -143,8 +148,9 @@ async def async_send_display_alert(
     data: dict[str, Any] | None = None,
 ) -> None:
     """Store the revision first, then request GUI delivery without retries."""
+    model = entry_model(entry)
     try:
-        options = alert_options(data)
+        options = alert_options(data, model)
         severity = options["severity"]
         notice = SHOW_SCHEMA({
             "notification_id": options.get("notification_id", uuid4().hex),
@@ -155,25 +161,25 @@ async def async_send_display_alert(
             "expires_in": options["expires_in"],
         })
     except vol.Invalid as err:
-        raise ServiceValidationError(f"Invalid C300X display notification: {err}") from err
+        raise _invalid(str(err), model) from err
 
     if not entry_device_ui_enabled_or_patch_active(entry):
-        raise ServiceValidationError("C300X display integration is disabled")
+        raise ServiceValidationError(f"{model} display integration is disabled")
     runtime = entry.runtime_data
     if options["display"] and runtime.capabilities.get("display_alerts") is not True:
         raise ServiceValidationError(
-            "C300X display alerts require an update of the device agent and "
+            f"{model} display alerts require an update of the device agent and "
             "Display patch. Update both and reload the integration before sending."
         )
     if options["led_required"] and runtime.capabilities.get("memo_led") is not True:
         if options["mode"] == "led":
             raise ServiceValidationError(
-                "C300X mode led requires a device agent that reports memo LED support. "
+                f"{model} mode led requires a device agent that reports memo LED support. "
                 "Update the agent and reload the integration, or choose another mode "
                 "if the device has no memo LED."
             )
         raise ServiceValidationError(
-            "C300X led requires a device agent that reports memo LED support. "
+            f"{model} led requires a device agent that reports memo LED support. "
             "Update the agent and reload the integration, or leave led off "
             "if the device has no memo LED."
         )
@@ -213,7 +219,7 @@ async def async_send_display_alert(
     except C300XAgentApiError as err:
         # Keep the HA notice: a lost response cannot prove GUI non-delivery.
         raise HomeAssistantError(
-            f"C300X display alert delivery was not confirmed: {err}. "
+            f"{model} display alert delivery was not confirmed: {err}. "
             "The HA notice remains stored; wake and sound are not confirmed."
         ) from err
     if isinstance(result, dict) and result.get("suppressed") is True:

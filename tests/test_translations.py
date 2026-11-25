@@ -333,8 +333,18 @@ def test_fixable_core_qml_hook_repair_uses_ha_issue_fix_flow_schema() -> None:
             assert _path_value(fix_flow, "abort")["core_patch_unsupported"]
             assert _path_value(fix_flow, "abort")["display_unsupported"]
         owed = _path_value(data, "issues", "device_display_followup_pending")
-        assert owed["title"] and "{entry_title}" in owed["description"]
-        assert "{qml_patch_status}" not in _path_value(owed, "fix_flow", "step", "confirm")["description"]
+        confirm = _path_value(owed, "fix_flow", "step", "confirm")["description"]
+        assert owed["title"] and "{entry_title}" in confirm
+        assert "{qml_patch_status}" not in confirm
+
+
+def test_no_issue_has_both_a_description_and_a_fix_flow() -> None:
+    """Hassfest takes the two as exclusive: a fixable issue explains itself in its flow."""
+
+    for path in (INTEGRATION / "strings.json", *sorted(TRANSLATIONS.glob("*.json"))):
+        issues = _path_value(_load_json(path), "issues")
+        both = sorted(key for key, issue in issues.items() if "description" in issue and "fix_flow" in issue)
+        assert both == [], f"{path.name}: {both}"
 
 
 def test_fixable_frontend_card_repair_uses_ha_issue_fix_flow_schema() -> None:

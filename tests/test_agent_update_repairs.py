@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import re
 import sys
 import types
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -15,6 +18,7 @@ from custom_components.bticino_c300x.api import C300XAgentApiError  # noqa: E402
 from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_CALLBACK_BASE_URL,
     CONF_DEVICE_UI_ENABLED,
+    CONF_DISPLAY_FOLLOWUP_PENDING,
     CONF_FRONTEND_CARD_SETUP_DISMISSED,
     CONF_FRONTEND_CARD_SETUP_REPAIR_VERSION,
     DOMAIN,
@@ -1804,7 +1808,7 @@ def test_core_qml_hook_repair_reports_agent_failure(monkeypatch) -> None:
     assert result["type"] == "form"
     assert result["step_id"] == "confirm"
     assert result["errors"] == {"base": "core_patch_failed"}
-    assert result["description_placeholders"] == {"qml_patch_status": "original"}
+    assert result["description_placeholders"] == {"qml_patch_status": "original", "entry_title": "entry-1"}
 
 
 def test_core_qml_hook_repair_reports_verify_failure(monkeypatch) -> None:
@@ -1833,7 +1837,27 @@ def test_core_qml_hook_repair_reports_verify_failure(monkeypatch) -> None:
     assert result["type"] == "form"
     assert result["step_id"] == "confirm"
     assert result["errors"] == {"base": "core_patch_verify_failed"}
-    assert result["description_placeholders"] == {"qml_patch_status": "patched"}
+    assert result["description_placeholders"] == {"qml_patch_status": "patched", "entry_title": "entry-1"}
+
+
+def test_owed_display_steps_repair_fills_every_placeholder_of_its_text() -> None:
+    """The issue has no description of its own: the confirm step names the entry."""
+
+    strings = json.loads(
+        (Path(__file__).resolve().parents[1] / "custom_components/bticino_c300x/strings.json").read_text()
+    )
+    text = strings["issues"]["device_display_followup_pending"]["fix_flow"]["step"]["confirm"]["description"]
+    runtime_data = FakeRuntimeData(FakePatchApi())
+    runtime_data.capabilities = {"maintenance": {"supported": True, "qml_core_patch": True}}
+    entry = FakeEntry(runtime_data=runtime_data, data={CONF_DISPLAY_FOLLOWUP_PENDING: True})
+    flow = DeviceCoreQmlHookRepairFlow(FakeHass(entry), "entry-1")  # type: ignore[arg-type]
+    flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}  # type: ignore[method-assign]
+
+    result = asyncio.run(flow.async_step_confirm(None))
+
+    assert result["step_id"] == "confirm"
+    assert set(re.findall(r"\{(\w+)\}", text)) == {"entry_title"}
+    assert result["description_placeholders"]["entry_title"] == "entry-1"
 
 
 def test_core_qml_hook_repair_success_finishes_repair(monkeypatch) -> None:

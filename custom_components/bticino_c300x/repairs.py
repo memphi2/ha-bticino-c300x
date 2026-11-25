@@ -404,9 +404,7 @@ class DeviceCoreQmlHookRepairFlow(RepairsFlow):
             return self.async_show_form(
                 step_id="confirm",
                 data_schema=vol.Schema({}),
-                description_placeholders={
-                    "qml_patch_status": _runtime_qml_patch_status(entry),
-                },
+                description_placeholders=_core_hook_placeholders(entry),
             )
         try:
             if CONF_DISPLAY_FOLLOWUP_PENDING in entry.data:
@@ -434,18 +432,14 @@ class DeviceCoreQmlHookRepairFlow(RepairsFlow):
                 step_id="confirm",
                 data_schema=vol.Schema({}),
                 errors={"base": "core_patch_failed"},
-                description_placeholders={
-                    "qml_patch_status": _runtime_qml_patch_status(entry),
-                },
+                description_placeholders=_core_hook_placeholders(entry),
             )
         if status.get("core_patched") is not True:
             return self.async_show_form(
                 step_id="confirm",
                 data_schema=vol.Schema({}),
                 errors={"base": "core_patch_verify_failed"},
-                description_placeholders={
-                    "qml_patch_status": _runtime_qml_patch_status(entry),
-                },
+                description_placeholders=_core_hook_placeholders(entry),
             )
         # The issue is also raised for a failed status read, and only entry
         # setup cleared that record: without this the next issue sync would
@@ -1166,6 +1160,15 @@ def _ssh_install_schema(ask_login: bool) -> vol.Schema:
             vol.Optional(CONF_BOOTSTRAP_SSH_PASSWORD, default=""): str,
         }
     )
+
+
+def _core_hook_placeholders(entry: Any) -> dict[str, str]:
+    """Placeholders of the core hook confirm step, also its owed-steps text."""
+
+    return {
+        "qml_patch_status": _runtime_qml_patch_status(entry),
+        "entry_title": str(getattr(entry, "title", "") or entry.entry_id),
+    }
 
 
 def _runtime_qml_patch_status(entry: Any) -> str:

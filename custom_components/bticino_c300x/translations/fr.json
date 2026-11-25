@@ -1565,12 +1565,11 @@
     },
     "device_display_followup_pending": {
       "title": "Les pages d'affichage C300X doivent encore être appliquées après la mise à jour",
-      "description": "{entry_title} : la mise à jour ou l'installation de l'agent est terminée, mais les étapes d'affichage qui la suivent n'ont pas abouti sur l'écran de la station. Les pages d'affichage du nouvel agent ne sont pas encore confirmées ; la station affiche peut-être encore les pages de l'agent précédent ou l'affichage d'origine. Ouvrez cette réparation pour relancer les étapes d'affichage.",
       "fix_flow": {
         "step": {
           "confirm": {
             "title": "Appliquer à nouveau les pages d'affichage C300X",
-            "description": "Home Assistant exécute les étapes d'affichage laissées en suspens par la mise à jour : le hook média de base, les pages d'affichage si le patch d'affichage est activé, et un redémarrage de l'écran de la station. L'écran s'éteint et redémarre pendant la réparation ; cela peut prendre quelques minutes."
+            "description": "{entry_title} : la mise à jour ou l'installation de l'agent est terminée, mais les étapes d'affichage qui la suivent n'ont pas abouti sur l'écran de la station. Les pages d'affichage du nouvel agent ne sont pas encore confirmées ; la station affiche peut-être encore les pages de l'agent précédent ou l'affichage d'origine.\n\nHome Assistant exécute les étapes d'affichage laissées en suspens par la mise à jour : le hook média de base, les pages d'affichage si le patch d'affichage est activé, et un redémarrage de l'écran de la station. L'écran s'éteint et redémarre pendant la réparation ; cela peut prendre quelques minutes."
           }
         },
         "error": {

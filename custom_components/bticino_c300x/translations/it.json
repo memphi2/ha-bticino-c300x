@@ -1565,12 +1565,11 @@
     },
     "device_display_followup_pending": {
       "title": "Le pagine del display C300X devono ancora essere applicate dopo l'aggiornamento",
-      "description": "{entry_title}: l'aggiornamento o l'installazione dell'agent è completato, ma i passaggi del display successivi non sono riusciti sul display della stazione. Le pagine del display del nuovo agent non sono ancora confermate; la stazione potrebbe mostrare ancora le pagine dell'agent precedente o il display originale. Apri questa riparazione per eseguire di nuovo i passaggi del display.",
       "fix_flow": {
         "step": {
           "confirm": {
             "title": "Applica di nuovo le pagine del display C300X",
-            "description": "Home Assistant esegue i passaggi del display lasciati in sospeso dall'aggiornamento: l'hook multimediale di base, le pagine del display se la patch del display è attiva e un riavvio del display della stazione. Durante la correzione il display si spegne e si riavvia; può richiedere alcuni minuti."
+            "description": "{entry_title}: l'aggiornamento o l'installazione dell'agent è completato, ma i passaggi del display successivi non sono riusciti sul display della stazione. Le pagine del display del nuovo agent non sono ancora confermate; la stazione potrebbe mostrare ancora le pagine dell'agent precedente o il display originale.\n\nHome Assistant esegue i passaggi del display lasciati in sospeso dall'aggiornamento: l'hook multimediale di base, le pagine del display se la patch del display è attiva e un riavvio del display della stazione. Durante la correzione il display si spegne e si riavvia; può richiedere alcuni minuti."
           }
         },
         "error": {

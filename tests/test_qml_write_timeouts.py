@@ -33,7 +33,9 @@ def test_home_assistant_outwaits_a_qml_write_and_its_rollback() -> None:
     # Both agent jobs use these constants, not their own numbers.
     maintenance = (SRC / "http_maintenance.c").read_text(encoding="utf-8")
     recovery = (SRC / "qml_recovery.c").read_text(encoding="utf-8")
-    assert "C300X_QML_WRITE_TIMEOUT_MS : 10000" in maintenance
+    limit = (SRC / "maintenance_job_limit.h").read_text(encoding="utf-8")
+    assert "c300x_maintenance_job_timeout_ms(records_write, gui_reload)" in maintenance
+    assert "C300X_QML_WRITE_TIMEOUT_MS : 10000" in limit
     assert "records_write || gui_reload ? C300X_QML_WRITE_TERM_GRACE_MS : 0" in maintenance
     # A GUI reload: 10 s, then the same grace; its request waits for the answer.
     assert 10 + grace_ms / 1000 + 5 <= _GUI_RELOAD_JOB_TIMEOUT < MAINTENANCE_BUSY_WAIT_SECONDS

@@ -1,140 +1,76 @@
 # Changelog
 
-## v2.10.0b2 - Unreleased
+## v2.10.0 - Unreleased
 
-Firmware 3.0.6 beta. Includes 2.9.2; on firmware 1.7.x and 2.0.2 it works
-like 2.9.2. On a 3.0.6 station only the start with the pages and the home
-page buttons were checked (with 2.10.0b1); the rest is checked offline only.
+2.10.0 adds firmware 3.0.6 (Classe 300X hardware revision 4) to 1.7.x and
+2.0.2. Everything below is new against 2.9.2. On a 3.0.6 station a tester
+checked that the display pages load at start and that the Alarm and Home
+Assistant buttons sit in the right place; the rest of the 3.0.6 support is
+checked offline only, with the station's own display components.
 
-- On firmware 3.0.6 the display overlay carries the station pages of 2.9.2:
-  the **Integration** tab with its status block, the two Display options and
-  the station's own confirmation window for **Reboot station** and **Remove
-  agent**, the house symbol on the home page that shows the connection to
-  Home Assistant, and the other page changes of 2.9.2. Checked offline only,
-  with the station's own Qt 5 display components.
-- The native agent is rebuilt as 2.10.0b2; an agent update is required.
+Firmware 3.0.6:
 
-## v2.10.0b1 - 2026-11-25
+- The **Display patch** works on 3.0.6, whose display program carries its
+  pages inside itself. The station gets the same pages as on 1.7.x and 2.0.2:
+  the **Alarm** and **Home Assistant** buttons with the house symbol on the
+  home page, the Alarm, Home Assistant and Energy pages and the
+  **Integration** tab in the station's **Settings**. **Home page buttons**
+  offers **Stock** and **Fixed side by side** here too. The fix for lost taps
+  is not part of it on 3.0.6.
+- The display restarts after a change one restart at a time and only after
+  the old display has ended; several changes close together end in one
+  restart. A restart that takes longer than a request is reported as running
+  (`gui_restart: pending`), and Home Assistant and the installers wait for
+  its outcome instead of reporting a failure.
+- A display that fails with the pages is restarted once more and then starts
+  as shipped until the station restarts; the patch status reads **applied,
+  but the display started as shipped**. Turning the **Display patch** switch
+  on, the core hook Repair or an agent update tries the pages again; saving
+  the display settings does not.
+- A display step that fails during an install from Home Assistant or an agent
+  update no longer fails the install or update: the step stays owed, and the
+  core hook Repair stays until it has run again. A step that could not run at
+  all (no connection, agent busy, rejected key) still fails.
+- On a display program the agent does not know, the display stays as
+  shipped, the agent runs without the display pages and Repairs says why.
+- The camera's stream on 3.0.6 offers the sizes 320x240, 352x288, 400x288
+  (factory), 480x288, 640x384, 640x480, 704x576, 720x432 and 720x576. Sizes
+  other than the factory one are not yet tested on a station.
+- Picture controls: until the station has written the contrast once after a
+  start, they may only work during a ring call.
+- The IPv6 firewall switch is not offered on a station without an IPv6
+  firewall (3.0.6).
 
-Firmware 3.0.6 beta. On a 3.0.6 station (Dave, PR #126) the display pages
-loaded at start, the Alarm and Home Assistant buttons sat in the right place
-and stayed after a configuration change; the display restart, install and
-update behaviour below is checked offline only. Includes 2.9.1; on firmware
-1.7.x and 2.0.2 it works like 2.9.1.
+Station (all firmwares):
 
-- On firmware 3.0.6 the display overlay also carries the 2.9.0
-  **Settings > Home Assistant** tab (HA feedback, SSH, reboot, agent removal).
-  Checked offline against the original Qt 5 files only.
-- On firmware 3.0.6 the 2.9.0 Display option **Home page buttons** works on
-  the Qt 5 display too: **Stock** places the Alarm and Home
-  Assistant buttons among the station's own, as in Dave's 3.0.x fix in PR #126;
-  **Fixed side by side** keeps the pair. The patch status reports the layout
-  only while the display pages are active.
-- On firmware 3.0.6 the agent restarts the display one restart at a time and
-  only after the old display and its start script have ended. Several
-  requests close together end in one restart, a restart never starts while
-  display files are being written, and a restart that outlasts a call keeps
-  running: the patch status reports it as `gui_restart: pending`; Home
-  Assistant and both installers wait for its outcome instead of reporting a
-  failure, and the media-user label accepts a restart still running. The
-  display counts as started only once it has written its watchdog file and
-  kept running for 8 seconds; one that never writes it within 40 seconds
-  counts as failed.
-- On firmware 3.0.6 a display that fails with the pages is restarted once
-  more and then starts as shipped until the station restarts; turning the
-  **Display patch** switch on, the core hook Repair or an agent update tries
-  the pages again, saving the display settings does not.
-- On firmware 3.0.6 a display step that fails during an install from Home
-  Assistant or an agent update no longer fails the install or update. The
-  owed display steps stay recorded: the core hook Repair stays until it has
-  run them all again (the full Display patch included when it was on), and
-  the Display setting and the next agent update run them as well. A step
-  that could not run at all (no connection, agent busy, rejected key) still
-  fails the install or update.
-- On firmware 3.0.x a display program or start script the agent does not know
-  no longer stops installation or agent updates: the display stays as shipped,
-  the agent runs without the display pages and Repairs says why.
-- The IPv6 firewall switch is no longer offered on a station without an IPv6
-  firewall start script (firmware 3.0.6).
-- A visitor image that cannot be taken is logged as a warning once per cause,
-  and **Save images** names the cause in its attribute `last_failure`. On
-  firmware 3.0.6 reading the display picture is checked offline only.
-- Direct picture controls on firmware 3.0.6 are checked offline only: until the
-  station has written the contrast once after a start, they may only work
-  during a Ring Call (through the display).
-- The Qt 5 display, the additional Low sizes, routing and downgrade recovery
-  stay as in 2.9.0b2. The native agent is rebuilt as 2.10.0b1; an agent update
-  is required.
+- The **Integration** tab is laid out as one aligned column. A long address
+  breaks only after a dot or a colon and keeps its start and its port in
+  view; the row is called **Address**.
+- **Energy**: the hour labels of the **Today** view sit below the bars, and
+  the flow arrows stay on their lines in every direction.
+- The consumers view of the Energy page is kept while the notification list
+  or the **More** list covers it: the bars are not built again and the
+  scales do not jump when the list closes.
+- A display notification no longer shows a black band above its button, and
+  its message area ends on a whole line.
+- Opening a dashboard page no longer writes two warnings into the station's
+  log.
 
-## v2.9.0b2 - 2026-11-22
+Home Assistant and agent:
 
-Firmware 3.0.6 beta, not yet tested on a device. Includes final stable 2.8.2
-changes through `06f7396f`, without moving beta code into the stable line.
-Also includes the reviewed general camera-card, routing and talkback fixes
-selected from local 2.8.3 development; no C100X model detection is added.
+- **Save images** shows the cause of its last failure in words; the
+  attribute `last_failure` keeps its codes for automations and is absent
+  while images succeed.
+- A visitor image that is stored after the capture's time limit counts as
+  saved: it becomes the preview and is linked to the visit.
+- A display restart or a display repair that runs past its time limit
+  finishes instead of leaving the display off, and Home Assistant waits for
+  its answer. A write of the media-user label that hangs ends after its time
+  limit and is rolled back, and the agent stays responsive meanwhile. A
+  display step of the SSH install that runs past its time limit is rolled
+  back on the station.
+- The native agent is rebuilt as 2.10.0; an agent update is required.
 
-- Unavailable cameras disable media controls and cancel pending microphone
-  requests. Ending a ring call cancels pending answer and talkback starts.
-- UDP talkback requires a live, played RTSP connection from the same peer IP.
-  Announcements wait for that peer's transport readiness; playback that never
-  starts or fails to stop cooperatively reports an error. This is peer-IP
-  admission, not cryptographic authentication of UDP packets.
-- Routing changes verify the complete supported binary identity and preserve
-  unknown active routes instead of replacing them. Camera option help is shorter.
-
-- Camera transactions preserve rollback and saved/running state across agent
-  restarts; unknown running state alone does not request a reboot. Removal
-  verifies agent termination before restoration and retains recovery on failure.
-- Low keeps factory 400x288 and earlier sizes. Additional bounded choices are
-  320x240 (4:3), and 480x288, 640x384, 720x432 (5:3). Original 3.0.6 caps were
-  checked offline; actual framing, performance and operation remain untested
-  on hardware. No 3.0.6 High geometry patch is enabled.
-- Snapshot defaults are native 800x480; explicit user sizes stay unchanged.
-  The card preserves actual media dimensions and stable matching-ratio layout.
-- Qt5 display, routing and downgrade recovery remain beta-specific. The native
-  agent is rebuilt as 2.9.0b2; an agent update is required.
-- Release evidence keeps exact canonical beta pushes available only to
-  prereleases; stable releases still require main. Full checks, source/tag
-  binding, build-lock approval and attestations remain mandatory.
-
-## v2.9.0b1 - 2026-11-22
-
-Beta for firmware 3.0.6, not yet tested on a device.
-
-Camera and maintenance:
-
-- Includes the stable 2.8.2 camera transaction, running/pending status and
-  removal safety fixes, matching-ratio card layout and 800x480 snapshot default.
-  Existing explicit snapshot sizes and beta Qt5 recovery remain intact.
-- Additional Low choices: compact 320x240 (4:3), and 480x288 / 640x384 / 720x432 (5:3).
-  Factory 400x288 and all earlier Low choices remain available. Original
-  3.0.6 configuration/caps checked offline; non-factory sizes, framing and
-  performance remain untested on hardware. These choices do not patch the
-  media executable or change the LCD window. The older 960x576 High binary
-  patch is not enabled on firmware 3.0.6.
-
-Display:
-
-- **Home Assistant pages on firmware 3.0.6** (beta): the Display patch now
-  works on the Qt 5 display of 3.0.6, whose display files are built into the
-  vendor program. The home page gets the Alarm and Home Assistant buttons, with
-  the Alarm, Home Assistant and Energy pages and the other pages of the
-  integration. Switching off the optional pages retains the core hooks;
-  full removal restores the vendor startup script. If the display exits with
-  an error within the first minute, it starts as shipped and the patch status
-  reads **applied, but the display started as shipped**. The touch fix for lost
-  taps is not part of it on 3.0.6.
-- **Display recovery:** activation and restore retain the previous resources,
-  startup wrapper, preload library and quarantine state for rollback. Failed
-  overlays remain disabled through updates and partial restores; retrying
-  requires an explicit full removal and apply after investigating the error.
-  Apply repairs missing or outdated activation files even when the pages did
-  not change, and runtime-only updates refresh the display preload too.
-  Installation and settings no longer confirm a quarantined or incomplete
-  overlay as active; unsuccessful display follow-up remains pending.
-  The preload validates complete resource tables before handing pointers to
-  Qt; damaged files are quarantined without registering them.
-  Offline fault injection does not establish device or watchdog safety.
 ## v2.9.2 - 2026-11-25
 
 Station:

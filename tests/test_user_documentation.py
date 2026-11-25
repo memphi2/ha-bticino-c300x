@@ -539,20 +539,21 @@ def test_the_qt5_marker_is_named_as_the_trap_for_the_c100x_merge():
         assert name in trap
 
 
-def test_the_3_0_6_beta_texts_say_what_ran_on_a_station():
+def changelog_2_10_0() -> str:
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    return changelog.split("## v2.10.0 - ", 1)[1].split("\n## ", 1)[0]
+
+
+def test_the_3_0_6_texts_say_what_ran_on_a_station():
     """Dave ran the overlay on a 3.0.6 station (PR #126); the rest is offline only."""
 
-    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
-    beta = changelog.split("## v2.10.0b1", 1)[1].split("\n## ", 1)[0]
-    beta2 = changelog.split("## v2.10.0b2", 1)[1].split("\n## ", 1)[0]
     texts = {
-        "CHANGELOG v2.10.0b2": beta2,
-        "v2.10.0b2.md": (ROOT / ".github/release-notes/v2.10.0b2.md").read_text(encoding="utf-8"),
+        "CHANGELOG v2.10.0": changelog_2_10_0(),
+        "v2.10.0.md": (ROOT / ".github/release-notes/v2.10.0.md").read_text(encoding="utf-8"),
         "README.md": (ROOT / "README.md").read_text(encoding="utf-8"),
         "SUPPORT.md": (ROOT / "SUPPORT.md").read_text(encoding="utf-8"),
         "display.md": (DOCS / "display.md").read_text(encoding="utf-8"),
         "quickstart.md": (DOCS / "quickstart.md").read_text(encoding="utf-8"),
-        "CHANGELOG v2.10.0b1": beta,
     }
     for name, text in texts.items():
         flat = " ".join(text.split())
@@ -566,8 +567,7 @@ def test_the_way_out_of_a_restart_loop_removes_the_overlay_before_the_setting():
 
     agent = "/home/bticino/cfg/extra/c300x-native-agent"
     for name, path in (("display.md", DOCS / "display.md"),
-                       ("v2.10.0b1.md", ROOT / ".github/release-notes/v2.10.0b1.md"),
-                       ("v2.10.0b2.md", ROOT / ".github/release-notes/v2.10.0b2.md")):
+                       ("v2.10.0.md", ROOT / ".github/release-notes/v2.10.0.md")):
         text = path.read_text(encoding="utf-8")
         way_out = " ".join(text.split("keeps restarting", 1)[1].split("\n## ", 1)[0].split())
         rename = way_out.index(f"`mv {agent}/display-qt5.rcc {agent}/display-qt5.rcc.hang`")
@@ -582,11 +582,10 @@ def test_the_quarantine_texts_name_the_controls_that_retry_the_pages():
     """A quarantined overlay is retried by the switch, the core Repair or an update;
     the Display setting sync never retries it (display_patch_sync._differs)."""
 
-    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8").split("## v2.10.0b1", 1)[1].split("\n## ", 1)[0]
     texts = {
         "display.md": (DOCS / "display.md").read_text(encoding="utf-8"),
-        "v2.10.0b1.md": (ROOT / ".github/release-notes/v2.10.0b1.md").read_text(encoding="utf-8"),
-        "CHANGELOG v2.10.0b1": changelog,
+        "v2.10.0.md": (ROOT / ".github/release-notes/v2.10.0.md").read_text(encoding="utf-8"),
+        "CHANGELOG v2.10.0": changelog_2_10_0(),
     }
     for name, text in texts.items():
         flat = " ".join(text.split())

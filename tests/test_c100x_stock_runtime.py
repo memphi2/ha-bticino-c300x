@@ -92,3 +92,7 @@ def test_keys_work_after_a_notice(tmp_path, arguments):
     # the screen going off, the adapter stopping), the vendor's current page must have the keys again.
     run_scenario(arguments[0], tmp_path, arguments=arguments[1:])
 
+
+@pytest.mark.parametrize("cause", ["missing", "unnamed"])
+def test_a_screen_without_a_page_shows_exit(tmp_path, cause):
+    run_scenario("screen_without_page", tmp_path, arguments=(cause,))

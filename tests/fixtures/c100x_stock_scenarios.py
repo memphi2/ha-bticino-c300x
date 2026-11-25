@@ -602,6 +602,38 @@ def alert_during_call(work, skin):
     assert not page_warnings(runtime), page_warnings(runtime)
 
 
+def screen_without_page(work, skin, cause):
+    """No blank screen without a way out: a screen that has no page shows EXIT and Return leaves it."""
+    from c100x_dashboard_data import build
+    from c100x_stock_runtime import RELEASE
+    missing = cause == "missing"
+    runtime = Runtime(work, skin, build(),
+                      prepare=(lambda built: (built / RELEASE / "HomeAssistant.qml").unlink()) if missing else None)
+    runtime.wait(300)
+    runtime.keys("D")
+    if missing:
+        runtime.keys("R", settle=2400)
+    else:
+        # The entry is forgotten between Return and the page: the screen opens without a page name.
+        runtime.keys("R", settle=50)
+        runtime.js("c100xHost.entryPage = ''")
+        runtime.wait(2400)
+    assert runtime.js("mainStackView.depth") == 2
+    screen = "mainStackView.currentItem.item"
+    assert runtime.js(screen + ".pageItem === null")
+    assert runtime.js(screen + ".failed") is missing and (runtime.js(screen + ".pageName") == "") is not missing
+    shown = runtime.js("(function() { var exit = FIND(SCREEN, 'c100xScreenExit'); "
+                       "return !!exit && exit.visible && exit.status === Image.Ready && exit.width > 0 })()"
+                       .replace("FIND", FIND).replace("SCREEN", screen))
+    assert shown, "a blank page without EXIT"
+    vendor_keys(runtime, "screen without a page")
+    runtime.keys("D U", settle=300)
+    assert runtime.js("mainStackView.depth") == 2
+    runtime.keys("R", settle=2400)
+    assert runtime.js("mainStackView.depth") == 1, "Return did not leave the screen without a page"
+    main_menu_keys(runtime, "after leaving the screen without a page")
+
+
 if __name__ == "__main__":
     globals()[sys.argv[1]](Path(sys.argv[2]), Path(sys.argv[3]), *sys.argv[4:])
     sys.stdout.write(sys.argv[1] + ": passed\n")

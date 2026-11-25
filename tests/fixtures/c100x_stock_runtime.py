@@ -161,13 +161,15 @@ class Probe:
 
 
 class Runtime:
-    def __init__(self, work, firmware_skin, routes=None, setup="", patched=True):
+    def __init__(self, work, firmware_skin, routes=None, setup="", patched=True, prepare=None):
         self.routes = dict(routes or {})
         self.requests = []
         self.sleeping = {}
         self.warnings = []
         self.app = QGuiApplication.instance() or QGuiApplication([])
         self.skin = build_skin(Path(work), Path(firmware_skin), patched)
+        if prepare:
+            prepare(self.skin)
         self.engine = QQmlApplicationEngine()
         self.factory = Factory(self)
         self.engine.setNetworkAccessManagerFactory(self.factory)

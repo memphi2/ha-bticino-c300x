@@ -9,6 +9,7 @@ FocusScope {
     property int currentIndex: 0
     property string pageName: ""
     readonly property bool failed: body.status === Loader.Error
+    readonly property bool empty: !c100xHost.blocked && (pageName === "" || failed)
     property alias pageItem: body.item
     signal exitRequested()
     function known(name) { return ["HomeAssistant.qml", "Alarm.qml"].indexOf(name) >= 0 }
@@ -18,6 +19,16 @@ FocusScope {
         else exitRequested()
     }
     Component.onCompleted: if (known(c100xHost.entryPage)) pageName = c100xHost.entryPage
+    Keys.onReturnPressed: {
+        event.accepted = empty
+        if (empty && !event.isAutoRepeat) exitRequested()
+    }
+    Image {
+        objectName: "c100xScreenExit"
+        anchors.centerIn: parent
+        source: screen.empty ? "../images/Exit.svg" : ""
+        visible: screen.empty
+    }
     Loader {
         id: body
         anchors.fill: parent

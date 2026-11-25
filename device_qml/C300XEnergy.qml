@@ -30,11 +30,16 @@ Item {
     property int selectedHour: -1
     property int selectedPower: -1
     property int powerBuckets: EnergyChart.count(powerSeries)
-    onShownChanged: { selectedHour = -1; selectedPower = -1 }
-    onVisibleChanged: { if (!visible) { selectedHour = -1; selectedPower = -1 } }
+    property bool consumersKept: false
+    onShownChanged: { selectedHour = -1; selectedPower = -1; keepConsumers() }
+    onVisibleChanged: { if (!visible) { selectedHour = -1; selectedPower = -1 } keepConsumers() }
     onPowerHistoryChanged: selectedPower = -1
     onEnergyChanged: syncPower()
-    Component.onCompleted: syncPower()
+    Component.onCompleted: { syncPower(); keepConsumers() }
+
+    function keepConsumers() {
+        consumersKept = shown === "consumers" && (visible || consumersKept)
+    }
 
     function syncPower() {
         var next = energy && energy.power ? energy.power : ({})
@@ -613,7 +618,7 @@ Item {
         id: consumersLoader
         width: parent.width
         height: bodyHeight
-        source: root.visible && shown === "consumers" ? "C300XEnergyConsumers.qml" : ""
+        source: root.consumersKept ? "C300XEnergyConsumers.qml" : ""
         Binding {
             target: consumersLoader.item
             property: "consumers"

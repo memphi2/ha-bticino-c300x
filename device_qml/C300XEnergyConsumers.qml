@@ -7,17 +7,26 @@ Item {
     id: root
     objectName: "energyConsumers"
     property variant consumers: ({})
-    property variant rows: Consumers.rows(consumers)
+    property variant current: ({})
+    property bool stale: false
+    property variant rows: Consumers.rows(current)
     property variant leftScale: null
     property variant rightScale: null
     property bool initialized: false
-    property string statusText: consumers && consumers.status ? consumers.status : ""
+    property string statusText: current && current.status ? current.status : ""
     property int statusHeight: statusText ? 24 : 0
     property int axisHeight: 30
     property real rowHeight: Math.max(0, (height - statusHeight - axisHeight) / 5)
+    onConsumersChanged: { stale = true; if (initialized) take() }
     onRowsChanged: if (initialized) updateScales()
-    onVisibleChanged: if (initialized) updateScales()
-    Component.onCompleted: { initialized = true; updateScales() }
+    onVisibleChanged: if (initialized) { take(); updateScales() }
+    Component.onCompleted: { initialized = true; take(); updateScales() }
+
+    function take() {
+        if (!visible || !stale) return
+        stale = false
+        current = consumers
+    }
 
     function updateScales() {
         shrink.stop()
@@ -109,7 +118,7 @@ Item {
     UbuntuLightText {
         anchors.fill: parent
         visible: root.rows.length === 0
-        text: root.consumers && root.consumers.empty_text ? root.consumers.empty_text : "--"
+        text: root.current && root.current.empty_text ? root.current.empty_text : "--"
         color: "#e0eaf3"; font.pixelSize: 18
         horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
         wrapMode: Text.WordWrap; elide: Text.ElideRight

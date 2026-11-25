@@ -136,6 +136,7 @@ STRICT_TARGETS = (
     "custom_components/bticino_c300x/repair_flows_device_user.py",
     "custom_components/bticino_c300x/repair_flows_frontend.py",
     "custom_components/bticino_c300x/repair_issues.py",
+    "custom_components/bticino_c300x/repair_work.py",
     "custom_components/bticino_c300x/ring_ai.py",
     "custom_components/bticino_c300x/repairs.py",
     "custom_components/bticino_c300x/ring_capture.py",

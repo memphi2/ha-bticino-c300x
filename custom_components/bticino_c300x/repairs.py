@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Coroutine, Mapping
 from contextlib import suppress
 from datetime import UTC, datetime
 from typing import Any, cast
@@ -86,6 +86,7 @@ from .repair_issues import (
     UNSUPPORTED_CALLBACK_URL_ISSUE,
     repair_issue_id,
 )
+from .repair_work import OTHER_FLOW_FINISHED, RepairStepWork
 from .schema_compat import vol
 
 _LOGGER = logging.getLogger(__name__)
@@ -488,6 +489,7 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
             tuple[_ExternalPatchState, _ExternalPatchChanges] | None
         ) = None
         self._ask_ssh_login = False
+        self._work = RepairStepWork(hass, entry_id)
 
     async def async_step_init(
         self,
@@ -497,12 +499,39 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
 
         return await self.async_step_confirm()
 
+    async def _async_run_step(
+        self,
+        step: Callable[[dict[str, Any] | None], Coroutine[Any, Any, Any]],
+        user_input: dict[str, Any] | None,
+    ) -> Any:
+        """Run a submitted step so that a dropped request cannot end it.
+
+        The update and the reload after it then finish whatever happens to the
+        connection of the client that confirmed the repair.
+        """
+
+        if user_input is None:
+            return await step(None)
+        result = await self._work.async_run(lambda: step(user_input))
+        if result is not OTHER_FLOW_FINISHED:
+            return result
+        entry = self.hass.config_entries.async_get_entry(self._entry_id)
+        if entry is None or not hasattr(entry, "runtime_data"):
+            return self.async_abort(reason="entry_not_loaded")
+        update_state = getattr(entry.runtime_data, "agent_update_state", None)
+        if not getattr(update_state, "update_required", False):
+            return self.async_create_entry(data={})
+        return await step(None)
+
     async def async_step_confirm(
         self,
         user_input: dict[str, Any] | None = None,
     ) -> Any:
         """Confirm and run a device-agent self-update."""
 
+        return await self._async_run_step(self._async_confirm, user_input)
+
+    async def _async_confirm(self, user_input: dict[str, Any] | None) -> Any:
         entry = self.hass.config_entries.async_get_entry(self._entry_id)
         if entry is None or not hasattr(entry, "runtime_data"):
             return self.async_abort(reason="entry_not_loaded")
@@ -616,6 +645,9 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
     ) -> Any:
         """Repair an older agent by reinstalling the packaged bundle over SSH."""
 
+        return await self._async_run_step(self._async_ssh_install, user_input)
+
+    async def _async_ssh_install(self, user_input: dict[str, Any] | None) -> Any:
         entry = self.hass.config_entries.async_get_entry(self._entry_id)
         if entry is None or not hasattr(entry, "runtime_data"):
             return self.async_abort(reason="entry_not_loaded")

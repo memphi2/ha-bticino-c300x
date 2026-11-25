@@ -117,6 +117,32 @@ def test_incomplete_activation_is_repaired_even_with_patched_files(monkeypatch, 
     assert calls == ["apply"]
 
 
+def test_turning_the_pages_off_leaves_an_incomplete_overlay_to_the_core_repair(monkeypatch):
+    """After the resource file was renamed (the way out of a restart loop) a restore
+    would write it back with the core hook; the setting stays to do instead."""
+
+    calls = _device(monkeypatch, {"patched": True, "core_patched": True, "qt5_overlay": "incomplete",
+                                  "gui_running": True})
+    entry = _entry(False, data={CONF_DISPLAY_SETTING_PENDING: True})
+    updates: list[dict[str, Any]] = []
+    asyncio.run(display_patch_sync.async_settle_display_setting(_manager(entry, updates).hass, entry))
+    assert calls == []
+    assert updates == []
+    assert CONF_DISPLAY_SETTING_PENDING in entry.data
+
+
+def test_turning_the_pages_off_after_full_removal_writes_nothing_and_settles(monkeypatch):
+    """The end of the way out (restore-all): the setting is met, a pending one is dropped."""
+
+    calls = _device(monkeypatch, {"patched": False, "core_patched": False, "qt5_overlay": "off",
+                                  "gui_running": True})
+    entry = _entry(False, data={CONF_DISPLAY_SETTING_PENDING: True})
+    updates: list[dict[str, Any]] = []
+    asyncio.run(display_patch_sync.async_settle_display_setting(_manager(entry, updates).hass, entry))
+    assert calls == []
+    assert CONF_DISPLAY_SETTING_PENDING not in entry.data
+
+
 def test_failed_activation_after_setting_apply_is_not_confirmed(monkeypatch):
     _device(monkeypatch, {"patched": False, "qt5_overlay": "off", "gui_running": True})
     async def failed(*_args):

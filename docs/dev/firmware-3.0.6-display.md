@@ -308,6 +308,7 @@ again or uses the HA Repair.
 | Plain reload (button, service, CPU watchdog) | Keeps a mark of this boot; stock display. |
 | Partial restore | Keeps a mark of this boot, drops an older one. |
 | Display setting saves | Do not retry a quarantined overlay (`display_patch_sync`). |
+| Display setting off, overlay incomplete (resource file renamed) | Left alone with the core Repair: a restore keeps the core hook packed and would write the file back. `restore-all` over SSH is the way out. |
 
 ### Unknown Display
 

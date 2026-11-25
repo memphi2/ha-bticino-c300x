@@ -52,6 +52,11 @@ def _differs(status: dict[str, Any], wanted: bool, home_buttons: str) -> bool | 
         # Repeated setup/settings saves must not retry a quarantined overlay,
         # nor a display the agent does not know.
         return None
+    if status.get("qt5_overlay") == "incomplete" and not wanted:
+        # A restore keeps the core hook packed and writes the resource file
+        # back: after the way out of a restart loop (the file renamed) that
+        # starts the loop again. The core Repair is raised for it.
+        return None
     patched = status.get("patched")
     if isinstance(patched, bool):
         if patched is not wanted:

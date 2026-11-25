@@ -211,6 +211,12 @@ Item {
         contentHeight: content.height
         boundsBehavior: Flickable.StopAtBounds
         interactive: contentHeight > height
+        property real span: 0
+        onHeightChanged: {
+            var lost = span - height
+            if (lost > 0 && contentY >= contentHeight - span - lost) contentY = Math.max(0, contentHeight - height)
+            span = height
+        }
         Column {
             id: content
             anchors.horizontalCenter: parent.horizontalCenter

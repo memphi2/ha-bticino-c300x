@@ -101,13 +101,27 @@ Rectangle {
         interval: 1200
         onTriggered: {
             report("switch")
+            var message = tab.status
+            if (@END@) {
+                tab.status = ""
+                view.contentY = Math.max(0, view.contentHeight - view.height)
+                tab.status = message
+                return
+            }
             view.contentY = Math.max(0, view.contentHeight - view.height)
             report("end")
-            if (@END@) return
-            var message = tab.status
             tab.status = ""
             report("cleared")
             tab.status = message
+            report("returned")
+            tab.status = ""
+            view.contentY = view.contentY - 30
+            tab.status = message
+            report("near")
+            tab.status = ""
+            view.contentY = 40
+            tab.status = message
+            report("elsewhere")
             view.contentY = 0
             console.log("C300X_TAB_QT4_DONE")
         }

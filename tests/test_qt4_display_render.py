@@ -190,6 +190,33 @@ def test_integration_tab_failed_switch_message_shows_without_scrolling_on_qt4(ta
     assert stages["cleared"]["view"][1] == stages["cleared"]["panel"][3], "without a message the page has the whole tab"
 
 
+@pytest.mark.parametrize("language", ["de", "en", "it", "fr"])
+def test_integration_tab_message_keeps_the_end_of_the_page_in_view_on_qt4(tab, language):
+    """A message that appears while the page is at its end leaves the row just used in view.
+
+    The message takes 53 px from the 378 px view. The page stayed at 124
+    while its end moved to 177, so the Reboot and Remove row was cut until
+    the user scrolled on. A page that is somewhere else does not move.
+    """
+    stages = tab(language)
+
+    def end(report: dict) -> float:
+        return report["content"] - (report["view"][1] - report["view"][0])
+
+    cleared = stages["cleared"]
+    lost = cleared["view"][1] - stages["end"]["view"][1]
+    assert cleared["scrolled"] == end(cleared) > 0 and lost > 40
+    for stage in ("returned", "near"):
+        report = stages[stage]
+        assert report["status"] == "display_settings_error" and report["view"][1] == stages["end"]["view"][1]
+        assert report["scrolled"] == end(report) == end(cleared) + lost, stage
+        for key in ("maintenance_reboot", "maintenance_remove"):
+            button = next(text for text in report["texts"] if text["text"] == display_text(language, key))
+            assert report["view"][0] <= button["top"] and button["bottom"] + 8 <= report["view"][1], (stage, button)
+    assert end(cleared) - 30 >= end(cleared) - lost, "the near stage starts within the height of the message"
+    assert end(cleared) - lost > 40 and stages["elsewhere"]["scrolled"] == 40, "a page that is elsewhere stays where it is"
+
+
 def test_integration_tab_raises_no_qml_warning_on_qt4(tab):
     """Of our files only: the vendor page reports types its own program provides, which the probe lacks."""
     for reachable in (True, False):

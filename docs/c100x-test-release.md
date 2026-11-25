@@ -53,7 +53,11 @@ After step 7, with the station's keys only (Up, Down, Return):
 5. **Alarmo** opens the Alarmo page (blue, titled Alarmo). With a PIN the keypad
    follows the modes.
 6. Send a display notification without sound: it covers the whole screen and
-   Return marks it read.
+   Return marks it read. Afterwards Up, Down and Return work again. Also send
+   one and, while it shows, ring the station: the call menu reacts to Up, Down
+   and Return, and after the call the main menu does too. The same after a
+   notification on the Home Assistant page that was still open when the screen
+   went off.
 7. Settings: **Status messages** stands before EXIT; Return switches it on and
    off, and the routine confirmations on our pages follow.
 8. A door call during any of these pages shows the call as usual.

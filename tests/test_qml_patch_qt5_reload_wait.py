@@ -1,7 +1,9 @@
 """The GUI reload waits longer only for the Qt 5 display restart (firmware 3.0.x).
 
-On 1.7.x and 2.0.2 the request and every call site stay as in 2.9.2: no
-keyword, the 15 s maintenance wait.
+On 1.7.x and 2.0.2 the request and every call site stay as in the base:
+no keyword, the 30 s reload wait (10 s agent limit, 15 s grace for the
+script's trap, margin). The Qt 5 restart has the 30 s write limit on the
+agent and the same grace, so it waits like a display write (50 s).
 """
 
 from __future__ import annotations
@@ -54,8 +56,8 @@ def _timeouts(**kwargs: Any) -> list[object]:
     return [call["request_timeout"] for call in calls]
 
 
-def test_the_reload_request_keeps_the_292_wait_without_the_keyword() -> None:
-    assert _timeouts() == [15.0]
+def test_the_reload_request_keeps_the_base_wait_without_the_keyword() -> None:
+    assert _timeouts() == [30.0]
 
 
 def test_the_reload_request_waits_like_a_display_write_for_a_qt5_restart() -> None:

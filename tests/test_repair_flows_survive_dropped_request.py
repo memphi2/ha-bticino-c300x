@@ -20,10 +20,15 @@ from test_agent_update_repairs import (
 )
 from test_repair_survives_dropped_request import _ReloadingConfigEntries, _settle
 
-from custom_components.bticino_c300x import repair_work, repairs
+from custom_components.bticino_c300x import (
+    repair_flows_device_user,
+    repair_work,
+    repairs,
+)
 from custom_components.bticino_c300x.const import CONF_CALLBACK_BASE_URL
 from custom_components.bticino_c300x.repair_issues import (
     DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE,
+    DEVICE_USER_REQUIRED_ISSUE,
     MEDIA_SETUP_REPAIR_REQUIRED_ISSUE,
     UNSUPPORTED_CALLBACK_URL_ISSUE,
     repair_issue_id,
@@ -32,6 +37,7 @@ from custom_components.bticino_c300x.repair_issues import (
 CREATED = {"type": "create_entry", "data": {}}
 CALLBACK_ISSUE = repair_issue_id(UNSUPPORTED_CALLBACK_URL_ISSUE, "entry-1")
 MEDIA_ISSUE = repair_issue_id(MEDIA_SETUP_REPAIR_REQUIRED_ISSUE, "entry-1")
+DEVICE_USER_ISSUE = repair_issue_id(DEVICE_USER_REQUIRED_ISSUE, "entry-1")
 CORE_HOOK_ISSUE = repair_issue_id(DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE, "entry-1")
 
 
@@ -272,5 +278,27 @@ def test_media_repair_finishes_its_reload() -> None:
 
         assert hass.config_entries.reloads == ["entry-1"]
         assert hass.config_entries.state == "loaded"
+
+    asyncio.run(scenario())
+
+
+def test_device_user_repair_finishes_after_the_station_write(issue_registry) -> None:
+    async def scenario() -> None:
+        api = _GatedApi("async_ensure_homeassistant_user")
+        entry = FakeEntry(runtime_data=FakeRuntimeData(api))
+        issue_registry.add(DEVICE_USER_ISSUE)
+        flow = _prepare(repair_flows_device_user.DeviceUserRepairFlow(FakeHass(entry), "entry-1"))
+
+        request = asyncio.create_task(flow.async_step_confirm({}))
+        await api.started.wait()
+        await _drop(request)
+        api.gate.set()
+        await _settle()
+
+        # The station created the user either way; Home Assistant now knows it.
+        assert entry.runtime_data.device_user_status == api.device_user_status
+        assert DEVICE_USER_ISSUE not in issue_registry
+        assert await flow.async_step_confirm({}) == CREATED
+        assert api.calls == ["ensure_homeassistant_user:Home Assistant HA Test"]
 
     asyncio.run(scenario())

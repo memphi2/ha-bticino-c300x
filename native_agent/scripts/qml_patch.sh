@@ -485,7 +485,10 @@ gui_start() {
 # write within QT5_START_SECONDS).
 gui_verify() {
     gui_phase verify
+    # The mark as it was when the start script started: one written by a
+    # start that crashed before the first look here is still its failure.
     gui_had_mark=
+    [ "${1:-}" = "again" ] || gui_had_mark="${GUI_MARK_AT_START:-}"
     gui_waited=0
     gui_alive_at=
     gui_seen_pid=
@@ -559,6 +562,10 @@ gui_start_unless_writing() {
         drop_mark) rm -f "$QT5_RCC.failed" ;;
         mark) qt5_mark_failed 2>/dev/null || true ;;
     esac
+    GUI_MARK_AT_START=0
+    if qt5_failed_now; then
+        GUI_MARK_AT_START=1
+    fi
     gui_start "$1" || true
     "$GUI_FLOCK" -u 8
 }

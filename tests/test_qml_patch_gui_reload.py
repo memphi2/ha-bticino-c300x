@@ -803,3 +803,20 @@ def test_the_shipped_display_after_a_failed_overlay_needs_a_watchdog_write_of_it
     assert result.returncode != 0, overlay.events()
     assert "No display program could be started" in result.stderr
     assert _starts(overlay)[:3] == ["overlay", "overlay", "plain"]
+
+
+def test_an_overlay_that_fails_before_the_first_look_is_still_retried(overlay: OverlayStation) -> None:
+    """Every look at the mark waits on a slow lock: the crashing start has written
+    the mark before the worker first reads it, and is still taken for its failure."""
+
+    slow = overlay.root / "tools/flock-slow"
+    slow.write_text(f'#!/bin/sh\nsleep 0.7\nexec "{shutil.which("flock")}" "$@"\n')
+    slow.chmod(0o755)
+    overlay.boot()
+    overlay.mark.write_text("boot-1\n")
+    overlay.crashes.write_text("1\n")
+    status = overlay.run("core-apply", C300X_QML_GUI_FLOCK=str(slow))
+    assert status["ok"] is True and status["qt5_overlay"] == "active", status
+    assert len(_settled(overlay)) == 1
+    assert not overlay.mark.exists()
+    assert _starts(overlay) == ["overlay", "overlay", "plain", "overlay"]

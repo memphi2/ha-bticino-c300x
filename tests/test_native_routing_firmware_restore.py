@@ -75,7 +75,7 @@ def test_verified_roundtrip(routing_binary, tmp_path, firmware, recovery):
 
 
 def test_restore_ignores_predictable_temp_symlink(routing_binary, tmp_path):
-    target, backup = prepare(tmp_path, "3.0.6")
+    target, backup = prepare(tmp_path, "1.7.19")
     assert routing_run(routing_binary, target, backup, "apply").returncode == 0
     sentinel = tmp_path / "sentinel"
     sentinel.write_bytes(b"untouched")
@@ -87,20 +87,8 @@ def test_restore_ignores_predictable_temp_symlink(routing_binary, tmp_path):
 
 
 @pytest.mark.parametrize("firmware", FIRMWARES)
-def test_foreign_model_backup_is_rejected(routing_binary, tmp_path, firmware):
-    target, backup = prepare(tmp_path, firmware)
-    assert routing_run(routing_binary, target, backup, "apply").returncode == 0
-    # A negative identity fixture only; not a supported beta model/variant.
-    shutil.copy2(original("c100x-1.5.8"), backup)
-    before, saved = target.read_bytes(), backup.read_bytes()
-    result = routing_run(routing_binary, target, backup, "restore")
-    assert result.returncode != 0 and "routing_backup_invalid" in result.stdout
-    assert target.read_bytes() == before and backup.read_bytes() == saved
-
-
-@pytest.mark.parametrize("firmware", FIRMWARES)
 @pytest.mark.parametrize("fault", [
-    "corrupt_backup", "patched_backup", "truncated_backup", "foreign_backup",
+    "corrupt_backup", "patched_backup", "truncated_backup", "foreign_backup", "foreign_model",
     "corrupt_target", "unknown_target", "missing_target", "missing_backup",
     "target_symlink", "backup_symlink", "rename",
 ])
@@ -114,8 +102,8 @@ def test_invalid_restore_retains_recovery_material(routing_binary, tmp_path, fir
         backup.write_bytes(target.read_bytes())
     elif fault == "truncated_backup":
         backup.write_bytes(backup.read_bytes()[:-1])
-    elif fault == "foreign_backup":
-        other = FIRMWARES[(FIRMWARES.index(firmware) + 1) % len(FIRMWARES)]
+    elif fault in ("foreign_backup", "foreign_model"):
+        other = "c100x-1.5.8" if fault == "foreign_model" else FIRMWARES[(FIRMWARES.index(firmware) + 1) % len(FIRMWARES)]
         shutil.copy2(original(other), backup)
         data = bytearray(target.read_bytes())
         data[PATCH_OFFSETS[firmware]] ^= 1

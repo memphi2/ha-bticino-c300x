@@ -365,11 +365,11 @@ Item {
             model: [0, 6, 12, 18, 24]
 
             UbuntuLightText {
+                objectName: "energyHourLabel"
                 x: bars.x + modelData * bars.slotWidth - (modelData === 24 ? width : modelData === 0 ? 0 : width / 2)
+                y: bars.y + bars.height + 1
                 width: 40
                 height: 17
-                anchors.top: bars.bottom
-                anchors.topMargin: 1
                 text: (modelData < 10 ? "0" : "") + modelData + ":00"
                 color: "white"
                 font.pixelSize: 12

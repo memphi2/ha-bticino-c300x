@@ -5,7 +5,11 @@
 Beta. One package now serves the Classe 300X and, as an experiment, the Classe
 100X. The Classe 100X side is checked against the original 1.5.8 firmware
 files offline only and is not yet confirmed on a device. On a Classe 300X
-everything works as in 2.10.0, with these visible changes:
+everything works as in 2.10.0, with the visible changes below. The beta ran on
+a Classe 300X with firmware 1.7.19: the agent update from 2.10.0, the
+entities, the Display patch and a function test (video, display notice,
+ringer mute, text memo, reload, agent restart, diagnostics) were fine.
+Firmware 2.0.2 and 3.0.6 are checked offline.
 
 - **Names without the model.** The card picker lists the card as **BTicino
   Doorbell Call Card** (before: C300X Doorbell Call Card). The blueprints are

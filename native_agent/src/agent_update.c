@@ -86,11 +86,16 @@ static int apply_agent_update_init_script(
 static int repair_agent_init_link_after_update(struct agent_update_change_summary *summary);
 static int validate_agent_update_files(const struct c300x_config *config, const char *manifest);
 
+/* The C100X display adapter on any other station: never installed there. */
+static int update_file_not_for_station(const struct c300x_agent_update_file *file)
+{
+    return file->optional == C300X_UPDATE_FILE_C100X && c300x_device_model() != C300X_DEVICE_MODEL_C100X;
+}
+
 /* A patch script may always be left out; the C100X adapter on a C300X. */
 static int update_file_may_be_absent(const struct c300x_agent_update_file *file)
 {
-    return file->optional == C300X_UPDATE_FILE_PATCH
-        || (file->optional == C300X_UPDATE_FILE_C100X && c300x_device_model() != C300X_DEVICE_MODEL_C100X);
+    return file->optional == C300X_UPDATE_FILE_PATCH || update_file_not_for_station(file);
 }
 
 int agent_update_model_compatible(const char *manifest)
@@ -252,7 +257,7 @@ static int update_installed_set_verified(const struct c300x_config *config, cons
         if (!agent_update_target_path(config, file->path, target, sizeof(target))) {
             return 0;
         }
-        if (strcmp(target, C300X_AGENT_INIT_SCRIPT) == 0) {
+        if (strcmp(target, C300X_AGENT_INIT_SCRIPT) == 0 || update_file_not_for_station(file)) {
             continue;
         }
         if (!agent_update_manifest_sha_for_path(installed_manifest, file->path, sha256, sizeof(sha256))) {
@@ -329,7 +334,8 @@ static int update_prepare_transaction(const struct c300x_config *config, struct 
             || update_lstat(backup, &info) == 0 || errno != ENOENT) {
             return 0;
         }
-        if (access(stage, F_OK) != 0 || file_content_matches(stage, target)) {
+        if (access(stage, F_OK) != 0 || file_content_matches(stage, target)
+            || update_file_not_for_station(&C300X_AGENT_UPDATE_FILES[index])) {
             continue;
         }
         if (strcmp(target, C300X_AGENT_INIT_SCRIPT) == 0) {
@@ -617,6 +623,10 @@ int apply_agent_update_files(
                 }
             }
         }
+        /* Checked with the rest of the package, but not written here. */
+        if (update_file_not_for_station(&C300X_AGENT_UPDATE_FILES[index])) {
+            continue;
+        }
         if (
             !apply_agent_update_file(
                 config,
@@ -876,6 +886,8 @@ static int apply_agent_update_file(
             summary->manifest_changed = 1;
         } else if (c300x_agent_update_patch_path(bundle_path)) {
             summary->script_changed = 1;
+        } else if (strcmp(bundle_path, C300X_AGENT_UPDATE_C100X_ADAPTER) == 0) {
+            /* The adapter of the Classe 100X is no part of the Display patch. */
         } else if (strncmp(bundle_path, "device_agent/qml/", strlen("device_agent/qml/")) == 0) {
             summary->qml_patch_changed = 1;
         }

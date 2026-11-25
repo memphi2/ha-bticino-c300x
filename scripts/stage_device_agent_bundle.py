@@ -167,15 +167,15 @@ def stage_bundle(
         c100x_payload = build_c100x_bundle(component_dir / C100X_MEMBER, root=ROOT)
     except (OSError, ValueError) as err:
         raise BundleStageError(f"Cannot stage C100X payload: {err}") from err
-    qml_files.append(c100x_payload)
-    script_files.append(c100x_payload)
+    # The adapter of the Classe 100X is in no group: a change of it alone is
+    # neither a Display patch change nor a script change on a Classe 300X.
     _set_file_modes(qml_files, 0o644)
-    _set_file_modes(script_files, 0o700)
+    _set_file_modes(script_files + [c100x_payload], 0o700)
     _set_file_modes(runtime_files, 0o700)
     legacy_bootstrap = component_dir / LEGACY_BOOTSTRAP_QML
     legacy_bootstrap.write_bytes(LEGACY_BOOTSTRAP_CONTENT)
     legacy_bootstrap.chmod(0o644)
-    staged_files.extend(_unique_paths(runtime_files + script_files + qml_files + [legacy_bootstrap]))
+    staged_files.extend(_unique_paths(runtime_files + script_files + qml_files + [c100x_payload, legacy_bootstrap]))
     file_entries = _file_entries(component_dir, staged_files)
     group_hashes = {
         "runtime_hash": _content_hash(component_dir, runtime_files),

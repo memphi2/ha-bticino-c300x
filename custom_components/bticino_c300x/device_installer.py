@@ -53,6 +53,8 @@ COMPONENT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = COMPONENT_DIR.parents[1]
 DEFAULT_REMOTE_DIR = "/home/bticino/cfg/extra/c300x-native-agent"
 REMOTE_AGENT_NAME = "c300x-agent-native"
+# The display adapter of the Classe 100X; never written to another station.
+C100X_ADAPTER_NAME = "qml/c100x_bundle.sh"
 REMOTE_CONFIG_NAME = "config.json"
 REMOTE_INIT_ENV_NAME = "c300x-agent.env"
 REMOTE_BOOTSTRAP_FIREWALL_NAME = "bootstrap_firewall.sh"
@@ -304,6 +306,9 @@ def _install_device_agent_sync(
         for payload in bundle.payload_files:
             if payload.remote_path == f"{request.remote_dir}/bundle.json":
                 manifest = payload
+                continue
+            if not c100x and payload.remote_path == f"{request.remote_dir}/{C100X_ADAPTER_NAME}":
+                # The display adapter of the Classe 100X is of no use elsewhere.
                 continue
             if client.put_file(payload.source, payload.remote_path, payload.mode):
                 changed_files.append(payload.remote_path)

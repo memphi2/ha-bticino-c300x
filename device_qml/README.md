@@ -24,7 +24,7 @@ configure is in [Station Display Pages](../docs/display.md).
 | `C300XEnergyConsumers.qml` | Consumers view: up to ten current power readings in two independently scaled columns of five. |
 | `C300XAlerts.qml` | Notify popups with bounded wake and stock short-beep effects, only on safe Home/HA screens. |
 | `C300XRingerControl.qml` | Core, page-independent ringer command receiver using the stock `AudioState` calls. Installed with the core `EventManager.qml` patch. |
-| `C300XSettings.qml` | **Settings > Integration** tab: Status messages, SSH, reboot, agent removal. |
+| `C300XSettings.qml` | **Settings > Integration** tab: status block (Home Assistant reachable, address, last contact, versions), Status messages, Keep page open in standby, page change, SSH, reboot, agent removal. |
 | `js/c300x_ha.js` | Local HTTP helper of the HA pages. |
 | `js/c300x_i18n.js` | Display texts in the supported languages. |
 | `js/c300x_energy.js` | Energy chart formatting (HA wall time, not device timezone). |

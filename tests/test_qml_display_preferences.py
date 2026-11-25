@@ -930,6 +930,38 @@ assert.equal(panel.statusValue(1), '-');
 """)
 
 
+def test_integration_tab_message_has_a_line_that_stays_in_view():
+    """The message after a failed switch was the last item of the page, below the fold.
+
+    The page is 502 px high in a 378 px view: after a switch on the first
+    screen fell back, nothing was to be seen. The message has its own line
+    below the page, outside of what scrolls, on the dark panel and with the
+    inset of the rows; the page gives way to it and gets the room back.
+    """
+    source = (ROOT / "device_qml/C300XSettings.qml").read_text(encoding="utf-8")
+    page = source[source.index("    Flickable {"):source.index("        id: note\n")]
+    assert not re.search(r"panel\.status\b", page), "no message inside the page"
+    assert "        anchors.bottomMargin: note.visible ? note.height + 16 : 0\n" in page
+    note = source[source.index("        id: note\n"):source.index("        visible: scroller.contentHeight > scroller.height")]
+    for line in ('visible: panel.status !== ""', "anchors.bottom: parent.bottom", "anchors.bottomMargin: 8", "width: content.width",
+                 'source: "images/settings/act_btn.svg"', "x: statusRows.x", "width: parent.width - 2 * x",
+                 "wrapMode: Text.WordWrap", 'text: panel.status ? panel.label(panel.status) : ""'):
+        assert f"        {line}\n" in note, line
+    assert source.count("panel.label(panel.status)") == 1
+    _run_tab_harness(r"""
+for (const language of ['de', 'en', 'it', 'fr'])
+    for (const key of ['display_settings_error', 'maintenance_timeout', 'maintenance_accepted']) {
+        const text = texts.text(language, key);
+        assert.ok(text && text !== key && text.length <= 30, language + ' ' + key + ': one line of the 456 px the message has');
+    }
+const {panel, calls} = tab('de');
+panel.answered = true;
+panel.setDisplay('dashboard_prevent_return', 'on');
+calls.setting[0].callback(null);
+assert.deepEqual([panel.status, panel.saving, panel.keepOpen], ['display_settings_error', false, false]);
+""")
+
+
 def test_integration_tab_table_rows_and_buttons_share_their_edges():
     """The status block was 400 px wide and indented, the rows were not, the buttons were 480 px wide.
 

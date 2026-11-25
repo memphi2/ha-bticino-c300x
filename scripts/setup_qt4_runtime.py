@@ -40,23 +40,32 @@ def validate_paths(paths: list[str]) -> None:
 
 
 def runtime_paths() -> list[str] | None:
-    """Prefer explicit overrides; a stale configured setup fails, never skips."""
+    """Explicit variables win and the built setup supplies the rest; a stale or broken setup fails, never skips.
+
+    QEMU and ROOTFS are also the variables of the compile and render tests.
+    Set alone, without a built setup, they leave this runtime unconfigured.
+    """
     explicit = [os.environ.get("C300X_QT4_" + key, "") for key in KEYS]
-    if any(explicit):
+    if all(explicit):
         validate_paths(explicit)
         return explicit
     manifest = cache_directory() / "environment.json"
     if not manifest.exists():
+        if explicit[2] or explicit[3]:
+            missing = ", ".join("C300X_QT4_" + key for key, path in zip(KEYS, explicit, strict=True) if not path)
+            raise ValueError(f"Qt 4 runtime: set {missing} as well, or run scripts/setup_qt4_runtime.py")
         return None
     data = json.loads(manifest.read_text())
     if not isinstance(data, dict) or data.get("schema") != 1 or data.get("source_sha256") != source_digest():
         raise ValueError("Stale Qt 4 runtime; rerun scripts/setup_qt4_runtime.py")
-    paths = data.get("paths", [])
-    if not isinstance(paths, list):
+    built = data.get("paths", [])
+    if not isinstance(built, list):
         raise ValueError("Invalid Qt 4 runtime paths")
-    validate_paths(paths)
-    if hashlib.sha256(Path(paths[2]).read_bytes()).hexdigest() != data.get("binary_sha256"):
+    validate_paths(built)
+    if hashlib.sha256(Path(built[2]).read_bytes()).hexdigest() != data.get("binary_sha256"):
         raise ValueError("Qt 4 probe differs from its build; rerun scripts/setup_qt4_runtime.py")
+    paths = [given or path for given, path in zip(explicit, built, strict=True)]
+    validate_paths(paths)
     return paths
 
 

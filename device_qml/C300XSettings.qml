@@ -206,6 +206,7 @@ Item {
     Flickable {
         id: scroller
         anchors.fill: parent
+        anchors.bottomMargin: note.visible ? note.height + 16 : 0
         clip: true
         contentHeight: content.height
         boundsBehavior: Flickable.StopAtBounds
@@ -345,14 +346,31 @@ Item {
                 }
             }
             Item { width: 1; height: 8 }
-            UbuntuLightText {
-                visible: text !== ""
-                width: parent.width
-                color: "white"
-                font.pixelSize: 18
-                wrapMode: Text.WordWrap
-                text: panel.status ? panel.label(panel.status) : ""
-            }
+        }
+    }
+    Item {
+        id: note
+        visible: panel.status !== ""
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 8
+        width: content.width
+        height: noteText.paintedHeight + 16
+        Image {
+            anchors.fill: parent
+            source: "images/settings/act_btn.svg"
+            fillMode: Image.Stretch
+        }
+        UbuntuLightText {
+            id: noteText
+            objectName: "note"
+            x: statusRows.x
+            y: 8
+            width: parent.width - 2 * x
+            color: "white"
+            font.pixelSize: 18
+            wrapMode: Text.WordWrap
+            text: panel.status ? panel.label(panel.status) : ""
         }
     }
     Rectangle {

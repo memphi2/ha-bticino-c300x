@@ -185,7 +185,7 @@ def qt5_start_script(lab):
            "QT5_BOOT_ID": str(lab.root / "boot_id")}
     text = subprocess.run(["sh", "-c", generator + 'qt5_wrapper_text "$1"', "sh", str(stock)],
                           env=env, check=True, capture_output=True, text=True).stdout
-    assert "{ { LD_PRELOAD=" in text and "} 3>&1 &" in text
+    assert '    { LD_PRELOAD=' in text and '2> "$c300x_err"; echo $?' in text
     return text.replace("./bin/gui/BtClass", './bin/gui/BtClass -c "$GUI_CLIENT"')
 
 
@@ -213,12 +213,13 @@ def test_qt5_start_script_runs_the_display_in_a_station_launch(lab):
             assert rc.read_text() == "0\n"
 
 
-def test_qt5_start_script_with_one_more_fork_is_not_a_station_launch(lab):
+def test_qt5_start_script_with_more_forks_is_not_a_station_launch(lab):
     ui = {"X-C300X-UI": "settings-v1"}
     home = Path(lab.process.args[0]).parents[1]
     (lab.root / "qt5-mark").touch()
-    text = qt5_start_script(lab).replace("{ { LD_PRELOAD=", "{ { ( LD_PRELOAD=")
-    text = text.replace("3>&-; echo $?", "3>&-; true; ); echo $?")
+    # The display runs one fork below the start script; three are more than allowed.
+    text = qt5_start_script(lab).replace("    { LD_PRELOAD=", "    { ( ( LD_PRELOAD=")
+    text = text.replace('2> "$c300x_err"; echo $?', '2> "$c300x_err"; true; ); true; ); echo $?')
     with start_script(lab, text):
         for launcher in (SUPERVISOR, [str(home / "sh"), str(home / "bin/BtClass_qws")]):
             assert display(lab, launcher=launcher, status=403, **ui)["error"] == "display_maintenance_denied"

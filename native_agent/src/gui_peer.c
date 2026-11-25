@@ -167,8 +167,8 @@ static int stock_daemons(unsigned pid)
     return ok;
 }
 
-/* The Qt 5 start script runs the display inside a pipeline, so up to two forks
- * of the wrapper shell sit in between. A fork keeps the exe, cwd, cmdline and
+/* The Qt 5 start script runs the display in a background group, one fork of
+ * the wrapper shell below it; up to two forks are accepted. A fork keeps the exe, cwd, cmdline and
  * credentials but closes the script; only the wrapper itself has it open.
  * The Qt 4 start script (firmware 1.7.x/2.0.2) has none: the wrapper must be
  * the display's direct parent there. */

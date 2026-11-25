@@ -1065,6 +1065,12 @@ recover_pass() {
 # ignored: a GUI started here must not inherit an ignored SIGTERM.
 abort_recovery() {
     trap : HUP INT TERM
+    # Qt 5: the repeat waits for the display restart the first pass filed
+    # (at most 5 s, the worker finishes it), instead of filing a second one.
+    if [ "$QT5_DISPLAY" = "1" ]; then
+        FINISH_SIGNALLED=1
+        FINISH_STEP_REPEAT=1
+    fi
     recover_pass || true
     exit 131
 }
@@ -2449,6 +2455,12 @@ qt5_legacy_unchanged() {
 # Every file that differs from the firmware's, back in Qt 5 form, into the
 # resource file. The deterministic candidate also repairs activation-only drift.
 qt5_pack_resources() {
+    # A stage of a script killed past its grace period stays on storage.
+    for qt5_stage in "$QT5_ROOT"/rcc-stage.*; do
+        [ -d "$qt5_stage" ] || continue
+        [ "${qt5_stage##*.}" != "$$" ] && transaction_owner_running "${qt5_stage##*.}" && continue
+        rm -rf "$qt5_stage"
+    done
     qt5_stage="$QT5_ROOT/rcc-stage.$$"
     rm -rf "$qt5_stage"
     mkdir -p "$qt5_stage"
@@ -2563,6 +2575,10 @@ qt5_publish() {
 
 cleanup_staging() {
     rm -rf "$STAGING_DIR"
+    # The Qt 5 resource stage is on the station's storage, not in RAM.
+    if [ "$QT5_DISPLAY" = "1" ]; then
+        rm -rf "$QT5_ROOT/rcc-stage.$$"
+    fi
 }
 
 generate_core_patch_stage() {

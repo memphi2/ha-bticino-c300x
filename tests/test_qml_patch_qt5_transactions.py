@@ -237,3 +237,88 @@ def test_a_sigkill_during_the_activation_rollback_leaves_no_recovery_copy_after_
     assert snapshot(device) == before
     assert not list(device.gui.glob(".c300x-qml-transaction.*"))
     assert not list(device.root.rglob("*.c300x-recovery.*"))
+
+
+def held_agent(device, command):
+    """The agent binary, held in its `--display-qt5 <command>` until signalled."""
+    held = device.root / "held"
+    agent = device.root / "held-agent"
+    agent.write_text(
+        f'#!/bin/sh\nif [ "$2" = "{command}" ] && [ ! -e "{held}" ]; then\n'
+        f'    : > "{held}"; while :; do sleep 0.02; done\nfi\n'
+        f'exec "{device.programs["agent"]}" "$@"\n'
+    )
+    agent.chmod(0o700)
+    return held, {"C300X_QML_AGENT_BIN": str(agent)}
+
+
+def signal_when(process, mark, signo):
+    deadline = time.monotonic() + 20
+    while not mark():
+        assert process.poll() is None and time.monotonic() < deadline, process.communicate()
+        time.sleep(0.01)
+    os.killpg(process.pid, signo)
+    return process.communicate(timeout=20)
+
+
+@pytest.mark.parametrize("signo", [signal.SIGTERM, signal.SIGKILL])
+def test_a_write_ended_during_the_resource_pack_leaves_no_stage_on_storage(device, signo):
+    """The resource stage lies on the station's storage, not in RAM like the
+    base's staging directory: the signal clean-up removes it with that, and a
+    stage of a script killed past its grace goes with the next pack."""
+
+    device.ok("core-apply")
+    before = snapshot(device)
+    held, env = held_agent(device, "pack")
+    process = subprocess.Popen([str(overlay.SCRIPT), "apply"], env=device.environment(**env),
+                               text=True, start_new_session=True,
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    _, stderr = signal_when(process, held.exists, signo)
+    stages = list(device.qt5_root.glob("rcc-stage.*"))
+    if signo == signal.SIGTERM:
+        assert process.returncode == 130, stderr
+        assert stages == []
+        assert snapshot(device) == before
+    else:
+        assert stages == [device.qt5_root / f"rcc-stage.{process.pid}"]
+    device.ok("apply")
+    assert list(device.qt5_root.glob("rcc-stage.*")) == []
+
+
+def test_a_sigterm_during_the_recovery_restart_waits_for_its_request_on_qt5(device):
+    """The base repeats a recovery pass cut by the deadline signal. On the Qt 5
+    display its display restart is a request to the restart worker: the repeat
+    waits for the request the first pass filed and files no second restart."""
+
+    device.ok("apply")
+    source = overlay.SCRIPT.read_text()
+    start, end = source.index("reload_gui() {"), source.index("\nremount_rw() {")
+    failing = device.root / "reload-failure.sh"
+    failing.write_text(source[:start] + "reload_gui() { return 1; }\n" + source[end:])
+    failing.chmod(0o700)
+    # A write killed after its files changed leaves a transaction that needs a restart.
+    held = device.root / "held"
+    env = command_failure(
+        device, "cp",
+        f'case "$*" in *"/.qt5/wrapper {device.wrapper}.c300x-recovery."*) [ ! -e "{held}" ];; *) false;; esac',
+        effect=f': > "{held}"; while :; do sleep 0.02; done',
+    )
+    process = subprocess.Popen([str(failing), "media-user-label-apply"], env=device.environment(**env),
+                               text=True, start_new_session=True,
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    signal_when(process, held.exists, signal.SIGKILL)
+    assert list(device.gui.glob(".c300x-qml-transaction.*/.c300x-reload"))
+    # No worker may take the request (flock refuses), so the filed requests stay countable.
+    noflock = device.root / "noflock"
+    noflock.write_text("#!/bin/sh\nexit 1\n")
+    noflock.chmod(0o700)
+    requests = device.root / "gui-restart/requests"
+    process = subprocess.Popen([str(overlay.SCRIPT), "recover"], env=device.environment(
+        C300X_QML_RELOAD_GUI="1", C300X_QML_GUI_FLOCK=str(noflock), C300X_QML_GUI_BUDGET_SECONDS="60"),
+        text=True, start_new_session=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    started = time.monotonic()
+    _, stderr = signal_when(process, lambda: requests.is_dir() and any(requests.iterdir()), signal.SIGTERM)
+    assert process.returncode == 131, stderr
+    assert time.monotonic() - started < 15
+    assert len(list(requests.iterdir())) == 1
+    assert not list(device.gui.glob(".c300x-qml-transaction.*"))

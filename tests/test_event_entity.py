@@ -168,6 +168,35 @@ def test_device_info_names_the_model_the_agent_detected() -> None:
     assert C300XEntity(offline, "test").device_info["model"] == "Classe 300X"  # type: ignore[arg-type]
 
 
+def test_device_info_shows_the_board_and_the_article_number_the_station_reports() -> None:
+    owner = _FakeEntry(runtime_data=_FakeRuntimeData(agent_info={
+        "model": "C300X", "firmware": "1.7.19",
+        "board": "BTicino ZIA board HW Rev 3", "article": "344642",
+    }))
+    info = C300XEntity(owner, "test").device_info  # type: ignore[arg-type]
+    assert (info["model"], info["sw_version"]) == ("Classe 300X", "1.7.19")
+    # The full board name, and the article number as the model id.
+    assert (info["hw_version"], info["model_id"]) == ("BTicino ZIA board HW Rev 3", "344642")
+
+    c100x = _FakeEntry(runtime_data=_FakeRuntimeData(agent_info={
+        "model": "C100X", "board": "BTicino SHARK board (Dig-D/Car-C)", "article": "",
+    }))
+    info = C300XEntity(c100x, "test").device_info  # type: ignore[arg-type]
+    assert info["hw_version"] == "BTicino SHARK board (Dig-D/Car-C)"
+    assert "model_id" not in info and "sw_version" not in info
+
+    # An agent that reports neither leaves the device as release 2.10.0 showed it.
+    plain = _FakeEntry(runtime_data=_FakeRuntimeData(agent_info={"model": "C300X", "firmware": "2.0.2"}))
+    assert dict(C300XEntity(plain, "test").device_info) == {  # type: ignore[arg-type]
+        "identifiers": {("bticino_c300x", plain.entry_id)}, "manufacturer": "BTicino",
+        "model": "Classe 300X", "name": plain.title, "sw_version": "2.0.2",
+    }
+    for empty in (None, "", "  "):
+        blank = _FakeEntry(runtime_data=_FakeRuntimeData(agent_info={"board": empty, "article": empty}))
+        info = C300XEntity(blank, "test").device_info  # type: ignore[arg-type]
+        assert "hw_version" not in info and "model_id" not in info
+
+
 def test_device_info_omits_empty_firmware_version() -> None:
     entry = _FakeEntry(
         runtime_data=_FakeRuntimeData(agent_info={"firmware": ""}),

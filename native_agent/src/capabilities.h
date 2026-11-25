@@ -7,6 +7,10 @@ struct c300x_capabilities_context {
     const char *device_id;
     const char *device_model;
     const char *display_kind;
+    /* ok, unread or mismatch: c300x_device_model_check_name(). */
+    const char *model_check;
+    const char *board;
+    const char *article;
     const char *device_firmware;
     const char *bundle_hash;
     int maintenance_supported;

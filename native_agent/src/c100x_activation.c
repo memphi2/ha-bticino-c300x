@@ -40,7 +40,10 @@ void c100x_activation_init(struct c100x_activation *activation, const char *bund
     memset(activation, 0, sizeof(*activation));
     c300x_command_job_init(&activation->job);
     activation->blocked = activation->boot_check = "";
-    if (c300x_device_model() != C300X_DEVICE_MODEL_C100X || bundle == NULL
+    struct c300x_device_profile profile = c300x_device_profile();
+    /* Only on a station that names itself a C100X and runs its display program. */
+    if (profile.model != C300X_DEVICE_MODEL_C100X || profile.model_check == C300X_MODEL_CHECK_MISMATCH
+        || bundle == NULL
         || strlen(bundle) >= sizeof(activation->bundle)) {
         return;
     }

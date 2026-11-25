@@ -24,6 +24,9 @@ int c300x_capabilities_json(
     char device_id_json[128];
     char device_model[128];
     char display_kind[64];
+    char model_check[32];
+    char board[C300X_JSON_QUOTED_LEN(96)];
+    char article[C300X_JSON_QUOTED_LEN(32)];
     char device_firmware[384];
     char stair_address[128];
     char lock_id[128];
@@ -42,6 +45,9 @@ int c300x_capabilities_json(
     c300x_json_escape_string(config->video_rtsp_recorder_path, recorder_path, sizeof(recorder_path));
     c300x_json_escape_string(context->device_model, device_model, sizeof(device_model));
     c300x_json_escape_string(context->display_kind, display_kind, sizeof(display_kind));
+    c300x_json_escape_string(context->model_check ? context->model_check : "ok", model_check, sizeof(model_check));
+    c300x_json_string(context->board ? context->board : "", board, sizeof(board));
+    c300x_json_string(context->article ? context->article : "", article, sizeof(article));
     c300x_json_escape_string(context->device_firmware, device_firmware, sizeof(device_firmware));
     c300x_json_escape_string(config->stair_light_default_address, stair_address, sizeof(stair_address));
     c300x_json_escape_string(config->lock_id, lock_id, sizeof(lock_id));
@@ -54,7 +60,7 @@ int c300x_capabilities_json(
         "{"
         "\"api_version\":\"1\","
         "\"agent\":{\"implementation\":\"native-c\",\"version\":\"%s\",\"api_version\":\"1\",\"bundle_hash\":%s,\"self_update_supported\":%s,\"self_update_file_set_version\":7},"
-        "\"device\":{\"id\":\"%s\",\"model\":\"%s\",\"display_kind\":\"%s\",\"camera\":\"%s\",\"firmware\":\"%s\"},"
+        "\"device\":{\"id\":\"%s\",\"model\":\"%s\",\"display_kind\":\"%s\",\"camera\":\"%s\",\"model_check\":\"%s\",\"board\":%s,\"article\":%s,\"firmware\":\"%s\"},"
         "\"capabilities\":{"
         "\"doorbell_events\":true,"
         "\"camera_picture\":{\"supported\":%s},"
@@ -93,6 +99,9 @@ int c300x_capabilities_json(
         device_model,
         display_kind,
         context->camera_resolution_fixed ? "fixed" : "high_res",
+        model_check,
+        board,
+        article,
         device_firmware,
         context->picture_supported ? "true" : "false",
         context->https_callbacks ? "true" : "false",

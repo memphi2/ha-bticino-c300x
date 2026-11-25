@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import os
 import re
+import shlex
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -51,7 +54,7 @@ def test_the_profile_is_read_from_the_agents_answer(device, profile):
     assert setup_profile(device) == profile
     assert entry_profile(_entry(device)) == profile
     assert setup_is_c100x(device) is entry_is_c100x(_entry(device)) is profile.is_c100x
-    assert profile.has_display_patch is (profile.model == "C300X")
+    assert profile.has_display_patch is (profile.display != "qt5_ondisk")
     assert profile.camera_fixed is (profile.display != "qt4_ondisk")
 
 
@@ -68,6 +71,14 @@ def test_an_agent_without_a_display_answer_is_judged_by_the_display_status(info)
     assert entry_profile(SimpleNamespace()) == C300X_QT4
 
 
+def test_a_mismatch_the_agent_reports_is_kept():
+    mismatch = setup_profile({"model": "C300X", "display_kind": "qt5_ondisk", "model_check": "mismatch"})
+    assert mismatch == DeviceProfile("C100X", "qt5_ondisk", "fixed", False)
+    assert not mismatch.has_display_patch
+    for check in ("ok", "unread", None):
+        assert setup_profile({"model": "C300X", "display_kind": "qt4_ondisk", "model_check": check}) == C300X_QT4
+
+
 def test_the_agents_answer_decides_before_the_display_status():
     c100x = _entry({"model": "C100X", "display_kind": "qt5_ondisk"}, {"qt5_overlay": "active"})
     assert entry_profile(c100x) == C100X and not display_is_qt5(c100x)
@@ -78,11 +89,18 @@ def test_the_agents_answer_decides_before_the_display_status():
 
 
 @pytest.mark.parametrize(("answer", "profile"), [
+    ("qt4\nc300x\nnamed-C300X\n", C300X_QT4),
+    ("qt5\nc300x\nnamed-C300X\n", C300X_QT5),
+    ("qt5\nc100x\nnamed-C100X\n", C100X),
+    # The station names no model: its display program decides.
     ("qt4\nc300x\n", C300X_QT4),
     ("qt5\nc300x\n", C300X_QT5),
     ("qt5\nc100x\n", C100X),
     ("qt4\nc100x\n", C100X),
     ("", C300X_QT4),
+    # They disagree: the station's name is the model, and no Display patch.
+    ("qt5\nc100x\nnamed-C300X\n", DeviceProfile("C300X", "qt5_ondisk", "fixed", False)),
+    ("qt4\nc300x\nnamed-C100X\n", DeviceProfile("C100X", "qt5_ondisk", "fixed", False)),
 ])
 def test_the_installer_probe_reads_the_same_profile_on_the_station(answer, profile):
     commands = []
@@ -92,9 +110,29 @@ def test_the_installer_probe_reads_the_same_profile_on_the_station(answer, profi
         return answer
 
     assert station_profile(run, lambda text: f"'{text}'") == profile
+    assert not profile.has_display_patch or profile in (C300X_QT4, C300X_QT5)
     assert len(commands) == 1
-    assert "'/usr/lib/libQt5Core.so.5'" in commands[0]
-    assert "'/home/bticino/bin/gui/BtClass100'" in commands[0]
+    for path in ("/usr/lib/libQt5Core.so.5", "/home/bticino/bin/gui/BtClass100", "/home/bticino/sp/dbfiles_ws.xml"):
+        assert f"'{path}'" in commands[0]
+
+
+def test_the_installer_probe_command_reads_the_firmware_files(tmp_path):
+    """The probe's own shell command, run against the model files of the firmwares."""
+
+    work = Path(os.environ.get("C300X_FIRMWARE_WORK", ROOT.parent / "c300x-fwpatch/work"))
+    for firmware, profile in (("1.7.19", C300X_QT4), ("2.0.2", C300X_QT4), ("3.0.6", C300X_QT5),
+                              ("c100x-1.5.8", C100X)):
+        root = work / f"rootfs-{firmware}"
+        if not root.is_dir():
+            pytest.skip("Private firmware files unavailable")
+
+        def run(command, root=root):
+            for path in ("/usr/lib/libQt5Core.so.5", "/home/bticino/bin/gui/BtClass100",
+                         "/home/bticino/sp/dbfiles_ws.xml"):
+                command = command.replace(f"'{path}'", shlex.quote(str(root) + path))
+            return subprocess.run(["sh", "-c", command], capture_output=True, text=True, check=True).stdout
+
+        assert station_profile(run, lambda text: f"'{text}'") == profile, firmware
 
 
 def test_the_profile_names_match_the_agent():
@@ -104,7 +142,8 @@ def test_the_profile_names_match_the_agent():
                  device_profile.C300X, device_profile.C100X):
         assert f'"{name}"' in detect
     assert '"fixed" : "high_res"' in capabilities
-    for marker in (device_profile._QT5_DISPLAY_MARKER, device_profile._C100X_DISPLAY_MARKER):
+    for marker in (device_profile._QT5_DISPLAY_MARKER, device_profile._C100X_DISPLAY_MARKER,
+                   device_profile._MODEL_FILE):
         assert f'"{marker}"' in detect
 
 

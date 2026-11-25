@@ -40,6 +40,8 @@ def test_native_capabilities_contract(tmp_path: Path) -> None:
         assert document["device"] == {
             # The model is the detected one, not the configured C300X.
             "id": "synthetic-id", "model": "C100X", "display_kind": "qt5_ondisk", "camera": "high_res",
+            # The board as the kernel names it; no article number on this station.
+            "model_check": "ok", "board": 'BTicino SHARK board (Dig-D/Car-C) "x"', "article": "",
             "firmware": '1.7.19"test',
         }
         assert document["agent"]["self_update_supported"] is maintenance

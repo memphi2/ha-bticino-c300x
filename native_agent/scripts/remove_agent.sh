@@ -7,14 +7,26 @@ QML_PATCH="${C300X_QML_PATCH_SCRIPT:-$AGENT_DIR/qml_patch.sh}"
 # device-profile-begin
 # The station this script runs on: model and display mechanism. The same
 # block stands in qml_patch.sh and remove_agent.sh and matches the agent's
-# device_detect.c; nothing else in the scripts reads the markers. A C100X has
-# the Qt 5 library too, so its marker decides first.
+# device_detect.c; nothing else in the scripts reads these files. The station
+# names its model itself; the display program's name is the cross-check and
+# decides alone where the station names none. Whatever names a C100X keeps
+# the C300X Display patch away, also on a station that has the Qt 5 library.
+DEVICE_INFO_XML="${C300X_QML_DEVICE_INFO_XML:-/home/bticino/sp/dbfiles_ws.xml}"
 QT5_MARKER="${C300X_QML_QT5_MARKER:-/usr/lib/libQt5Core.so.5}"
 C100X_MARKER="${C300X_QML_C100X_MARKER:-/home/bticino/bin/gui/BtClass100}"
-DEVICE_MODEL=C300X
+DEVICE_MODEL="$(sed -n 's:.*<webserver_type>[[:space:]]*\(C[13]00X\)[[:space:]]*</webserver_type>.*:\1:p' \
+    "$DEVICE_INFO_XML" 2>/dev/null | sed -n 1p)" || DEVICE_MODEL=""
+DEVICE_PROGRAM_MODEL=C300X
+[ ! -e "$C100X_MARKER" ] || DEVICE_PROGRAM_MODEL=C100X
+DEVICE_MODEL_CHECK=ok
+if [ -z "$DEVICE_MODEL" ]; then
+    DEVICE_MODEL="$DEVICE_PROGRAM_MODEL"
+    DEVICE_MODEL_CHECK=unread
+elif [ "$DEVICE_MODEL" != "$DEVICE_PROGRAM_MODEL" ]; then
+    DEVICE_MODEL_CHECK=mismatch
+fi
 DEVICE_DISPLAY=qt4_ondisk
-if [ -e "$C100X_MARKER" ]; then
-    DEVICE_MODEL=C100X
+if [ "$DEVICE_MODEL" = "C100X" ] || [ "$DEVICE_PROGRAM_MODEL" = "C100X" ]; then
     DEVICE_DISPLAY=qt5_ondisk
 elif [ -e "$QT5_MARKER" ]; then
     DEVICE_DISPLAY=qt5_rcc
@@ -159,7 +171,7 @@ restore_c100x_qml() {
 }
 
 restore_qml() {
-    if [ "$DEVICE_MODEL" = "C100X" ]; then restore_c100x_qml; return; fi
+    if [ "$DEVICE_DISPLAY" = "qt5_ondisk" ]; then restore_c100x_qml; return; fi
     if [ ! -x "$QML_PATCH" ]; then
         printf 'Cannot verify GUI restoration without executable patch script; keeping agent files and backups in place\n' >&2
         exit 1
@@ -427,7 +439,7 @@ restore_media_patches() {
 # Without a valid stock backup the library stays as it is (wider tap
 # tolerance); any other failure keeps the backup for another removal.
 restore_display_library() {
-    [ "$DEVICE_MODEL" = "C100X" ] && return 0
+    [ "$DEVICE_DISPLAY" = "qt5_ondisk" ] && return 0
     touch_result="$("$AGENT_DIR/c300x-agent-native" --display-touch restore 2>/dev/null || true)"
     case "$touch_result" in
         *'"ok":true'*) return 0 ;;

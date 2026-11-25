@@ -11,6 +11,8 @@ int main(int argc, char **argv)
         .device_id = "synthetic-id",
         .device_model = "C100X",
         .display_kind = "qt5_ondisk",
+        .model_check = "ok",
+        .board = "BTicino SHARK board (Dig-D/Car-C) \"x\"",
         .device_firmware = "1.7.19\"test",
         .bundle_hash = "",
         .activations_count = 3,

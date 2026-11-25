@@ -5163,10 +5163,17 @@ static void api_capabilities(
         runtime->video, &video_status, config, NULL, NULL) : PICTURE_UNAVAILABLE;
     if (picture == PICTURE_DEFERRED) { free(body); return; }
     if (runtime != NULL) c100x_display_capability(&runtime->c100x_activation, c100x, sizeof(c100x));
+    const struct c300x_device_profile profile = c300x_device_profile();
+    char board[C300X_DEVICE_BOARD_LEN], article[C300X_DEVICE_ARTICLE_LEN];
+    c300x_device_board(board, sizeof(board));
+    c300x_device_article(article, sizeof(article));
     const struct c300x_capabilities_context context = {
         .device_id = device_id,
-        .device_model = c300x_device_model_name(c300x_device_model()),
-        .display_kind = c300x_display_kind_name(c300x_device_display_kind()),
+        .device_model = c300x_device_model_name(profile.model),
+        .display_kind = c300x_display_kind_name(profile.display),
+        .model_check = c300x_device_model_check_name(profile.model_check),
+        .board = board,
+        .article = article,
         .memo_led_present = runtime != NULL && runtime->memo_led.claim_dir >= 0,
         /* Firmware 3.0.x has no IPv6 firewall start script to patch. */
         .ipv6_firewall_hook = access(config->maintenance_ipv6_firewall_path, F_OK) == 0,

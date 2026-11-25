@@ -28,6 +28,8 @@ CAMERA_FIXED = "fixed"
 # program's name tells the C100X, which has the Qt 5 library too.
 _QT5_DISPLAY_MARKER = "/usr/lib/libQt5Core.so.5"
 _C100X_DISPLAY_MARKER = "/home/bticino/bin/gui/BtClass100"
+# The vendor's web server file, in which the station names its model.
+_MODEL_FILE = "/home/bticino/sp/dbfiles_ws.xml"
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,6 +39,9 @@ class DeviceProfile:
     model: str = C300X
     display: str = QT4_ONDISK
     camera: str = CAMERA_HIGH_RES
+    # False when the station's own model name and its display program
+    # disagree. Such a station gets no display of either kind.
+    model_confirmed: bool = True
 
     @property
     def is_c100x(self) -> bool:
@@ -52,21 +57,29 @@ class DeviceProfile:
     def has_display_patch(self) -> bool:
         """The Display patch exists on every C300X; the C100X has its own activation."""
 
-        return not self.is_c100x
+        return self.display != QT5_ONDISK
 
     @property
     def camera_fixed(self) -> bool:
         return self.camera == CAMERA_FIXED
 
 
-def _profile(c100x: bool, qt5: bool, camera: Any = None) -> DeviceProfile:
-    """The camera follows the display unless the agent names it."""
+def _profile(
+    c100x: bool, qt5: bool, camera: Any = None, *,
+    c100x_program: bool | None = None, confirmed: bool = True,
+) -> DeviceProfile:
+    """The camera follows the display unless the agent names it.
 
+    Whatever names a C100X, the station itself or its display program, keeps
+    the C300X Display patch away.
+    """
+
+    display = QT5_ONDISK if c100x or c100x_program else QT5_RCC if qt5 else QT4_ONDISK
     if camera not in (CAMERA_HIGH_RES, CAMERA_FIXED):
-        camera = CAMERA_FIXED if c100x or qt5 else CAMERA_HIGH_RES
-    if c100x:
-        return DeviceProfile(C100X, QT5_ONDISK, camera)
-    return DeviceProfile(C300X, QT5_RCC if qt5 else QT4_ONDISK, camera)
+        camera = CAMERA_HIGH_RES if display == QT4_ONDISK else CAMERA_FIXED
+    if c100x_program is not None and c100x_program is not c100x:
+        confirmed = False
+    return DeviceProfile(C100X if c100x else C300X, display, camera, confirmed)
 
 
 def setup_profile(setup: Any, display_status: Any = None) -> DeviceProfile:
@@ -80,10 +93,13 @@ def setup_profile(setup: Any, display_status: Any = None) -> DeviceProfile:
 
     info = setup if isinstance(setup, Mapping) else {}
     kind = info.get("display_kind")
+    confirmed = info.get("model_check") != "mismatch"
     if info.get("model") == C100X or kind == QT5_ONDISK:
-        return _profile(True, True, info.get("camera"))
+        # A station whose own name and display program disagree is treated as
+        # a C100X here: no Display patch; the agent refuses its activation.
+        return _profile(True, True, info.get("camera"), confirmed=confirmed)
     if kind in (QT4_ONDISK, QT5_RCC):
-        return _profile(False, kind == QT5_RCC, info.get("camera"))
+        return _profile(False, kind == QT5_RCC, info.get("camera"), confirmed=confirmed)
     overlay = display_status.get("qt5_overlay") if isinstance(display_status, Mapping) else None
     return _profile(False, overlay is not None)
 
@@ -100,11 +116,19 @@ def entry_profile(entry: Any) -> DeviceProfile:
 def station_profile(run: Callable[[str], str], quote: Callable[[str], str]) -> DeviceProfile:
     """Profile read on the station before an agent runs.
 
-    An unreadable answer counts as the C300X with the Qt 4 display.
+    As in the agent: the station names its model itself, its display program
+    is the cross-check and decides alone where the station names none. An
+    unreadable answer counts as the C300X with the Qt 4 display.
     """
 
     words = run(
         f"test -e {quote(_QT5_DISPLAY_MARKER)} && echo qt5 || echo qt4; "
-        f"test -e {quote(_C100X_DISPLAY_MARKER)} && echo c100x || echo c300x"
+        f"test -e {quote(_C100X_DISPLAY_MARKER)} && echo c100x || echo c300x; "
+        "sed -n 's:.*<webserver_type>[[:space:]]*\\(C[13]00X\\)[[:space:]]*</webserver_type>.*:"
+        f"named-\\1:p' {quote(_MODEL_FILE)} 2>/dev/null | sed -n 1p"
     ).split()
-    return _profile("c100x" in words, "qt5" in words)
+    program = "c100x" in words
+    named = next((word[6:] for word in words if word in ("named-C300X", "named-C100X")), None)
+    if named is None:
+        return _profile(program, "qt5" in words)
+    return _profile(named == C100X, "qt5" in words, c100x_program=program)

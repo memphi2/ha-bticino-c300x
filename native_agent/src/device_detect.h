@@ -1,6 +1,8 @@
 #ifndef C300X_DEVICE_DETECT_H
 #define C300X_DEVICE_DETECT_H
 
+#include <stddef.h>
+
 enum c300x_device_model {
     C300X_DEVICE_MODEL_C300X = 0,
     C300X_DEVICE_MODEL_C100X,
@@ -15,17 +17,40 @@ enum c300x_display_kind {
     C300X_DISPLAY_QT5_ONDISK,
 };
 
+/* How far the model is confirmed. The station names its model itself
+ * (<webserver_type> in the vendor's web server file); the display program's
+ * name is only the cross-check.
+ * ok: both agree. unread: the station named no known model, the display
+ * program decided. mismatch: they disagree; the station's own name counts as
+ * the model and no display of either kind is written. */
+enum c300x_device_model_check {
+    C300X_MODEL_CHECK_OK = 0,
+    C300X_MODEL_CHECK_UNREAD,
+    C300X_MODEL_CHECK_MISMATCH,
+};
+
 /* What the agent knows about the station it runs on. Everything that differs
  * between the stations is a question to this profile; nothing else reads the
- * markers on the device. */
+ * model or the markers on the device. */
 struct c300x_device_profile {
     enum c300x_device_model model;
+    enum c300x_device_model_check model_check;
     enum c300x_display_kind display;
     /* The camera sends other receivers only its low-resolution stream. */
     int camera_fixed;
 };
 
 struct c300x_device_profile c300x_device_profile(void);
+const char *c300x_device_model_check_name(enum c300x_device_model_check check);
+
+/* The board as the kernel names it ("BTicino ZIA board HW Rev 3", "BTicino
+ * SHARK board (Dig-D/Car-C)") and the article number the vendor's HAL caches
+ * ("344642"; none on a C100X). Shown as they are; empty when not readable.
+ * Nothing is decided from them. */
+#define C300X_DEVICE_BOARD_LEN 96
+#define C300X_DEVICE_ARTICLE_LEN 32
+void c300x_device_board(char *out, size_t out_len);
+void c300x_device_article(char *out, size_t out_len);
 
 enum c300x_device_model c300x_device_model(void);
 enum c300x_display_kind c300x_device_display_kind(void);

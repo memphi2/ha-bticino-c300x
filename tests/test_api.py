@@ -205,7 +205,8 @@ def test_validate_setup_uses_native_agent_version() -> None:
         '{"api_version": "1", '
         '"agent": {"implementation": "native-c", "version": "0.2.0"}, '
         '"device": {"id": "c300x-aabbcc001122", '
-        '"model": "C100X", "display_kind": "qt5_ondisk", "firmware": "1.5.8"}, '
+        '"model": "C100X", "display_kind": "qt5_ondisk", "camera": "fixed", "model_check": "ok", '
+        '"board": "BTicino SHARK board (Dig-D/Car-C)", "article": "", "firmware": "1.5.8"}, '
         '"capabilities": {"doorbell_events": true}}'
     )
     api = C300XAgentApi(
@@ -222,6 +223,9 @@ def test_validate_setup_uses_native_agent_version() -> None:
     assert setup["api_version"] == "1"
     assert setup["device_id"] == "c300x-aabbcc001122"
     assert (setup["model"], setup["display_kind"]) == ("C100X", "qt5_ondisk")
+    assert (setup["camera"], setup["model_check"]) == ("fixed", "ok")
+    # An empty article number is none.
+    assert (setup["board"], setup["article"]) == ("BTicino SHARK board (Dig-D/Car-C)", None)
     assert setup["capabilities"] == {"doorbell_events": True}
     assert session.requests[0]["kwargs"]["timeout"] == 2.0
 

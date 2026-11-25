@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -124,34 +125,72 @@ def test_a_c100x_keeps_the_low_stream_whatever_its_libraries(config_probe):
     assert (answer["model"], answer["resolution_fixed"], answer["high_resolution"]) == ("C100X", 1, 0)
 
 
+def _script_profile_block(name: str = "qml_patch.sh") -> tuple[str, str]:
+    text = (NATIVE / "scripts" / name).read_text(encoding="utf-8")
+    head, rest = text.split("# device-profile-begin\n")
+    block, tail = rest.split("# device-profile-end\n")
+    return block, head + tail
+
+
 def test_the_scripts_ask_one_profile_block_for_the_station():
-    scripts = {name: (NATIVE / "scripts" / name).read_text(encoding="utf-8")
-               for name in ("qml_patch.sh", "remove_agent.sh")}
-    blocks, rests = [], []
-    for text in scripts.values():
-        head, rest = text.split("# device-profile-begin\n")
-        block, tail = rest.split("# device-profile-end\n")
-        blocks.append(block)
-        rests.append(head + tail)
-    assert blocks[0] == blocks[1]
-    # Same markers and the same order as device_detect.c: the C100X first.
+    block, patch_rest = _script_profile_block()
+    remove_block, remove_rest = _script_profile_block("remove_agent.sh")
+    assert block == remove_block
+    # The same files as device_detect.c.
     detect = (NATIVE / "src/device_detect.c").read_text(encoding="utf-8")
-    for marker in ("/usr/lib/libQt5Core.so.5", "/home/bticino/bin/gui/BtClass100"):
-        assert marker in blocks[0] and marker in detect
-    assert blocks[0].index('[ -e "$C100X_MARKER" ]') < blocks[0].index('[ -e "$QT5_MARKER" ]')
-    for rest in rests:
+    for path in ("/usr/lib/libQt5Core.so.5", "/home/bticino/bin/gui/BtClass100",
+                 "/home/bticino/sp/dbfiles_ws.xml"):
+        assert path in block and path in detect
+    for rest in (patch_rest, remove_rest):
         assert "QT5_MARKER" not in rest and "libQt5Core" not in rest
-        assert '-e "$C100X_MARKER"' not in rest
+        assert '-e "$C100X_MARKER"' not in rest and "DEVICE_INFO_XML" not in rest
+        # A station that anything names a C100X is decided by its display kind.
+        assert '"$DEVICE_MODEL" =' not in rest
     for script in (NATIVE / "scripts").glob("*.sh"):
-        if script.name not in scripts and not script.name.startswith("c100x_"):
+        if script.name not in ("qml_patch.sh", "remove_agent.sh") and not script.name.startswith("c100x_"):
             assert "libQt5Core" not in script.read_text(encoding="utf-8"), script.name
+
+
+@pytest.mark.parametrize(("named", "qt5", "c100x", "expected"), [
+    ("C300X", False, False, "C300X ok qt4_ondisk"),
+    ("C300X", True, False, "C300X ok qt5_rcc"),
+    ("C100X", True, True, "C100X ok qt5_ondisk"),
+    (None, False, False, "C300X unread qt4_ondisk"),
+    (None, True, False, "C300X unread qt5_rcc"),
+    (None, True, True, "C100X unread qt5_ondisk"),
+    ("C500X", True, False, "C300X unread qt5_rcc"),
+    ("C300X", True, True, "C300X mismatch qt5_ondisk"),
+    ("C100X", True, False, "C100X mismatch qt5_ondisk"),
+    ("C100X", False, False, "C100X mismatch qt5_ondisk"),
+])
+def test_the_script_profile_block_reads_the_station_like_the_agent(tmp_path, named, qt5, c100x, expected):
+    """The same table as tests/test_native_device_identity.py for the agent."""
+
+    if named is not None:
+        (tmp_path / "dbfiles_ws.xml").write_text(
+            f"<Root_Element>\n      <webserver_type>{named}</webserver_type>\n"
+            "      <ver_webserver>1.7.19</ver_webserver>\n</Root_Element>\n", encoding="utf-8")
+    if qt5:
+        (tmp_path / "qt5").write_bytes(b"")
+    if c100x:
+        (tmp_path / "c100x").write_bytes(b"")
+    script = "set -eu\n" + _script_profile_block()[0] + 'echo "$DEVICE_MODEL $DEVICE_MODEL_CHECK $DEVICE_DISPLAY"\n'
+    for shell in (["sh"], ["busybox", "sh"]):
+        if shutil.which(shell[0]) is None:
+            continue
+        result = subprocess.run(
+            [*shell, "-c", script], capture_output=True, text=True, check=True,
+            env={"PATH": os.environ["PATH"], "C300X_QML_DEVICE_INFO_XML": str(tmp_path / "dbfiles_ws.xml"),
+                 "C300X_QML_QT5_MARKER": str(tmp_path / "qt5"), "C300X_QML_C100X_MARKER": str(tmp_path / "c100x")},
+        )
+        assert result.stdout.strip() == expected, shell
 
 
 def test_the_agent_offers_the_camera_resolution_except_on_a_qt5_display():
     http = (NATIVE / "src/http.c").read_text(encoding="utf-8")
     capabilities = (NATIVE / "src/capabilities.c").read_text(encoding="utf-8")
     assert ".camera_resolution_fixed = c300x_device_camera_resolution_fixed()," in http
-    assert ".display_kind = c300x_display_kind_name(c300x_device_display_kind())," in http
+    assert ".display_kind = c300x_display_kind_name(profile.display)," in http
     assert '\\"camera_resolution\\":%s,\\"camera_quality\\":%s}' in capabilities
     assert "config->video_enabled && !context->camera_resolution_fixed" in capabilities
 
@@ -187,7 +226,9 @@ def test_the_installer_names_the_display_like_the_agent():
     assert installer._device_display_kind(device) == "qt5_rcc"
     assert device.commands == [
         "test -e /usr/lib/libQt5Core.so.5 && echo qt5 || echo qt4; "
-        "test -e /home/bticino/bin/gui/BtClass100 && echo c100x || echo c300x"
+        "test -e /home/bticino/bin/gui/BtClass100 && echo c100x || echo c300x; "
+        "sed -n 's:.*<webserver_type>[[:space:]]*\\(C[13]00X\\)[[:space:]]*</webserver_type>.*:named-\\1:p' "
+        "/home/bticino/sp/dbfiles_ws.xml 2>/dev/null | sed -n 1p"
     ]
     assert installer._device_display_kind(_Device(qt5=False)) == "qt4_ondisk"
     assert installer._device_display_kind(_Device(qt5=True, c100x=True)) == "qt5_ondisk"

@@ -511,7 +511,7 @@ for (const [age, text] of [[null, 'nie seit Start'], [undefined, 'nie seit Start
 assert.equal(tab('en').panel.contactText(600), '10 min ago');
 assert.equal(tab('it').panel.contactText(7200), '2 h fa');
 assert.equal(tab('fr').panel.contactText(null), 'jamais depuis le démarrage');
-for (const key of ['status_ok', 'status_down', 'status_checking', 'status_contact', 'contact_never',
+for (const key of ['status_ok', 'status_down', 'status_checking', 'status_address', 'status_contact', 'contact_never',
         'contact_now', 'contact_min', 'contact_hours', 'contact_days', 'section_display', 'section_station',
         'bridge_unreachable', 'bridge_not_registered', 'bridge_disabled']) {
     for (const language of ['de', 'en', 'it', 'fr']) assert.notEqual(texts.text(language, key), key, language + ' ' + key);
@@ -833,27 +833,90 @@ def test_integration_tab_rows_are_not_rebuilt_when_a_value_changes():
 
 
 def test_integration_tab_status_lines_fit_long_values():
-    """Measured in the station font at 18 px: the value column is 260 px wide.
+    """Measured in the station font at 18 px: the value column is 306 px wide.
 
-    "https://ha.example.duckdns.org:8123" is 298 px and the three versions in
-    one line were 435 px with "2.10.0b1" in a 400 px column, so both were cut.
-    The address has the full width and may wrap once; the versions are two rows.
+    "https://ha.example.duckdns.org:8123" is 298 px and fits in one line. A
+    longer address may take a second line; the versions are two rows.
     """
     source = (ROOT / "device_qml/C300XSettings.qml").read_text(encoding="utf-8")
     assert "                model: 5\n" in source
-    assert "anchors.leftMargin: index === 1 ? 0 : 140" in source
-    assert "wrapMode: index === 1 ? Text.WrapAnywhere : Text.NoWrap" in source
-    assert "height: Math.max(23, statusValue.paintedHeight + 2)" in source
+    assert "wrapMode: index === 1 ? Text.Wrap : Text.NoWrap" in source
+    assert "height: Math.max(26, statusValue.paintedHeight + 4)" in source
     assert 'row === 3 ? "Integration" : row === 4 ? "Agent"' in source
     assert '(agentVersion || "-") + " \\u00b7 Firmware " + (firmwareVersion || "-")' in source
     assert '"Integration " +' not in source
     assert "status_server" not in (ROOT / "device_qml/js/c300x_i18n.js").read_text(encoding="utf-8")
 
 
+def test_integration_tab_address_is_a_table_row_like_the_others():
+    """The address stood alone at the left edge, without a label, like a wrapped first line.
+
+    It has its own label in every display language and starts in the value
+    column like the other four values.
+    """
+    source = (ROOT / "device_qml/C300XSettings.qml").read_text(encoding="utf-8")
+    row = source[source.index("                model: 5\n"):source.index('objectName: "bridgeReason"')]
+    assert re.findall(r"anchors\.leftMargin: ([^\n]+)", row) == ["150"], "one value column for all five rows"
+    assert "WrapAnywhere" not in source, "an address is never cut inside a word"
+    _run_tab_harness(r"""
+assert.deepEqual(['de', 'en', 'it', 'fr'].map(language => tab(language).panel.statusKey(1)),
+    ['Adresse', 'Address', 'Indirizzo', 'Adresse']);
+const {panel} = tab('de');
+assert.deepEqual([0, 1, 2, 3, 4].map(row => panel.statusKey(row) !== ''), [true, true, true, true, true]);
+assert.equal(panel.statusValue(1), '-');
+// A long address breaks after a dot or a colon only, never inside the scheme and never inside a group.
+const gap = '​';
+for (const address of ['http://192.0.2.10:8123', 'https://ha.example.duckdns.org:8123',
+        'http://[fd00:1234:5678:9abc:def0:1234:5678:9abc]:8123', 'http://homeassistant.local']) {
+    panel.address = address;
+    const shown = panel.statusValue(1);
+    assert.equal(shown.split(gap).join(''), address, 'the visible text is the address');
+    const parts = shown.split(gap);
+    assert.ok(parts.length > 1 && parts[0].startsWith(address.slice(0, address.indexOf('//') + 2)), shown);
+    for (const part of parts.slice(0, -1)) assert.match(part, /[.:]$/, shown);
+    for (const part of parts) assert.ok(!/[.:]./.test(part.replace('://', '')), 'every dot and colon is a break point: ' + part);
+}
+""")
+
+
+def test_integration_tab_table_rows_and_buttons_share_their_edges():
+    """The status block was 400 px wide and indented, the rows were not, the buttons were 480 px wide.
+
+    One column as wide as the two buttons holds everything; the text of the
+    table, of the section titles and of the switch rows starts at the same
+    inset, and the switches end at that inset on the right.
+    """
+    source = (ROOT / "device_qml/C300XSettings.qml").read_text(encoding="utf-8")
+    column = source[source.index("            id: content\n"):]
+    assert "            width: 480\n" in column[:120]
+    assert "background.width: 236\n" in source and "spacing: 8\n" in source and 236 * 2 + 8 == 480
+    assert "                    x: 12\n                    y: 10\n                    width: parent.width - 24\n" in source
+    rows = source[source.index("                model: 6\n"):source.index('model: ["reboot", "remove"]')]
+    assert "anchors.leftMargin: statusRows.x\n" in rows and "anchors.rightMargin: statusRows.x\n" in rows
+    assert "anchors.horizontalCenter" not in rows, "the buttons start at the column edge, not centred on their own"
+
+
+def test_integration_tab_rows_have_air():
+    """The section title touched the status block, the switches touched each other.
+
+    The station's switch is 34 px high. A switch row is 48 px, a section
+    title has 44 px with its text in the lower part, and the buttons keep
+    14 px from the last switch row.
+    """
+    source = (ROOT / "device_qml/C300XSettings.qml").read_text(encoding="utf-8")
+    rows = source[source.index("                model: 6\n"):source.index('model: ["reboot", "remove"]')]
+    match = re.search(r"height: head \? (\d+) : (\d+)\n", rows)
+    assert match, "section titles and switch rows have fixed heights"
+    title, switch = int(match.group(1)), int(match.group(2))
+    assert switch - 34 >= 12 and title >= 40
+    assert "anchors.verticalCenterOffset: head ? 7 : 0\n" in rows
+    assert "            Item { width: 1; height: 14 }\n            Row {\n" in source
+
+
 def test_integration_tab_status_block_is_readable_on_a_bright_background():
     """Green and grey text straight on the sand-coloured wallpaper could not be read."""
     source = (ROOT / "device_qml/C300XSettings.qml").read_text(encoding="utf-8")
-    block = source[source.index("height: statusRows.height + 8"):source.index("                model: 6\n")]
+    block = source[source.index("height: statusRows.height + 20"):source.index("                model: 6\n")]
     assert 'source: "images/settings/act_btn.svg"' in block
     assert block.index("Image {") < block.index("id: statusRows") < block.index("model: 5")
     assert 'objectName: "bridgeReason"' in block, "the reason lies on the panel too"

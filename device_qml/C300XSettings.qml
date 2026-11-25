@@ -71,12 +71,12 @@ Item {
     }
 
     function statusKey(row) {
-        return row === 0 ? "Home Assistant" : row === 2 ? label("status_contact") : row === 3 ? "Integration" : row === 4 ? "Agent" : ""
+        return row === 0 ? "Home Assistant" : row === 1 ? label("status_address") : row === 2 ? label("status_contact") : row === 3 ? "Integration" : row === 4 ? "Agent" : ""
     }
     function statusValue(row) {
         if (row === 0) return label(reachable ? "status_ok" : problem ? "status_down" : "status_checking")
             + (reachable && instanceName ? " (" + instanceName + ")" : "")
-        if (row === 1) return address || "-"
+        if (row === 1) return address ? address.replace(/([.:])(?=[^\/])/g, "$1\u200b") : "-"
         if (row === 2) return contact || "-"
         if (row === 3) return reachable && integrationVersion ? integrationVersion : "-"
         return (agentVersion || "-") + " \u00b7 Firmware " + (firmwareVersion || "-")
@@ -177,7 +177,6 @@ Item {
     Flickable {
         id: scroller
         anchors.fill: parent
-        anchors.topMargin: 8
         clip: true
         contentHeight: content.height
         boundsBehavior: Flickable.StopAtBounds
@@ -185,10 +184,10 @@ Item {
         Column {
             id: content
             anchors.horizontalCenter: parent.horizontalCenter
-            width: 400
+            width: 480
             Item {
                 width: content.width
-                height: statusRows.height + 8
+                height: statusRows.height + 20
                 Image {
                     anchors.fill: parent
                     source: "images/settings/act_btn.svg"
@@ -196,16 +195,16 @@ Item {
                 }
                 Column {
                     id: statusRows
-                    x: 8
-                    y: 4
-                    width: parent.width - 16
+                    x: 12
+                    y: 10
+                    width: parent.width - 24
                     Repeater {
                         model: 5
                         Item {
                             width: statusRows.width
-                            height: Math.max(23, statusValue.paintedHeight + 2)
+                            height: Math.max(26, statusValue.paintedHeight + 4)
                             UbuntuLightText {
-                                anchors.verticalCenter: parent.verticalCenter
+                                y: 2
                                 color: "#c7d0d9"
                                 font.pixelSize: 18
                                 text: panel.statusKey(index)
@@ -214,26 +213,32 @@ Item {
                                 id: statusValue
                                 objectName: "statusValue" + index
                                 anchors.left: parent.left
-                                anchors.leftMargin: index === 1 ? 0 : 140
+                                anchors.leftMargin: 150
                                 anchors.right: parent.right
-                                anchors.verticalCenter: parent.verticalCenter
+                                y: 2
                                 color: index > 0 ? "white" : panel.reachable ? "#58d68d" : panel.problem ? "#f1c40f" : "white"
                                 font.pixelSize: 18
-                                wrapMode: index === 1 ? Text.WrapAnywhere : Text.NoWrap
+                                wrapMode: index === 1 ? Text.Wrap : Text.NoWrap
                                 maximumLineCount: 2
                                 elide: Text.ElideRight
                                 text: panel.statusValue(index)
                             }
                         }
                     }
-                    UbuntuLightText {
-                        objectName: "bridgeReason"
-                        visible: text !== ""
-                        width: parent.width
-                        color: "#f1c40f"
-                        font.pixelSize: 18
-                        wrapMode: Text.WordWrap
-                        text: panel.problem ? panel.label(panel.reasonKey()) : ""
+                    Item {
+                        visible: bridgeReason.text !== ""
+                        width: statusRows.width
+                        height: bridgeReason.paintedHeight + 10
+                        UbuntuLightText {
+                            id: bridgeReason
+                            objectName: "bridgeReason"
+                            y: 6
+                            width: parent.width
+                            color: "#f1c40f"
+                            font.pixelSize: 18
+                            wrapMode: Text.WordWrap
+                            text: panel.problem ? panel.label(panel.reasonKey()) : ""
+                        }
                     }
                 }
             }
@@ -242,19 +247,22 @@ Item {
                 Item {
                     width: content.width
                     property bool head: index === 0 || index === 4
-                    height: head ? 24 : 34
+                    height: head ? 44 : 48
                     Rectangle {
                         visible: head
                         anchors.bottom: parent.bottom
                         width: parent.width
                         height: 1
-                        color: "#5c6fd0"
+                        color: "white"
+                        opacity: 0.5
                     }
                     UbuntuLightText {
                         anchors.left: parent.left
+                        anchors.leftMargin: statusRows.x
                         anchors.right: toggle.left
+                        anchors.rightMargin: 8
                         anchors.verticalCenter: parent.verticalCenter
-                        anchors.verticalCenterOffset: head ? 1 : 0
+                        anchors.verticalCenterOffset: head ? 7 : 0
                         color: "white"
                         font.pixelSize: 18
                         elide: Text.ElideRight
@@ -264,6 +272,7 @@ Item {
                         id: toggle
                         visible: !head
                         anchors.right: parent.right
+                        anchors.rightMargin: statusRows.x
                         anchors.verticalCenter: parent.verticalCenter
                         checked: panel.rowOn(index)
                         enabled: panel.rowEnabled(index) && !panel.pending
@@ -289,30 +298,26 @@ Item {
                     }
                 }
             }
-            Item { width: 1; height: 6 }
-            Item {
-                width: content.width
-                height: 50
-                Row {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    spacing: 8
-                    Repeater {
-                        model: ["reboot", "remove"]
-                        BasicButton {
-                            style: IconAndLabelStyle {
-                                defaultImage: "images/settings/list_option_btn.svg"
-                                pressedImage: "images/settings/list_option_btn_p.svg"
-                                background.width: 236
-                                background.height: 50
-                                description: panel.label("maintenance_" + modelData)
-                            }
-                            enabled: (modelData === "reboot" ? panel.canReboot : panel.canRemove) && !panel.busy && !panel.pending
-                            opacity: enabled ? 1 : 0.45
-                            onMouseClicked: panel.ask(modelData)
+            Item { width: 1; height: 14 }
+            Row {
+                spacing: 8
+                Repeater {
+                    model: ["reboot", "remove"]
+                    BasicButton {
+                        style: IconAndLabelStyle {
+                            defaultImage: "images/settings/list_option_btn.svg"
+                            pressedImage: "images/settings/list_option_btn_p.svg"
+                            background.width: 236
+                            background.height: 50
+                            description: panel.label("maintenance_" + modelData)
                         }
+                        enabled: (modelData === "reboot" ? panel.canReboot : panel.canRemove) && !panel.busy && !panel.pending
+                        opacity: enabled ? 1 : 0.45
+                        onMouseClicked: panel.ask(modelData)
                     }
                 }
             }
+            Item { width: 1; height: 8 }
             UbuntuLightText {
                 visible: text !== ""
                 width: parent.width
@@ -329,7 +334,7 @@ Item {
         anchors.rightMargin: 10
         width: 4
         radius: 2
-        color: "#c7d0d9"
+        color: "white"
         opacity: 0.7
         y: scroller.y + scroller.contentY / scroller.contentHeight * scroller.height
         height: scroller.height * scroller.height / scroller.contentHeight

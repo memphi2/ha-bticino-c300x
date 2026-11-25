@@ -1559,8 +1559,8 @@
       "description": "{entry_title} ha rilevato troppi watcher eventi display C300X simultanei. Il device agent ha rifiutato il watcher aggiuntivo per evitare un ciclo di polling locale che può sovraccaricare il C300X. Watcher attivi: {waiters}/{capacity}. Watcher rifiutati: {overflows}. Ricarica la GUI display C300X dall'integrazione se dashboard o memo sul display non si aggiornano più, poi aggiorna la diagnostica."
     },
     "device_display_unsupported": {
-      "title": "Le pagine del display C300X non sono disponibili su questa postazione",
-      "description": "{entry_title}: l'agente del dispositivo non conosce il programma del display o lo script di avvio del display di questa postazione ({reason}). Ha lasciato il display nello stato originale e funziona senza le pagine del display: la postazione non mostra pagine o pulsanti di Home Assistant e la patch del display resta disattivata. Le altre funzioni dell'agente funzionano come prima delle pagine del display per il firmware 3.0.x. Applicare di nuovo la patch del display controlla la postazione ancora una volta."
+      "title": "Le pagine del display C300X non sono disponibili su questo dispositivo",
+      "description": "{entry_title}: il device agent non conosce il programma del display o lo script di avvio del display di questo dispositivo ({reason}). Ha lasciato il display nello stato originale e funziona senza le pagine del display: il dispositivo non mostra pagine o pulsanti di Home Assistant e la patch display resta disattivata. Le altre funzioni del device agent funzionano come prima delle pagine del display per il firmware 3.0.x. Applicare di nuovo la patch display controlla il dispositivo ancora una volta."
     },
     "device_core_qml_hook_required": {
       "title": "Hook media core C300X mancante",
@@ -1578,7 +1578,7 @@
         "abort": {
           "entry_not_loaded": "La voce BTicino C300X non è caricata.",
           "core_patch_unsupported": "Il device agent C300X installato non supporta l'applicazione dell'hook media core.",
-          "display_unsupported": "L'agente del dispositivo non conosce il display di questa postazione; funziona senza le pagine del display e non c'è alcun hook media core da applicare."
+          "display_unsupported": "Il device agent non conosce il display di questo dispositivo; funziona senza le pagine del display e non c'è alcun hook media core da applicare."
         }
       }
     },
@@ -1588,17 +1588,17 @@
         "step": {
           "confirm": {
             "title": "Applica di nuovo le pagine del display C300X",
-            "description": "{entry_title}: l'aggiornamento o l'installazione dell'agent è completato, ma i passaggi del display successivi non sono riusciti sul display della stazione. Le pagine del display del nuovo agent non sono ancora confermate; la stazione potrebbe mostrare ancora le pagine dell'agent precedente o il display originale.\n\nHome Assistant esegue i passaggi del display lasciati in sospeso dall'aggiornamento: l'hook multimediale di base, le pagine del display se la patch del display è attiva e un riavvio del display della stazione. Durante la correzione il display si spegne e si riavvia; può richiedere alcuni minuti."
+            "description": "{entry_title}: l'aggiornamento o l'installazione del device agent è completato, ma i passaggi del display successivi non sono riusciti sul display del dispositivo. Le pagine del display del nuovo device agent non sono ancora confermate; il dispositivo potrebbe mostrare ancora le pagine del device agent precedente o il display originale.\n\nHome Assistant esegue i passaggi del display lasciati in sospeso dall'aggiornamento: l'hook media core, le pagine del display se la patch display è attiva e un riavvio del display del dispositivo. Durante la correzione il display si spegne e si riavvia; può richiedere alcuni minuti."
           }
         },
         "error": {
-          "core_patch_failed": "I passaggi del display non sono riusciti. Verifica che la stazione sia raggiungibile e che il suo display funzioni, poi riprova.",
-          "core_patch_verify_failed": "I passaggi del display sono stati eseguiti, ma l'agent non ha confermato l'hook multimediale di base."
+          "core_patch_failed": "I passaggi del display non sono riusciti. Verifica che il dispositivo sia raggiungibile e che il suo display funzioni, poi riprova.",
+          "core_patch_verify_failed": "I passaggi del display sono stati eseguiti, ma il device agent non ha confermato l'hook media core."
         },
         "abort": {
           "entry_not_loaded": "La voce BTicino C300X non è caricata.",
-          "core_patch_unsupported": "L'agent C300X installato non supporta i passaggi del display.",
-          "display_unsupported": "L'agent non conosce il display di questa stazione; funziona senza le pagine del display e non ci sono passaggi del display da eseguire."
+          "core_patch_unsupported": "Il device agent C300X installato non supporta i passaggi del display.",
+          "display_unsupported": "Il device agent non conosce il display di questo dispositivo; funziona senza le pagine del display e non ci sono passaggi del display da eseguire."
         }
       }
     },
@@ -1795,7 +1795,7 @@
         "unknown": "sconosciuto",
         "unavailable": "non disponibile",
         "display_failed": "applicato, ma il display è partito nello stato originale",
-        "display_unsupported": "non disponibile per il display di questa postazione"
+        "display_unsupported": "non disponibile per il display di questo dispositivo"
       }
     }
   },

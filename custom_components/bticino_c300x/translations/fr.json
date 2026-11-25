@@ -1559,8 +1559,8 @@
       "description": "{entry_title} a détecté trop de watchers d'événements display C300X simultanés. L'agent a refusé le watcher supplémentaire pour éviter une boucle de polling locale qui peut surcharger le C300X. Watchers actifs : {waiters}/{capacity}. Watchers refusés : {overflows}. Rechargez la GUI display C300X depuis l'intégration si le dashboard ou les mémos de l'écran ne se mettent plus a jour, puis actualisez les diagnostics."
     },
     "device_display_unsupported": {
-      "title": "Les pages d'écran C300X ne sont pas disponibles sur ce poste",
-      "description": "{entry_title} : l'agent de l'appareil ne connaît pas le programme d'affichage ou le script de démarrage de l'écran de ce poste ({reason}). Il a laissé l'écran dans son état d'origine et fonctionne sans les pages d'écran : le poste n'affiche ni pages ni boutons Home Assistant, et le patch d'affichage reste désactivé. Les autres fonctions de l'agent fonctionnent comme avant les pages d'écran pour le firmware 3.0.x. Appliquer à nouveau le patch d'affichage vérifie le poste une nouvelle fois."
+      "title": "Les pages de l'écran C300X ne sont pas disponibles sur cet appareil",
+      "description": "{entry_title} : l'agent appareil ne connaît pas le programme de l'écran ou le script de démarrage de l'écran de cet appareil ({reason}). Il a laissé l'écran dans son état d'origine et fonctionne sans les pages de l'écran : l'appareil n'affiche ni pages ni boutons Home Assistant, et le patch display reste désactivé. Les autres fonctions de l'agent appareil fonctionnent comme avant les pages de l'écran pour le firmware 3.0.x. Appliquer à nouveau le patch display vérifie l'appareil une nouvelle fois."
     },
     "device_core_qml_hook_required": {
       "title": "Hook média core C300X manquant",
@@ -1578,27 +1578,27 @@
         "abort": {
           "entry_not_loaded": "L'entrée BTicino C300X n'est pas chargée.",
           "core_patch_unsupported": "L'agent appareil C300X installé ne prend pas en charge l'application du hook média core.",
-          "display_unsupported": "L'agent de l'appareil ne connaît pas l'écran de ce poste ; il fonctionne sans les pages d'écran et il n'y a pas de hook média core à appliquer."
+          "display_unsupported": "L'agent appareil ne connaît pas l'écran de cet appareil ; il fonctionne sans les pages de l'écran et il n'y a pas de hook média core à appliquer."
         }
       }
     },
     "device_display_followup_pending": {
-      "title": "Les pages d'affichage C300X doivent encore être appliquées après la mise à jour",
+      "title": "Les pages de l'écran C300X doivent encore être appliquées après la mise à jour",
       "fix_flow": {
         "step": {
           "confirm": {
-            "title": "Appliquer à nouveau les pages d'affichage C300X",
-            "description": "{entry_title} : la mise à jour ou l'installation de l'agent est terminée, mais les étapes d'affichage qui la suivent n'ont pas abouti sur l'écran de la station. Les pages d'affichage du nouvel agent ne sont pas encore confirmées ; la station affiche peut-être encore les pages de l'agent précédent ou l'affichage d'origine.\n\nHome Assistant exécute les étapes d'affichage laissées en suspens par la mise à jour : le hook média de base, les pages d'affichage si le patch d'affichage est activé, et un redémarrage de l'écran de la station. L'écran s'éteint et redémarre pendant la réparation ; cela peut prendre quelques minutes."
+            "title": "Appliquer à nouveau les pages de l'écran C300X",
+            "description": "{entry_title} : la mise à jour ou l'installation de l'agent appareil est terminée, mais les étapes de l'écran qui la suivent n'ont pas abouti sur l'écran de l'appareil. Les pages de l'écran du nouvel agent appareil ne sont pas encore confirmées ; l'appareil affiche peut-être encore les pages de l'agent précédent ou l'écran d'origine.\n\nHome Assistant exécute les étapes de l'écran laissées en suspens par la mise à jour : le hook média core, les pages de l'écran si le patch display est activé, et un redémarrage de l'écran de l'appareil. L'écran s'éteint et redémarre pendant la réparation ; cela peut prendre quelques minutes."
           }
         },
         "error": {
-          "core_patch_failed": "Les étapes d'affichage n'ont pas abouti. Vérifiez que la station est joignable et que son écran fonctionne, puis réessayez.",
-          "core_patch_verify_failed": "Les étapes d'affichage ont été exécutées, mais l'agent n'a pas confirmé le hook média de base."
+          "core_patch_failed": "Les étapes de l'écran n'ont pas abouti. Vérifiez que l'appareil est joignable et que son écran fonctionne, puis réessayez.",
+          "core_patch_verify_failed": "Les étapes de l'écran ont été exécutées, mais l'agent appareil n'a pas confirmé le hook média core."
         },
         "abort": {
           "entry_not_loaded": "L'entrée BTicino C300X n'est pas chargée.",
-          "core_patch_unsupported": "L'agent C300X installé ne prend pas en charge les étapes d'affichage.",
-          "display_unsupported": "L'agent ne connaît pas l'écran de cette station ; il fonctionne sans les pages d'affichage et il n'y a aucune étape d'affichage à exécuter."
+          "core_patch_unsupported": "L'agent appareil C300X installé ne prend pas en charge les étapes de l'écran.",
+          "display_unsupported": "L'agent appareil ne connaît pas l'écran de cet appareil ; il fonctionne sans les pages de l'écran et il n'y a aucune étape de l'écran à exécuter."
         }
       }
     },
@@ -1795,7 +1795,7 @@
         "unknown": "inconnu",
         "unavailable": "indisponible",
         "display_failed": "appliqué, mais l'écran a démarré dans son état d'origine",
-        "display_unsupported": "non disponible pour l'écran de ce poste"
+        "display_unsupported": "non disponible pour l'écran de cet appareil"
       }
     }
   },

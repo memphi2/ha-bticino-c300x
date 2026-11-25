@@ -12,23 +12,30 @@
 #define C300X_C100X_DISPLAY_MARKER "/home/bticino/bin/gui/BtClass100"
 #endif
 
+struct c300x_device_profile c300x_device_profile(void)
+{
+    struct c300x_device_profile profile = {C300X_DEVICE_MODEL_C300X, C300X_DISPLAY_QT4_ONDISK, 0};
+
+    /* A known C100X must never receive the C300X Qt 4 file patch, whatever
+     * libraries it carries. */
+    if (access(C300X_C100X_DISPLAY_MARKER, F_OK) == 0) {
+        profile.model = C300X_DEVICE_MODEL_C100X;
+        profile.display = C300X_DISPLAY_QT5_ONDISK;
+    } else if (access(C300X_QT5_DISPLAY_MARKER, F_OK) == 0) {
+        profile.display = C300X_DISPLAY_QT5_RCC;
+    }
+    profile.camera_fixed = profile.display != C300X_DISPLAY_QT4_ONDISK;
+    return profile;
+}
+
 enum c300x_device_model c300x_device_model(void)
 {
-    return access(C300X_C100X_DISPLAY_MARKER, F_OK) == 0
-        ? C300X_DEVICE_MODEL_C100X
-        : C300X_DEVICE_MODEL_C300X;
+    return c300x_device_profile().model;
 }
 
 enum c300x_display_kind c300x_device_display_kind(void)
 {
-    /* A known C100X must never receive the C300X Qt 4 file patch. */
-    if (c300x_device_model() == C300X_DEVICE_MODEL_C100X) {
-        return C300X_DISPLAY_QT5_ONDISK;
-    }
-    if (access(C300X_QT5_DISPLAY_MARKER, F_OK) != 0) {
-        return C300X_DISPLAY_QT4_ONDISK;
-    }
-    return C300X_DISPLAY_QT5_RCC;
+    return c300x_device_profile().display;
 }
 
 const char *c300x_device_model_name(enum c300x_device_model model)
@@ -51,8 +58,7 @@ const char *c300x_display_kind_name(enum c300x_display_kind kind)
 
 int c300x_device_camera_resolution_fixed(void)
 {
-    return c300x_device_model() == C300X_DEVICE_MODEL_C100X
-        || c300x_device_display_kind() != C300X_DISPLAY_QT4_ONDISK;
+    return c300x_device_profile().camera_fixed;
 }
 
 const char *c300x_device_sip_user(void)
@@ -84,6 +90,5 @@ void c300x_device_set_display_adapter_confirmed(int confirmed)
 
 int c300x_device_display_features(void)
 {
-    return c300x_device_model() == C300X_DEVICE_MODEL_C300X || c300x_device_display_files_patchable()
-        || (c300x_device_model() == C300X_DEVICE_MODEL_C100X && display_adapter_confirmed);
+    return c300x_device_profile().model == C300X_DEVICE_MODEL_C300X || display_adapter_confirmed;
 }

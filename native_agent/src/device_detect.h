@@ -15,6 +15,18 @@ enum c300x_display_kind {
     C300X_DISPLAY_QT5_ONDISK,
 };
 
+/* What the agent knows about the station it runs on. Everything that differs
+ * between the stations is a question to this profile; nothing else reads the
+ * markers on the device. */
+struct c300x_device_profile {
+    enum c300x_device_model model;
+    enum c300x_display_kind display;
+    /* The camera sends other receivers only its low-resolution stream. */
+    int camera_fixed;
+};
+
+struct c300x_device_profile c300x_device_profile(void);
+
 enum c300x_device_model c300x_device_model(void);
 enum c300x_display_kind c300x_device_display_kind(void);
 const char *c300x_device_model_name(enum c300x_device_model model);

@@ -54,7 +54,7 @@ int c300x_capabilities_json(
         "{"
         "\"api_version\":\"1\","
         "\"agent\":{\"implementation\":\"native-c\",\"version\":\"%s\",\"api_version\":\"1\",\"bundle_hash\":%s,\"self_update_supported\":%s,\"self_update_file_set_version\":7},"
-        "\"device\":{\"id\":\"%s\",\"model\":\"%s\",\"display_kind\":\"%s\",\"firmware\":\"%s\"},"
+        "\"device\":{\"id\":\"%s\",\"model\":\"%s\",\"display_kind\":\"%s\",\"camera\":\"%s\",\"firmware\":\"%s\"},"
         "\"capabilities\":{"
         "\"doorbell_events\":true,"
         "\"camera_picture\":{\"supported\":%s},"
@@ -92,6 +92,7 @@ int c300x_capabilities_json(
         device_id_json,
         device_model,
         display_kind,
+        context->camera_resolution_fixed ? "fixed" : "high_res",
         device_firmware,
         context->picture_supported ? "true" : "false",
         context->https_callbacks ? "true" : "false",

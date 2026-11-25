@@ -103,6 +103,19 @@ def test_the_agent_names_the_model_and_display_of_each_firmware(config_probe, qt
     assert answer["restartable"] == answer["gui_reload"] == int(model == "C300X")
     assert answer["resolution_fixed"] == int(not qt4)
     assert answer["high_resolution"] == int(qt4)
+    # The profile holds the same three facts; every helper above asks it.
+    assert answer["profile"] == [
+        int(model == "C100X"), ["qt4_ondisk", "qt5_rcc", "qt5_ondisk"].index(kind), int(not qt4)]
+
+
+def test_only_the_profile_reads_the_markers_of_the_station():
+    sources = {path.name: path.read_text(encoding="utf-8") for path in (NATIVE / "src").glob("*.[ch]")}
+    readers = sorted(name for name, text in sources.items() if "libQt5Core" in text or "BtClass100\"" in text)
+    assert readers == ["device_detect.c"]
+    detect = sources["device_detect.c"]
+    profile = detect[detect.index("struct c300x_device_profile c300x_device_profile(void)"):]
+    profile = profile[:profile.index("\n}\n")]
+    assert detect.count("access(") == profile.count("access(") == 2
 
 
 def test_a_c100x_keeps_the_low_stream_whatever_its_libraries(config_probe):

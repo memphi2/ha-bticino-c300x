@@ -39,7 +39,7 @@ def test_native_capabilities_contract(tmp_path: Path) -> None:
         assert document["api_version"] == "1"
         assert document["device"] == {
             # The model is the detected one, not the configured C300X.
-            "id": "synthetic-id", "model": "C100X", "display_kind": "qt5_ondisk",
+            "id": "synthetic-id", "model": "C100X", "display_kind": "qt5_ondisk", "camera": "high_res",
             "firmware": '1.7.19"test',
         }
         assert document["agent"]["self_update_supported"] is maintenance

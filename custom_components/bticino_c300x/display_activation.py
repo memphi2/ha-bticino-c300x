@@ -8,6 +8,8 @@ from .api_errors import C300XAgentApiConnectionError, C300XDisplayNotConfirmedEr
 # The agent's answers for a display write that ran on the station and failed:
 # 502 the script failed (reload_failed, script_failed), 504 its job limit.
 _DISPLAY_STEP_FAILED_HTTP = frozenset({502, 504})
+# Answers of a step the agent never started: its script is not installed.
+_DISPLAY_STEP_NOT_RUN = frozenset({"script_missing", "reload_script_missing"})
 
 
 def display_activation_confirmed(status: Mapping[str, Any], *, required: bool = True) -> bool:
@@ -103,4 +105,5 @@ def display_step_failed(err: BaseException) -> bool:
     return (
         isinstance(err, C300XAgentApiConnectionError)
         and err.http_status in _DISPLAY_STEP_FAILED_HTTP
+        and err.agent_state not in _DISPLAY_STEP_NOT_RUN
     )

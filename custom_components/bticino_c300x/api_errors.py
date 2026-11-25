@@ -11,12 +11,15 @@ class C300XAgentApiConnectionError(C300XAgentApiError):
     """Raised when the device agent cannot be reached.
 
     Also raised for an HTTP error answer; ``http_status`` then holds its
-    status (None when no answer came at all).
+    status (None when no answer came at all) and ``agent_state`` the
+    ``state`` or ``error`` field of the agent's answer.
     """
 
-    def __init__(self, *args: object, http_status: int | None = None) -> None:
+    def __init__(self, *args: object, http_status: int | None = None,
+                 agent_state: str | None = None) -> None:
         super().__init__(*args)
         self.http_status = http_status
+        self.agent_state = agent_state
 
 
 class C300XDisplayBridgeNotRegisteredError(C300XAgentApiConnectionError):

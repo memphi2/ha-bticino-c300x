@@ -11,11 +11,8 @@ Install integration -> add the station -> install the device agent -> choose opt
 ## Requirements
 
 - Home Assistant `2026.10.0` or newer.
-- A BTicino Classe 300X / C300X on firmware `1.7.x` or `2.0.2`. Firmware
-  `3.0.6` is supported experimentally, with the low-resolution camera stream;
-  the Home Assistant pages on its display are in the [beta](#beta-versions):
-  the home page buttons were checked on a station, the other pages offline
-  only.
+- A BTicino Classe 300X / C300X on firmware `1.7.x`, `2.0.2` or `3.0.6`
+  ([Firmware 3.0.6](#firmware-306)).
 - Root or SSH access on the station for the first agent installation.
 - A trusted local network between Home Assistant and the station.
 
@@ -28,6 +25,31 @@ risk; flashing a station can brick it. If a separate rooting or SSH-enablement
 workflow asks for a firmware target, use `1.7.19`. A station on `2.0.2` or
 `3.0.6` needs a workflow made for that firmware. Everything is used at your own
 risk and without warranty.
+
+### Firmware 3.0.6
+
+Everything works as on `1.7.x` and `2.0.2`, with these differences:
+
+- **Camera:** the station sends only its low-resolution stream, with other
+  sizes, bit rates and frame rates; there is no **Camera resolution** select
+  and no 960x576 ([Stream Settings](user-guide.md#stream-settings)).
+- **Picture controls:** until the station has written the contrast once after
+  a start, they may only work during a Ring Call
+  ([Picture Controls](user-guide.md#picture-controls)).
+- **Sound:** the station already uses PCMU from the factory, so **Audio codec**
+  needs no change.
+- **Display pages:** the same pages and buttons, loaded into the station's
+  display program at its start; the fix for lost taps is not available
+  ([Display Patch on Firmware 3.0.6](display.md#display-patch-on-firmware-306)).
+- **IPv6 firewall:** the station has no IPv6 firewall, so the switch is not
+  offered.
+
+Every release is tested on a station with `1.7.19`. On a `3.0.6` station,
+Ring Call, the camera at its factory size, the door and activations were
+tested, and the display pages loaded at start with the Alarm and Home
+Assistant buttons in place. The other display pages, the other camera sizes,
+picture controls, visitor images, Speex and announcements are checked offline
+only.
 
 ## Install the Integration
 
@@ -200,15 +222,12 @@ To install a published beta:
 Stable installations do not receive betas automatically. To leave the beta,
 disable pre-releases and select the stable release, or wait for the next one,
 then run the agent update Repair again. A Home Assistant backup does not
-restore the agent on the device. On firmware 3.0.6, remove the display overlay
-first as described in
-[Display Patch on Firmware 3.0.6](display.md#display-patch-on-firmware-306).
+restore the agent on the device.
 
-`2.10.0b2` is a beta for the display and Low camera settings of firmware `3.0.6`,
-see [Display Patch on Firmware 3.0.6](display.md#display-patch-on-firmware-306).
-It includes stable 2.9.2; on `1.7.x` and `2.0.2` it works like 2.9.2. Additional Low sizes
-and their framing/performance remain untested on hardware; see
-[Stream Settings](user-guide.md#stream-settings).
+On firmware `3.0.6`, before going back to a release older than 2.10.0,
+remove the display pages completely as described in
+[Display Patch on Firmware 3.0.6](display.md#display-patch-on-firmware-306);
+older releases cannot remove them.
 
 ## Next Steps
 

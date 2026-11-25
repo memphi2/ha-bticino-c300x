@@ -146,13 +146,11 @@ choose a time without a call or recording, then open a new stream.
 | 1.7.x, 2.0.2 | High | 688x480 (factory cut-out), 704x576 (full height), optional 960x576 | 300-3000 kbit/s (factory 800) | 5-24 fps (factory 15) |
 | 3.0.6 | Low | 320x240 to 720x576, including the 5:3 sizes 480x288, 640x384 and 720x432 (factory 400x288) | 100-2000 kbit/s (factory 180) | 5-25 fps (factory 10) |
 
-On 3.0.6 only the factory size is tested on a device. The beta adds the compact
-**320x240 (4:3)** and **480x288 / 640x384 / 720x432 (5:3)** Low sizes. The 5:3
-choices match the display's ratio, not its pixel count, and do not change its
-picture. Only the station's Low configuration changes; no program is patched.
-The original 3.0.6 code was checked offline, but other sizes than the factory
-one, their framing and performance are **not tested on a device**; keep the
-factory size unless you deliberately test another one
+On 3.0.6 only the factory size is tested on a device. The 5:3 sizes match the
+display's ratio, not its pixel count, and do not change its picture. Only the
+station's Low configuration changes; no program is patched. The other sizes,
+their framing and performance are checked offline only; keep the factory size
+unless you deliberately test another one
 ([offline evidence and limits](dev/firmware-3.0.6-camera.md)). High video stops at
 **24 fps**: at 25 the older firmware turns its frame-rate control off and sends
 only about 8 fps. A higher bit rate reduces compression artifacts; lower it

@@ -4,20 +4,28 @@ FocusScope {
     id: input
     property var controller: null
     property var scroll: null
-    property var previousFocus: null
+    property var owner: null
     readonly property bool showing: !!controller && !!controller.notice && !controller.blocked
+    function holds(ancestor) {
+        for (var item = input; item; item = item.parent) if (item === ancestor) return true
+        return false
+    }
+    function vendorScope() {
+        var item = c100xHost ? c100xHost.pageStack : null
+        while (item && item.parent && !holds(item.parent)) item = item.parent
+        return item && item.parent ? item : null
+    }
+    function giveBack() {
+        focus = false
+        if (owner) owner.focus = true
+    }
     onShowingChanged: {
         if (showing) {
-            previousFocus = c100xHost.focusWindow ? c100xHost.focusWindow.activeFocusItem : null
+            owner = vendorScope()
             forceActiveFocus()
-        } else {
-            focus = false
-            // Calls/commissioning own focus as soon as the guard closes.
-            if (controller && !controller.blocked && previousFocus && previousFocus.visible && previousFocus.enabled)
-                previousFocus.forceActiveFocus()
-            previousFocus = null
-        }
+        } else giveBack()
     }
+    Component.onDestruction: giveBack()
     Keys.priority: Keys.BeforeItem
     Keys.onPressed: {
         event.accepted = false

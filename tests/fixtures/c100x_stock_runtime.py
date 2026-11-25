@@ -46,6 +46,13 @@ class Reply(QNetworkReply):
             self.setHeader(QNetworkRequest.ContentTypeHeader, "application/json")
             QTimer.singleShot(0, self.complete)
 
+    def answer(self, payload, status=200):
+        """Complete a sleeping request later, as the agent does when a notice arrives."""
+        self.data = json.dumps(payload).encode()
+        self.setAttribute(QNetworkRequest.HttpStatusCodeAttribute, status)
+        self.setHeader(QNetworkRequest.ContentTypeHeader, "application/json")
+        self.complete()
+
     def complete(self):
         if self.isFinished():
             return
@@ -83,7 +90,9 @@ class Agent(QNetworkAccessManager):
             route = route(method, url, body)
         if route is None:
             if url.path().endswith("/next"):
-                return Reply(self, operation, request, 0, {})
+                reply = Reply(self, operation, request, 0, {})
+                self.runtime.sleeping[url.path() + ("?" + url.query() if url.query() else "")] = reply
+                return reply
             return Reply(self, operation, request, 404, {"ok": False, "error": "not_found"})
         if isinstance(route, tuple):
             return Reply(self, operation, request, route[0], route[1])
@@ -155,6 +164,7 @@ class Runtime:
     def __init__(self, work, firmware_skin, routes=None, setup="", patched=True):
         self.routes = dict(routes or {})
         self.requests = []
+        self.sleeping = {}
         self.warnings = []
         self.app = QGuiApplication.instance() or QGuiApplication([])
         self.skin = build_skin(Path(work), Path(firmware_skin), patched)

@@ -405,24 +405,95 @@ def alarmo_page(work, skin):
     assert not page_warnings(runtime), page_warnings(runtime)
 
 
-def alert_covers_the_screen(work, skin):
-    """A notice fills the screen and shows that Return marks it read."""
+def alert_runtime(work, skin):
+    """The dashboard agent; its notice request sleeps until send_alert answers it."""
+    from c100x_dashboard_data import build
+    runtime = Runtime(work, skin, build())
+    runtime.wait(600)
+    return runtime
+
+
+def send_alert(runtime, message="The garage door is open.", settle=900):
+    """Answer the sleeping notice request, as the agent does when Home Assistant sends one."""
     import time
     now = int(time.time() * 1000)
-    sent = []
+    reply = runtime.sleeping.pop("/ui/alerts/next", None)
+    try:
+        if reply is None or reply.isFinished():
+            return False
+    except RuntimeError:
+        # The page dropped the request; Qt has deleted the reply.
+        return False
+    reply.answer({"id": "a" * 32, "notification_id": "garage_door", "revision": "b" * 32, "wake_duration": 30,
+                  "sound_duration": 0, "expires_in": 600, "remaining_ms": 4000, "expires": now + 600000,
+                  "message_expires": now + 600000, "severity": "warning", "title": "Garage door", "message": message})
+    runtime.wait(settle)
+    return True
 
-    def alerts(method, url, body):
-        if sent or url.query():
-            return None
-        sent.append(1)
-        return {"id": "a" * 32, "notification_id": "garage_door", "revision": "b" * 32, "wake_duration": 30,
-                "sound_duration": 0, "expires_in": 600, "remaining_ms": 4000, "expires": now + 600000,
-                "message_expires": now + 600000, "severity": "warning", "title": "Garage door",
-                "message": "The garage door has been open for 15 minutes. " * 10}
 
-    from c100x_dashboard_data import build
-    runtime = Runtime(work, skin, {**build(), "/ui/alerts/next": alerts})
+def alert_shown(runtime):
+    return bool(runtime.js("(function() { var button = FIND(c100xAlerts.item, 'alertAcknowledge'); "
+                           "return !!button && button.parent.visible })()".replace("FIND", FIND)))
+
+
+def acknowledged(runtime):
+    return [url for method, url, body in runtime.requests if "notification.garage_door" in url]
+
+
+def vendor_keys(runtime, where):
+    """Up, Down and Return reach the vendor's current page: the window's active focus is inside it."""
+    assert runtime.js("(function() { var item = window.activeFocusItem; var page = mainStackView.currentItem; "
+                      "while (item && item !== page) item = item.parent; return !!item })()"), where + ": focus lost"
+
+
+def main_menu_keys(runtime, where):
+    vendor_keys(runtime, where)
+    assert runtime.js("mainStackView.depth") == 1, where
+    index, count = runtime.stack("currentIndex"), runtime.stack("count")
+    runtime.keys("D")
+    assert runtime.stack("currentIndex") == (index + 1) % count, where + ": Down is dead in the main menu"
+    runtime.keys("U")
+    assert runtime.stack("currentIndex") == index, where + ": Up is dead in the main menu"
+
+
+def start_call(runtime):
+    depth = runtime.js("mainStackView.depth")
+    runtime.js("global.cctv.callInProgress = true; global.cctv.incomingCall()")
+    runtime.wait(600)
+    assert runtime.js("mainStackView.depth") == depth + 1, "the vendor did not push its call page"
+    assert runtime.js("mainStackView.currentItem.menuVisible") is False
+
+
+def call_menu_keys(runtime, where):
+    """Any key shows the call menu, Down moves in it, Return on its Exit closes it."""
+    vendor_keys(runtime, where)
+    assert runtime.js("mainStackView.currentItem.activeFocus"), where + ": call page without active focus"
+    runtime.keys("D", settle=600)
+    assert runtime.js("mainStackView.currentItem.menuVisible"), where + ": Down did not show the call menu"
+    index = runtime.js("mainStackView.currentItem.currentIndex")
+    runtime.keys("D", settle=600)
+    assert runtime.js("mainStackView.currentItem.currentIndex") == index + 1, where + ": Down is dead in the call menu"
+    runtime.keys("U", settle=600)
+    assert runtime.js("mainStackView.currentItem.currentIndex") == index, where + ": Up is dead in the call menu"
+    count = runtime.js("mainStackView.currentItem.count")
+    runtime.keys(f"{count - 1 - index}D", settle=600)
+    runtime.keys("R", settle=600)
+    assert runtime.js("mainStackView.currentItem.menuVisible") is False, where + ": Return is dead in the call menu"
+
+
+def end_call(runtime):
+    """The vendor ends a call by turning the screen off, which pops every page; then a key wakes the station."""
+    runtime.js("global.cctv.callInProgress = false; global.cctv.callEnded(); global.screenState.state = 1")
+    runtime.wait(800)
+    assert runtime.js("mainStackView.depth") == 1
+    runtime.js("global.screenState.state = 2")
     runtime.wait(1500)
+
+
+def alert_covers_the_screen(work, skin):
+    """A notice fills the screen and shows that Return marks it read."""
+    runtime = alert_runtime(work, skin)
+    assert send_alert(runtime, "The garage door has been open for 15 minutes. " * 10)
     panel = runtime.js(
         "(function() { var button = FIND(c100xAlerts.item, 'alertAcknowledge'); if (!button) return null; "
         "var bar = FIND(button, 'alertFocusBar'); var scroll = FIND(c100xAlerts.item, 'alertMessageScroll'); "
@@ -437,8 +508,98 @@ def alert_covers_the_screen(work, skin):
     runtime.keys("D", settle=300)
     assert runtime.js(FIND + "(c100xAlerts.item, 'c100xMoreAbove').visible")
     runtime.keys("R", settle=600)
-    assert [url for method, url, body in runtime.requests if "notification.garage_door" in url], "not acknowledged"
+    assert acknowledged(runtime), "not acknowledged"
     assert not runtime.adapter_warnings(), runtime.adapter_warnings()
+
+
+def mark_read(runtime, where):
+    assert alert_shown(runtime), where + ": no notice"
+    runtime.keys("R", settle=800)
+    assert acknowledged(runtime) and not alert_shown(runtime), where + ": Return did not mark the notice read"
+
+
+def alert_dismissed_returns_the_keys(work, skin, start):
+    """Mark read on the main menu or on the Home Assistant page: what is under the notice has the keys again."""
+    runtime = alert_runtime(work, skin)
+    if start == "page":
+        runtime.keys("D R", settle=2400)
+        page = Page(runtime)
+        assert page.js("currentPageIndex") == 0
+    index = runtime.stack("currentIndex")
+    assert send_alert(runtime)
+    assert alert_shown(runtime)
+    runtime.keys("D", settle=300)
+    assert runtime.stack("currentIndex") == index, "a key went to the page under the notice"
+    mark_read(runtime, start)
+    if start == "page":
+        vendor_keys(runtime, "page after Mark read")
+        runtime.keys("D")
+        assert page.js("currentPageIndex") == 1, "Down is dead on the Home Assistant page"
+        runtime.keys("U U")
+        assert page.js("exitSelected"), "Up is dead on the Home Assistant page"
+        runtime.keys("R", settle=2400)
+    main_menu_keys(runtime, "after Mark read")
+    assert not page_warnings(runtime), page_warnings(runtime)
+
+
+def alert_then_call(work, skin, start):
+    """A call takes the screen from a notice: the call menu and afterwards the main menu have the keys."""
+    runtime = alert_runtime(work, skin)
+    if start == "page":
+        runtime.keys("D R", settle=2400)
+        assert runtime.js("mainStackView.currentItem.item.pageName") == "HomeAssistant.qml"
+    assert send_alert(runtime)
+    assert alert_shown(runtime), "no notice on the " + start
+    start_call(runtime)
+    assert not alert_shown(runtime), "notice over a call"
+    call_menu_keys(runtime, "call after a notice")
+    end_call(runtime)
+    main_menu_keys(runtime, "after the call")
+    assert not page_warnings(runtime), page_warnings(runtime)
+
+
+def alert_screen_off_on_page(work, skin):
+    """The screen goes off under a notice on the Home Assistant page; the vendor pops to the main menu."""
+    runtime = alert_runtime(work, skin)
+    runtime.keys("D R", settle=2400)
+    assert send_alert(runtime)
+    assert alert_shown(runtime) and runtime.js("mainStackView.depth") == 2
+    runtime.js("global.screenState.state = 1")
+    runtime.wait(800)
+    assert runtime.js("mainStackView.depth") == 1
+    runtime.js("global.screenState.state = 2")
+    runtime.wait(1500)
+    if alert_shown(runtime):
+        mark_read(runtime, "after screen off and on")
+    main_menu_keys(runtime, "after screen off and on")
+    assert not page_warnings(runtime), page_warnings(runtime)
+
+
+def alert_adapter_stops(work, skin):
+    """The adapter stops under a notice (bridge unloaded): the notice goes and the main menu has the keys."""
+    runtime = alert_runtime(work, skin)
+    assert send_alert(runtime)
+    assert alert_shown(runtime)
+    runtime.js("c100xHost.running = false")
+    runtime.wait(600)
+    assert runtime.js("c100xAlerts.item === null")
+    main_menu_keys(runtime, "after the adapter stopped")
+    assert not page_warnings(runtime), page_warnings(runtime)
+
+
+def alert_during_call(work, skin):
+    """During a call no notice is fetched and none takes a key; afterwards it shows and gives the keys back."""
+    runtime = alert_runtime(work, skin)
+    start_call(runtime)
+    assert not send_alert(runtime), "a notice request stayed open during the call"
+    assert not alert_shown(runtime)
+    call_menu_keys(runtime, "during a call")
+    end_call(runtime)
+    runtime.wait(1500)
+    assert send_alert(runtime), "no notice request after the call"
+    mark_read(runtime, "after the call")
+    main_menu_keys(runtime, "after the call and Mark read")
+    assert not page_warnings(runtime), page_warnings(runtime)
 
 
 if __name__ == "__main__":

@@ -18,6 +18,7 @@ FocusScope {
         property int normalState: 1
         property int offState: 0
         property var focusWindow: null
+        property var pageStack: stack
         property QtObject vendor: QtObject { property var screenState: screen }
     }
     QtObject {
@@ -34,11 +35,21 @@ FocusScope {
             releases++; transition(0)
         }
     }
-    Item { id: vendorFocus; objectName: "vendorFocus"; width: 800; height: 480; focus: true }
-    Item { id: callFocus; objectName: "callFocus"; width: 800; height: 480 }
+    FocusScope {
+        objectName: "vendorScope"
+        anchors.fill: parent
+        focus: true
+        FocusScope {
+            id: stack
+            anchors.fill: parent
+            focus: true
+            Item { id: vendorFocus; objectName: "vendorFocus"; width: 800; height: 480; focus: true }
+            Item { id: callFocus; objectName: "callFocus"; width: 800; height: 480 }
+        }
+    }
     C300XAlerts { id: alerts; anchors.fill: parent }
     function receive(command) { return Controller.runtimeFor(alerts).controller.receive(command) }
-    function resume() { host.blocked = false; vendorFocus.forceActiveFocus() }
-    function startCall() { callFocus.forceActiveFocus(); screen.transition(2); host.blocked = true }
+    function resume() { host.blocked = false; vendorFocus.focus = true }
+    function startCall() { callFocus.focus = true; screen.transition(2); host.blocked = true }
     function poll() { alerts.abortPoll(); alerts.waitForCommand() }
 }

@@ -80,3 +80,15 @@ def test_pages_are_operated_like_the_vendor_menus(tmp_path, scenario):
 
 def test_alert_covers_the_screen_and_shows_its_action(tmp_path):
     run_scenario("alert_covers_the_screen", tmp_path)
+
+
+@pytest.mark.parametrize("arguments", [
+    ("alert_dismissed_returns_the_keys", "menu"), ("alert_dismissed_returns_the_keys", "page"),
+    ("alert_then_call", "menu"), ("alert_then_call", "page"),
+    ("alert_screen_off_on_page",), ("alert_adapter_stops",), ("alert_during_call",),
+], ids=" ".join)
+def test_keys_work_after_a_notice(tmp_path, arguments):
+    # The notice borrows the window focus from the vendor's scope; whatever ends it (Mark read, a call,
+    # the screen going off, the adapter stopping), the vendor's current page must have the keys again.
+    run_scenario(arguments[0], tmp_path, arguments=arguments[1:])
+

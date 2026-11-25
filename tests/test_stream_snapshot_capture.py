@@ -398,6 +398,7 @@ def test_a_visitor_image_that_became_stale_while_storing_is_no_failure(tmp_path,
         api.return_value = (bmp(), "image/bmp")
 
         async def stale(*args, **kwargs):
+            manager.capture.generation += 1
             raise ValueError("Snapshot capture became stale during storage")
 
         monkeypatch.setattr(manager, "save", stale)
@@ -407,3 +408,24 @@ def test_a_visitor_image_that_became_stale_while_storing_is_no_failure(tmp_path,
         manager.close()
 
     asyncio.run(run())
+
+
+def test_a_visitor_image_the_store_refuses_is_reported(tmp_path, monkeypatch, caplog):
+    async def run():
+        manager = setup(tmp_path, monkeypatch)
+        api = manager.entry.runtime_data.api.async_doorbell_snapshot
+        api.return_value = (bmp(), "image/bmp")
+
+        async def refused(*args, **kwargs):
+            raise ValueError("Snapshot directory must not be a symlink")
+
+        monkeypatch.setattr(manager, "save", refused)
+        event(manager, "doorbell_pressed", "one")
+        await drain(manager)
+        assert manager.capture.last_failure == "save_failed"
+        warnings = [record for record in caplog.records if record.levelname == "WARNING"]
+        assert len(warnings) == 1 and "save_failed" in warnings[0].getMessage()
+        manager.close()
+
+    asyncio.run(run())
+

@@ -242,7 +242,10 @@ class SnapshotCapture:
                         self._failed("save_failed")
                         return
                     except ValueError:
-                        # The capture became stale while storing: nothing failed.
+                        # Stale while storing is no failure; a refusing store is.
+                        if self._current(generation):
+                            _LOGGER.debug("C300X visitor image was refused by the store", exc_info=True)
+                            self._failed("save_failed")
                         return
                     self._failed(None)
                     if self._current(generation) and self.manager.journal is not None:

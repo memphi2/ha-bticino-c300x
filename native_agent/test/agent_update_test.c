@@ -247,6 +247,7 @@ static void regular_boot_entry_test(const struct c300x_config *config, const cha
 static void obsolete_source_safety_test(const struct c300x_config *config, const char *manifest)
 {
     char backup[sizeof(obsolete_source) + 24], other[C300X_MAX_PATH_LEN], content[64];
+    char folder[sizeof(obsolete_source)], moved[sizeof(obsolete_source) + 24];
     struct agent_update_change_summary summary;
     struct stat info;
     int fd;
@@ -259,14 +260,22 @@ static void obsolete_source_safety_test(const struct c300x_config *config, const
     fail_obsolete_unlink = 0;
     assert(read_bounded_text_file(obsolete_source, content, sizeof(content), NULL));
     assert(strcmp(content, "old-distribution") == 0);
-    fd = open(obsolete_source, O_RDONLY | O_NOFOLLOW);
-    assert(fd >= 0 && fstat(fd, &info) == 0 && (info.st_mode & 0777) == 0640);
-    close(fd);
     assert(access(backup, F_OK) != 0 && errno == ENOENT);
     assert(summary.changed_files == 0);
     /* The committed update that retired it could not clean up: the
-     * installed bundle verifies, so its leftover is dropped. */
-    assert(rename(obsolete_source, backup) == 0);
+     * installed bundle verifies, so its leftover is dropped. The file is
+     * moved inside its directory, held open, and its kept mode is read from
+     * the moved entry: no path is looked at first and acted on afterwards. */
+    snprintf(folder, sizeof(folder), "%s", obsolete_source);
+    char *name = strrchr(folder, '/');
+    assert(name != NULL);
+    *name++ = '\0';
+    assert(snprintf(moved, sizeof(moved), "%s.update-backup", name) < (int)sizeof(moved));
+    fd = open(folder, O_RDONLY | O_DIRECTORY);
+    assert(fd >= 0 && renameat(fd, name, fd, moved) == 0);
+    assert(fstatat(fd, moved, &info, AT_SYMLINK_NOFOLLOW) == 0);
+    assert(S_ISREG(info.st_mode) && (info.st_mode & 0777) == 0640);
+    close(fd);
     assert(apply_agent_update_files(config, manifest, manifest, &summary, NULL));
     assert(summary.changed_files == 0);
     assert(access(obsolete_source, F_OK) != 0 && errno == ENOENT);

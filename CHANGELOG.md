@@ -77,8 +77,6 @@ Fixed:
 - A visitor image that could not be taken now logs a warning with the cause,
   and the **Save images** switch shows it as the attribute `last_failure`
   until an image succeeds again.
-- The IPv6 firewall switch is offered only on stations that have the IPv6
-  firewall start script.
 
 Documentation:
 

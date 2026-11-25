@@ -45,3 +45,47 @@ class HomeCallStatus(AgentContract):
     rtcp_packets: int
     max_duration_seconds: int | None
     last_error: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class OutdoorUnit:
+    """One outdoor unit of the station; ``id`` is its where with '_' for '#'."""
+
+    id: str
+    where: str
+    action_where: str
+    lock_where: str
+    name: str
+    source: str
+    default: bool
+
+
+@dataclass(frozen=True, slots=True, eq=False)
+class OutdoorUnitsPayload(AgentContract):
+    """``GET /api/v1/outdoor-units``."""
+
+    units: tuple[OutdoorUnit, ...]
+    default_unit: str | None
+    archive: str
+
+
+@dataclass(frozen=True, slots=True)
+class Call:
+    """One call as the agent owns it."""
+
+    call_id: str
+    kind: str
+    state: str
+    unit: str | None
+    attribution: str
+    answered_by: str | None
+    end_reason: str | None
+
+
+@dataclass(frozen=True, slots=True, eq=False)
+class CallsPayload(AgentContract):
+    """``GET /api/v1/calls``."""
+
+    boot_id: str
+    current_call_id: str | None
+    calls: tuple[Call, ...]

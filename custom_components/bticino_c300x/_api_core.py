@@ -22,9 +22,12 @@ from .api_errors import (
     C300XAgentApiResponseError,
     C300XAgentApiUnsupportedError,
     C300XAgentUpdateError,
+    C300XCallNotCurrentError,
     C300XDeviceNotRegisteredError,
     C300XDisplayBridgeNotRegisteredError,
     C300XStationBusyError,
+    C300XUnitVideoUnsupportedError,
+    C300XUnknownUnitError,
 )
 from .const import (
     HEADER_MAINTENANCE_TOKEN,
@@ -220,6 +223,9 @@ class _C300XApiCore:
                 maintenance=code == "maintenance_unauthorized"
                 or path.startswith("/api/v1/maintenance/")
             )
+        if status == 404 and _agent_error_field(text, "error") == "unknown_unit":
+            raise C300XUnknownUnitError(_http_error_text(status, text), http_status=404,
+                                        agent_state="unknown_unit")
         if status in (404, 501):
             # 501 is the agent's answer for an /api/v1 route it does not have.
             if (
@@ -245,6 +251,12 @@ class _C300XApiCore:
                 raise C300XDeviceNotRegisteredError(_http_error_text(status, text))
             if status == 409 and _agent_error_field(text, "error") == "station_busy":
                 raise C300XStationBusyError(_http_error_text(status, text))
+            if status == 409 and _agent_error_field(text, "error") == "call_not_current":
+                raise C300XCallNotCurrentError(
+                    _http_error_text(status, text), _agent_error_field(text, "current_call_id"))
+            if status == 409 and _agent_error_field(text, "error") == "unit_video_unsupported":
+                raise C300XUnitVideoUnsupportedError(
+                    _http_error_text(status, text), http_status=409, agent_state="unit_video_unsupported")
             raise C300XAgentApiConnectionError(
                 _http_error_text(status, text), http_status=status,
                 agent_state=_agent_error_field(text, "state") or _agent_error_field(text, "error"))

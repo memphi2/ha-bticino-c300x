@@ -1,7 +1,14 @@
 """Typed device-agent API contracts."""
 
 from .base import AgentContract
-from .calls import HomeCallStatus, RingCallStatus
+from .calls import (
+    Call,
+    CallsPayload,
+    HomeCallStatus,
+    OutdoorUnit,
+    OutdoorUnitsPayload,
+    RingCallStatus,
+)
 from .capabilities import CapabilityPayload
 from .diagnostics import AgentDiagnosticsStatus
 from .forwarding import ForwardingStatus
@@ -12,12 +19,16 @@ from .video import DoorbellVideoStatus
 __all__ = [
     "AgentContract",
     "AgentDiagnosticsStatus",
+    "Call",
+    "CallsPayload",
     "AuthConfigStatus",
     "CapabilityPayload",
     "DoorbellVideoStatus",
     "FirewallStatus",
     "ForwardingStatus",
     "HomeCallStatus",
+    "OutdoorUnit",
+    "OutdoorUnitsPayload",
     "RingCallStatus",
     "SelfTestCheck",
     "SelfTestStatus",

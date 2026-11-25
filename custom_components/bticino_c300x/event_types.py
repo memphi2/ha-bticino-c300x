@@ -10,7 +10,11 @@ DOORBELL_VIDEO_EVENTS = ("doorbell.media.closed",)
 DOOR_UNLOCK_EVENTS = ("door_unlock.started", "door_unlock.ended")
 STAIR_LIGHT_EVENTS = ("stair_light.activated", "stair_light.released")
 ACTIVATION_EVENTS = ("activation.executed",)
-CALL_EVENTS = ("call.started", "call.ended")
+# Calls owned by the agent (API 2), see docs/dev/multi-outdoor-units.md.
+CALL_EVENTS = (
+    "call.caller_identified", "call.answered", "call.view_started", "call.ended",
+)
+OUTDOOR_UNIT_EVENTS = ("outdoor_units.changed",)
 HOME_CALL_EVENTS = ("home_call.started", "home_call.answered", "home_call.ended")
 RINGER_EVENTS = ("ringer.muted", "ringer.unmuted", "ringer.volume_changed")
 TOUCH_TONE_EVENTS = ("display.touch_tone_changed",)
@@ -30,8 +34,11 @@ HA_EVENT_TYPES: dict[str, str] = {
     "stair_light.activated": "stair_light_activated",
     "stair_light.released": "stair_light_released",
     "activation.executed": "activation_executed",
-    "call.started": "call_started",
+    "call.caller_identified": "call_caller_identified",
+    "call.answered": "call_answered",
+    "call.view_started": "call_view_started",
     "call.ended": "call_ended",
+    "outdoor_units.changed": "outdoor_units_changed",
     "home_call.started": "home_call_started",
     "home_call.answered": "home_call_answered",
     "home_call.ended": "home_call_ended",

@@ -1362,7 +1362,6 @@
               "agent_restarted": "Device-Agent neu gestartet",
               "answering_machine_messages_changed": "Video-Nachrichten aktualisiert",
               "call_ended": "Anruf beendet",
-              "call_started": "Anruf gestartet",
               "door_unlock_ended": "Türöffner beendet",
               "door_unlock_started": "Türöffner gestartet",
               "doorbell_media_closed": "Türkamera-Stream beendet",
@@ -1381,7 +1380,11 @@
               "stair_light_released": "Treppenlicht freigegeben",
               "system_metrics_changed": "Systemwerte aktualisiert",
               "agent_diagnostics_changed": "Agent-Schreibdiagnose aktualisiert",
-              "activation_executed": "Geräteaktion ausgeführt"
+              "activation_executed": "Geräteaktion ausgeführt",
+              "call_caller_identified": "Anrufer erkannt",
+              "call_answered": "Anruf angenommen",
+              "call_view_started": "Kameraansicht gestartet",
+              "outdoor_units_changed": "Außenstellen geändert"
             }
           }
         }
@@ -1970,9 +1973,15 @@
       "name": "Kamerabild einstellen",
       "description": "Liest alle drei Bildwerte. Zum Ändern einen Regler und einen Wert (0 bis 100 % in Zehnerschritten) angeben. Erfordert den aktualisierten Geräteagenten und ein aktives Klingelvideo oder Livevideo auf Abruf mit bestätigten Quellwerten und Wertebereichen. Gespeicherte Medien bleiben unverändert.",
       "fields": {
-        "entry_id": {"name": "Integrationseintrag"},
-        "control": {"name": "Regler"},
-        "value": {"name": "Wert"}
+        "entry_id": {
+          "name": "Integrationseintrag"
+        },
+        "control": {
+          "name": "Regler"
+        },
+        "value": {
+          "name": "Wert"
+        }
       }
     },
     "capture_doorbell_call": {

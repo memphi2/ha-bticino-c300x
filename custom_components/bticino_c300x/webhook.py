@@ -27,6 +27,7 @@ from .api import (
     normalize_memos,
     normalize_system_metrics,
 )
+from .call_sync import async_apply_call_event
 from .capabilities import event_label
 from .const import (
     CONF_EVENT_WEBHOOK_ID,
@@ -392,6 +393,9 @@ async def _async_handle_agent_event(
     if snapshot:
         _apply_snapshot_entity_refresh(hass, entry, event_type, data)
     else:
+        # The call fields come from the registry: a caller frame may already
+        # have named the unit of a call whose event arrives now.
+        event_data.update(async_apply_call_event(hass, entry, event_type, data))
         event_state.last_event = event_type
         event_state.last_event_time = event_at
         event_state.event_sequence += 1
@@ -444,10 +448,6 @@ def _apply_door_unlock_event(context: _AgentEventContext) -> None:
     context.event_state.door_unlock_state = context.event_type
 
 
-def _apply_call_event(context: _AgentEventContext) -> None:
-    context.event_state.call_active = context.event_type == "call_started"
-
-
 def _apply_ringer_event(context: _AgentEventContext) -> None:
     if context.data.get("available") is False:
         return
@@ -490,8 +490,6 @@ _AGENT_EVENT_STATE_HANDLERS: dict[str, _AgentEventStateHandler] = {
     "doorbell_media_closed": _apply_doorbell_media_closed,
     "door_unlock_started": _apply_door_unlock_event,
     "door_unlock_ended": _apply_door_unlock_event,
-    "call_started": _apply_call_event,
-    "call_ended": _apply_call_event,
     "ringer_muted": _apply_ringer_event,
     "ringer_unmuted": _apply_ringer_event,
     "ringer_volume_changed": _apply_ringer_volume_event,

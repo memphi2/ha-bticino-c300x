@@ -1362,7 +1362,6 @@
               "agent_restarted": "Agent appareil redémarré",
               "answering_machine_messages_changed": "Messages vidéo mis a jour",
               "call_ended": "Appel terminé",
-              "call_started": "Appel démarré",
               "door_unlock_ended": "Ouverture porte terminée",
               "door_unlock_started": "Ouverture porte démarrée",
               "doorbell_media_closed": "Flux caméra de sonnette terminé",
@@ -1381,7 +1380,11 @@
               "stair_light_released": "Lumière d'escalier relâchée",
               "system_metrics_changed": "Métriques système mises a jour",
               "agent_diagnostics_changed": "Diagnostics écritures agent mis a jour",
-              "activation_executed": "Activation appareil exécutée"
+              "activation_executed": "Activation appareil exécutée",
+              "call_caller_identified": "Appelant identifié",
+              "call_answered": "Appel répondu",
+              "call_view_started": "Vue caméra démarrée",
+              "outdoor_units_changed": "Platines de rue modifiées"
             }
           }
         }
@@ -1970,9 +1973,15 @@
       "name": "Régler l’image",
       "description": "Lit les trois réglages de l’image en direct. Pour en modifier un, indiquez le réglage et sa valeur (de 0 à 100 % par pas de 10). Nécessite l’agent à jour et un appel vidéo de la platine en cours ou une vidéo à la demande active dont les valeurs et les plages de réglage ont été vérifiées à la source. Les médias enregistrés restent inchangés.",
       "fields": {
-        "entry_id": {"name": "Entrée"},
-        "control": {"name": "Réglage"},
-        "value": {"name": "Valeur"}
+        "entry_id": {
+          "name": "Entrée"
+        },
+        "control": {
+          "name": "Réglage"
+        },
+        "value": {
+          "name": "Valeur"
+        }
       }
     },
     "capture_doorbell_call": {

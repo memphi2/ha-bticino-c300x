@@ -49,7 +49,9 @@ from .const import (
     CONF_FRONTEND_CARD_SETUP_REPAIR_VERSION,
     CONF_HOMEASSISTANT_MEDIA_USER_BOOTSTRAPPED,
     CONF_MAINTENANCE_TOKEN,
+    CONF_OUTDOOR_UNITS,
     CONF_SHARED_SECRET,
+    CONF_STATION_ID,
     CONF_VIDEO_ENABLED,
     CONF_WEBHOOK_ID,
     DATA_RUNTIME_ENTRIES,
@@ -214,6 +216,7 @@ class C300XRuntimeManager:
         # very buttons the platform re-creates two lines further down.
         _async_remove_stale_gui_dependent_entities(self.hass, self.entry)
         await self.async_sync_activation_state()
+        await self.async_sync_calls()
         await self.async_forward_platforms()
         self.async_schedule_startup_sync()
         return True
@@ -350,6 +353,21 @@ class C300XRuntimeManager:
                     runtime.resources.display_bridge_registration_pending = True
                 return
             await _async_configure_display_bridge(self.hass, self.entry, api)
+
+    async def async_sync_calls(self) -> None:
+        """Know the station's outdoor units and calls before the platforms load."""
+
+        from .call_sync import (
+            async_refresh_calls,
+            async_refresh_units,
+            calls_supported,
+            load_stored_units,
+        )
+
+        load_stored_units(self.entry, self.entry.runtime_data.calls)
+        if self.connection_state.available and calls_supported(self.capabilities):
+            await async_refresh_units(self.hass, self.entry)
+            await async_refresh_calls(self.hass, self.entry)
 
     async def async_sync_activation_state(self) -> None:
         """Synchronize device activations before platform entity creation."""
@@ -544,6 +562,9 @@ def _entry_update_listener(
         data.pop(CONF_HOMEASSISTANT_MEDIA_USER_BOOTSTRAPPED, None)
         data.pop(CONF_FRONTEND_CARD_SETUP_DISMISSED, None)
         data.pop(CONF_FRONTEND_CARD_SETUP_REPAIR_VERSION, None)
+        # Written by the integration from the station's own answers.
+        data.pop(CONF_OUTDOOR_UNITS, None)
+        data.pop(CONF_STATION_ID, None)
         # The speech settings are read when a notification is spoken, and the
         # two settings the station may change itself with every page it loads.
         # A reload for those would drop the display registration the station

@@ -65,6 +65,10 @@ ADDED_SINCE_2_10_0 = frozenset({
     "config/step/c100x_experimental/title",
     "entity/button/activate_display_pages/name",
     "entity/button/restore_display_pages/name",
+    "entity/event/agent_event/state_attributes/event_type/state/call_answered",
+    "entity/event/agent_event/state_attributes/event_type/state/call_caller_identified",
+    "entity/event/agent_event/state_attributes/event_type/state/call_view_started",
+    "entity/event/agent_event/state_attributes/event_type/state/outdoor_units_changed",
     "issues/c100x_display_boot_check_failed/description",
     "issues/c100x_display_boot_check_failed/title",
     "issues/c100x_display_rolled_back/description",
@@ -79,14 +83,19 @@ CHANGED_SINCE_2_10_0 = frozenset({
     "config/error/installer_dependency_missing",
     "services/capture_doorbell_call/name",
 })
-# sha256 over every text of 2.10.0 (f4f75ea3) but the changed ones, per file:
+# Texts of 2.10.0 that 3.1.0 removed with the outdoor units and calls
+# (docs/dev/multi-outdoor-units.md).
+REMOVED_SINCE_2_10_0 = frozenset({
+    "entity/event/agent_event/state_attributes/event_type/state/call_started",
+})
+# sha256 over every text of 2.10.0 (f4f75ea3) but the changed and removed ones, per file:
 #   json.dumps({"a/b/c": text}, sort_keys=True, ensure_ascii=False)
 DIGESTS_2_10_0 = {
-    "base": "42a0903b48c9225b7faebd421ffa4fb8700c4f4527f442c61d3490c4dd315018",
-    "en": "42a0903b48c9225b7faebd421ffa4fb8700c4f4527f442c61d3490c4dd315018",
-    "de": "611a1c2c360ad1a773913043b7abea0761342b6c067604ea2605e96f531bb21f",
-    "it": "bdf851941d345b5d0258e0b5fec801c86058684367a7d42362ef62893a6d0fc4",
-    "fr": "49180b6d423ee2157d350ed7e39ea5143a89f863a2015907af658609a7d7e583",
+    "base": "2130db98093976ea10e47ae79270f7c4a5b69eaffb2f66a853ef1cd7cd307b18",
+    "en": "2130db98093976ea10e47ae79270f7c4a5b69eaffb2f66a853ef1cd7cd307b18",
+    "de": "e8a0525f331ef51be27a6e9bdb874a85932b2585a3c95226f360dcde9a98a65b",
+    "it": "12dd70857e3efe065b84b0bef6d6fbc1bc373d28dbd45c0bf1b219a87ea19d38",
+    "fr": "0c59489ff75dd0bed9842235f424812aa9b0501adebe9906c4f5a3714293d6bd",
 }
 
 
@@ -113,6 +122,7 @@ def test_a_c300x_reads_the_texts_of_2_10_0():
         paths = {"/".join(path) for path in _leaves(_load(lang))}
         # The declared additions and changes exist; nothing is listed for nothing.
         assert paths >= ADDED_SINCE_2_10_0 | CHANGED_SINCE_2_10_0, lang
+        assert not paths & REMOVED_SINCE_2_10_0, lang
 
 
 def _setup_flow(monkeypatch, info=None, hint=""):

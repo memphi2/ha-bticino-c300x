@@ -21,7 +21,7 @@ from .api import C300XAgentApi
 from .api_errors import C300XAgentApiAuthError
 from .callback_transport import CallbackTransport
 from .callback_url import async_generate_agent_callback_url
-from .capabilities import EVENT_ENTITY_EXCLUDED_TYPES, events_for_capabilities
+from .capabilities import events_for_capabilities
 from .const import (
     CONF_EVENT_WEBHOOK_ID,
     CONF_EVENT_WEBHOOK_TOKEN,
@@ -32,7 +32,6 @@ from .const import (
 from .data import C300XConnectionState
 from .entry_types import BticinoC300XConfigEntry
 from .error_text import compact_error_text
-from .event_types import HA_EVENT_TYPES
 from .fingerprint import fnv1a64_fingerprint
 from .runtime_auth import async_classify_runtime_auth_error, async_request_reauth
 from .system_metrics import invalidate_system_metrics
@@ -526,68 +525,12 @@ def _active_events_for_capabilities(
     return _filter_events_for_active_entities(events, entry.entry_id, registry)
 
 
-_EVENT_ENTITY_CONSUMER = ("event", "agent_event")
-_INTERNAL_SAFETY_EVENTS = frozenset({"system.metrics_changed"})
-_DEFAULT_DISABLED_EVENT_CONSUMERS = frozenset(
-    {
-        _EVENT_ENTITY_CONSUMER,
-        ("camera", "doorbell_camera"),
-        ("sensor", "agent_diagnostics"),
-        ("sensor", "device_cpu"),
-        ("sensor", "device_load"),
-        ("sensor", "device_memory"),
-        ("sensor", "device_temperature"),
-    }
-)
+# Every event reaches Home Assistant whatever entities are enabled: automations
+# and the call registry depend on them. Only the write diagnostics stay tied
+# to the sensor that shows them (they are large and frequent while writing).
+_DEFAULT_DISABLED_EVENT_CONSUMERS = frozenset({("sensor", "agent_diagnostics")})
 _EVENT_CONSUMERS: dict[str, tuple[tuple[str, str], ...]] = {
     "agent.diagnostics_changed": (("sensor", "agent_diagnostics"),),
-    "system.metrics_changed": (
-        ("camera", "doorbell_camera"),
-        ("sensor", "device_cpu"),
-        ("sensor", "device_load"),
-        ("sensor", "device_memory"),
-        ("sensor", "device_temperature"),
-    ),
-    "answering_machine.messages_changed": (
-        ("sensor", "voicemail_messages"),
-        ("button", "delete_latest_video_message"),
-    ),
-    "memos.changed": (
-        ("sensor", "text_memos"),
-        ("sensor", "voice_memos"),
-        ("button", "delete_latest_text_memo"),
-        ("button", "delete_latest_voice_memo"),
-    ),
-    "smartphone_forwarding.changed": (("select", "smartphone_forwarding_mode"),),
-    "ringer.muted": (("switch", "ringer_mute"),),
-    "display.touch_tone_changed": (("switch", "touch_tone"),),
-    "ringer.unmuted": (("switch", "ringer_mute"),),
-    "ringer.volume_changed": (("number", "ringer_volume"),),
-    "doorbell.pressed": (
-        ("event", "doorbell_event"),
-        ("sensor", "doorbell_state"),
-        ("camera", "doorbell_camera"),
-    ),
-    "doorbell.view_requested": (
-        ("sensor", "doorbell_state"),
-        ("camera", "doorbell_camera"),
-    ),
-    "doorbell.media.closed": (
-        ("sensor", "doorbell_state"),
-        ("camera", "doorbell_camera"),
-    ),
-    "home_call.started": (
-        ("binary_sensor", "home_call_active"),
-        ("camera", "doorbell_camera"),
-    ),
-    "home_call.answered": (
-        ("binary_sensor", "home_call_active"),
-        ("camera", "doorbell_camera"),
-    ),
-    "home_call.ended": (
-        ("binary_sensor", "home_call_active"),
-        ("camera", "doorbell_camera"),
-    ),
 }
 
 
@@ -596,31 +539,16 @@ def _filter_events_for_active_entities(
     entry_id: str,
     registry: Any,
 ) -> list[str]:
-    """Filter agent event subscriptions to enabled HA consumers."""
+    """Drop only the events whose sole consumer is a disabled entity."""
 
-    event_entity_active = _consumer_active(
-        registry,
-        entry_id,
-        *_EVENT_ENTITY_CONSUMER,
-    )
-    active_events: list[str] = []
-    for event in events:
-        if event in _INTERNAL_SAFETY_EVENTS:
-            active_events.append(event)
-            continue
-        ha_event_type = HA_EVENT_TYPES.get(event)
-        visible_in_event_entity = (
-            ha_event_type is not None and ha_event_type not in EVENT_ENTITY_EXCLUDED_TYPES
-        )
-        if visible_in_event_entity and event_entity_active:
-            active_events.append(event)
-            continue
-        if any(
+    return [
+        event for event in events
+        if event not in _EVENT_CONSUMERS
+        or any(
             _consumer_active(registry, entry_id, domain, key)
-            for domain, key in _EVENT_CONSUMERS.get(event, ())
-        ):
-            active_events.append(event)
-    return active_events
+            for domain, key in _EVENT_CONSUMERS[event]
+        )
+    ]
 
 
 def _consumer_active(

@@ -62,6 +62,26 @@ class C300XStationBusyError(C300XAgentApiConnectionError):
     """
 
 
+class C300XCallNotCurrentError(C300XAgentApiConnectionError):
+    """The agent answered `409 call_not_current`: that call cannot be acted on.
+
+    It is unknown, over or not the current call; ``current_call_id`` is the
+    call that can (None when there is none). Nothing reached the station.
+    """
+
+    def __init__(self, message: str, current_call_id: str | None) -> None:
+        super().__init__(message, http_status=409, agent_state="call_not_current")
+        self.current_call_id = current_call_id
+
+
+class C300XUnknownUnitError(C300XAgentApiConnectionError):
+    """The agent answered `404 unknown_unit`: the station has no such outdoor unit."""
+
+
+class C300XUnitVideoUnsupportedError(C300XAgentApiConnectionError):
+    """The agent answered `409 unit_video_unsupported`: only the default unit has on-demand video."""
+
+
 class C300XAgentApiAuthError(C300XAgentApiError):
     """A credential was rejected, independently of transport availability."""
 

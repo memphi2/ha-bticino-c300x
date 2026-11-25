@@ -53,6 +53,10 @@ CONF_DEVICE_UI_ENABLED = "device_ui_enabled"
 CONF_EVENT_WEBHOOK_ID = "event_webhook_id"
 CONF_EVENT_WEBHOOK_TOKEN = "event_webhook_token"
 CONF_FRONTEND_CARD_SETUP_DISMISSED = "frontend_card_setup_dismissed"
+# The station's identity (agent device id) and its last known outdoor units,
+# written by the integration itself (docs/dev/multi-outdoor-units.md).
+CONF_STATION_ID = "station_id"
+CONF_OUTDOOR_UNITS = "outdoor_units"
 CONF_FRONTEND_CARD_SETUP_REPAIR_VERSION = "frontend_card_setup_repair_version"
 CONF_MAINTENANCE_TOKEN = "maintenance_token"
 CONF_ROTATE_SHARED_SECRET = "rotate_shared_secret"

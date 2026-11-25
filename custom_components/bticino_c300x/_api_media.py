@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import base64
 from typing import Any, cast
+from urllib.parse import quote
 
+from ._api_calls import normalize_calls, normalize_outdoor_units
 from ._api_core import _RESTART_WRITE_TIMEOUT, _C300XApiCore
 from ._api_normalize import (
     _doorbell_video_has_ring_call,
@@ -14,12 +16,15 @@ from ._api_normalize import (
     normalize_home_call,
 )
 from .agent_contracts import (
+    CallsPayload,
     DoorbellVideoStatus,
     HomeCallStatus,
+    OutdoorUnitsPayload,
     RingCallStatus,
 )
 from .api_errors import (
     C300XAgentApiConnectionError,
+    C300XCallNotCurrentError,
 )
 
 # Base64 of one piece and its JSON frame stay below the agent's request size.
@@ -47,14 +52,23 @@ class _ApiMediaMixin(_C300XApiCore):
         data = await self._request_json("GET", "/api/v1/video/doorbell/status")
         return normalize_doorbell_video(data)
 
-    async def async_activate_doorbell_video(self, audio: bool = True) -> dict[str, Any]:
-        """Start or renew the native doorbell video call on demand."""
+    async def async_activate_doorbell_video(
+        self, audio: bool = True, unit: str | None = None,
+    ) -> dict[str, Any]:
+        """Start or renew the native doorbell video call on demand.
 
+        ``unit`` names the outdoor unit; another than the default one raises
+        C300XUnitVideoUnsupportedError.
+        """
+
+        body: dict[str, Any] = {"audio": bool(audio)}
+        if unit is not None:
+            body["unit"] = unit
         try:
             data = await self._request_json(
                 "POST",
                 "/api/v1/video/doorbell/actions/activate",
-                json_data={"audio": bool(audio)},
+                json_data=body,
             )
         except C300XAgentApiConnectionError as err:
             if "HTTP 409" not in str(err) or "external_session_active" not in str(err):
@@ -98,21 +112,48 @@ class _ApiMediaMixin(_C300XApiCore):
         data = await self._request_json("GET", "/api/v1/calls/doorbell/status")
         return normalize_doorbell_call(data)
 
-    async def async_answer_doorbell_call(self) -> dict[str, Any]:
-        """Request local media answering of the active doorbell ring call."""
+    async def async_outdoor_units(self) -> OutdoorUnitsPayload:
+        """Return the station's outdoor units (agent API 2)."""
 
+        return normalize_outdoor_units(await self._request_json("GET", "/api/v1/outdoor-units"))
+
+    async def async_calls(self) -> CallsPayload:
+        """Return the live calls and those ended in the last minute (agent API 2)."""
+
+        return normalize_calls(await self._request_json("GET", "/api/v1/calls"))
+
+    async def async_answer_doorbell_call(self, call_id: str | None = None) -> dict[str, Any]:
+        """Answer a ring call locally; without ``call_id`` the current call.
+
+        Raises C300XCallNotCurrentError when that call is not the current one.
+        """
+
+        return await self._call_action(call_id, "answer")
+
+    async def async_hangup_doorbell_call(self, call_id: str | None = None) -> dict[str, Any]:
+        """Hang up a ring call; without ``call_id`` the current call."""
+
+        return await self._call_action(call_id, "hangup")
+
+    async def _call_action(self, call_id: str | None, action: str) -> dict[str, Any]:
+        if call_id is None:
+            call_id = (await self.async_calls())["current_call_id"]
+            if call_id is None:
+                raise C300XCallNotCurrentError("no current call", None)
         data = await self._request_json(
-            "POST",
-            "/api/v1/calls/doorbell/actions/answer",
+            "POST", f"/api/v1/calls/{quote(call_id, safe='')}/actions/{action}",
         )
         return _ok_response(data)
 
-    async def async_hangup_doorbell_call(self) -> dict[str, Any]:
-        """Hang up the active doorbell ring call."""
+    async def async_unlock_outdoor_unit(
+        self, unit_id: str = "current", call_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Open the lock of one outdoor unit (``current``: the calling unit)."""
 
         data = await self._request_json(
             "POST",
-            "/api/v1/calls/doorbell/actions/hangup",
+            f"/api/v1/outdoor-units/{quote(unit_id, safe='')}/actions/unlock",
+            json_data={"call_id": call_id} if call_id else None,
         )
         return _ok_response(data)
 

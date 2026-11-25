@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
+from .call_registry import C300XCallRegistry
 from .callback_target import (
     callback_url_host_type,
     callback_url_scheme,
@@ -190,7 +191,6 @@ class C300XEventState:
     ringer_muted: bool | None = None
     ringer_volume: int | None = None
     door_unlock_state: str | None = None
-    call_active: bool = False
     voicemail_available: bool | None = None
     voicemail_total: int | None = None
     voicemail_unread: int | None = None
@@ -345,6 +345,7 @@ class BticinoC300XRuntimeData:
     display_unread_claim_possible: bool = False
     display_notifications: DisplayNotifications | None = None
     media_timeline: C300XMediaTimeline = field(default_factory=C300XMediaTimeline)
+    calls: C300XCallRegistry = field(default_factory=C300XCallRegistry)
     agent_update_state: AgentUpdateState | None = None
     resources: C300XRuntimeResources = field(default_factory=C300XRuntimeResources)
     diagnostics: C300XRuntimeDiagnostics = field(

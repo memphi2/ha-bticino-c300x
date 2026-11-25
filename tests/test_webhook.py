@@ -49,10 +49,17 @@ from custom_components.bticino_c300x import (  # noqa: E402
     agent_diagnostics as agent_diagnostics_module,
 )
 from custom_components.bticino_c300x import (  # noqa: E402
+    call_sync,
     media_watchdog,
 )
 from custom_components.bticino_c300x import (  # noqa: E402
     webhook as webhook_module,
+)
+from custom_components.bticino_c300x._api_calls import (  # noqa: E402
+    normalize_outdoor_units,
+)
+from custom_components.bticino_c300x.call_registry import (  # noqa: E402
+    C300XCallRegistry,
 )
 from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_EVENT_WEBHOOK_TOKEN,
@@ -955,29 +962,54 @@ def test_stair_light_release_event_keeps_address_in_public_event_data() -> None:
     assert event_state.last_event_data["data"]["address"] == "21"
 
 
-def test_call_events_update_call_active_state() -> None:
+def test_call_events_feed_the_call_registry_and_name_the_unit(monkeypatch: pytest.MonkeyPatch) -> None:
     hass = _FakeHass()
     event_state = C300XEventState()
+    registry = C300XCallRegistry()
+    registry.set_units(normalize_outdoor_units({"default_unit": "20", "units": [
+        {"id": "20", "where": "20", "name": "Gate", "default": True},
+        {"id": "21", "where": "21", "name": "Garden"},
+    ]}))
     entry = SimpleNamespace(
         entry_id="entry-1",
         title="C300X",
         data={CONF_EVENT_WEBHOOK_TOKEN: "event-token"},
         options={},
-        runtime_data=SimpleNamespace(event_state=event_state),
+        runtime_data=SimpleNamespace(event_state=event_state, calls=registry),
     )
+    hass.async_create_background_task = lambda coro, name: coro.close()  # type: ignore[attr-defined]
+    signals: list[tuple] = []
+    monkeypatch.setattr(call_sync, "async_dispatcher_send", lambda *args: signals.append(args))
+    monkeypatch.setattr(webhook_module, "resolve_doorbell_camera_entity_id", lambda _hass, _entry: None)
+    fired: list[dict] = []
+    hass.bus.async_fire = lambda event_type, data: fired.append(data)  # type: ignore[method-assign]
 
-    for event_name, expected in (("call.started", True), ("call.ended", False)):
+    def send(event: str, data: dict) -> None:
         response = asyncio.run(
             _async_handle_agent_event(
                 hass,  # type: ignore[arg-type]
                 entry,  # type: ignore[arg-type]
                 event_state,
-                _FakeRequest("event-token", {"event": event_name}),  # type: ignore[arg-type]
+                _FakeRequest("event-token", {"event": event, "data": data}),  # type: ignore[arg-type]
             )
         )
         assert response.status == 200
-        assert event_state.call_active is expected
 
+    send("doorbell.pressed", {"call_id": "0badc0de-1", "unit": None, "attribution": "pending"})
+    assert fired[-1]["call_id"] == "0badc0de-1" and fired[-1]["unit_id"] is None
+    send("call.caller_identified", {"call_id": "0badc0de-1", "unit": "21", "attribution": "caller_frame"})
+    assert (fired[-1]["unit_id"], fired[-1]["unit_name"]) == ("21", "Garden")
+    assert registry.unit_state("21") == ("ringing", "0badc0de-1")
+    # A second unit rings: its own call, which becomes the current one.
+    send("doorbell.pressed", {"call_id": "0badc0de-2", "unit": "20", "attribution": "caller_frame"})
+    assert registry.current_call_id == "0badc0de-2"
+    send("call.answered", {"call_id": "0badc0de-1", "unit": "21", "answered_by": "station"})
+    assert registry.current_call_id == "0badc0de-1"
+    send("door_unlock.started", {"address": "21", "unit": "21", "call_id": "0badc0de-1"})
+    assert (fired[-1]["call_id"], fired[-1]["unit_id"]) == ("0badc0de-1", "21")
+    send("call.ended", {"call_id": "0badc0de-1", "unit": "21", "kind": "ring", "reason": "hangup_frame"})
+    assert registry.unit_state("21") == ("idle", None)
+    assert registry.current_call_id == "0badc0de-2"
 
 def test_external_doorbell_view_does_not_advertise_ha_video_available() -> None:
     hass = _FakeHass()

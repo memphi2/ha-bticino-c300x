@@ -478,13 +478,30 @@ def test_filter_events_for_active_entities_skips_disabled_internal_diagnostics()
     assert _filter_events_for_active_entities(
         ["agent.diagnostics_changed", "agent.restarted"],
         "entry-1",
-        _FakeEntityRegistry(
-            disabled={
-                ("sensor", "agent_diagnostics"),
-                ("event", "agent_event"),
-            }
-        ),
-    ) == []
+        _FakeEntityRegistry(disabled={("sensor", "agent_diagnostics")}),
+    ) == ["agent.restarted"]
+
+
+def test_event_delivery_does_not_depend_on_enabled_entities() -> None:
+    # 2.x dropped door_unlock.started while the diagnostic event entity was
+    # disabled, and rings while the doorbell entities were.
+    events = [
+        "doorbell.pressed", "doorbell.view_requested", "doorbell.media.closed",
+        "door_unlock.started", "home_call.started", "call.caller_identified",
+        "call.ended", "outdoor_units.changed", "system.metrics_changed",
+    ]
+    disabled = {
+        ("event", "agent_event"), ("event", "doorbell_event"), ("sensor", "doorbell_state"),
+        ("camera", "doorbell_camera"), ("binary_sensor", "home_call_active"),
+        ("sensor", "device_cpu"), ("sensor", "device_load"), ("sensor", "device_memory"),
+        ("sensor", "device_temperature"),
+    }
+    assert _filter_events_for_active_entities(
+        events, "entry-1", _FakeEntityRegistry(disabled=disabled),
+    ) == events
+    assert _filter_events_for_active_entities(
+        events, "entry-1", _FakeEntityRegistry(missing=disabled),
+    ) == events
 
 
 def test_filter_events_for_active_entities_keeps_metric_event_for_active_metric_sensor() -> None:
@@ -565,17 +582,6 @@ def test_filter_events_for_active_entities_keeps_visible_event_for_event_entity(
     ) == ["door_unlock.started"]
 
 
-def test_filter_events_for_active_entities_skips_missing_default_disabled_event_entity() -> None:
-    assert (
-        _filter_events_for_active_entities(
-            ["door_unlock.started"],
-            "entry-1",
-            _FakeEntityRegistry(missing={("event", "agent_event")}),
-        )
-        == []
-    )
-
-
 def test_filter_events_for_active_entities_keeps_home_call_events_for_consumers() -> None:
     assert _filter_events_for_active_entities(
         ["home_call.started", "home_call.answered", "home_call.ended"],
@@ -590,40 +596,6 @@ def test_filter_events_for_active_entities_keeps_doorbell_state_events_for_senso
         "entry-1",
         _FakeEntityRegistry(disabled={("event", "agent_event")}),
     ) == ["doorbell.pressed", "doorbell.view_requested", "doorbell.media.closed"]
-
-
-def test_filter_events_for_active_entities_skips_doorbell_state_events_without_consumers() -> None:
-    assert (
-        _filter_events_for_active_entities(
-            ["doorbell.view_requested", "doorbell.media.closed"],
-            "entry-1",
-            _FakeEntityRegistry(
-                disabled={
-                    ("event", "agent_event"),
-                    ("sensor", "doorbell_state"),
-                    ("camera", "doorbell_camera"),
-                }
-            ),
-        )
-        == []
-    )
-
-
-def test_filter_events_for_active_entities_skips_home_call_when_consumers_disabled() -> None:
-    assert (
-        _filter_events_for_active_entities(
-            ["home_call.started", "home_call.answered", "home_call.ended"],
-            "entry-1",
-            _FakeEntityRegistry(
-                disabled={
-                    ("event", "agent_event"),
-                    ("binary_sensor", "home_call_active"),
-                    ("camera", "doorbell_camera"),
-                }
-            ),
-        )
-        == []
-    )
 
 
 def test_async_start_agent_event_registration_registers_when_missing() -> None:

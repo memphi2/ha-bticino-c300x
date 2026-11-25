@@ -1,8 +1,8 @@
 {
   "ha_reference": {
-    "answer_action": "/api/v1/calls/doorbell/actions/answer",
+    "answer_action": "/api/v1/calls/{call_id}/actions/answer",
     "answered_rtsp_path": "/doorbell",
-    "hangup_action": "/api/v1/calls/doorbell/actions/hangup",
+    "hangup_action": "/api/v1/calls/{call_id}/actions/hangup",
     "preview_rtsp_path": "/doorbell-video"
   },
   "media_phases": [

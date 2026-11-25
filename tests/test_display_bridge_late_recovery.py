@@ -47,11 +47,13 @@ def setup_idle(monkeypatch):
         async_get=lambda _: SimpleNamespace(disabled_by="user"),
     )
     api.async_diagnostics = AsyncMock(return_value={})
-    monkeypatch.setattr(events, "_active_events_for_capabilities", _REAL_ACTIVE_EVENTS)
     monkeypatch.setattr(agent_diagnostics, "async_dispatcher_send", Mock())
     monkeypatch.setattr(repair_issues, "async_sync_entry_repair_issues", Mock())
-    assert "doorbell.pressed" in events.events_for_capabilities(capabilities)
-    assert _REAL_ACTIVE_EVENTS(hass, entry, capabilities) == []
+    # Disabled entities no longer silence events: only the diagnostics stay tied to their sensor.
+    active = _REAL_ACTIVE_EVENTS(hass, entry, capabilities)
+    assert "doorbell.pressed" in active and "agent.diagnostics_changed" not in active
+    # An idle worker is one with nothing to subscribe.
+    monkeypatch.setattr(events, "_active_events_for_capabilities", lambda *_: [])
     return hass, entry, api, worker
 
 

@@ -1362,7 +1362,6 @@
               "agent_restarted": "Device-Agent riavviato",
               "answering_machine_messages_changed": "Messaggi video aggiornati",
               "call_ended": "Chiamata terminata",
-              "call_started": "Chiamata avviata",
               "door_unlock_ended": "Apertura porta terminata",
               "door_unlock_started": "Apertura porta avviata",
               "doorbell_media_closed": "Stream videocitofono terminato",
@@ -1381,7 +1380,11 @@
               "stair_light_released": "Luce scale rilasciata",
               "system_metrics_changed": "Metriche di sistema aggiornate",
               "agent_diagnostics_changed": "Diagnostica scritture agent aggiornata",
-              "activation_executed": "Attivazione dispositivo eseguita"
+              "activation_executed": "Attivazione dispositivo eseguita",
+              "call_caller_identified": "Chiamante riconosciuto",
+              "call_answered": "Chiamata risposta",
+              "call_view_started": "Vista telecamera avviata",
+              "outdoor_units_changed": "Posti esterni modificati"
             }
           }
         }
@@ -1970,9 +1973,15 @@
       "name": "Regola immagine",
       "description": "Legge le tre impostazioni dell’immagine in diretta. Per modificarne una, indica il controllo e il valore (da 0 a 100% a passi di 10). Richiede l’agente aggiornato e una videochiamata in corso dal posto esterno oppure un video su richiesta attivo con valori e intervalli verificati alla sorgente. I contenuti salvati restano invariati.",
       "fields": {
-        "entry_id": {"name": "Voce"},
-        "control": {"name": "Controllo"},
-        "value": {"name": "Valore"}
+        "entry_id": {
+          "name": "Voce"
+        },
+        "control": {
+          "name": "Controllo"
+        },
+        "value": {
+          "name": "Valore"
+        }
       }
     },
     "capture_doorbell_call": {

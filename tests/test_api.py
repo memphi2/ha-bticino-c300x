@@ -53,6 +53,11 @@ from custom_components.bticino_c300x.api import (
     normalize_text_memo_text,
     normalize_video_message_id,
 )
+from custom_components.bticino_c300x.api_errors import (
+    C300XCallNotCurrentError,
+    C300XUnitVideoUnsupportedError,
+    C300XUnknownUnitError,
+)
 from custom_components.bticino_c300x.const import HEADER_MAINTENANCE_TOKEN
 
 _CONTENT_LENGTH_AUTO = object()
@@ -489,17 +494,24 @@ def test_notify_display_bridge_event_posts_topic(payload) -> None:
         ),
         (
             "async_answer_doorbell_call",
-            (),
+            ("0badc0de-3",),
             {},
-            "/api/v1/calls/doorbell/actions/answer",
+            "/api/v1/calls/0badc0de-3/actions/answer",
             None,
         ),
         (
             "async_hangup_doorbell_call",
-            (),
+            ("0badc0de-3",),
             {},
-            "/api/v1/calls/doorbell/actions/hangup",
+            "/api/v1/calls/0badc0de-3/actions/hangup",
             None,
+        ),
+        (
+            "async_unlock_outdoor_unit",
+            ("20_2",),
+            {"call_id": "0badc0de-3"},
+            "/api/v1/outdoor-units/20_2/actions/unlock",
+            {"call_id": "0badc0de-3"},
         ),
         (
             "async_capture_doorbell_call",
@@ -2416,42 +2428,86 @@ def test_doorbell_call_status_requests_authenticated_endpoint() -> None:
     )
 
 
-def test_answer_doorbell_call_requests_authenticated_endpoint() -> None:
-    session = _FakeSession('{"ok": true, "audio": true, "answer_requested": true}')
+_CALLS = (
+    '{"ok": true, "boot_id": "0badc0de", "current_call_id": "0badc0de-2", "calls": ['
+    '{"call_id": "0badc0de-2", "kind": "ring", "state": "ringing", "unit": "21",'
+    ' "attribution": "caller_frame", "answered_by": null, "end_reason": null},'
+    '{"call_id": "0badc0de-1", "kind": "ring", "state": "answered", "unit": null,'
+    ' "attribution": "pending", "answered_by": "ha", "end_reason": null}]}'
+)
+
+
+def test_answer_without_a_call_id_answers_the_agents_current_call() -> None:
+    session = _QueuedSession([(200, _CALLS), (200, '{"ok": true, "answer_requested": true}')])
+    api = C300XAgentApi(session, "http://agent.local:8080", "agent-token")  # type: ignore[arg-type]
+
+    assert asyncio.run(api.async_answer_doorbell_call()) == {"ok": True, "answer_requested": True}
+    assert [request["args"] for request in session.requests] == [
+        ("GET", "http://agent.local:8080/api/v1/calls"),
+        ("POST", "http://agent.local:8080/api/v1/calls/0badc0de-2/actions/answer"),
+    ]
+
+
+def test_hangup_without_a_current_call_sends_nothing() -> None:
+    session = _QueuedSession([(200, '{"ok": true, "boot_id": "0badc0de", "current_call_id": null, "calls": []}')])
+    api = C300XAgentApi(session, "http://agent.local:8080", "agent-token")  # type: ignore[arg-type]
+
+    with pytest.raises(C300XCallNotCurrentError) as raised:
+        asyncio.run(api.async_hangup_doorbell_call())
+    assert raised.value.current_call_id is None
+    assert len(session.requests) == 1
+
+
+def test_a_stale_call_id_raises_call_not_current_with_the_current_call() -> None:
+    session = _FakeSession(
+        '{"ok": false, "error": "call_not_current", "current_call_id": "0badc0de-4"}',
+        response_status=409,
+    )
+    api = C300XAgentApi(session, "http://agent.local:8080", "agent-token")  # type: ignore[arg-type]
+
+    with pytest.raises(C300XCallNotCurrentError) as raised:
+        asyncio.run(api.async_hangup_doorbell_call("0badc0de-3"))
+    assert raised.value.current_call_id == "0badc0de-4"
+    assert raised.value.http_status == 409
+
+
+@pytest.mark.parametrize(
+    ("status", "body", "error"),
+    [
+        (404, '{"ok": false, "error": "unknown_unit"}', C300XUnknownUnitError),
+        (409, '{"ok": false, "error": "unit_video_unsupported"}', C300XUnitVideoUnsupportedError),
+    ],
+)
+def test_unit_errors_have_their_own_exceptions(status: int, body: str, error: type[Exception]) -> None:
     api = C300XAgentApi(
-        session,  # type: ignore[arg-type]
-        "http://agent.local:8080",
-        "agent-token",
+        _FakeSession(body, response_status=status), "http://agent.local:8080", "agent-token",  # type: ignore[arg-type]
     )
 
-    assert asyncio.run(api.async_answer_doorbell_call()) == {
-        "ok": True,
-        "audio": True,
-        "answer_requested": True,
-    }
-    assert session.requests[0]["args"] == (
-        "POST",
-        "http://agent.local:8080/api/v1/calls/doorbell/actions/answer",
-    )
-    assert session.requests[0]["kwargs"]["headers"] == {
-        "Authorization": "Bearer agent-token",
-    }
-    assert session.requests[0]["kwargs"]["json"] is None
+    with pytest.raises(error):
+        asyncio.run(api.async_activate_doorbell_video(unit="21"))
 
 
-def test_hangup_doorbell_call_requests_authenticated_endpoint() -> None:
-    session = _FakeSession('{"ok": true}')
-    api = C300XAgentApi(
-        session,  # type: ignore[arg-type]
-        "http://agent.local:8080",
-        "agent-token",
-    )
+def test_calls_and_outdoor_units_are_normalized() -> None:
+    api = C300XAgentApi(_FakeSession(_CALLS), "http://agent.local:8080", "agent-token")  # type: ignore[arg-type]
+    calls = asyncio.run(api.async_calls())
+    assert calls.current_call_id == "0badc0de-2"
+    assert [(call.call_id, call.state, call.unit) for call in calls.calls] == [
+        ("0badc0de-2", "ringing", "21"), ("0badc0de-1", "answered", None),
+    ]
 
-    assert asyncio.run(api.async_hangup_doorbell_call()) == {"ok": True}
-    assert session.requests[0]["args"] == (
-        "POST",
-        "http://agent.local:8080/api/v1/calls/doorbell/actions/hangup",
+    units = (
+        '{"ok": true, "default_unit": "20_2", "archive": "ok", "units": ['
+        '{"id": "20_2", "where": "20#2", "action_where": "20", "lock_where": "20",'
+        ' "name": "Gate", "source": "archive", "default": true},'
+        '{"id": "21", "where": "21", "name": "", "source": "seen", "default": false},'
+        '{"id": "../x", "where": "21"}, {"id": "21", "where": "21"}]}'
     )
+    api = C300XAgentApi(_FakeSession(units), "http://agent.local:8080", "agent-token")  # type: ignore[arg-type]
+    payload = asyncio.run(api.async_outdoor_units())
+    assert payload.default_unit == "20_2"
+    assert [(unit.id, unit.action_where, unit.lock_where, unit.name) for unit in payload.units] == [
+        ("20_2", "20", "20", "Gate"), ("21", "21", "21", ""),
+    ]
 
 
 def test_capture_doorbell_call_requests_authenticated_endpoint() -> None:

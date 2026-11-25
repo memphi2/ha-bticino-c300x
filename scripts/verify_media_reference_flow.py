@@ -55,6 +55,8 @@ class Check:
     detail: str = ""
 
 
+CALL_ACTION_ROUTE = 'f"/api/v1/calls/{quote(call_id, safe=\'\')}/actions/{action}"'
+
 def tcpdump_ascii(pcap_path: Path) -> str:
     try:
         result = subprocess.run(
@@ -342,8 +344,9 @@ def collect_code_checks(mode: str, root: Path = ROOT) -> list[Check]:
         Check("code.webhook.forwards_media_owner", '"media_owner",' in webhook),
         Check("code.camera.preview_path_available", 'DEFAULT_VIDEO_STREAM_PATH = "/doorbell-video"' in const),
         Check("code.camera.answered_path_available", '"/doorbell"' in camera),
-        Check("code.api.answer_action", "/api/v1/calls/doorbell/actions/answer" in api),
-        Check("code.api.hangup_action", "/api/v1/calls/doorbell/actions/hangup" in api),
+        # 3.1.0: answer and hang-up name the call (/api/v1/calls/{call_id}/actions/...).
+        Check("code.api.answer_action", CALL_ACTION_ROUTE in api and '_call_action(call_id, "answer")' in api),
+        Check("code.api.hangup_action", CALL_ACTION_ROUTE in api and '_call_action(call_id, "hangup")' in api),
         Check("code.state_model.ring_pending_answerable", 'mediaState === "ring_pending"' in state_model),
         Check("code.state_model.preview_answerable", 'mediaState === "ring_preview_active"' in state_model),
         Check("code.card.answer_service", '"answer_doorbell_call"' in card_actions),
@@ -534,12 +537,12 @@ def _collect_ring_fixture_checks(fixture: dict[str, Any]) -> list[Check]:
         Check(
             "fixture.ring_call.answer_action",
             ha_reference_dict.get("answer_action")
-            == "/api/v1/calls/doorbell/actions/answer",
+            == "/api/v1/calls/{call_id}/actions/answer",
         ),
         Check(
             "fixture.ring_call.hangup_action",
             ha_reference_dict.get("hangup_action")
-            == "/api/v1/calls/doorbell/actions/hangup",
+            == "/api/v1/calls/{call_id}/actions/hangup",
         ),
         Check(
             "fixture.ring_call.media_phases",
@@ -946,10 +949,8 @@ def _timing_checks(
         return [
             Check("pcap.timing.timestamps_present", False),
         ]
-    answer_post = _first_packet_containing(
-        packets,
-        "POST /api/v1/calls/doorbell/actions/answer",
-    )
+    # The 2.x route and the call-scoped one of 3.1.0 both match.
+    answer_post = _first_packet_containing(packets, "POST /api/v1/calls/", "/actions/answer")
     first_large = _first_packet_between(packets, pressed, view, min_length=900)
     first_small = _first_packet_after(packets, view, max_length=350)
     checks = [
@@ -1094,10 +1095,8 @@ def _ring_timing(packets: list[Packet]) -> dict[str, float]:
     pressed = events.get("doorbell.pressed")
     closed = events.get("doorbell.media.closed")
     view = events.get("doorbell.view_requested")
-    answer_post = _first_packet_containing(
-        packets,
-        "POST /api/v1/calls/doorbell/actions/answer",
-    )
+    # The 2.x route and the call-scoped one of 3.1.0 both match.
+    answer_post = _first_packet_containing(packets, "POST /api/v1/calls/", "/actions/answer")
     if (
         pressed is None
         or closed is None

@@ -300,5 +300,8 @@ def test_reference_ring_call_fingerprint_matches_native_ring_media_flow() -> Non
     assert ha_ref["preview_rtsp_path"] in const
     assert "self._video_stream_path = str(status[\"stream_path\"])" in camera
     assert ha_ref["answered_rtsp_path"] in camera
-    assert ha_ref["answer_action"] in api
-    assert ha_ref["hangup_action"] in api
+    # API 2: the call id names the call in the route.
+    assert ha_ref["answer_action"] == "/api/v1/calls/{call_id}/actions/answer"
+    assert ha_ref["hangup_action"] == "/api/v1/calls/{call_id}/actions/hangup"
+    assert "f\"/api/v1/calls/{quote(call_id, safe='')}/actions/{action}\"" in api
+    assert '_call_action(call_id, "answer")' in api and '_call_action(call_id, "hangup")' in api

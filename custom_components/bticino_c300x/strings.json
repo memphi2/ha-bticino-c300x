@@ -1362,7 +1362,6 @@
               "agent_restarted": "Agent restarted",
               "answering_machine_messages_changed": "Video messages changed",
               "call_ended": "Call ended",
-              "call_started": "Call started",
               "door_unlock_ended": "Door unlock ended",
               "door_unlock_started": "Door unlock started",
               "doorbell_media_closed": "Doorbell camera stream ended",
@@ -1381,7 +1380,11 @@
               "stair_light_released": "Stair light released",
               "system_metrics_changed": "System metrics updated",
               "agent_diagnostics_changed": "Agent write diagnostics updated",
-              "activation_executed": "Device activation executed"
+              "activation_executed": "Device activation executed",
+              "call_caller_identified": "Caller identified",
+              "call_answered": "Call answered",
+              "call_view_started": "Camera view started",
+              "outdoor_units_changed": "Outdoor units changed"
             }
           }
         }
@@ -1970,9 +1973,15 @@
       "name": "Adjust camera picture",
       "description": "Read all three live picture settings, or supply a control and a value (0 to 100% in steps of 10) to change one. Requires the updated device agent and an active Ring Call video or on-demand video with verified source values and ranges. Saved media is unchanged.",
       "fields": {
-        "entry_id": {"name": "Integration entry"},
-        "control": {"name": "Control"},
-        "value": {"name": "Value"}
+        "entry_id": {
+          "name": "Integration entry"
+        },
+        "control": {
+          "name": "Control"
+        },
+        "value": {
+          "name": "Value"
+        }
       }
     },
     "capture_doorbell_call": {

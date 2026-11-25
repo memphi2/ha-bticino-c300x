@@ -686,11 +686,14 @@ gui_writing_end() {
 
 # A note whose PID is gone or is no longer this script (a killed writer, its
 # PID reused) is no write; with "drop", called under the activation lock, the
-# worker removes it.
+# worker removes it. Only the worker asks, and it never writes: a note with its
+# own PID is a killed writer's too.
 gui_writer_active() {
     gui_writer="$(cat "$GUI_RUN_DIR/writing" 2>/dev/null || true)"
     [ -n "$gui_writer" ] || return 1
-    transaction_owner_running "$gui_writer" && return 0
+    if [ "$gui_writer" != "$$" ] && transaction_owner_running "$gui_writer"; then
+        return 0
+    fi
     if [ "${1:-}" = "drop" ]; then
         rm -f "$GUI_RUN_DIR/writing"
     fi

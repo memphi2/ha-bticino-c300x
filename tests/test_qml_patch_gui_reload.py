@@ -684,6 +684,32 @@ def test_a_note_of_a_killed_writer_whose_pid_was_reused_does_not_block_the_resta
         foreign.wait()
 
 
+def test_a_note_whose_pid_was_reused_by_the_worker_itself_does_not_block_the_restart(
+    station: Station,
+) -> None:
+    """A killed writer's note names the PID the worker got later: the worker never writes,
+    so it neither waits on itself nor counts the note."""
+
+    station.boot(C300X_TEST_TEARDOWN="1")
+    note = station.run_dir / "writing"
+    flock = station.root / "tools/flock-own-note"
+    # Called by the worker for its lock: its parent is the worker's shell.
+    flock.write_text(
+        "#!/bin/sh\n"
+        f"if [ \"$1\" = -n ] && [ \"$2\" = 9 ] && mkdir '{station.root}/note-written' 2>/dev/null; then\n"
+        f"    printf '%s\\n' \"$PPID\" > '{note}'\n"
+        "fi\n"
+        f"exec '{shutil.which('flock')}' \"$@\"\n"
+    )
+    flock.chmod(0o755)
+    result = station.reload(C300X_QML_GUI_FLOCK=str(flock), C300X_QML_GUI_BUDGET_SECONDS="3")
+    assert result.returncode == 0, result.stderr
+    assert (station.root / "note-written").exists()
+    assert _wait_for(lambda: _kinds(station).count("wrapper") == 2, 20), station.events()
+    assert len(_settled(station)) == 1
+    assert not note.exists()
+
+
 def test_a_request_filed_as_the_worker_unlocks_is_served_before_it_exits(station: Station) -> None:
     """The worker found nothing to do and lets go of its lock; a request filed right then
     (its requester saw the lock held and started no worker) is served by this worker.

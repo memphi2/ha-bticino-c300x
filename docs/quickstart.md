@@ -96,9 +96,9 @@ fill in:
 
 | Field | Value |
 | --- | --- |
-| **Address of the C300X** | IP address or host name of the station. With an IPv4 address, Home Assistant follows the station to a new address on its own ([Station Changed Its Address](media-troubleshooting.md#station-changed-its-address)). |
+| **Address of the C300X/C100X** | IP address or host name of the station. With an IPv4 address, Home Assistant follows the station to a new address on its own ([Station Changed Its Address](media-troubleshooting.md#station-changed-its-address)). |
 | **Port** | `8091`, unless you changed it during installation. |
-| **Address of Home Assistant for the C300X** | Leave empty. The station then reports rings and events to the address Home Assistant knows for itself. See [Callback URL](advanced-maintenance.md#callback-url) if events do not arrive. |
+| **Address of Home Assistant for the C300X/C100X** | Leave empty. The station then reports rings and events to the address Home Assistant knows for itself. See [Callback URL](advanced-maintenance.md#callback-url) if events do not arrive. |
 
 ## Install the Device Agent
 

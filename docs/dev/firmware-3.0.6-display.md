@@ -184,8 +184,9 @@ The first restart (`3876e2b4`) grew by patching and kept drawing findings: a
 during the wrapper's `sleep 3` armed the vendor SIGTERM trap, which fired only
 after that sleep and killed the next display, and back-to-back restarts left a
 quarantine mark behind. It is replaced as a whole. Firmware 1.7.19 and 2.0.2
-keep the restart of the stable release (`reload_gui_qt4`, byte-identical to
-2.9.2's `reload_gui`), unchanged.
+keep the restart of the stable release unchanged: `reload_gui` keeps 2.9.2's
+`RELOAD_GUI` check and calls `reload_gui_qt4`, which is the rest of 2.9.2's
+`reload_gui` line for line.
 
 **One restart worker.** Every Qt 5 restart (`reload`, a write's restart, the
 rollback restart, `recover`) only files a request and waits for its answer.

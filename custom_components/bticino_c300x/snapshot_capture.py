@@ -226,7 +226,9 @@ class SnapshotCapture:
                     except (C300XAgentApiError, ClientConnectionError, OSError, TimeoutError) as err:
                         retry = isinstance(err, (C300XAgentApiConnectionError, ClientConnectionError, OSError, TimeoutError))
                         retry = retry or getattr(err, "status", None) in (409, 503)
-                        if not retry or attempt == MAX_ATTEMPTS - 1:
+                        # An HTTP client reports the limit's cancellation as its
+                        # own time-out when both expire together: no retry then.
+                        if not retry or attempt == MAX_ATTEMPTS - 1 or limit.expired():
                             raise
                         # Three attempts at t=0,1,2 allow the native two-second
                         # throttle to clear without an unbounded retry loop.
@@ -242,11 +244,19 @@ class SnapshotCapture:
                 if not self._current(generation):
                     return
                 stage = "save"
-                # A write the store has begun cannot be abandoned: the limit
-                # ends there, and the image counts as what the store reports.
+                def writing() -> None:
+                    # A limit that fired without ending the capture (its
+                    # cancellation was swallowed) ends it here: nothing is
+                    # stored late. Otherwise a write the store has begun cannot
+                    # be abandoned: the limit ends there, and the image counts
+                    # as what the store reports.
+                    if limit.expired():
+                        raise TimeoutError
+                    limit.reschedule(None)
+
                 item = await self.manager.save(
                     image, identity, is_current=lambda: self._current(generation),
-                    writing=lambda: limit.reschedule(None),
+                    writing=writing,
                 )
             stage = "stored"
             self._failed(None)

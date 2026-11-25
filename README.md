@@ -17,10 +17,6 @@ Assistant over your local network.
 [Quick Start](docs/quickstart.md) | [User guide](docs/user-guide.md) |
 [Display pages](docs/display.md) | [Troubleshooting](docs/media-troubleshooting.md)
 
-<p align="center">
-  <a href="https://ko-fi.com/oliver7557"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Support me on Ko-fi"></a>
-</p>
-
 ## Features
 
 - **See and answer the door:** live video, Ring Call, talkback and audio-only
@@ -157,3 +153,7 @@ only be checked against its files. A contribution towards a second unit, or a
 used or defective Classe 300X / C300X (`344642` or `344643`), is welcome in a
 [discussion](https://github.com/memphi2/ha-bticino-c300x/discussions/new?category=general).
 It is voluntary; support and features stay open to everyone.
+
+<p align="center">
+  <a href="https://ko-fi.com/oliver7557"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Support me on Ko-fi"></a>
+</p>

@@ -19,7 +19,7 @@ def route_binary(request, tmp_path_factory):
          str(NATIVE / "test/http_device_user_test.c"),
          *[str(NATIVE / "src" / name) for name in (
              "http_device_user.c", "device_user_label.c", "http_maintenance.c", "http_auth.c",
-             "command_job.c", "command_transaction.c", "string_util.c", "json_util.c", "json_parse.c")],
+             "command_job.c", "string_util.c", "json_util.c", "json_parse.c")],
          "-o", str(binary)], capture_output=True, text=True, timeout=30,
     )
     assert result.returncode == 0, result.stderr
@@ -38,7 +38,11 @@ def route_binary(request, tmp_path_factory):
 ] + [("ensure", case) for case in ("routing-failure", "user-failure", "user-failure-patched", "invalid", "false")]
   + [("restore", "restore-failure"), ("restore", "false"),
      ("restore", "invalid-json"), ("ensure", "invalid-json"), ("status", "qt5"), ("ensure", "qt5"),
-     ("ensure", "busy-root"), ("restore", "busy-root")])
+     ("ensure", "busy-root"), ("restore", "busy-root"),
+     # A label write that hangs: SIGTERM at the write deadline, the script's
+     # rollback, then 504; one that ignores the signal is killed after the grace.
+     ("ensure", "label-timeout"), ("restore", "label-timeout"),
+     ("ensure", "label-kill"), ("restore", "label-kill")])
 def test_route_state_machine(route_binary, tmp_path, operation, case):
     script = tmp_path / "job.sh"
     body = ('case "$1" in\n'
@@ -59,6 +63,10 @@ def test_route_state_machine(route_binary, tmp_path, operation, case):
         body = 'printf \'{"ok":false}\'\n'
     elif case == "invalid-json":
         body = 'printf \'{"ok":true\'\n'
+    elif case in ("label-timeout", "label-kill"):
+        # Ends by itself, so a run against a route that waits leaves no stand-in.
+        trap = "trap 'sleep 0.2; : > \"$0.rolled\"; exit 130' TERM\n" if case == "label-timeout" else "trap '' TERM\n"
+        body = trap + ': > "$0.started"\ni=0\nwhile [ $i -lt 600 ]; do sleep 0.02; i=$((i + 1)); done\n'
     elif case == "overflow":
         body += "head -c 12000 /dev/zero | tr '\\000' ' '\n"
     if case != "missing":

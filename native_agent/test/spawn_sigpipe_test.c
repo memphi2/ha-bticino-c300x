@@ -7,7 +7,6 @@
 #include <sys/stat.h>
 
 #include "../src/command_job.h"
-#include "../src/command_transaction.h"
 #include "../src/time_util.h"
 
 static void assert_default_sigpipe(const char *report)
@@ -31,9 +30,6 @@ int main(int argc, char **argv)
     assert(fclose(file) == 0 && chmod(script, 0700) == 0);
     /* As in the agent: a closed reader must not kill it. */
     signal(SIGPIPE, SIG_IGN);
-
-    assert(c300x_command_transaction_capture(script, "x", out, sizeof(out)));
-    assert_default_sigpipe(out);
 
     c300x_command_job_init(&job);
     assert(c300x_command_job_start_capture(&job, script, "x", out, sizeof(out), 2000));

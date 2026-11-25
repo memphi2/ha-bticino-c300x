@@ -14,6 +14,7 @@ import logging
 import secrets
 import shlex
 import stat
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
@@ -48,7 +49,17 @@ REMOTE_FIREWALL_BACKUP = (
     "/etc/network/if-pre-up.d/iptables"
 )
 _SSH_CONNECT_TIMEOUT = 12.0
+# Probes, uploads of at most the agent binary, the init script and its
+# restart (5 s stop wait, 2 s after SIGKILL, 20 status checks of 100 ms).
 _SSH_COMMAND_TIMEOUT = 30.0
+# A display write over SSH is the script the agent runs as a job, so it gets
+# the agent's handling (http_maintenance.h): this deadline, then SIGTERM for
+# the script's rollback trap and this grace period. The station's SSH server
+# sends no signal when a channel closes; a write merely cut off would run on
+# and die of SIGPIPE at its next message, in the middle of its clean-up.
+_SSH_DISPLAY_WRITE_TIMEOUT = 30.0
+_SSH_DISPLAY_WRITE_TERM_GRACE = 15.0
+DISPLAY_WRITE_TIMEOUT = "device_display_timeout"
 _REQUIRED_ASYNCSSH_VERSION = "2.24.1"
 INSTALLER_REQUIREMENTS = (f"asyncssh=={_REQUIRED_ASYNCSSH_VERSION}",)
 # The display files the agent directory holds; qml_patch.sh installs them.
@@ -642,6 +653,41 @@ class _AsyncSshDeviceSshClient(_DeviceSshClient):
                 result = await process.wait(check=True)
         return cast(bytes, result.stdout).decode("utf-8", "replace")
 
+    def run_display_write(self, command: str) -> str:
+        """Run a display write; past its deadline end it by SIGTERM, not a cut."""
+
+        if self._closed or self._client.is_closed():
+            raise C300XDeviceInstallError("device_install_failed")
+        try:
+            return self._runner.run(self._run_display_write(command))
+        except (OSError, self._asyncssh.Error) as err:
+            raise C300XDeviceInstallError("device_install_failed") from err
+
+    async def _run_display_write(self, command: str) -> str:
+        deadline = asyncio.get_running_loop().time() + _SSH_DISPLAY_WRITE_TIMEOUT
+        async with asyncio.timeout_at(deadline):
+            process = await self._client.create_process(
+                command, encoding=None, request_pty=False,
+            )
+        try:
+            process.stdin.write_eof()
+            try:
+                async with asyncio.timeout_at(deadline):
+                    result = await process.wait(check=True)
+            except TimeoutError:
+                # The channel stays open: the trap's messages must not kill it.
+                process.terminate()
+                with suppress(TimeoutError):
+                    async with asyncio.timeout(_SSH_DISPLAY_WRITE_TERM_GRACE):
+                        await process.wait()
+                raise C300XDeviceInstallError(DISPLAY_WRITE_TIMEOUT) from None
+        finally:
+            process.close()
+            with suppress(TimeoutError):
+                async with asyncio.timeout(_SSH_CONNECT_TIMEOUT):
+                    await process.wait_closed()
+        return cast(bytes, result.stdout).decode("utf-8", "replace")
+
     def put_file(
         self,
         source: Path,
@@ -954,10 +1000,13 @@ def _apply_qml_patch_sync(client: _DeviceSshClient, remote_dir: str, action: str
             "C300X: device has no on-disk QML (Qt5 GUI); skipping %s patch", action
         )
         return
-    output = client.run(
-        f"C300X_QML_SOURCE_DIR={_quote(f'{remote_dir}/qml')} "
+    # exec: the signal the SSH server delivers must reach the script itself.
+    command = (
+        f"exec env C300X_QML_SOURCE_DIR={_quote(f'{remote_dir}/qml')} "
         f"{_quote(f'{remote_dir}/qml_patch.sh')} {action}"
     )
+    run_display_write = getattr(client, "run_display_write", client.run)
+    output = run_display_write(command)
     try:
         result = json.loads(output)
     except (TypeError, ValueError) as err:

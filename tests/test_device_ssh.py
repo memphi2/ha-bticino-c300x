@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+import signal
 import threading
+import time
 from pathlib import Path
 
 import asyncssh
@@ -39,6 +41,9 @@ def ssh_server(monkeypatch, request):
             process.command, stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
         )
+        # Like the station's SSH server: a "signal" request goes to the
+        # command's process alone, and nothing is sent when a channel closes.
+        process.signal_received = lambda name: child.send_signal(getattr(signal, f"SIG{name}"))
         try:
             stdout, stderr = await child.communicate(await process.stdin.read())
             process.stdout.write(stdout)
@@ -129,6 +134,48 @@ def test_command_timeout_closes_channel(ssh_server, monkeypatch):
     try:
         with pytest.raises(installer.C300XDeviceInstallError, match="device_install_failed"):
             client.run("hang")
+        assert client.run("true") == ""
+    finally:
+        client.close()
+
+
+DISPLAY_STAND_IN = """#!/bin/sh
+{trap}
+: > "$0.started"
+i=0
+while [ $i -lt 400 ]; do sleep 0.02; i=$((i + 1)); done
+"""
+
+
+@pytest.mark.parametrize(("trap", "rolled_back"), [
+    ("trap 'sleep 0.2; printf rolling >&2; : > \"$0.rolled\"; exit 130' TERM", True),
+    ("trap '' TERM", False),
+])
+def test_a_display_write_past_its_deadline_is_ended_by_sigterm_and_reported(
+    ssh_server, monkeypatch, tmp_path: Path, trap: str, rolled_back: bool,
+) -> None:
+    """The display write over SSH gets the agent's job handling: SIGTERM for
+    the script itself at the deadline, the channel open while its trap rolls
+    back, and an error of its own. A stand-in that ignores the signal costs
+    the grace period, no more; it ends by itself."""
+
+    script = tmp_path / "qml_patch.sh"
+    script.write_text(DISPLAY_STAND_IN.format(trap=trap))
+    script.chmod(0o700)
+    monkeypatch.setattr(installer, "_device_display_is_qt5", lambda client: False)
+    monkeypatch.setattr(installer, "_SSH_DISPLAY_WRITE_TIMEOUT", 0.5, raising=False)
+    monkeypatch.setattr(installer, "_SSH_DISPLAY_WRITE_TERM_GRACE", 1.0, raising=False)
+    client = installer._connect_device_client(ssh_server)
+    started = time.monotonic()
+    try:
+        with pytest.raises(installer.C300XDeviceInstallError) as result:
+            installer._apply_qml_patch_sync(client, str(tmp_path), "core-apply")
+        elapsed = time.monotonic() - started
+        assert result.value.reason == "device_display_timeout"
+        assert script.with_name("qml_patch.sh.started").exists()
+        assert script.with_name("qml_patch.sh.rolled").exists() is rolled_back
+        assert (elapsed < 1.4) is rolled_back and elapsed < 5
+        # The connection is still good for the next step or attempt.
         assert client.run("true") == ""
     finally:
         client.close()

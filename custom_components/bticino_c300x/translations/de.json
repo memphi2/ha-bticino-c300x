@@ -672,6 +672,7 @@
     "error": {
       "agent_bundle_missing": "Das paketierte ARMHF-Agent-Bundle fehlt. Baue/paketiere das Release-Bundle, bevor der Installer genutzt wird.",
       "device_install_failed": "Die SSH-Installation ist fehlgeschlagen. Prüfe den SSH-Zugriff und versuche es erneut.",
+      "device_display_timeout": "Die Display-Dateien wurden nicht innerhalb der Zeitgrenze geschrieben; das Gerät wurde angewiesen, die vorherigen Dateien wiederherzustellen. Prüfe, ob das Display funktioniert, und versuche es erneut.",
       "device_install_verify_failed": "Die Installation ist fertig, aber der native Agent antwortet nicht mit dem generierten Zugangsschlüssel.",
       "invalid_agent_port": "Gib einen gültigen Device-Agent-Port ein.",
       "invalid_agent_host": "Gib den Device-Agent-Host ein.",
@@ -1532,6 +1533,7 @@
         },
         "error": {
           "ssh_install_failed": "Die SSH-Reparaturinstallation ist fehlgeschlagen. Prüfe den SSH-Zugriff und versuche es erneut.",
+          "device_display_timeout": "Die Display-Dateien wurden nicht innerhalb der Zeitgrenze geschrieben; das Gerät wurde angewiesen, die vorherigen Dateien wiederherzustellen. Prüfe, ob das Display funktioniert, und versuche es erneut.",
           "update_failed": "Das Device-Agent-Update ist fehlgeschlagen. Prüfe, ob Maintenance-Zugriff aktiv ist, und versuche es erneut.",
           "update_root_already_writable": "Das Update wurde vor dem Anwenden abgelehnt, weil das Root-Dateisystem (/) bereits beschreibbar war. Falls du / zuvor manuell beschreibbar eingehängt hast, starte das Gerät normal neu und wiederhole dann diese Reparatur. Andernfalls kläre vor einem neuen Versuch, warum / beschreibbar ist.",
           "update_root_readonly_failed": "Das Update konnte das Root-Dateisystem (/) nicht wieder schreibgeschützt einhängen. Der endgültige Gerätezustand ist ungewiss; eine erfolgreiche Wiederherstellung ist nicht bestätigt. Bewahre Wiederherstellungsdateien auf und prüfe Agent und Dateisystem vor einem weiteren Update.",

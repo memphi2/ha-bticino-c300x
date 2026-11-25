@@ -11,6 +11,7 @@ from http.client import HTTPConnection
 from pathlib import Path
 
 import pytest
+from native_build import default_host_agent
 
 from native_agent.test.smoke import TOKEN, api_get, free_tcp_ports, wait_for_health
 
@@ -30,10 +31,7 @@ def wait_until(predicate, timeout=3):
 
 @pytest.fixture(scope="module")
 def binary(tmp_path_factory):
-    build = tmp_path_factory.mktemp("maintenance-build")
-    subprocess.run(["make", "-C", str(ROOT / "native_agent"), f"BUILD_DIR={build}",
-                    "-j2", "all"], check=True, capture_output=True, text=True)
-    return build / "host/c300x-agent-native"
+    return default_host_agent(tmp_path_factory)
 
 
 @dataclass

@@ -12,6 +12,7 @@ from http.client import HTTPConnection
 from pathlib import Path
 
 import pytest
+from native_build import default_host_agent
 
 from native_agent.test.smoke import TOKEN, free_tcp_ports, wait_for_health
 
@@ -35,10 +36,7 @@ def test_hmac_matches_rfc4231_vectors(tmp_path: Path) -> None:
 
 @pytest.fixture(scope="module")
 def binary(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    build = tmp_path_factory.mktemp("identity-build")
-    subprocess.run(["make", "-C", str(NATIVE), f"BUILD_DIR={build}", "-j2", "all"],
-                   check=True, capture_output=True, text=True)
-    return build / "host/c300x-agent-native"
+    return default_host_agent(tmp_path_factory)
 
 
 @pytest.fixture

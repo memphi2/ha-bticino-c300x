@@ -126,6 +126,16 @@ def _snapshot_failure_codes() -> set[str]:
     }
 
 
+def test_the_italian_visitor_image_failures_name_the_agent_as_the_file_does() -> None:
+    """The Italian file keeps "device agent"; a second term for it reads as a second thing."""
+
+    states = _load_json(TRANSLATIONS / "it.json")["entity"]["switch"]["stream_snapshots"][
+        "state_attributes"]["last_failure"]["state"]
+    for code in ("agent_unreachable", "agent_error"):
+        assert "device agent" in states[code].lower(), code
+        assert "agente del dispositivo" not in states[code].lower(), code
+
+
 def test_every_visitor_image_failure_is_shown_in_words_in_every_language() -> None:
     """The switch attribute keeps the code; the frontend shows the translated text."""
 

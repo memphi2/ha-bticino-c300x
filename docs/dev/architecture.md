@@ -237,7 +237,7 @@ The main loop never waits for these scripts; there is no queue and no thread.
 | QML write (incl. failed start, file rollback, restart of the previous GUI) | 30 s |
 | SSH start/stop | 60 s |
 | SSH status | 15 s |
-| Label apply/restore | none (synchronous, see below) |
+| Label apply/restore (QML write jobs, see below) | 30 s |
 
 At a deadline the process group is killed. While a job owns the slot,
 authorized maintenance writes and competing QML or device-user reads get

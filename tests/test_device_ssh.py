@@ -141,18 +141,23 @@ def test_command_timeout_closes_channel(ssh_server, monkeypatch):
 
 DISPLAY_STAND_IN = """#!/bin/sh
 {trap}
+[ "$C300X_QML_SOURCE_DIR" = "${{0%/*}}/qml" ] || exit 9
 : > "$0.started"
 i=0
 while [ $i -lt 400 ]; do sleep 0.02; i=$((i + 1)); done
+: > "$0.ended"
 """
 
 
-@pytest.mark.parametrize(("trap", "rolled_back"), [
-    ("trap 'sleep 0.2; printf rolling >&2; : > \"$0.rolled\"; exit 130' TERM", True),
-    ("trap '' TERM", False),
+@pytest.mark.parametrize(("trap", "rolled_back", "grace"), [
+    # The grace is far above any scheduling delay: only a client that waits
+    # for all of it instead of for the script's end reaches it.
+    ("trap 'sleep 0.2; printf rolling >&2; : > \"$0.rolled\"; exit 130' TERM", True, 30.0),
+    ("trap '' TERM", False, 1.0),
 ])
 def test_a_display_write_past_its_deadline_is_ended_by_sigterm_and_reported(
     ssh_server, monkeypatch, tmp_path: Path, trap: str, rolled_back: bool,
+    grace: float,
 ) -> None:
     """The display write over SSH gets the agent's job handling: SIGTERM for
     the script itself at the deadline, the channel open while its trap rolls
@@ -164,7 +169,7 @@ def test_a_display_write_past_its_deadline_is_ended_by_sigterm_and_reported(
     script.chmod(0o700)
     monkeypatch.setattr(installer, "_device_display_is_qt5", lambda client: False)
     monkeypatch.setattr(installer, "_SSH_DISPLAY_WRITE_TIMEOUT", 0.5, raising=False)
-    monkeypatch.setattr(installer, "_SSH_DISPLAY_WRITE_TERM_GRACE", 1.0, raising=False)
+    monkeypatch.setattr(installer, "_SSH_DISPLAY_WRITE_TERM_GRACE", grace, raising=False)
     client = installer._connect_device_client(ssh_server)
     started = time.monotonic()
     try:
@@ -174,7 +179,14 @@ def test_a_display_write_past_its_deadline_is_ended_by_sigterm_and_reported(
         assert result.value.reason == "device_display_timeout"
         assert script.with_name("qml_patch.sh.started").exists()
         assert script.with_name("qml_patch.sh.rolled").exists() is rolled_back
-        assert (elapsed < 1.4) is rolled_back and elapsed < 5
+        if rolled_back:
+            # Back as soon as the trap is done, not after the grace.
+            assert elapsed < grace
+        else:
+            # The whole grace was spent, and the client did not wait for the
+            # stand-in's own end eight seconds later.
+            assert elapsed >= 0.5 + grace
+            assert not script.with_name("qml_patch.sh.ended").exists()
         # The connection is still good for the next step or attempt.
         assert client.run("true") == ""
     finally:
@@ -184,24 +196,79 @@ def test_a_display_write_past_its_deadline_is_ended_by_sigterm_and_reported(
 def test_a_display_step_past_its_deadline_on_the_qt5_display_is_ended_the_same_way(
     ssh_server, monkeypatch, tmp_path: Path,
 ) -> None:
-    """Firmware 3.0.x: the display step is the same write with the same limits.
-    Ended at its deadline it is not an owed step (it did not finish): the
-    install fails with the display timeout, as on 1.7.x/2.0.2."""
+    """Firmware 3.0.x: the display step is the same write, with the same
+    command form and limits. Ended at its deadline it is not an owed step (it
+    did not finish): the install fails with the display timeout, as on
+    1.7.x/2.0.2."""
 
     script = tmp_path / "qml_patch.sh"
     script.write_text(DISPLAY_STAND_IN.format(
         trap="trap 'sleep 0.2; : > \"$0.rolled\"; exit 130' TERM"))
     script.chmod(0o700)
+    grace = 30.0
     monkeypatch.setattr(installer, "_SSH_DISPLAY_WRITE_TIMEOUT", 0.5, raising=False)
-    monkeypatch.setattr(installer, "_SSH_DISPLAY_WRITE_TERM_GRACE", 1.0, raising=False)
+    monkeypatch.setattr(installer, "_SSH_DISPLAY_WRITE_TERM_GRACE", grace, raising=False)
     client = installer._connect_device_client(ssh_server)
     started = time.monotonic()
     try:
         with pytest.raises(installer.C300XDeviceInstallError) as result:
             installer._apply_display_step_sync(client, str(tmp_path), "core-apply", qt5=True)
         assert result.value.reason == "device_display_timeout"
+        # The stand-in starts only when C300X_QML_SOURCE_DIR arrived.
+        assert script.with_name("qml_patch.sh.started").exists()
         assert script.with_name("qml_patch.sh.rolled").exists()
-        assert time.monotonic() - started < 1.4
+        # Back as soon as the trap is done, not after the grace.
+        assert time.monotonic() - started < grace
+        assert client.run("true") == ""
+    finally:
+        client.close()
+
+
+@pytest.mark.parametrize("refusal", [None, OSError("Channel not open")])
+def test_a_display_write_whose_channel_closed_at_the_deadline_is_a_timeout(
+    ssh_server, monkeypatch, tmp_path: Path, refusal: OSError | None,
+) -> None:
+    """The channel can close in the loop pass in which the deadline fires.
+    The signal then has nowhere to go: the pinned AsyncSSH drops it silently,
+    its documentation announces OSError. Either way the write ran past its
+    deadline and its outcome on the station is unknown, which is the display
+    time-out and not a general install failure; nothing waits for the grace."""
+
+    script = tmp_path / "qml_patch.sh"
+    script.write_text(DISPLAY_STAND_IN.format(trap=""))
+    script.chmod(0o700)
+    grace = 30.0
+    monkeypatch.setattr(installer, "_device_display_is_qt5", lambda client: False)
+    monkeypatch.setattr(installer, "_SSH_DISPLAY_WRITE_TIMEOUT", 0.5)
+    monkeypatch.setattr(installer, "_SSH_DISPLAY_WRITE_TERM_GRACE", grace)
+    client = installer._connect_device_client(ssh_server)
+    create_process = client._client.create_process
+    signalled: list[bool] = []
+
+    async def closing_process(*args, **kwargs):
+        process = await create_process(*args, **kwargs)
+        terminate = process.terminate
+
+        def closed_then_terminate() -> None:
+            # The real channel is closed before the signal is attempted.
+            process.close()
+            signalled.append(True)
+            if refusal is not None:
+                raise refusal
+            terminate()
+
+        process.terminate = closed_then_terminate
+        return process
+
+    client._client.create_process = closing_process
+    started = time.monotonic()
+    try:
+        with pytest.raises(installer.C300XDeviceInstallError) as result:
+            installer._apply_qml_patch_sync(client, str(tmp_path), "core-apply")
+        assert signalled == [True]
+        assert result.value.reason == "device_display_timeout"
+        assert time.monotonic() - started < grace
+        client._client.create_process = create_process
         assert client.run("true") == ""
     finally:
         client.close()

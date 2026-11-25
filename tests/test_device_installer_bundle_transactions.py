@@ -213,7 +213,8 @@ def test_the_display_steps_are_display_writes_with_the_same_limits_on_every_disp
     assert not hasattr(installer, "_SSH_COMMAND_TIMEOUT_QT5")
     assert [command.rsplit(" ", 1)[1] for command in transaction.client.display_writes] == [
         "core-apply", "apply"]
-    assert all(command.startswith("exec env ") for command in transaction.client.display_writes)
+    assert all(command.startswith("C300X_QML_SOURCE_DIR=") and " exec " in command
+               for command in transaction.client.display_writes)
 
 
 def test_native_metadata_reader_observes_manifest_commit_without_restart(tmp_path) -> None:

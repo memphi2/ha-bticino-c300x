@@ -1,6 +1,7 @@
 """Framebuffer acquisition is event-driven, bounded, and generation-guarded."""
 
 import asyncio
+import contextlib
 import time
 from io import BytesIO
 from types import SimpleNamespace
@@ -447,6 +448,69 @@ def test_a_visitor_image_save_that_runs_out_of_time_is_not_blamed_on_the_agent(t
         event(manager, "doorbell_pressed", "one")
         await drain(manager)
         assert manager.capture.last_failure == "save_failed"
+        manager.close()
+
+    asyncio.run(run())
+
+
+def swallowed_limit(calls):
+    """Wait for the capture limit and turn its cancellation into a time-out,
+    as an HTTP client does when its own timer expires in the same loop pass.
+    The real asyncio.timeout is then expiring while the task runs on."""
+
+    async def wait(*args, **kwargs):
+        calls.append(args)
+        if len(calls) > 1:
+            return bmp(), "image/bmp"
+        try:
+            await asyncio.sleep(5)
+        except asyncio.CancelledError:
+            raise TimeoutError from None
+
+    return wait
+
+
+def test_a_capture_limit_reported_as_a_request_time_out_ends_the_capture(tmp_path, monkeypatch, caplog):
+    async def run():
+        manager = setup(tmp_path, monkeypatch)
+        calls = []
+        manager.entry.runtime_data.api.async_doorbell_snapshot = swallowed_limit(calls)
+        monkeypatch.setattr(capture, "CAPTURE_TIMEOUT", 0.05)
+        event(manager, "doorbell_pressed", "one")
+        task = manager.capture.task
+        await drain(manager)
+        # Over with the limit: no further attempt, a recorded cause, no crash.
+        assert task.exception() is None and len(calls) == 1
+        assert manager.capture.last_failure == "agent_unreachable"
+        assert manager.latest is None and manager.store.items(30) == []
+        assert "Unexpected snapshot acquisition failure" not in caplog.text
+        manager.close()
+
+    asyncio.run(run())
+
+
+def test_a_capture_limit_that_already_fired_stops_the_store_before_it_writes(tmp_path, monkeypatch, caplog):
+    async def run():
+        manager = setup(tmp_path, monkeypatch)
+        monkeypatch.setattr(capture, "CAPTURE_TIMEOUT", 0.05)
+        disk_job = manager.disk_job
+        waited = []
+        wait = swallowed_limit(waited)
+
+        async def conversion_outliving_the_limit(function, *args):
+            if function is capture.framebuffer_jpeg:
+                with contextlib.suppress(TimeoutError):
+                    await wait()
+            return await disk_job(function, *args)
+
+        monkeypatch.setattr(manager, "disk_job", conversion_outliving_the_limit)
+        event(manager, "doorbell_pressed", "one")
+        task = manager.capture.task
+        await drain(manager)
+        assert len(waited) == 1 and task.exception() is None
+        assert manager.capture.last_failure == "save_failed"
+        assert manager.latest is None and manager.store.items(30) == []
+        assert "Unexpected snapshot acquisition failure" not in caplog.text
         manager.close()
 
     asyncio.run(run())

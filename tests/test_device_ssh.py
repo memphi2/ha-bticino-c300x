@@ -145,15 +145,19 @@ DISPLAY_STAND_IN = """#!/bin/sh
 : > "$0.started"
 i=0
 while [ $i -lt 400 ]; do sleep 0.02; i=$((i + 1)); done
+: > "$0.ended"
 """
 
 
-@pytest.mark.parametrize(("trap", "rolled_back"), [
-    ("trap 'sleep 0.2; printf rolling >&2; : > \"$0.rolled\"; exit 130' TERM", True),
-    ("trap '' TERM", False),
+@pytest.mark.parametrize(("trap", "rolled_back", "grace"), [
+    # The grace is far above any scheduling delay: only a client that waits
+    # for all of it instead of for the script's end reaches it.
+    ("trap 'sleep 0.2; printf rolling >&2; : > \"$0.rolled\"; exit 130' TERM", True, 30.0),
+    ("trap '' TERM", False, 1.0),
 ])
 def test_a_display_write_past_its_deadline_is_ended_by_sigterm_and_reported(
     ssh_server, monkeypatch, tmp_path: Path, trap: str, rolled_back: bool,
+    grace: float,
 ) -> None:
     """The display write over SSH gets the agent's job handling: SIGTERM for
     the script itself at the deadline, the channel open while its trap rolls
@@ -165,7 +169,7 @@ def test_a_display_write_past_its_deadline_is_ended_by_sigterm_and_reported(
     script.chmod(0o700)
     monkeypatch.setattr(installer, "_device_display_is_qt5", lambda client: False)
     monkeypatch.setattr(installer, "_SSH_DISPLAY_WRITE_TIMEOUT", 0.5, raising=False)
-    monkeypatch.setattr(installer, "_SSH_DISPLAY_WRITE_TERM_GRACE", 1.0, raising=False)
+    monkeypatch.setattr(installer, "_SSH_DISPLAY_WRITE_TERM_GRACE", grace, raising=False)
     client = installer._connect_device_client(ssh_server)
     started = time.monotonic()
     try:
@@ -175,7 +179,14 @@ def test_a_display_write_past_its_deadline_is_ended_by_sigterm_and_reported(
         assert result.value.reason == "device_display_timeout"
         assert script.with_name("qml_patch.sh.started").exists()
         assert script.with_name("qml_patch.sh.rolled").exists() is rolled_back
-        assert (elapsed < 1.4) is rolled_back and elapsed < 5
+        if rolled_back:
+            # Back as soon as the trap is done, not after the grace.
+            assert elapsed < grace
+        else:
+            # The whole grace was spent, and the client did not wait for the
+            # stand-in's own end eight seconds later.
+            assert elapsed >= 0.5 + grace
+            assert not script.with_name("qml_patch.sh.ended").exists()
         # The connection is still good for the next step or attempt.
         assert client.run("true") == ""
     finally:

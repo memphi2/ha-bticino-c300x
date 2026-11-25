@@ -537,16 +537,22 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
 
         if user_input is None:
             return await step(None)
-        result = await self._work.async_run(lambda: step(user_input))
-        if result is not OTHER_FLOW_FINISHED:
-            return result
-        entry = self.hass.config_entries.async_get_entry(self._entry_id)
-        if entry is None or not hasattr(entry, "runtime_data"):
-            return self.async_abort(reason="entry_not_loaded")
-        update_state = getattr(entry.runtime_data, "agent_update_state", None)
-        if not getattr(update_state, "update_required", False):
+
+        def still_needed() -> bool:
+            # After another flow's work for the entry: is an update still due?
+            entry = self.hass.config_entries.async_get_entry(self._entry_id)
+            if entry is None or not hasattr(entry, "runtime_data"):
+                # The step itself reports that.
+                return True
+            update_state = getattr(entry.runtime_data, "agent_update_state", None)
+            return bool(getattr(update_state, "update_required", False))
+
+        result = await self._work.async_run(
+            lambda: step(user_input), (step.__name__, user_input), still_needed
+        )
+        if result is OTHER_FLOW_FINISHED:
             return self.async_create_entry(data={})
-        return await step(None)
+        return result
 
     async def async_step_confirm(
         self,

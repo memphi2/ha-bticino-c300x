@@ -34,6 +34,7 @@ from .entity import (
 )
 from .entry_types import BticinoC300XConfigEntry
 from .event_payload import agent_event_key
+from .exceptions import home_assistant_error
 from .forwarding import coerce_forwarding_mode_state, forwarding_state_from_value
 from .select_camera_resolution import C300XCameraResolutionSelect
 
@@ -44,7 +45,7 @@ PARALLEL_UPDATES = 1
 
 
 def _audio_codec_select_allowed(entry: BticinoC300XConfigEntry) -> bool:
-    """Keep device-codec changes outside the first C100X test scope."""
+    """The firmware codec can be switched on a C300X only; a C100X stays on Speex."""
 
     return not entry_profile(entry).is_c100x and (
         entry_maintenance_action_is_advertised(entry, "audio_codec_apply")
@@ -263,9 +264,7 @@ class C300XAudioCodecSelect(C300XEntity, SelectEntity):
         """Switch the device codec (apply=PCMU, restore=speex); reboots."""
 
         if not _audio_codec_select_allowed(self._entry):
-            raise HomeAssistantError(
-                "Device codec changes are unavailable in this test build"
-            )
+            raise home_assistant_error("maintenance_action_not_supported", entry=self._entry)
         api = self._entry.runtime_data.api
         try:
             if option == "pcmu":

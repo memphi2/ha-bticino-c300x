@@ -1708,11 +1708,9 @@
           "ssh_login_refused": "Le {model} a refusé la connexion SSH. Saisissez l'utilisateur et le mot de passe SSH de l'appareil."
         },
         "abort": {
-          "entry_not_loaded": "L'entrée BTicino C300X n'est pas chargée.",
-          "device_model_incompatible": "Ce paquet ne prend pas en charge cette platine, ou le modèle de la platine n'a pas pu être confirmé. Aucun fichier de l'appareil n'a été remplacé."
+          "entry_not_loaded": "L'entrée BTicino C300X n'est pas chargée."
         }
-      },
-      "description": "Installed: {installed_version}. Packaged: {available_version}. Update path: {update_path}. Reason: {reason}."
+      }
     },
     "device_agent_startup_disabled": {
       "title": "L'agent {model} ne démarre pas après redémarrage",

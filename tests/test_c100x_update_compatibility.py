@@ -1,52 +1,19 @@
 """C100X package guards exercise real metadata and temporary-directory updates."""
 
-import asyncio
 import json
 import os
 import subprocess
 from hashlib import sha256
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
 
 import pytest
-from test_agent_update import FakeHass, FakeUpdateApi
 from test_native_agent_update_legacy_bootstrap import _compile_updater
 
-from custom_components.bticino_c300x import agent_update, device_installer, repairs
+from custom_components.bticino_c300x import agent_update, device_installer
 from custom_components.bticino_c300x.device_profile import DeviceProfile
 
 ROOT = Path(__file__).resolve().parents[1]
-
-
-@pytest.mark.parametrize("flag", [None, False, "true", 1, {}, []])
-def test_known_c100x_never_offers_incompatible_bundle_repair(flag):
-    bundle = {"version": "same", "bundle_hash": "sha256:same", "c100x_compatible": flag}
-    state = agent_update.compare_agent_bundle({
-        "model": "C100X", "version": "same",
-        "agent": {"bundle_hash": "sha256:same", "self_update_supported": True},
-    }, bundle)
-    assert state.reason == "device_model_incompatible"
-    assert state.update_required and not state.repair_fixable
-    assert not state.self_update_repair_supported
-    assert "blocked" in state.repair_placeholders["update_path"]
-    entry = SimpleNamespace(runtime_data=SimpleNamespace(agent_update_state=state))
-    hass = SimpleNamespace(data={}, config_entries=SimpleNamespace(async_get_entry=lambda _: entry))
-    flow = repairs.DeviceAgentUpdateRepairFlow(hass, "synthetic")
-    flow.async_abort = lambda **kwargs: kwargs
-    assert asyncio.run(flow.async_step_confirm({}))["reason"] == "device_model_incompatible"
-    assert asyncio.run(flow.async_step_ssh_install({}))["reason"] == "device_model_incompatible"
-
-
-def test_api_preflight_rejects_before_any_upload(monkeypatch):
-    monkeypatch.setattr(agent_update, "async_load_packaged_bundle_metadata", AsyncMock(return_value={
-        "version": "same", "bundle_hash": "sha256:synthetic", "files": [],
-    }))
-    api = FakeUpdateApi()
-    api.async_validate_setup = AsyncMock(return_value={"model": "C100X"})
-    with pytest.raises(RuntimeError, match="device_model_incompatible"):
-        asyncio.run(agent_update.async_apply_packaged_agent_update(FakeHass(), api))
-    assert api.calls == []
 
 
 @pytest.mark.parametrize("variant", ["missing", "invalid", "unmarked", "wrong-binary", "compatible"])
@@ -181,15 +148,15 @@ def test_the_joint_package_updates_both_models(monkeypatch, model):
         assert issue["translation_key"] == "device_agent_update_required"
 
 
-def test_a_c100x_entry_with_an_incompatible_package_is_blocked_not_misadvised():
-    state = agent_update.compare_agent_bundle({
-        "model": "C100X", "version": "old",
-        "agent": {"bundle_hash": "sha256:old", "self_update_supported": True},
-    }, {"version": "new", "bundle_hash": "sha256:new"})
-    assert state.reason == "device_model_incompatible"
-    assert state.repair_placeholders["update_path"] == "blocked: install a C100X-compatible integration package"
+def test_no_text_sends_a_station_to_another_package():
     for name in ("strings.json", "translations/en.json", "translations/de.json",
                  "translations/it.json", "translations/fr.json"):
         texts = json.loads((ROOT / "custom_components/bticino_c300x" / name).read_text())
+        issue = texts["issues"]["device_agent_update_required"]
+        # A fixable issue has its text in the flow; hassfest refuses both.
+        assert "description" not in issue and "fix_flow" in issue
+        assert "device_model_incompatible" not in issue["fix_flow"]["abort"]
         assert "device_agent_update_regular_package" not in texts["issues"]
         assert "c100x_package_only" not in texts["config"]["abort"]
+    source = (ROOT / "custom_components/bticino_c300x/agent_update.py").read_text()
+    assert "blocked:" not in source and "device_model_incompatible" not in source

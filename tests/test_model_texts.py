@@ -69,8 +69,6 @@ ADDED_SINCE_2_10_0 = frozenset({
     "issues/c100x_display_boot_check_failed/title",
     "issues/c100x_display_rolled_back/description",
     "issues/c100x_display_rolled_back/title",
-    "issues/device_agent_update_required/description",
-    "issues/device_agent_update_required/fix_flow/abort/device_model_incompatible",
     "options/abort/unsupported_display",
     "options/step/init/menu_option_descriptions/dashboard_alarm",
     "options/step/init/menu_options/dashboard_alarm",

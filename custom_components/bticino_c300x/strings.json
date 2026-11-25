@@ -1708,11 +1708,9 @@
           "ssh_login_refused": "The {model} refused the SSH login. Enter the SSH user and password of the device."
         },
         "abort": {
-          "entry_not_loaded": "The BTicino C300X entry is not loaded.",
-          "device_model_incompatible": "This package does not support this station, or the station's model could not be confirmed. No device files were replaced."
+          "entry_not_loaded": "The BTicino C300X entry is not loaded."
         }
-      },
-      "description": "Installed: {installed_version}. Packaged: {available_version}. Update path: {update_path}. Reason: {reason}."
+      }
     },
     "device_agent_startup_disabled": {
       "title": "{model} device agent does not start after reboot",

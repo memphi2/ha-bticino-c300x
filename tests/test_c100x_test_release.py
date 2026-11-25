@@ -1,6 +1,5 @@
 """One package for the Classe 300X and the Classe 100X; no network or device actions."""
 
-import asyncio
 import importlib
 import json
 import os
@@ -8,10 +7,8 @@ import subprocess
 import zipfile
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
 
 import pytest
-from test_agent_update import FakeHass, FakeUpdateApi
 from test_native_agent_update_legacy_bootstrap import _compile_updater
 
 from custom_components.bticino_c300x import agent_update, device_installer
@@ -20,30 +17,19 @@ from custom_components.bticino_c300x.factory_login import factory_ssh_login
 ROOT = Path(__file__).resolve().parents[1]
 
 
-@pytest.mark.parametrize("model", ["C300X", "", None])
-@pytest.mark.parametrize("bundle", [
-    {}, {"c100x_compatible": True}, {"c100x_compatible": False}, {"c100x_only": True}, {"c100x_only": False},
+@pytest.mark.parametrize("info", [
+    {"model": "C300X"}, {"model": ""}, {}, {"model": "C100X"}, {"model": "C300X", "display_kind": "qt5_ondisk"},
 ])
-def test_a_c300x_takes_every_package_as_before(model, bundle):
-    assert agent_update.bundle_supports_device({"model": model}, bundle) is True
+def test_the_joint_package_is_offered_to_every_station(info):
+    """No model is told to fetch another package; the agent's own updater guards a C100X."""
 
-
-@pytest.mark.parametrize("info", [{"model": "C100X"}, {"model": "C300X", "display_kind": "qt5_ondisk"}])
-@pytest.mark.parametrize("compatible", [True, False, "true", 1, None])
-def test_a_c100x_takes_only_a_package_that_names_itself_compatible(info, compatible):
-    bundle = {} if compatible is None else {"c100x_compatible": compatible}
-    assert agent_update.bundle_supports_device(info, bundle) is (compatible is True)
-
-
-def test_a_c100x_is_refused_an_incompatible_package_before_upload(monkeypatch):
-    monkeypatch.setattr(agent_update, "async_load_packaged_bundle_metadata", AsyncMock(return_value={
-        "version": "test", "bundle_hash": "sha256:test", "files": [],
-    }))
-    api = FakeUpdateApi()
-    api.async_validate_setup = AsyncMock(return_value={"model": "C100X"})
-    with pytest.raises(RuntimeError, match="device_model_incompatible"):
-        asyncio.run(agent_update.async_apply_packaged_agent_update(FakeHass(), api))
-    assert api.calls == []
+    state = agent_update.compare_agent_bundle(
+        {**info, "version": "old", "agent": {"bundle_hash": "sha256:old", "self_update_supported": True}},
+        {"version": "new", "bundle_hash": "sha256:new", "c100x_compatible": True},
+    )
+    assert (state.state, state.reason) == (agent_update.UPDATE_STATE_UPDATE_AVAILABLE, "version_mismatch")
+    assert state.repair_fixable and state.self_update_repair_supported
+    assert not hasattr(agent_update, "bundle_supports_device")
 
 
 def test_explicit_c100x_gui_request_is_not_silently_ignored(tmp_path, monkeypatch):

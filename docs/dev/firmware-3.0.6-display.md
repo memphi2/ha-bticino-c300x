@@ -246,7 +246,11 @@ A request left by a worker that died is taken over by the next worker.
 **The start script** tries the overlay once per start, at boot and on a
 restart alike: no retry loop, no `sleep`, so the vendor trap always runs at
 once. An abnormal exit within 60 s writes the mark for this boot and starts
-`BtClass` as shipped. The mark holds the boot id; a mark of an earlier boot
+`BtClass` as shipped. The 60 s are counted on `/proc/uptime`, so a clock set
+by hwclock or NTP during the start does not turn an early crash into a late
+one. The display's error output goes through a FIFO to a reader that is no
+child of the start script, so the fallback waits for `BtClass` alone; a
+child of the display that keeps the error output open does not delay it. The mark holds the boot id; a mark of an earlier boot
 counts as absent, so the next boot tries the overlay once more.
 
 **Writes and the worker.** A write that changes the activation files notes

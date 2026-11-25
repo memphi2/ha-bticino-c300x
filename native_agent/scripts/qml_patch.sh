@@ -38,6 +38,7 @@ if [ -e "${C300X_QML_QT5_MARKER:-/usr/lib/libQt5Core.so.5}" ]; then
     QT5_WRAPPER_BACKUP="${C300X_QML_QT5_WRAPPER_BACKUP:-$QT5_BACKUP_ROOT/original/bin/BtClass_qws}"
     QT5_LOG="${C300X_QML_QT5_LOG:-/tmp/c300x-display-qt5.log}"
     QT5_BOOT_ID="${C300X_QML_BOOT_ID:-/proc/sys/kernel/random/boot_id}"
+    QT5_UPTIME="${C300X_QML_UPTIME:-/proc/uptime}"
     # bt_daemon checks the watchdog file at least every 32 s and reboots
     # without it: a display that wrote none within 40 s is not starting.
     QT5_START_SECONDS="${C300X_QML_QT5_START_SECONDS:-40}"
@@ -2258,21 +2259,38 @@ qt5_overlay_state() {
 
 # The vendor start script with the overlay ahead of the plain start. A display
 # that ends with an error within a minute of starting with the overlay marks it
-# failed for this boot and starts as shipped.
-# Its error output, where Qt reports QML errors, goes to a log of at most 64 KB.
+# failed for this boot and starts as shipped. The minute is counted on the
+# uptime clock, which a time set at boot or by NTP does not move.
+# Its error output, where Qt reports QML errors, goes through a FIFO to a log
+# of at most 64 KB. The reader is no child of the start script: the fallback
+# waits for the display program alone, not for every process that inherited
+# its error output.
 qt5_wrapper_text() {
-    awk -v lib="$QT5_OVERLAY_LIB" -v rcc="$QT5_RCC" -v errlog="$QT5_LOG" -v bootid="$QT5_BOOT_ID" '
+    awk -v lib="$QT5_OVERLAY_LIB" -v rcc="$QT5_RCC" -v errlog="$QT5_LOG" -v bootid="$QT5_BOOT_ID" \
+        -v uptime="$QT5_UPTIME" '
         $0 == "./bin/gui/BtClass &" && !done {
             print "# c300x-qrc-overlay: display pages of the Home Assistant integration"
             print "c300x_boot=$(cat \047" bootid "\047 2>/dev/null)"
             print "if [ -f \047" lib "\047 ] && [ -f \047" rcc "\047 ] && { [ ! -e \047" rcc ".failed\047 ] || [ \"$(cat \047" rcc ".failed\047 2>/dev/null)\" != \"$c300x_boot\" ]; }; then"
-            print "    c300x_start=$(date +%s)"
-            print "    rm -f \047" errlog ".rc\047"
-            print "    { { LD_PRELOAD=\047" lib "\047 C300X_QRC_OVERLAY=\047" rcc "\047 QML_DISABLE_DISK_CACHE=1 C300X_QRC_FAILED_ID=\"$c300x_boot\" ./bin/gui/BtClass 2>&1 1>&3 3>&-; echo $? > \047" errlog ".rc\047; } | { head -c 65536 > \047" errlog "\047; cat > /dev/null; }; } 3>&1 &"
+            print "    c300x_start="
+            print "    read c300x_start c300x_idle 2>/dev/null < \047" uptime "\047"
+            print "    rm -f \047" errlog ".rc\047 \047" errlog ".fifo\047"
+            print "    c300x_err=/dev/null"
+            print "    if mkfifo -m 600 \047" errlog ".fifo\047 2>/dev/null; then"
+            print "        c300x_err=\047" errlog ".fifo\047"
+            print "        ( sh -c \047head -c 65536 > \"$0\"; exec cat > /dev/null\047 \047" errlog "\047 < \"$c300x_err\" > /dev/null 2>&1 & )"
+            print "    fi"
+            print "    { LD_PRELOAD=\047" lib "\047 C300X_QRC_OVERLAY=\047" rcc "\047 QML_DISABLE_DISK_CACHE=1 C300X_QRC_FAILED_ID=\"$c300x_boot\" ./bin/gui/BtClass 2> \"$c300x_err\"; echo $? > \047" errlog ".rc\047; } &"
             print "    wait $!"
             print "    c300x_rc=$(cat \047" errlog ".rc\047 2>/dev/null || echo 0)"
             print "    case $c300x_rc in 0|137|138|140|143) exit $c300x_rc ;; esac"
-            print "    [ $(($(date +%s) - c300x_start)) -lt 60 ] || exit $c300x_rc"
+            print "    c300x_now="
+            print "    read c300x_now c300x_idle 2>/dev/null < \047" uptime "\047"
+            print "    c300x_start=${c300x_start%%.*} c300x_now=${c300x_now%%.*}"
+            print "    case $c300x_start:$c300x_now in"
+            print "        *[!0-9:]*|:*|*:) ;;"
+            print "        *) [ $((c300x_now - c300x_start)) -lt 60 ] || exit $c300x_rc ;;"
+            print "    esac"
             print "    printf \047%s\\n\047 \"$c300x_boot\" > \047" rcc ".failed\047"
             print "fi"
             done = 1

@@ -29,20 +29,23 @@ def firmware():
 @pytest.mark.parametrize("shell", ["host", "firmware"])
 @pytest.mark.parametrize("patched", [False, True])
 @pytest.mark.parametrize("mode", ["error", "normal", "term", "usr1", "usr2", "late-error",
-                                  "exit137", "exit138", "exit140", "exit143"])
+                                  "exit137", "exit138", "exit140", "exit143", "clock-step", "child"])
 def test_original_wrapper_lifecycle(programs, tmp_path, firmware, shell, patched, mode):
     device = Device(tmp_path, programs)
     device.program = firmware / "home/bticino/bin/gui/BtClass"
     shutil.copy2(firmware / "home/bticino/bin/BtClass_qws", device.wrapper)
-    device.ok("apply")
+    uptime = tmp_path / "uptime"
+    uptime.write_text("100.50 80.25\n")
+    device.ok("apply", C300X_QML_UPTIME=str(uptime))
     # Function overrides retain the original wrapper body and signal traps.
     prefix = (
         'local_alpha() { :; }\n'
         'killall() { probe_signal=TERM; [ "$#" -le 1 ] || probe_signal="${1#-SIG}"; '
         'kill -s "$probe_signal" "$(cat "$PROBE_PID")"; }\n'
     )
-    if mode == "late-error":
-        prefix += ('date() { if [ -f "$PROBE_CLOCK" ]; then echo 161; '
+    if mode == "clock-step":
+        # The wall clock jumps forward during the start (hwclock, NTP).
+        prefix += ('date() { if [ -f "$PROBE_CLOCK" ]; then echo 100000; '
                    'else : > "$PROBE_CLOCK"; echo 100; fi; }\n')
     wrapper = tmp_path / "wrapper-probe.sh"
     wrapper.write_text(prefix + (device.wrapper if patched else device.wrapper_backup).read_text())
@@ -55,14 +58,17 @@ def test_original_wrapper_lifecycle(programs, tmp_path, firmware, shell, patched
         'trap \'echo usr2 >> "$PROBE_LOG"\' USR2\n'
         'trap \'echo term >> "$PROBE_LOG"; exit 0\' TERM\n'
         'echo "start:${LD_PRELOAD:+overlay}" >> "$PROBE_LOG"\n'
-        'case "$PROBE_MODE" in error|late-error) exit 139;; normal) exit 0;; '
+        'case "$PROBE_MODE" in error|clock-step) exit 139;; normal) exit 0;; '
+        'late-error) echo "161.75 90.00" > "$PROBE_UPTIME"; exit 139;; '
+        # A child that keeps the display's error output open for 30 s.
+        'child) [ -z "$LD_PRELOAD" ] || sleep 30 > /dev/null & exit 139;; '
         'exit*) exit "${PROBE_MODE#exit}";; esac\n'
         'while :; do sleep 0.05; done\n'
     )
     child.chmod(0o700)
     env = {**os.environ, "PROBE_PID": str(tmp_path / "child.pid"),
            "PROBE_LOG": str(tmp_path / "events"), "PROBE_MODE": mode,
-           "PROBE_CLOCK": str(tmp_path / "clock")}
+           "PROBE_CLOCK": str(tmp_path / "clock"), "PROBE_UPTIME": str(uptime)}
     command = ["/bin/bash", "--posix", str(wrapper)]
     if shell == "firmware":
         # Original /bin/sh is an absolute link to /bin/bash.bash, not BusyBox.
@@ -89,6 +95,11 @@ def test_original_wrapper_lifecycle(programs, tmp_path, firmware, shell, patched
 
     try:
         wait_event("start:overlay" if patched else "start:")
+        if mode == "child" and patched:
+            started = time.monotonic()
+            wait_event("start:")
+            # The fallback follows the display program, not its error output.
+            assert time.monotonic() - started < 5
         if mode in {"term", "usr1", "usr2"}:
             if mode != "term":
                 process.send_signal(signal.SIGUSR1 if mode == "usr1" else signal.SIGUSR2)
@@ -103,7 +114,7 @@ def test_original_wrapper_lifecycle(programs, tmp_path, firmware, shell, patched
         stdout, stderr = process.communicate(timeout=5)
         (tmp_path / "wrapper.log").write_text(stdout + stderr)
     lines = events.read_text().splitlines()
-    if mode == "error" and patched:
+    if mode in {"error", "clock-step", "child"} and patched:
         assert lines == ["start:overlay", "start:"]
         assert device.ok("status")["qt5_overlay"] == "failed"
     else:

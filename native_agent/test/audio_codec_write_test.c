@@ -38,14 +38,18 @@ static int checked_sync(int fd) {
     if (failure == 3) { errno = EIO; return -1; }
     return fsync(fd);
 }
-static int checked_rename(const char *from, const char *to) {
+static mode_t mode_of(const char *path) {
     struct stat st;
+    int fd = open(path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
+    assert(fd >= 0 && fstat(fd, &st) == 0 && close(fd) == 0);
+    return st.st_mode & 07777;
+}
+static int checked_rename(const char *from, const char *to) {
     if (failure == 4) { errno = EIO; return -1; }
-    assert(stat(from, &st) == 0);
-    renamed_mode = st.st_mode & 07777;
-    if (failure != 5) return rename(from, to);
+    assert(rename(from, to) == 0);
+    renamed_mode = mode_of(to);
     /* Another process swaps the new name for a symlink right after the rename. */
-    assert(rename(from, to) == 0 && unlink(to) == 0 && symlink("victim", to) == 0);
+    if (failure == 5) assert(unlink(to) == 0 && symlink("victim", to) == 0);
     return 0;
 }
 static void check_file(const char *path, const char *expected, mode_t mode) {

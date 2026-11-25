@@ -43,7 +43,7 @@ def test_fw306_low_choices_preserve_viewport_binary_and_running_baseline(lab: La
     body = lab.call()
     assert (body["size"], body["running_size"], body["restart_required"]) == (size, "400x288", True)
     # Removal retains the factory dimensions, not the last selected size.
-    subprocess.run([str(lab.binary), "--restore-media-patches"], env=lab.removal_env,
+    subprocess.run([str(lab.binary), "--restore-media-patches"], env=lab.env,
                    cwd=lab.settings.parent, check=True, capture_output=True, timeout=10)
     assert lab.settings.read_text() == SETTINGS
     assert lab.stack.read_text() == STACK and target.read_bytes() == original

@@ -60,21 +60,6 @@ class Lab:
     start: Callable[[], subprocess.Popen[bytes]]
     process: subprocess.Popen[bytes] | None = None
 
-    @property
-    def removal_env(self) -> dict[str, str]:
-        """The beta removal CLI also verifies/restores its routing binary."""
-        original = Path(os.environ.get(
-            "C300X_FIRMWARE_WORK", ROOT.parent / "c300x-fwpatch/work"
-        )) / "rootfs-3.0.6/home/bticino/bin/bt_answering_machine"
-        if not original.is_file():
-            pytest.skip("local original routing firmware is not distributed")
-        target = self.settings.parent / "routing-bin/bt_answering_machine"
-        target.parent.mkdir(exist_ok=True)
-        target.write_bytes(original.read_bytes())
-        target.chmod(0o755)
-        return {**self.env, "C300X_ROUTING_TARGET_DIR": str(target.parent),
-                "C300X_ROUTING_BACKUP_DIR": str(self.settings.parent / "routing-backup")}
-
     def restart_agent(self) -> None:
         """The agent starts again while the device keeps running."""
         assert self.process is not None
@@ -268,7 +253,7 @@ def test_removing_the_agent_puts_the_original_values_back(lab: Lab) -> None:
     lab.settings.write_text(lab.settings.read_text().replace("LcdDelay=600", "LcdDelay=700"))
 
     for _ in range(2):
-        result = subprocess.run([str(lab.binary), "--restore-media-patches"], env=lab.removal_env,
+        result = subprocess.run([str(lab.binary), "--restore-media-patches"], env=lab.env,
                                 capture_output=True, text=True, timeout=10, check=False)
         assert result.returncode == 0, result.stderr
         assert lab.settings.read_text() == SETTINGS.replace("LcdDelay=600", "LcdDelay=700")
@@ -314,7 +299,7 @@ def test_an_agent_that_restarts_without_the_device_keeps_what_the_device_runs(la
 def test_removal_leaves_a_file_alone_that_lost_its_values(lab: Lab, content: str) -> None:
     lab.call({**CONFIRM, "bitrate_kbps": 3000, "fps": 24})
     lab.settings.write_text(content)
-    result = subprocess.run([str(lab.binary), "--restore-media-patches"], env=lab.removal_env,
+    result = subprocess.run([str(lab.binary), "--restore-media-patches"], env=lab.env,
                             capture_output=True, text=True, timeout=10, check=False)
     assert result.returncode == 0, result.stderr
     assert lab.settings.read_text() == content
@@ -324,7 +309,7 @@ def test_removal_puts_back_an_original_value_outside_the_offered_range(lab: Lab)
     original = SETTINGS.replace("FpsRtpH=15", "FpsRtpH=30")
     lab.settings.write_text(original)
     lab.call({**CONFIRM, "bitrate_kbps": 1000, "fps": 20})
-    result = subprocess.run([str(lab.binary), "--restore-media-patches"], env=lab.removal_env,
+    result = subprocess.run([str(lab.binary), "--restore-media-patches"], env=lab.env,
                             capture_output=True, text=True, timeout=10, check=False)
     assert result.returncode == 0, result.stderr
     assert lab.settings.read_text() == original
@@ -405,7 +390,7 @@ def test_firmware_3_sets_the_low_stream_its_only_stream(lab: Lab) -> None:
         "BitrateRtpL=600\nFpsRtpL=25\nWidthLow=720\nHeightLow=576")
     assert lab.call({**CONFIRM, "bitrate_kbps": 2001}, status=400)["error"] == "camera_quality_out_of_range"
     assert lab.call({**CONFIRM, "size": "688x480"}, status=400)["error"] == "camera_quality_invalid_size"
-    result = subprocess.run([str(lab.binary), "--restore-media-patches"], env=lab.removal_env, cwd=lab.settings.parent,
+    result = subprocess.run([str(lab.binary), "--restore-media-patches"], env=lab.env, cwd=lab.settings.parent,
                             capture_output=True, text=True, timeout=10, check=False)
     assert result.returncode == 0, result.stderr
     assert lab.settings.read_text() == SETTINGS
@@ -471,7 +456,7 @@ def test_removal_puts_back_the_original_size(lab: Lab) -> None:
     # The device changed another part of the cut file meanwhile; that one stays.
     lab.stack.write_text(lab.stack.read_text().replace("<min>30</min>", "<min>40</min>"))
     for _ in range(2):
-        result = subprocess.run([str(lab.binary), "--restore-media-patches"], env=lab.removal_env,
+        result = subprocess.run([str(lab.binary), "--restore-media-patches"], env=lab.env,
                                 capture_output=True, text=True, timeout=10, check=False)
         assert result.returncode == 0, result.stderr
         assert lab.settings.read_text() == SETTINGS

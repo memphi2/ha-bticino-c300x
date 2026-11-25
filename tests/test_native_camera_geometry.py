@@ -84,7 +84,7 @@ def test_geometry_selection_is_coupled_and_survives_agent_restart(lab: Lab) -> N
 def test_uninstall_restores_geometry_and_original_camera_settings(lab: Lab) -> None:
     lab.call({**CONFIRM, "size": "960x576", "fps": 24})
     for _ in range(2):
-        result = subprocess.run([str(lab.binary), "--restore-media-patches"], env=lab.removal_env,
+        result = subprocess.run([str(lab.binary), "--restore-media-patches"], env=lab.env,
                                 capture_output=True, text=True, timeout=10, check=False)
         assert result.returncode == 0, result.stderr
         assert digest(Path(lab.env["C300X_MEDIA_GEOMETRY_TARGET"])) == STOCK
@@ -120,7 +120,7 @@ def test_unreadable_managed_config_blocks_removal_and_keeps_all_backups(lab: Lab
     target = Path(lab.env["C300X_MEDIA_GEOMETRY_TARGET"])
     backup = Path(lab.env["C300X_MEDIA_GEOMETRY_BACKUP"])
     (lab.settings if broken == "settings" else lab.stack).write_text("damaged config")
-    result = subprocess.run([str(lab.binary), "--restore-media-patches"], env=lab.removal_env,
+    result = subprocess.run([str(lab.binary), "--restore-media-patches"], env=lab.env,
                             capture_output=True, text=True, timeout=10, check=False)
     assert result.returncode == 1
     assert "managed_camera_config_unreadable" in result.stderr
@@ -267,7 +267,7 @@ def test_running_review_current_geometry_observation_does_not_change_boot_note(l
     before = note.read_bytes()
     for current, expected in ((running.read_bytes(), True), (b"unknown executable", False)):
         running.write_bytes(current)
-        result = subprocess.run([str(lab.binary), "--restore-media-patches"], env=lab.removal_env,
+        result = subprocess.run([str(lab.binary), "--restore-media-patches"], env=lab.env,
                                 capture_output=True, text=True, timeout=10, check=True)
         assert json.loads(result.stdout)["media_reboot_required"] is expected
         assert digest(target) == STOCK

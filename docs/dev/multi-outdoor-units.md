@@ -212,7 +212,8 @@ it the unit is the current call's, else the default unit. A ring call always
 shows the calling unit; the station switches the picture itself.
 
 On-demand video of a unit other than the default one (phase D) is **not yet
-supported**: it answers `409 unit_video_unsupported`. Designed for later: the
+supported**: it answers `409 unit_video_unsupported`. Later, with its own
+concept that includes how the card handles several units' video. Design note: the
 request's `unit` (and an RTSP `?unit=<unit_id>` for a stream started by
 `PLAY`) selects the SDP `a=DEVADDR:<action_where>` of that one session instead
 of `video.sip.devaddr`; a running view of another unit is stopped first.
@@ -278,6 +279,12 @@ The bus event `bticino_c300x_agent_event_received` no longer carries rings;
 the unit event entities replace it. Its other events gain `device_id` (the HA
 station device), and for unit events `unit_id`, `outdoor_unit_device_id` and
 `call_id`.
+
+### Card
+
+The card follows the active call: it shows the calling unit's name and uses
+the media camera as before. It has no unit selector and no per-unit video in
+3.1.0 (that comes with phase D).
 
 ### Services
 

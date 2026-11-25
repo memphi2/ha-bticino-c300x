@@ -20,7 +20,12 @@ from PyQt5.QtTest import QTest
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 from c100x_probe_vendor import provide  # noqa: E402
-from check_display_layout import HOST, fixtures, intersection, layout_issues  # noqa: E402
+from check_display_layout import (  # noqa: E402
+    HOST,
+    fixtures,
+    intersection,
+    layout_issues,
+)
 from check_energy_layout import make_fixtures  # noqa: E402
 
 

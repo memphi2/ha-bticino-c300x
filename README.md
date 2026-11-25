@@ -2,11 +2,9 @@
 
 [![Validate](https://img.shields.io/badge/checks-local%20%2B%20CI-2ea44f?style=flat-square)](.github/workflows/validate.yml)
 [![Quality](https://img.shields.io/badge/HA%20Quality%20Scale-Self%20assessment-0366d6?style=flat-square)](docs/dev/quality-scale.md)
-[![Release](https://img.shields.io/badge/release-v2.9.2-0366d6?style=flat-square)](CHANGELOG.md)
+[![Release](https://img.shields.io/badge/release-v2.10.0-0366d6?style=flat-square)](CHANGELOG.md)
 [![Marketplace](https://img.shields.io/badge/Home_Assistant-Marketplace-41BDF5?style=flat-square)](https://contributors.home-assistant.io/marketplace/)
 [![License Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
-
-Beta: **2.10.0b2** (display pages and additional Low camera sizes for firmware 3.0.6; the home page buttons were checked on a 3.0.6 station, the rest offline only), including **2.9.2**.
 
 Local-first Home Assistant custom integration for the BTicino Classe 300X /
 C300X video door station. A small agent on the station connects it to Home
@@ -50,10 +48,8 @@ Assistant over your local network.
 ## Requirements
 
 - Home Assistant `2026.10.0` or newer.
-- BTicino Classe 300X / C300X firmware `1.7.x` or `2.0.2`. Firmware `3.0.6` is
-  supported experimentally, with the low-resolution camera stream; the Home
-  Assistant pages on its display are in the [beta](#beta-versions): the home
-  page buttons were checked on a station, the other pages offline only.
+- BTicino Classe 300X / C300X firmware `1.7.x`, `2.0.2` or `3.0.6`
+  ([what differs on 3.0.6](docs/quickstart.md#firmware-306)).
 - Root or SSH access on the station for the first agent installation.
 - A trusted local network between Home Assistant and the station.
 
@@ -77,15 +73,9 @@ through the options and adds the card. Later releases: [Update](docs/quickstart.
 
 ### Beta Versions
 
-Betas are opt-in. The current beta, **2.10.0b2**, brings the Home Assistant
-pages to the display of firmware `3.0.6`. On a 3.0.6 station the pages loaded
-at start, the Alarm and Home Assistant buttons sat in the right place and stayed
-after a configuration change (checked with 2.10.0b1); the other pages, the Low
-camera sizes and the recovery paths are checked offline only. On `1.7.x` and
-`2.0.2` it works like stable 2.9.2. Enable **Pre-release** for this
-repository in Marketplace, or beta versions in HACS. Stable installations are
-not switched to a beta automatically. See
-[beta versions and returning to stable](docs/quickstart.md#beta-versions).
+Betas are opt-in: enable **Pre-release** for this repository in Marketplace,
+or beta versions in HACS. Stable installations are not switched to a beta
+automatically. See [beta versions](docs/quickstart.md#beta-versions).
 
 ## Doorbell Video, Ring Calls and Talkback
 
@@ -97,7 +87,7 @@ Use one **C300X Doorbell Call Card** in **Doorstation + Home Call** mode.
 | Ring Call | Set **Forwarding** to **Home Assistant**. When someone rings, the card shows the picture; press **Answer**, later **Hang Up**. With **Smartphone**, calls go to the Door Entry app instead. |
 | Home Call | Audio-only call from Home Assistant to the station display. |
 | Talkback | Speak through the browser microphone. Needs HTTPS or Home Assistant Cloud and microphone permission. |
-| Picture controls | Brightness, contrast and colour saturation during a Ring Call; for on-demand video on firmware 1.7.19, 2.0.2 (either video decoder) and 3.0.6 (TVP5150 boards only), once the station reads them back live; 2.0.2 and 3.0.6 are checked offline only, and on TVP5150 boards (every 3.0.6 station) they may only work during a Ring Call until the station has written the contrast once after a start. Saved media stays unchanged. |
+| Picture controls | Brightness, contrast and colour saturation during a Ring Call, and for on-demand video once the station reads them back live. Tested on 1.7.19; 2.0.2 and 3.0.6 are checked offline only. On TVP5150 boards (every 3.0.6 station) they may only work during a Ring Call until the station has written the contrast once after a start. Saved media stays unchanged. |
 
 Talking in Home Assistant's own camera view is optional and off by default
 (Home Assistant 2026.11+, **Two-way audio** in Labs and the option **Talk

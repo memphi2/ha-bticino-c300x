@@ -42,10 +42,10 @@ The optional Display patch writes the files for the
 device UI, which can take about a minute. Use Repairs instead of editing device
 files.
 
-On firmware 3.0.6 (beta) the patch works through a display resource overlay
-with its own rollback and quarantine. Read
+On firmware 3.0.6 the display program loads the patched pages at its start;
+its files are not changed. Read
 [Display Patch on Firmware 3.0.6](display.md#display-patch-on-firmware-306)
-before switching it off, removing the agent or returning to a stable release.
+before going back to a release older than 2.10.0.
 
 ### Home Assistant Media User
 

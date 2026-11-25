@@ -421,7 +421,7 @@ files, not just a routing table. It also lists the vendor programs that differ;
 those are covered by the device tests in
 [Release Validation](release-validation.md#firmware-versions).
 
-Firmware `3.0.6` fails this check and is supported experimentally:
+Firmware `3.0.6` fails this check and is supported with its own display path:
 
 - Its C library is glibc 2.35, and `libcurl` and `libsrtp` are other builds. The
   same binary runs there; `armhf-abi-check` checks it against the `3.0.6` root
@@ -443,12 +443,12 @@ Firmware `3.0.6` fails this check and is supported experimentally:
   and starts as shipped. Started with the overlay, the display's error output,
   where Qt reports QML errors, goes to `/tmp/c300x-display-qt5.log` (at most
   64 KB). Full removal (`restore-all`) puts the vendor start script back, but
-  only over the original with a block of this or an earlier beta in it. A start
+  only over the original with a block of this or an earlier agent in it. A start
   script that a firmware
   update or anyone else replaced stays as it is, and `status` reports
   `qt5_unsupported: display_wrapper_unknown`. A
   partial restore keeps the overlay for the remaining core hooks or user label.
-  This path is a beta; user view:
+  User view:
   [Display Patch on Firmware 3.0.6](../display.md#display-patch-on-firmware-306).
 - Activation changes preserve the resource file, preload library, wrapper,
   original wrapper backup and quarantine marker as one rollback unit. A failed
@@ -472,8 +472,8 @@ Firmware `3.0.6` fails this check and is supported experimentally:
   is fixed to that stream (`video.av.highResolution: false`) and the Camera
   resolution entity is not offered. Camera quality sets the low stream
   (`BitrateRtpL`, `FpsRtpL`, `WidthLow`, `HeightLow`); sizes other than the
-  factory 400x288 are untested on a 3.0.6 device. The beta adds the Low sizes
-  320x240, 480x288, 640x384 and 720x432 through configuration only, without a
+  factory 400x288 are untested on a 3.0.6 device. The Low sizes 320x240,
+  480x288, 640x384 and 720x432 come through configuration only, without a
   binary patch; evidence and limits:
   [Firmware 3.0.6 Low Camera Evidence](firmware-3.0.6-camera.md).
 - `bt_answering_machine` is another build with its own routing table.

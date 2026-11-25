@@ -1734,7 +1734,7 @@ start script is not one the agent knows (`display_program_unknown`,
 agent runs without the display pages. The field stays until an apply finds a
 known display again. Full removal also records `display_wrapper_unknown` when
 the start script is no longer the original with a block of this or an earlier
-beta in it, for example after a
+agent in it, for example after a
 vendor update; it then removes the overlay files and leaves that script as it
 is.
 
@@ -2131,5 +2131,5 @@ Agent `2.10.0b2` retains self-test contract `api_version: "1.1"` for firmware fa
 `1.7.x`, `2.0.x` and `3.0.x`. `firmware_family` is derived from `device.firmware` of
 the agent config, or from the station's firmware info when that is empty, which
 is what the installer writes; it is `unknown` only when neither is readable. Of
-the `2.0.x` family only `2.0.2` is supported, of `3.0.x` only `3.0.6`,
-experimentally. The release notes list the agent changes of each version.
+the `2.0.x` family only `2.0.2` is supported, of `3.0.x` only `3.0.6`.
+The release notes list the agent changes of each version.

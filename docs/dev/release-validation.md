@@ -402,12 +402,12 @@ files. Before a release, and before a version of that kind is added:
 3. Apply `scripts/device_routing_builder.py` to the stock routing target of
    each of these versions. It must accept the file and report the patched hash.
 
-Firmware `3.0.6` (experimental) fails step 1, has its own routing table and
+Firmware `3.0.6` fails step 1, has its own routing table and
 keeps its display files as Qt resources in `BtClass`, so steps 1 to 3 do not
 apply; see
 [Supported Firmware Versions](native-agent.md#supported-firmware-versions).
 For it, run `armhf-abi-check` with its root file system in
-`C300X_ABI_SYSROOTS`, then the device tests below. On this beta the Display
+`C300X_ABI_SYSROOTS`, then the device tests below. On 3.0.6 the Display
 patch row checks the Qt 5 resource overlay; the status must show
 `qt5_overlay: active`.
 

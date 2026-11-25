@@ -4,8 +4,7 @@ The Display patch adds Home Assistant pages to the C300X's own blue interface:
 tiles for your entities, an energy page, an agenda, departure checks, an Alarmo
 page and notices from automations. They are native station pages, not the
 Lovelace card or an embedded Home Assistant dashboard. Display pages run on
-firmware 1.7.x and 2.0.2; on firmware 3.0.6 they are a beta: the home page
-buttons were checked on a station, the other pages offline only
+firmware 1.7.x, 2.0.2 and 3.0.6
 ([Display Patch on Firmware 3.0.6](#display-patch-on-firmware-306)).
 
 <table>
@@ -109,64 +108,35 @@ agent and display files together.
 
 ### Display Patch on Firmware 3.0.6
 
-Beta from `2.9.0b1`. On a 3.0.6 station the pages loaded at start, the Alarm
-and Home Assistant buttons sat in the right place and stayed after a
-configuration change. The other pages and the handling of failures and unknown
-displays described below are checked offline only. On `3.0.6` the display files
-are built into the vendor display program, so the Display patch does not
-change them on disk: the agent reads the files it changes out of that program,
-patches them and keeps the result in its own folder, and the vendor start
-script of the display gets a few lines that load them at the next start. The
-display then has the same buttons and pages as on `1.7.x` and `2.0.2`. The
-touch fix for lost taps is not part of it; it changes a Qt 4 library that
-`3.0.6` does not have.
+The display has the same buttons, pages and **Integration** tab as on 1.7.x
+and 2.0.2, and is switched on and off the same way. Its pages are part of the
+station's display program, so the Display patch keeps the changed pages in the
+agent's folder and the display loads them at each start. On a 3.0.6 station
+the pages loaded at start and the Alarm and Home Assistant buttons sat in the
+right place; the other pages are checked offline only.
 
-- **Turning it off:** switching the Display patch off removes the optional
-  pages, but retains the core hooks. Removing the agent restores the vendor
-  start script and removes the complete overlay. A start script that a
-  firmware update has already replaced stays as the update left it.
-- **When the display fails with the pages:** if the display ends with an error
-  within a minute of a start with the pages, it is started again as shipped,
-  and the Display patch status reads **applied, but the display started as
-  shipped**. This holds until the station restarts; the next start tries the
-  pages again. Turning the **Display patch** switch on, the core hook Repair
-  or an agent update also tries them once more without a restart (saving the
-  display settings does not); if the display fails
-  again, it stays as shipped. The agent runs one display restart at a time;
-  requests that arrive meanwhile share the next one. A restart waits until
-  the old display and its start script have ended, and after a change it
-  tries the pages twice before it starts as shipped. A restart cut short by
-  the agent's time limit still finishes, so the station is never left
-  without a display.
-- **On a display the agent does not know:** the pages are only built for the
-  display program and start script of the firmware 3.0.6 the integration was
-  made for. On any other build the agent leaves the display as shipped and
-  runs without the pages; installation and agent updates still complete.
+- **When the display fails with the pages:** the agent starts it once more
+  and then as shipped, until the station restarts. The Display patch status
+  reads **applied, but the display started as shipped**. Turning the
+  **Display patch** switch on, the core hook Repair or an agent update tries
+  the pages again; saving the display settings does not.
+- **Restarts:** the agent runs one display restart at a time, after the old
+  display has ended; changes close together share one restart. Home Assistant
+  waits for a restart that takes longer.
+- **Install and update:** a display step that fails does not fail the
+  installation or the agent update; the core hook Repair stays until it has
+  run the display steps again. A step that could not run at all, for example
+  without a connection, still fails.
+- **On a display the agent does not know**, for example after a firmware
+  update, the display stays as shipped and the agent runs without the pages.
   Repairs shows **C300X display pages are not available on this station**
-  with the reason, and the Display patch stays off.
-- **Interrupted changes:** failed activation or restore rolls back the display
-  resources, startup wrapper, preload library and quarantine state together.
-  If rollback cannot finish, recovery files are retained and the overlay stays
-  blocked. Do not delete recovery files or quarantine to force a GUI restart.
-- **Confirmation:** installed files alone do not confirm activation. A
-  quarantined or incomplete overlay never counts as active; settings stay
-  pending instead of accepting the stock fallback as success. On firmware
-  3.0.6 a display step that ran and failed does not fail the install from
-  Home Assistant or the agent update: the agent is installed or updated,
-  the HA log names the step, and the core hook Repair stays until it has
-  run all display steps again (the full Display patch included when it was
-  on). A step that could not run at all still fails the install or update.
-  An active overlay and a running process are still not proof that every QML
-  page loaded correctly. Device checks remain required before merging this beta.
-- **Returning to stable:** on 3.0.6, run the beta's `qml_patch.sh restore-all`
-  and confirm `qt5_overlay: off` with the stock GUI running before replacing
-  the agent with a stable release. Stable releases have no Qt 5 overlay
-  recovery code; switching off just the optional pages is not a complete
-  removal. The beta native updater refuses a target without Qt 5 recovery with
-  `qt5_recovery_required` while overlay files, quarantine or an unverified
-  start script remain. It leaves the installed agent and recovery untouched.
-  Older agents and direct SSH/manual installations do not have this guard;
-  complete removal and checking the running stock GUI remain mandatory.
+  with the reason.
+- **Removal:** removing the agent restores the station's display start. Before
+  going back to a release older than 2.10.0, remove the pages completely over
+  SSH with `/home/bticino/cfg/extra/c300x-native-agent/qml_patch.sh restore-all`
+  and check that its last line contains `"qt5_overlay":"off"`; older releases
+  cannot remove them, and the agent update refuses an older agent with
+  `qt5_recovery_required` until then.
 - **If the station keeps restarting** after an install, an update or saving
   the display settings:
   1. Over SSH, between two restarts, rename the display resource file:

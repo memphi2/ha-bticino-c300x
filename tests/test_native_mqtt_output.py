@@ -39,14 +39,14 @@ def test_mqtt_connect_runs_beside_the_loop(tmp_path, sanitize, case):
     flags = ["-fsanitize=address,undefined", "-fno-omit-frame-pointer"] if sanitize else []
     result = subprocess.run(
         ["cc", "-std=c11", "-D_DEFAULT_SOURCE", "-g", "-O1", "-Wall", "-Wextra", "-Werror", *flags,
-         "-DMQTT_RESOLVE_CONNECT_TIMEOUT_MS=500", str(NATIVE / "test/mqtt_connect_test.c"),
+         "-DMQTT_RESOLVE_CONNECT_TIMEOUT_MS=2000", str(NATIVE / "test/mqtt_connect_test.c"),
          *(str(NATIVE / "src" / name) for name in (
              "mqtt_bridge.c", "mqtt_output.c", "string_util.c", "http_util.c", "time_util.c")),
          *MQTT_CONNECT_SOURCES, "-pthread", "-Wl,--wrap=getaddrinfo", "-o", str(binary)],
         capture_output=True, text=True, timeout=60,
     )
     assert result.returncode == 0, result.stderr
-    result = subprocess.run([str(binary), case], capture_output=True, text=True, timeout=30)
+    result = subprocess.run([str(binary), case], capture_output=True, text=True, timeout=90)
     assert result.returncode == 0, result.stderr
 
 

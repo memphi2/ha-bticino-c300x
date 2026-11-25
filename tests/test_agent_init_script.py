@@ -91,8 +91,9 @@ int main(void) {
         fprintf(log, "api_bind_failed %d\n", (int)getpid());
         return 1;
     }
-    fprintf(log, "started %d\n", (int)getpid());
+    /* Before the start line: the test may stop the agent as soon as it reads it. */
     signal(SIGTERM, getenv("STUB_IGNORE_TERM") ? SIG_IGN : on_term);
+    fprintf(log, "started %d\n", (int)getpid());
     while (!term) pause();
     usleep(600000);
     fprintf(log, "stopped %d\n", (int)getpid());
@@ -150,6 +151,25 @@ def _alive(pid: int) -> bool:
     return Path(f"/proc/{pid}/status").read_text().split("State:")[1].split()[0] != "Z"
 
 
+def _wait_started(pidfile: Path, log: Path, seconds: float = 60) -> int:
+    """The PID of the started agent, once it has written its start line.
+
+    start-stop-daemon writes the PID file before the agent has opened its log,
+    and under the emulator on a busy machine both can take seconds.
+    """
+
+    import time
+
+    deadline = time.monotonic() + seconds
+    while True:
+        if pidfile.exists() and log.exists() and "started" in log.read_text():
+            pid = pidfile.read_text().strip()
+            if pid:
+                return int(pid)
+        assert time.monotonic() < deadline, log.read_text() if log.exists() else "no agent log"
+        time.sleep(0.05)
+
+
 def _reap_all(tmp_path: Path) -> None:
     import signal
 
@@ -163,13 +183,8 @@ def test_restart_waits_for_the_old_agent_on_the_station_busybox(tmp_path):
     run, log, pidfile, _port = _device_init(tmp_path)
     try:
         assert run("start").returncode == 0
-        first = None
-        for _ in range(50):
-            if pidfile.exists() and "started" in log.read_text():
-                first = int(pidfile.read_text())
-                break
-            __import__("time").sleep(0.1)
-        assert first is not None and _alive(first)
+        first = _wait_started(pidfile, log)
+        assert _alive(first)
         restart = run("restart")
         events = log.read_text()
         assert "api_bind_failed" not in events, events
@@ -207,11 +222,7 @@ def test_stop_kills_an_agent_that_ignores_term_and_spares_a_foreign_pid(tmp_path
     run, log, pidfile, _port = _device_init(tmp_path)
     try:
         assert run("start", STUB_IGNORE_TERM="1").returncode == 0
-        for _ in range(50):
-            if pidfile.exists() and "started" in log.read_text():
-                break
-            time.sleep(0.1)
-        agent = int(pidfile.read_text())
+        agent = _wait_started(pidfile, log)
         started = time.monotonic()
         assert run("stop").returncode == 0
         assert not _alive(agent) and not pidfile.exists()

@@ -155,8 +155,8 @@ class Lab:
             return False
         return True
 
-    def wait_free(self) -> None:
-        deadline = time.monotonic() + 5
+    def wait_free(self, seconds: float = 5) -> None:
+        deadline = time.monotonic() + seconds
         while self.call()["busy"]:
             assert time.monotonic() < deadline
             time.sleep(0.02)
@@ -576,7 +576,8 @@ def test_a_restarted_agent_ends_the_sound_of_one_that_was_killed(lab: Lab) -> No
     assert lab.call("/actions/play", {"volume": 50}, status=409)["error"] == "announcement_device_busy"
     lab.wait_for("mixer Zia_Aud_St=0", seconds=RING_HOLD + 5)
     assert lab.log()[-3:] == ["mixer ZL0_Mute_Rout=on", "mixer TPA2028D1_Volume=0", "mixer Zia_Aud_St=0"]
-    assert lab.call()["busy"] is False
+    # The last mixer call has written its line; the agent is free once it has collected that call.
+    lab.wait_free(30)
 
 
 def test_a_second_agent_leaves_the_sound_of_the_running_one_alone(lab: Lab) -> None:

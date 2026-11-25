@@ -1,5 +1,24 @@
 # Changelog
 
+## Next release - Unreleased
+
+One package now serves the Classe 300X and, as an experiment, the Classe 100X.
+On a Classe 300X everything works as in 2.10.0, with these visible changes:
+
+- **Names without the model.** The card picker lists the card as **BTicino
+  Doorbell Call Card** (before: C300X Doorbell Call Card). The blueprints are
+  called **BTicino ...** instead of **C300X ...**, their device input is called
+  **Door station**, and the services are listed without "C300X" in their names
+  (for example **Run action** instead of Run C300X action). Only the displayed
+  names changed: the card type `custom:c300x-doorbell-call-card`, the service
+  IDs, the blueprint files and every entity stay as they are, so existing dashboards and automations keep
+  working without a change.
+- The device page shows the station's board as hardware version and its article
+  number as model ID.
+- **Classe 100X (experimental).** Setup recognises a Classe 100X on firmware
+  1.5.8 and asks for an explicit confirmation before it installs anything
+  ([Classe 100X](docs/c100x-experimental.md)). A Classe 300X is never asked.
+
 ## v2.10.0 - 2026-11-25
 
 2.10.0 adds firmware 3.0.6 (Classe 300X hardware revision 4) to 1.7.x and

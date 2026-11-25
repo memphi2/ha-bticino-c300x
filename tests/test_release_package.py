@@ -988,7 +988,7 @@ def test_native_self_update_reserves_external_patch_scripts_without_staging() ->
     assert "return optional && !agent_update_manifest_sha_for_path" in apply_file
     assert "c300x_agent_update_patch_path(bundle_path)" in apply_file
     assert "C300X_AGENT_UPDATE_FILE_COUNT" in apply_files
-    assert "C300X_AGENT_UPDATE_FILES[index].optional" in apply_files
+    assert "update_file_may_be_absent(&C300X_AGENT_UPDATE_FILES[index])" in apply_files
     for path in RESERVED_DEVICE_PATCH_PATHS:
         assert f'"{path}"' in update_paths
 

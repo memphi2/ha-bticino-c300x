@@ -86,6 +86,13 @@ static int apply_agent_update_init_script(
 static int repair_agent_init_link_after_update(struct agent_update_change_summary *summary);
 static int validate_agent_update_files(const struct c300x_config *config, const char *manifest);
 
+/* A patch script may always be left out; the C100X adapter on a C300X. */
+static int update_file_may_be_absent(const struct c300x_agent_update_file *file)
+{
+    return file->optional == C300X_UPDATE_FILE_PATCH
+        || (file->optional == C300X_UPDATE_FILE_C100X && c300x_device_model() != C300X_DEVICE_MODEL_C100X);
+}
+
 int agent_update_model_compatible(const char *manifest)
 {
     int compatible = 0, only = 0;
@@ -249,7 +256,7 @@ static int update_installed_set_verified(const struct c300x_config *config, cons
             continue;
         }
         if (!agent_update_manifest_sha_for_path(installed_manifest, file->path, sha256, sizeof(sha256))) {
-            if (file->optional && access(target, F_OK) != 0 && errno == ENOENT) {
+            if (update_file_may_be_absent(file) && access(target, F_OK) != 0 && errno == ENOENT) {
                 continue;
             }
             return 0;
@@ -616,7 +623,7 @@ int apply_agent_update_files(
                 manifest,
                 C300X_AGENT_UPDATE_FILES[index].path,
                 C300X_AGENT_UPDATE_FILES[index].mode,
-                C300X_AGENT_UPDATE_FILES[index].optional,
+                update_file_may_be_absent(&C300X_AGENT_UPDATE_FILES[index]),
                 summary
             )
         ) {
@@ -657,7 +664,7 @@ static int validate_agent_update_files(const struct c300x_config *config, const 
         }
         int has_hash = agent_update_manifest_sha_for_path(manifest, file->path, sha256, sizeof(sha256));
         if (access(stage, F_OK) != 0) {
-            if (errno == ENOENT && file->optional && !has_hash) {
+            if (errno == ENOENT && update_file_may_be_absent(file) && !has_hash) {
                 continue;
             }
             return 0;

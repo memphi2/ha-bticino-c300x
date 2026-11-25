@@ -899,7 +899,7 @@ def run_smoke(
                 "/api/v1/capabilities",
                 authorized=False,
             )
-            assert_json_field(unauthenticated_capabilities, "api_version", "1")
+            assert_json_field(unauthenticated_capabilities, "api_version", "2")
             no_auth_read = api_request(
                 api_port,
                 "GET",
@@ -973,7 +973,7 @@ def run_smoke(
             assert_json_field(auth_status, "noAuth", False)
             assert_json_field(auth_status, "api_token_configured", True)
             capabilities = api_get(api_port, "/api/v1/capabilities")
-            assert_json_field(capabilities, "api_version", "1")
+            assert_json_field(capabilities, "api_version", "2")
             assert_json_field(capabilities["device"], "model", "C300X")
             assert_json_field(capabilities["device"], "firmware", "1.7.19")
             self_test = api_get(api_port, "/api/v1/self-test")

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from hashlib import sha256
 from pathlib import Path
 from typing import Any
@@ -722,3 +723,22 @@ def test_apply_packaged_agent_update_uploads_empty_files(
     assert empty_upload["data"] == b""
     assert empty_upload["offset"] == 0
     assert empty_upload["final"] is True
+
+
+def test_packaged_bundle_names_the_api_the_agent_reports(monkeypatch):
+    # 3.1.0: the agent reports API 2; a bundle staged as API 1 kept every
+    # current agent "incompatible" and the update Repair open for good.
+    root = Path(__file__).resolve().parents[1]
+    monkeypatch.syspath_prepend(str(root / "scripts"))
+    import stage_device_agent_bundle as stager
+
+    source = (root / "native_agent/src/capabilities.c").read_text(encoding="utf-8")
+    reported = set(re.findall(r'\\"api_version\\":\\"([0-9.]+)\\"', source))
+    assert reported == {stager.AGENT_API_VERSION}
+    version = "3.1.0"
+    agent = {"version": version, "api_version": stager.AGENT_API_VERSION,
+             "agent": {"bundle_hash": "sha256:same", "self_update_supported": True,
+                       "self_update_file_set_version": stager.AGENT_UPDATE_FILE_SET_VERSION}}
+    bundle = {"agent_version": version, "api_version": stager.AGENT_API_VERSION,
+              "bundle_hash": "sha256:same", "update_file_set_version": stager.AGENT_UPDATE_FILE_SET_VERSION}
+    assert compare_agent_bundle(agent, bundle).state == UPDATE_STATE_UP_TO_DATE

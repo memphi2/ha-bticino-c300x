@@ -157,7 +157,10 @@ class TemporaryDisplayApi(FakePatchApi):
     async def async_validate_setup(self):
         path = self.agent / "bundle.json"
         manifest = json.loads(path.read_text()) if path.exists() else {"agent_version": "2.6.0", "bundle_hash": "old"}
-        return {"version": manifest["agent_version"], "api_version": "1", "capabilities": {},
+        # The file set is under test, not the API: the agent speaks the bundle's API.
+        from stage_device_agent_bundle import AGENT_API_VERSION
+
+        return {"version": manifest["agent_version"], "api_version": AGENT_API_VERSION, "capabilities": {},
                 "agent": {"bundle_hash": manifest["bundle_hash"], "self_update_supported": True,
                           "self_update_file_set_version": self.running_file_set}}
 

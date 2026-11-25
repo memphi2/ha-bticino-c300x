@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -150,7 +151,7 @@ def test_doorbell_blueprints_trigger_on_a_doorbell_event_entity() -> None:
         if "capture" not in filename:
             assert variables["camera_entity"] == "{{ state_attr(doorbell_event, 'camera_entity_id') or '' }}"
         assert data["condition"][0] == {
-            "condition": "template", "value_template": "{{ entry_id and call_id }}",
+            "condition": "template", "value_template": "{{ entry_id not in ['', none] and call_id not in ['', none] }}",
         }, filename
         assert "event_camera_entity" not in str(data), filename
         assert "bticino_c300x_agent_event_received" not in str(data["trigger"]), filename
@@ -165,19 +166,26 @@ def test_doorbell_blueprints_find_the_station_sensors_through_the_unit() -> None
         assert "device_entities(c300x_device)" in variables["c300x_entities"]
 
 
-def test_doorbell_blueprint_condition_needs_a_station_and_a_call(tmp_path: Path) -> None:
+@pytest.mark.parametrize("filename", DOORBELL_BLUEPRINTS)
+def test_doorbell_blueprint_condition_needs_a_station_and_a_call(tmp_path: Path, filename: str) -> None:
+    # Evaluated like Home Assistant does: a template condition passes only when
+    # it renders "true", not when it renders some other truthy text.
     import asyncio
 
     from homeassistant.core import HomeAssistant
+    from homeassistant.helpers.condition import async_template
     from homeassistant.helpers.template import Template
 
     async def run() -> None:
         hass = HomeAssistant(str(tmp_path))
-        template = Template(_blueprint("doorbell_notification.yaml")["condition"][0]["value_template"], hass)
+        template = Template(_blueprint(filename)["condition"][0]["value_template"], hass)
         for entry_id, call_id, expected in (
-            ("entry", "a1b2-7", True), ("", "a1b2-7", False), ("entry", "", False),
+            ("01JENTRY", "0badc0de-7", True), ("", "0badc0de-7", False),
+            ("01JENTRY", "", False), (None, "0badc0de-7", False), ("01JENTRY", None, False),
         ):
-            assert bool(template.async_render({"entry_id": entry_id, "call_id": call_id})) is expected
+            variables = {"entry_id": entry_id, "call_id": call_id}
+            assert async_template(hass, template, variables, trace_result=False) is expected, variables
+        await hass.async_stop(force=True)
 
     asyncio.run(run())
 

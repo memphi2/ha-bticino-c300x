@@ -150,7 +150,7 @@ variables:
 condition:
   - condition: template
     value_template: >-
-      {{ entry_id and call_id }}
+      {{ entry_id not in ['', none] and call_id not in ['', none] }}
   - condition: template
     value_template: >-
       {{ state_attr(forwarding_entity, 'state') == 'homeassistant' }}

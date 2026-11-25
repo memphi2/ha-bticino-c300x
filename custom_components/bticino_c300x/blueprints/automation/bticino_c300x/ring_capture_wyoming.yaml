@@ -98,7 +98,7 @@ variables:
 condition:
   - condition: template
     value_template: >-
-      {{ entry_id and call_id }}
+      {{ entry_id not in ['', none] and call_id not in ['', none] }}
   - condition: template
     value_template: "{{ states(media_readiness_entity) in ['ready', 'warning'] }}"
 

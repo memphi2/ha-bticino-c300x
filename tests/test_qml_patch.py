@@ -161,6 +161,50 @@ def test_agent_update_repatch_keeps_a_side_by_side_layout() -> None:
     assert api.dynamic_homepage is False
 
 
+def _script_answer(changed_files: int | None) -> dict[str, Any]:
+    """An apply answer as the API client returns it from the station's script."""
+
+    from custom_components.bticino_c300x._api_normalize import (
+        normalize_qml_patch_status,
+    )
+
+    answer: dict[str, Any] = {"ok": True, "patched": True, "core_patched": True}
+    if changed_files is not None:
+        answer["changed_files"] = changed_files
+    return normalize_qml_patch_status(answer)
+
+
+@pytest.mark.parametrize(
+    ("core", "full", "reload_unchanged", "restarted"),
+    [
+        # Nothing written: the pages were current, the display keeps running.
+        (0, 0, False, False),
+        (0, 0, True, True),
+        (0, 2, False, True),
+        (1, 0, False, True),
+        # An answer without a count does not say that nothing changed.
+        (None, 0, False, True),
+        (0, None, False, True),
+    ],
+)
+def test_agent_update_repatch_restarts_the_display_only_for_changed_pages(
+    core, full, reload_unchanged, restarted,
+) -> None:
+    api = _FakeApi(
+        status={"available": True, "patched": True, "state": "patched"},
+        apply_status=_script_answer(full),
+        core_apply_status=_script_answer(core),
+    )
+    entry = _entry(api)
+
+    asyncio.run(async_restore_qml_patches_after_update(
+        entry, apply_full_patch=True, reload_unchanged=reload_unchanged,
+    ))
+
+    assert ("reload_gui" in api.calls) is restarted
+    assert api.calls[:2] == ["apply_qml_core", "apply_qml"]
+
+
 def test_restore_qml_patch_keeps_action_status_when_confirmation_mismatches() -> None:
     api = _FakeApi(restore_status={"available": True, "patched": True, "state": "busy"})
     entry = _entry(api, {"available": True, "patched": True})

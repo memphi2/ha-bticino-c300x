@@ -2656,35 +2656,29 @@ def test_capture_external_patch_state_marks_unknown_firewall_status() -> None:
     assert patch_state.firewall_status_known is False
 
 
-def test_failed_qml_followup_survives_same_bundle_retry(monkeypatch):
+@pytest.mark.parametrize("runtime_changed", [False, True])
+def test_unconfirmed_display_followup_is_a_check_without_a_forced_restart(
+    monkeypatch, runtime_changed,
+):
+    """An update whose follow-up never finished: the answer of this run does not cover it."""
+
     import custom_components.bticino_c300x.repairs as repairs
 
     entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()))
-    hass = FakeHass(entry)
     state = _ExternalPatchState(qml_patch_required=True, firewall_patched=False,
                                firewall_status_known=True, ipv6_firewall_patched=False)
-    repairs._remember_qml_followup(hass, entry, state, {"qml_patch_changed": True})
+    changes = _ExternalPatchChanges(runtime_changed=runtime_changed)
+    changes.display_unconfirmed = True
     calls = []
 
-    async def restore(_entry, *, apply_full_patch):
-        calls.append(apply_full_patch)
-        if len(calls) == 1:
-            raise RuntimeError("temporary failure")
+    async def restore(_entry, **kwargs):
+        calls.append(kwargs)
 
     monkeypatch.setattr(repairs, "async_restore_qml_patches_after_update", restore)
-    with pytest.raises(RuntimeError, match="temporary failure"):
-        asyncio.run(_async_restore_external_patch_state(entry, state, _ExternalPatchChanges()))
-    repairs._remember_qml_followup(hass, entry, state, {"qml_patch_changed": False})
-    assert entry.data["agent_update_qml_pending"] is True
-    update = repairs.compare_agent_bundle(
-        {"version": "1.0", "agent": {"self_update_supported": True}},
-        {"agent_version": "1.0"}, qml_patch_pending=True,
-    )
-    assert update.update_required and update.self_update_repair_supported
-    asyncio.run(_async_restore_external_patch_state(entry, state, _ExternalPatchChanges()))
-    repairs._clear_qml_followup(hass, entry)
-    assert "agent_update_qml_pending" not in entry.data
-    assert calls == [True, True]
+    asyncio.run(_async_restore_external_patch_state(entry, state, changes))
+
+    # Active pages are restarted for a new agent; current pages otherwise are not.
+    assert calls == [{"apply_full_patch": True, "reload_unchanged": runtime_changed}]
 
 
 def test_restore_external_patch_state_skips_active_patches_without_source_changes() -> None:

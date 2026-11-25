@@ -364,7 +364,10 @@ def test_without_any_display_left_the_restart_fails(station: Station) -> None:
 def test_the_job_deadline_in_any_phase_still_ends_with_one_display(
     station: Station, phase: str, kill: str
 ) -> None:
-    """The agent signals the job's process group; the worker finishes the cycle."""
+    """The agent signals the job's process group; the worker finishes the cycle.
+
+    The reload trap of firmware 1.7.x/2.0.2 repeats the restart; on the Qt 5
+    display it only exits, so the one filed request is the one restart."""
 
     station.boot(C300X_TEST_TEARDOWN="1")
     process = subprocess.Popen([str(SCRIPT), "reload"], env=station.script_env(
@@ -373,6 +376,7 @@ def test_the_job_deadline_in_any_phase_still_ends_with_one_display(
     assert _wait_for(lambda: station.phase() == phase, 30), station.phase()
     os.killpg(process.pid, getattr(signal, f"SIG{kill}"))
     process.communicate(timeout=30)
+    assert process.returncode == (131 if kill == "TERM" else -9)
     running = _settled(station)
     assert len(running) == 1
     assert station.wrappers()

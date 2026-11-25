@@ -121,8 +121,9 @@ int main(int argc, char **argv)
         c300x_copy_string(request->body, sizeof(request->body), "{\"confirm\":\"apply_qml_patch\"}");
     }
     c300x_http_maintenance_init(&owner, record_write, NULL);
-    if (strncmp(mode, "reload-", 7) == 0) {
-        /* A GUI reload: 10 s on Qt 4 as in 2.9.2, the write limit on Qt 5. */
+    if (strcmp(mode, "reload-qt4") == 0 || strcmp(mode, "reload-qt5") == 0) {
+        /* A GUI reload: 10 s on Qt 4 as in the base, the write limit on Qt 5;
+         * both with the grace for the script's restart trap. */
         int qt5 = strcmp(mode, "reload-qt5") == 0;
         config->maintenance_gui_reload_enabled = 1;
         c300x_copy_string(config->maintenance_gui_reload_script,
@@ -135,7 +136,7 @@ int main(int argc, char **argv)
         assert(owner.job.pid > 0 && responses == 0 && owner.gui_reload && !owner.records_write);
         assert(qt5 ? limit >= C300X_QML_WRITE_TIMEOUT_MS && limit < C300X_QML_WRITE_TIMEOUT_MS + 1000
                    : limit >= 10000 && limit < 11000);
-        assert(owner.job.term_grace_ms == 0);
+        assert(owner.job.term_grace_ms == C300X_QML_WRITE_TERM_GRACE_MS);
         c300x_http_maintenance_close(&owner);
         free(request);
         free(config);

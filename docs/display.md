@@ -197,9 +197,10 @@ settings stay; **Alarm (Alarmo)** stays available.
 display** off, brings back the original display with one reboot.
 
 An agent update that brings newer pages renews confirmed pages the same way:
-after the update Repair the agent prepares them and reboots the station once it
-has been idle, and the new pages are confirmed in that boot. A station with the
-original display is left as it is.
+after the update Repair the agent prepares them and reboots the station once,
+after it has been idle for about two minutes, never during a call and only
+while the maintenance reboot is allowed. The new pages are confirmed in that
+boot. A station with the original display is not rebooted.
 
 If the new display does not start in its first boot, for example after a power
 loss, the station goes back to its original display at the following start and

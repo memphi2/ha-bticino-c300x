@@ -53,7 +53,16 @@ def test_inert_on_a_c300x(c300x_binary, tmp_path):
 
 @pytest.mark.parametrize("case", [
     "idle", "busy", "trial-fails", "trial-confirms", "no-display", "interrupted", "unknown", "requests",
-    "features", "boot-check",
+    "features", "boot-check", "adapter-updated",
 ])
 def test_c100x_activation(c100x_binary, tmp_path, case):
     _run(c100x_binary, case, tmp_path)
+
+
+def test_the_update_route_has_the_adapter_read_again():
+    """Without a new program the agent keeps running: only this call shows the new pages."""
+
+    source = (NATIVE / "src/http.c").read_text(encoding="utf-8")
+    applied = source.index('record_agent_write(config, runtime, "agent_update", "apply");')
+    restart = source.index('c300x_run_detached_command(C300X_AGENT_INIT_SCRIPT, "restart", 500)', applied)
+    assert "c100x_activation_payload_changed(&runtime->c100x_activation);" in source[applied:restart]

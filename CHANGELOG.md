@@ -1,9 +1,11 @@
 # Changelog
 
-## Next release - Unreleased
+## v3.0.0b1 - 2026-11-25
 
-One package now serves the Classe 300X and, as an experiment, the Classe 100X.
-On a Classe 300X everything works as in 2.10.0, with these visible changes:
+Beta. One package now serves the Classe 300X and, as an experiment, the Classe
+100X. The Classe 100X side is checked against the original 1.5.8 firmware
+files offline only and is not yet confirmed on a device. On a Classe 300X
+everything works as in 2.10.0, with these visible changes:
 
 - **Names without the model.** The card picker lists the card as **BTicino
   Doorbell Call Card** (before: C300X Doorbell Call Card). The blueprints are
@@ -11,13 +13,32 @@ On a Classe 300X everything works as in 2.10.0, with these visible changes:
   **Door station**, and the services are listed without "C300X" in their names
   (for example **Run action** instead of Run C300X action). Only the displayed
   names changed: the card type `custom:c300x-doorbell-call-card`, the service
-  IDs, the blueprint files and every entity stay as they are, so existing dashboards and automations keep
-  working without a change.
+  IDs, the blueprint files and every entity stay as they are, so existing
+  dashboards and automations keep working without a change.
+- Manual setup says **C300X/C100X** in its texts until the station has
+  answered and its model is known.
 - The device page shows the station's board as hardware version and its article
   number as model ID.
+- **Installation over SSH:**
+  - When Home Assistant cannot install its SSH package but a usable one is
+    already there, the installation goes on with it. When none can be loaded,
+    setup says so in a message of its own instead of reporting a login error.
+  - While the model is still unknown, setup tries the C100X factory password
+    after the station refused the C300X one, before it asks for a login.
+  - A station without the firewall file `/etc/network/if-pre-up.d/iptables` is
+    installed with firewall management switched off instead of failing. Where
+    that file or a directory above it is a link, the installation stops before
+    it changes anything. On the Classe 300X firmwares 1.7.19, 2.0.2 and 3.0.6
+    the file is a regular file, so nothing changes there.
 - **Classe 100X (experimental).** Setup recognises a Classe 100X on firmware
   1.5.8 and asks for an explicit confirmation before it installs anything
   ([Classe 100X](docs/c100x-experimental.md)). A Classe 300X is never asked.
+- On a Classe 100X with active display pages, the agent update Repair renews
+  the pages when the update brings newer ones: the station reboots once, after
+  it has been idle for about two minutes, never during a call and only while
+  the maintenance reboot is allowed. A station with the original display is
+  not rebooted.
+- The native agent is rebuilt as 3.0.0b1; an agent update is required.
 
 ## v2.10.0 - 2026-11-25
 

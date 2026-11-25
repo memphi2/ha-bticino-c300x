@@ -33,7 +33,7 @@
       },
       "c100x_experimental": {
         "title": "Classe 100X: experimental support",
-        "description": "This station is a Classe 100X. Its support is experimental: it is tested on firmware 1.5.8 only, and not every function of the Classe 300X is available. Nothing is changed on the station before you confirm; close this dialog to leave it as it is.",
+        "description": "This station is a Classe 100X. Its support is experimental: it is built for firmware 1.5.8 and checked without a device so far, not yet confirmed on a Classe 100X, and not every function of the Classe 300X is available. Nothing is changed on the station before you confirm; close this dialog to leave it as it is.",
         "data": {
           "c100x_experimental": "Set up the experimental Classe 100X support"
         }

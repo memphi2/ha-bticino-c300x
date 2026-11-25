@@ -29,6 +29,7 @@ from .agent_update_followup import (
 )
 from .api import C300XAgentApiError
 from .api_errors import C300XAgentApiUnsupportedError, C300XAgentUpdateError
+from .c100x_display_activation import async_renew_c100x_display_after_update
 from .callback_url import async_suggest_callback_base_url
 from .callback_url import (
     validated_callback_base_url as _validated_callback_base_url,
@@ -648,6 +649,7 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
                 setup_data,
             )
             _settle_display_followup(self.hass, entry, display, full=display_full)
+            await async_renew_c100x_display_after_update(self.hass, entry)
             clear_followup(self.hass, entry)
             await _async_migrate_mqtt_after_update(entry.runtime_data.api)
             setup_data = await entry.runtime_data.api.async_validate_setup()
@@ -797,6 +799,7 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
                 # The installer's core step failed and nothing ran it again.
                 display = False
             _settle_display_followup(self.hass, entry, display, full=display_full)
+            await async_renew_c100x_display_after_update(self.hass, entry)
             self._ssh_install_followup = None
             clear_followup(self.hass, entry)
             await _async_migrate_mqtt_after_update(entry.runtime_data.api)

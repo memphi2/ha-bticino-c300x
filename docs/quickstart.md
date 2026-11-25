@@ -96,17 +96,17 @@ fill in:
 
 | Field | Value |
 | --- | --- |
-| **Address of the C300X** | IP address or host name of the station. With an IPv4 address, Home Assistant follows the station to a new address on its own ([Station Changed Its Address](media-troubleshooting.md#station-changed-its-address)). |
+| **Address of the C300X/C100X** | IP address or host name of the station. With an IPv4 address, Home Assistant follows the station to a new address on its own ([Station Changed Its Address](media-troubleshooting.md#station-changed-its-address)). |
 | **Port** | `8091`, unless you changed it during installation. |
-| **Address of Home Assistant for the C300X** | Leave empty. The station then reports rings and events to the address Home Assistant knows for itself. See [Callback URL](advanced-maintenance.md#callback-url) if events do not arrive. |
+| **Address of Home Assistant for the C300X/C100X** | Leave empty. The station then reports rings and events to the address Home Assistant knows for itself. See [Callback URL](advanced-maintenance.md#callback-url) if events do not arrive. |
 
 ## Install the Device Agent
 
 The device agent is a small program on the station that Home Assistant talks
 to. What happens next depends on what Home Assistant finds:
 
-- **No agent:** setup offers **Install native agent on the C300X**, also for a
-  C100X. Use it only on a rooted or SSH-enabled station. Home Assistant logs in
+- **No agent:** setup offers **Install native agent on the C300X/C100X**; the
+  model is not known yet. Use it only on a rooted or SSH-enabled station. Home Assistant logs in
   over SSH with the station's factory root login and asks for an SSH user and
   password only if the station refuses it. While the model is still unknown it
   tries the C300X factory login first and the C100X one only after the station
@@ -231,8 +231,10 @@ existing ones stay until they expire. See
 Keep the existing integration entry. The release archive contains the agent,
 its display files and the card; no separate card repository is needed.
 
-A C100X is updated the same way. Home Assistant refuses to put a release from
-before the joint package on a C100X, before anything is written.
+A C100X is updated the same way. Do not go back to a release from before the
+joint package on a C100X: the C100X agent's own updater refuses such a package,
+and a refused upload can leave staging files, but the SSH installer of an older
+release does not check the model and must not be used on a C100X.
 
 ### Beta Versions
 
@@ -257,6 +259,11 @@ On firmware `3.0.6`, before going back to a release older than 2.10.0,
 remove the display pages completely as described in
 [Display Patch on Firmware 3.0.6](display.md#display-patch-on-firmware-306);
 older releases cannot remove them.
+
+`3.0.0b1` is the beta of the joint package for the Classe 300X and the Classe
+100X. On a Classe 300X it works like stable 2.10.0. The Classe 100X support is
+experimental and checked offline only; no stable release supports a Classe
+100X, see [Classe 100X](c100x-experimental.md).
 
 ## Next Steps
 

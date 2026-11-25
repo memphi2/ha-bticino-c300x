@@ -8522,6 +8522,7 @@ static void handle_agent_update_apply(
         (void)remove_tree(workspace->stage_dir);
     }
     record_agent_write(config, runtime, "agent_update", "apply");
+    c100x_activation_payload_changed(&runtime->c100x_activation);
     if (summary.runtime_changed) {
         (void)c300x_run_detached_command(C300X_AGENT_INIT_SCRIPT, "restart", 500);
     }

@@ -179,3 +179,21 @@ def test_the_question_has_its_texts_in_every_language(name):
     assert "Classe 100X" in texts["error"]["c100x_confirmation_required"]
     assert "c100x_package_only" not in texts["abort"]
     assert "C100X" not in texts["error"]["device_model_incompatible"]
+
+
+def test_the_opt_in_text_claims_no_device_test() -> None:
+    """The C100X side is checked against the firmware files, not yet on a station."""
+
+    confirmed = {
+        "strings.json": "checked without a device so far, not yet confirmed on a Classe 100X",
+        "translations/en.json": "checked without a device so far, not yet confirmed on a Classe 100X",
+        "translations/de.json": "bisher nur ohne Gerät geprüft, noch nicht auf einer Classe 100X bestätigt",
+        "translations/fr.json": "vérifiée jusqu'ici que sans appareil, pas encore confirmée sur un Classe 100X",
+        "translations/it.json": "finora verificato solo senza dispositivo, non ancora confermato su un Classe 100X",
+    }
+    for name, wording in confirmed.items():
+        document = json.loads((COMPONENT / name).read_text(encoding="utf-8"))
+        text = document["config"]["step"]["c100x_experimental"]["description"]
+        assert wording in text, name
+        for claim in ("tested", "getestet", "testée", "provato"):
+            assert claim not in text, (name, claim)

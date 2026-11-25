@@ -33,7 +33,7 @@
       },
       "c100x_experimental": {
         "title": "Classe 100X: supporto sperimentale",
-        "description": "Questa postazione è un Classe 100X. Il suo supporto è sperimentale: è provato solo con il firmware 1.5.8 e non tutte le funzioni del Classe 300X sono disponibili. Prima della tua conferma non viene modificato nulla sulla postazione; chiudi questa finestra per lasciarla com'è.",
+        "description": "Questa postazione è un Classe 100X. Il suo supporto è sperimentale: è realizzato per il firmware 1.5.8 e finora verificato solo senza dispositivo, non ancora confermato su un Classe 100X, e non tutte le funzioni del Classe 300X sono disponibili. Prima della tua conferma non viene modificato nulla sulla postazione; chiudi questa finestra per lasciarla com'è.",
         "data": {
           "c100x_experimental": "Configura il supporto sperimentale del Classe 100X"
         }

@@ -152,6 +152,10 @@ static void rollback_test(const struct c300x_config *config, const char *manifes
     }
     assert(symlink("old-agent", test_init_link) == 0);
     for (size_t i = 0; i < C300X_AGENT_UPDATE_FILE_COUNT; i++) {
+        if (C300X_AGENT_UPDATE_FILES[i].optional == C300X_UPDATE_FILE_C100X) {
+            /* The C100X adapter is not written on a C300X: nothing fails there. */
+            continue;
+        }
         assert(agent_update_target_path(config, C300X_AGENT_UPDATE_FILES[i].path, fail_target, sizeof(fail_target)));
         assert(!apply_agent_update_files(config, manifest, "{}", &summary, NULL));
         assert(summary.changed_files == 0);

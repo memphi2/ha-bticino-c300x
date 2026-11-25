@@ -9,6 +9,7 @@
 #include <unistd.h>
 
 #define GENERATION "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+#define NEWER "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 #define MINUTE 60000LL
 
 static char directory[256], bundle[300], state[300], log_path[300];
@@ -297,6 +298,33 @@ static void test_activate_and_restore_requests(void)
     c100x_activation_close(&activation);
 }
 
+/* An update that changes only the adapter: the agent keeps running and offers the new pages. */
+static void test_updated_adapter_is_offered_without_a_restart(void)
+{
+    struct c100x_activation activation;
+    struct c100x_activation_inputs inputs = idle_station(10 * MINUTE);
+    char json[1024], text[512];
+    set_state("installed", 0, 1, 0);
+    start_with(&activation, inputs.now_ms);
+    assert(c100x_activation_json(&activation, json, sizeof(json)));
+    assert(strstr(json, "\"confirmed\":true") && strstr(json, "\"activate\":false"));
+    snprintf(text, sizeof(text),
+        "{\"ok\":true,\"state\":\"installed\",\"runtime_verified\":false,\"phase\":\"installed\","
+        "\"trial_switched\":false,\"confirmed\":true,\"reboot_due\":false,\"generation\":\"%s\","
+        "\"available\":\"%s\",\"last_result\":\"\"}\n", GENERATION, NEWER);
+    write_file(state, text);
+    int reads = log_count("status");
+    assert(settle(&activation, &inputs) == 0 && log_count("status") == reads);
+    c100x_activation_payload_changed(&activation);
+    assert(c100x_activation_json(&activation, json, sizeof(json)));
+    assert(strstr(json, "\"busy\":true") && strstr(json, "\"activate\":false"));
+    assert(settle(&activation, &inputs) == 0 && log_count("status") == reads + 1);
+    assert(c100x_activation_json(&activation, json, sizeof(json)));
+    assert(strstr(json, "\"busy\":false") && strstr(json, "\"confirmed\":true"));
+    assert(strstr(json, "\"activate\":true") && strstr(json, "\"available\":\"" NEWER "\""));
+    c100x_activation_close(&activation);
+}
+
 /* Key beep, alerts, bridge and ringer mute: only with the confirmed adapter. */
 static void test_display_functions_follow_the_confirmed_adapter(void)
 {
@@ -368,6 +396,8 @@ static void test_inert_without_a_c100x(void)
     assert(activation.call_open_ms == 0);
     assert(run_for(&activation, &inputs, inputs.now_ms + 10 * MINUTE) == 0);
     assert(!strcmp(c100x_activation_request(&activation, C100X_ACTION_PREPARE), "c100x_required"));
+    c100x_activation_payload_changed(&activation);
+    assert(!activation.refresh && run_for(&activation, &inputs, inputs.now_ms + MINUTE) == 0);
     assert(log_count("status") == 0);
     c100x_activation_close(&activation);
 }
@@ -386,6 +416,7 @@ int main(int argc, char **argv)
     else if (!strcmp(argv[1], "unknown")) test_unknown_status_fails_closed();
     else if (!strcmp(argv[1], "requests")) test_activate_and_restore_requests();
     else if (!strcmp(argv[1], "features")) test_display_functions_follow_the_confirmed_adapter();
+    else if (!strcmp(argv[1], "adapter-updated")) test_updated_adapter_is_offered_without_a_restart();
     else if (!strcmp(argv[1], "boot-check")) test_failed_boot_check_keeps_activation_off();
     else assert(!"unknown case");
     return 0;

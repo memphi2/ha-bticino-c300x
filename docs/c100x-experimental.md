@@ -29,13 +29,15 @@ C100X; everything else is in the main documentation:
   custom SIP, media or display changes is not supported.
 - **The package.** One package serves the C300X and the C100X. Keep a copy of
   the one you installed for recovery. A release from before the joint package
-  is no substitute: a C100X refuses it.
+  is no substitute: the C100X agent's own updater refuses it (a refused upload
+  can leave staging files), and the SSH installer of such a release does not
+  check the model, so never use it on a C100X.
 
 ## What Is Different on the C100X
 
 | Area | On the C100X |
 | --- | --- |
-| Model detection | The agent detects the C100X from its display program and announces `_bticino-c100x-agent._tcp`; an announcement of one model never matches or moves an entry of the other. |
+| Model detection | The agent reads the model from the station's own `<webserver_type>` (`/home/bticino/sp/dbfiles_ws.xml`); the display program (`BtClass100` on a C100X) is the cross-check and decides where that name is missing or disagrees. A disagreement is reported and blocks the display activation. The agent announces `_bticino-c100x-agent._tcp`; an announcement of one model never matches or moves an entry of the other. |
 | Camera | Only the low stream; no **Camera resolution** select and no 960x576. Picture controls use the station's day ranges (brightness 30-220, contrast 80-255, saturation 80-255); at night and on off-grid menu steps the sliders show the nearest 10 % step. |
 | Audio | The firmware codec stays Speex/8000: the station's audio runs at 16 kHz, the firmware's PCMU path accepts only 8 kHz, and the audio chip clocks every profile at 16 kHz. The agent therefore refuses a firmware PCMU switch, and Home Assistant offers no **Audio codec** select. HA and the browser still get PCMU through the agent ([audio analysis](dev/c100x-audio-analysis.md)). |
 | Speaker and TTS | Not offered. The station's own sound paths have no safe owner or cancellation for a door call, so the agent blocks the C300X playback path on a C100X. |
@@ -43,6 +45,7 @@ C100X; everything else is in the main documentation:
 | Text memos | Not offered: HA creates no memo entities, `write_text_memo` is refused with a translated message, and the display has no memo page. |
 | Message LED | Not driven; the agent reports none, and HA refuses Notify `led`. |
 | Display | A separate Qt 5 adapter activated by one reboot, confirmed in its first boot and otherwise rolled back; entered through the items **Home Assistant** and **Alarmo** of the station's main menu and operated like the station's own menus (Up/Down, Return, EXIT as the last entry). No Display patch, no home page buttons, no display reload ([details](dev/c100x-display-parity.md#activation-by-reboot)). |
+| Agent update | With active, confirmed display pages the agent update Repair renews them when the update brings newer pages: the agent prepares them and reboots the station once, after it has been idle for about two minutes, never during a call and only while the maintenance reboot is allowed. The boot confirms the new pages; otherwise the station goes back to its original display. A station with the original display is not rebooted. |
 | Ringer mute, touch tone, display notifications | Only after the display activation; notifications without a tone. **Ringer volume** works without it. |
 
 <p align="center"><img src="images/readme/c100x-display-start-en.webp" alt="Classe 100X page Home Assistant: status fields, weather with two forecasts, page dots at the bottom" width="360"> <img src="images/readme/c100x-display-alarmo-en.webp" alt="Classe 100X Alarmo page while arming: state line, modes, number pad and the Leaving Home action" width="360"></p>

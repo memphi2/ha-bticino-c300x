@@ -65,19 +65,23 @@ ADDRESSES = (
 
 
 def settings_tab(station, language: str, *, reachable: bool = True, switch: bool = False, end: bool = False,
-                 name: str = LONG_NAME, background: str = "", picture: Path | None = None) -> str:
-    """The vendor Settings page with the Integration tab open, fed by a stand-in agent."""
+                 name: str = LONG_NAME, background: str = "", picture: Path | None = None, failing: bool = False) -> str:
+    """The vendor Settings page with the Integration tab open, fed by a stand-in agent.
+
+    A failing agent answers every request with 500.
+    """
     station.patch_vendor_pages()
     details = {"ok": True, "integration_version": "2.9.3", "instance_name": name, "preventReturnToHomepage": False,
                "navigation": "tabs"}
-    agent = qt4_render.Agent({
+    agent = qt4_render.Agent({} if failing else {
+        "/ui/preferences": (200, {"ok": True, "feedback_enabled": True}),
         "/ui/maintenance": (200, {"ok": True, "ssh": True, "reboot": True, "remove": True}),
         "/ui/maintenance/ssh": (200, {"ok": True, "running": True}),
         "/ui/status": (200, {"ok": True, "version": "2.9.3", "firmware": "1.7.19", "registered": reachable,
                              "home_assistant": "http://192.0.2.10:8123", "last_contact_age": 20 if reachable else 7300}),
         "/ui/state": (200, details) if reachable else (502, {"ok": False}),
         "/homeassistant": (503, {"ok": False}),
-    })
+    }, missing=500 if failing else 404)
     try:
         source = (ROOT / "tests/qml/settings_tab_qt4.qml").read_text()
         values = {"LANGUAGE": language, "BASE": agent.url, "ADDRESSES": json.dumps(ADDRESSES), "SWITCH": json.dumps(switch),
@@ -92,15 +96,15 @@ def settings_tab(station, language: str, *, reachable: bool = True, switch: bool
 @pytest.fixture(scope="module")
 def tab(station):
     """Show each state of the tab once per run: language, and whether Home Assistant answers."""
-    shown: dict[tuple[str, bool], dict[str, dict]] = {}
+    shown: dict[tuple[str, bool, bool], dict[str, dict]] = {}
 
-    def stages(language: str, reachable: bool = True) -> dict[str, dict]:
-        if (language, reachable) not in shown:
-            output = settings_tab(station, language, reachable=reachable, switch=reachable)
+    def stages(language: str, reachable: bool = True, failing: bool = False) -> dict[str, dict]:
+        if (language, reachable, failing) not in shown:
+            output = settings_tab(station, language, reachable=reachable, switch=reachable, failing=failing)
             assert "C300X_TAB_QT4_DONE" in output, output[-1500:]
             reports = [json.loads(line.split("C300X_TAB_QT4 ", 1)[1]) for line in output.splitlines() if "C300X_TAB_QT4 " in line]
-            shown[language, reachable] = {report["stage"]: report for report in reports} | {"output": {"text": output}}
-        return shown[language, reachable]
+            shown[language, reachable, failing] = {report["stage"]: report for report in reports} | {"output": {"text": output}}
+        return shown[language, reachable, failing]
 
     return stages
 
@@ -217,10 +221,39 @@ def test_integration_tab_message_keeps_the_end_of_the_page_in_view_on_qt4(tab, l
     assert end(cleared) - lost > 40 and stages["elsewhere"]["scrolled"] == 40, "a page that is elsewhere stays where it is"
 
 
+@pytest.mark.parametrize("language", ["de", "en", "it", "fr"])
+def test_integration_tab_opens_without_a_message_when_the_agent_fails_on_qt4(tab, language):
+    """What the tab cannot read on opening shows at its rows; the foot line is for what the user did.
+
+    With an agent that answers 500 the tab opened with "Setting unavailable"
+    at its foot, on the first screen beside the reason in the status block,
+    though the user had touched nothing; it stayed until the tab was left.
+    The switches and both buttons are greyed out instead, as the two
+    Home Assistant switches are while Home Assistant does not answer.
+    """
+    stages = tab(language, False, True)
+    for stage, report in stages.items():
+        if stage == "output":
+            continue
+        assert report["status"] == "" and [text for text in report["texts"] if text["name"] == "note"] == [], stage
+        assert report["view"][1] == report["panel"][3], "the page has the whole tab"
+        assert report["controls"] == [False] * 6, "no switch and no button can be used"
+    first = stages["first"]
+    labels = [text["text"] for text in first["texts"] if not text["name"]]
+    assert display_text(language, "display_settings_error") in labels, "the station preference names its state at its switch"
+    assert display_text(language, "setting_nav") in labels
+    assert tab_text(first, "statusValue0")["text"] == display_text(language, "status_down")
+    assert [tab_text(first, f"statusValue{row}")["text"] for row in (1, 2, 3)] == ["-", "-", "-"]
+    assert tab_text(first, "bridgeReason")["text"] == display_text(language, "bridge_unreachable")
+    silent = tab(language, False)["first"]
+    assert silent["status"] == "" and silent["controls"] == [True, False, False, True, True, True]
+    assert tab(language)["first"]["controls"] == [True] * 6
+
+
 def test_integration_tab_raises_no_qml_warning_on_qt4(tab):
     """Of our files only: the vendor page reports types its own program provides, which the probe lacks."""
-    for reachable in (True, False):
-        found = qt4_render.warnings(tab("de", reachable)["output"]["text"])
+    for reachable, failing in ((True, False), (False, False), (False, True)):
+        found = qt4_render.warnings(tab("de", reachable, failing)["output"]["text"])
         assert [line for line in found if re.match(r"C300X|c300x_|ProbeSettingsTab", line)] == []
 
 

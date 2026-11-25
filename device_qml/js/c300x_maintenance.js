@@ -1,18 +1,27 @@
 // Per page instance. Late responses must not update a reopened settings tab.
 var active = null
+var acting = false
 
 function cancel(panel, timer) {
     var previous = active
     active = null
+    acting = false
     timer.stop()
     panel.busy = false
     if (previous) previous.abort()
+}
+
+function expire(panel, timer) {
+    var acted = acting
+    cancel(panel, timer)
+    if (acted) panel.status = "maintenance_timeout"
 }
 
 function request(panel, timer, path, payload) {
     if (active) return
     var xhr = new XMLHttpRequest()
     active = xhr
+    acting = !!payload
     panel.busy = true
     if (path === "/ssh") panel.sshKnown = false
     panel.status = ""
@@ -22,7 +31,7 @@ function request(panel, timer, path, payload) {
         timer.stop()
         panel.busy = false
         if (!data || data.ok !== true) {
-            panel.status = "display_settings_error"
+            if (payload) panel.status = "display_settings_error"
         } else if (path === "") {
             panel.canReboot = data.reboot === true
             panel.canRemove = data.remove === true

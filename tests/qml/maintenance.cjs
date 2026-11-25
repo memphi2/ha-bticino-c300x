@@ -42,9 +42,37 @@ api.cancel(panel, deadline);
 stale.reply({ok:true, running:false});
 assert.equal(panel.sshRunning, true);
 api.request(panel, deadline, "", null);
-next("GET", "").reply(null, 403);
-assert.equal(panel.busy, false);
-assert.equal(panel.status, "display_settings_error");
+// A read the user did not ask for leaves no message: the rows show what is unknown.
+for (const [path, answer] of [["", null], ["", {ok:false}], ["/ssh", null]]) {
+    panel.sshKnown = true;
+    api.request(panel, deadline, path, null);
+    next("GET", path).reply(answer, answer ? 200 : 500);
+    assert.deepEqual([panel.busy, panel.status, panel.sshKnown], [false, "", path !== "/ssh"], "failed read of " + (path || "the abilities"));
+}
+api.request(panel, deadline, "", null);
+api.expire(panel, deadline);
+assert.deepEqual([panel.busy, panel.status, queue.length], [false, "", 1], "a read that takes too long leaves no message");
+queue.shift();
+api.request(panel, deadline, "", null);
+next("GET", "").reply({ok:true, ssh:false, reboot:true, remove:true});
+api.request(panel, deadline, "/reboot", {confirm:"reboot"});
+api.expire(panel, deadline);
+assert.deepEqual([panel.busy, panel.status], [false, "maintenance_timeout"], "an action that takes too long says so");
+next("POST", "/reboot", {confirm:"reboot"});
+api.request(panel, deadline, "", null);
+assert.equal(panel.status, "");
+api.expire(panel, deadline);
+assert.equal(panel.status, "", "the read after an action is a read");
+queue.shift();
+api.expire(panel, deadline);
+assert.equal(panel.status, "", "nothing is under way");
+for (const path of ["/ssh", "/reboot", "/remove"]) {
+    api.request(panel, deadline, path, {enabled:true});
+    next("POST", path, {enabled:true}).reply(null, 500);
+    assert.deepEqual([panel.busy, panel.status], [false, "display_settings_error"], "failed action " + path);
+}
+assert.match(fs.readFileSync(path.join(dir, "C300XSettings.qml"), "utf8"),
+    /id: deadline\n        interval: 125000\n        onTriggered: Maintenance\.expire\(panel, deadline\)\n/);
 api.request(panel, deadline, "", null);
 next("GET", "").reply({ok:true, ssh:false, reboot:false, remove:false});
 assert.equal(panel.canReboot, false);

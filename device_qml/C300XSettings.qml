@@ -192,10 +192,7 @@ Item {
     Timer {
         id: deadline
         interval: 125000
-        onTriggered: {
-            Maintenance.cancel(panel, deadline)
-            panel.status = "maintenance_timeout"
-        }
+        onTriggered: Maintenance.expire(panel, deadline)
     }
 
     UbuntuLightText {

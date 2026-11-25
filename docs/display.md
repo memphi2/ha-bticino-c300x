@@ -512,6 +512,11 @@ station preference, not an integration option, and survives restarts. If the
 agent cannot read or save it, the switch shows **Setting unavailable**; reopen
 the tab before trying again.
 
+What the tab cannot read when it opens shows at the rows: the switch or button
+concerned is greyed out. A line at the foot of the tab appears only as the
+result of something done there: a request the station accepted, a setting
+that could not be saved, or a request that got no answer in time.
+
 ### Home Assistant not reachable
 
 A house symbol beside the power button of the home page stands for the

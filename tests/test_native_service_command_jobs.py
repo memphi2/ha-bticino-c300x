@@ -41,6 +41,8 @@ def binary(request, tmp_path_factory):
              '-DC300X_SSH_STATUS_COMMAND=\\\"./status-test.sh\\\" '
              '-DC300X_REBOOT_PROGRAM=\\\"./reboot-test.sh\\\" '
              '-DC300X_SSH_COMMAND_TIMEOUT_MS=2000 -DC300X_SSH_STATUS_TIMEOUT_MS=2000')
+    # The lab is a Qt 4 station unless a test creates "qt5-mark" in its root.
+    flags += ' -DC300X_QT5_DISPLAY_MARKER=\\"./qt5-mark\\"'
     flags += (f' -DC300X_GUI_HOME=\\"{build}\\" -DC300X_GUI_SHELL=\\"{shell}\\" -DC300X_GUI_INIT_PID={os.getpid()}'
               f' -DC300X_GUI_UID={os.getuid()} -DC300X_GUI_GID={os.getgid()}')
     if request.param:
@@ -202,6 +204,7 @@ def test_qt5_start_script_runs_the_display_in_a_station_launch(lab):
     ui = {"X-C300X-UI": "settings-v1"}
     home = Path(lab.process.args[0]).parents[1]
     rc = lab.root / "display-qt5.log.rc"
+    (lab.root / "qt5-mark").touch()
     with start_script(lab, qt5_start_script(lab)):
         # At boot bt_daemon runs bin/BtClass_qws; reload_gui runs the absolute path under init.
         for launcher in (SUPERVISOR, [str(home / "sh"), str(home / "bin/BtClass_qws")]):
@@ -213,6 +216,7 @@ def test_qt5_start_script_runs_the_display_in_a_station_launch(lab):
 def test_qt5_start_script_with_one_more_fork_is_not_a_station_launch(lab):
     ui = {"X-C300X-UI": "settings-v1"}
     home = Path(lab.process.args[0]).parents[1]
+    (lab.root / "qt5-mark").touch()
     text = qt5_start_script(lab).replace("{ { LD_PRELOAD=", "{ { ( LD_PRELOAD=")
     text = text.replace("3>&-; echo $?", "3>&-; true; ); echo $?")
     with start_script(lab, text):
@@ -221,12 +225,27 @@ def test_qt5_start_script_with_one_more_fork_is_not_a_station_launch(lab):
     assert (lab.root / "display-qt5.log.rc").read_text() == "0\n"
 
 
+def test_a_forked_start_script_is_no_station_launch_on_qt4(lab):
+    """1.7.x/2.0.2 as in 2.9.2: the wrapper itself must start the display."""
+    ui = {"X-C300X-UI": "settings-v1"}
+    home = Path(lab.process.args[0]).parents[1]
+    assert not (lab.root / "qt5-mark").exists()
+    for text in (qt5_start_script(lab),
+                 f'#!{home / "sh"}\n( ./bin/gui/BtClass -c "$GUI_CLIENT"; true ) &\nwait\n'):
+        with start_script(lab, text):
+            for launcher in (SUPERVISOR, [str(home / "sh"), str(home / "bin/BtClass_qws")]):
+                assert display(lab, launcher=launcher, status=403, **ui)["error"] == "display_maintenance_denied"
+    # The stock start script still is one.
+    assert display(lab, **ui)["ok"]
+
+
 def test_gui_peer_checks_all_production_credential_fields(tmp_path):
     # Compile with production IDs (not the unprivileged integration fixture).
     probe = tmp_path / "credentials"
     subprocess.run(["cc", "-std=c11", "-D_DEFAULT_SOURCE", "-D_POSIX_C_SOURCE=200809L",
                     "-I", str(ROOT / "native_agent/src"), "-x", "c", "-", "-o", str(probe)],
-                   input='#include "gui_peer.c"\nint main(void) { return trusted_parent(AT_FDCWD) != 42; }',
+                   input='#include "gui_peer.c"\nint c300x_device_display_is_qt5(void) { return 0; }\n'
+                         'int main(void) { return trusted_parent(AT_FDCWD) != 42; }',
                    text=True, check=True)
     for changed in range(-1, 8):
         fields = [0] * 8

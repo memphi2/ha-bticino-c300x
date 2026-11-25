@@ -1,5 +1,6 @@
 #define _LARGEFILE64_SOURCE 1
 #include "gui_peer.h"
+#include "c300x_agent.h"
 
 #include <arpa/inet.h>
 #include <dirent.h>
@@ -168,7 +169,9 @@ static int stock_daemons(unsigned pid)
 
 /* The Qt 5 start script runs the display inside a pipeline, so up to two forks
  * of the wrapper shell sit in between. A fork keeps the exe, cwd, cmdline and
- * credentials but closes the script; only the wrapper itself has it open. */
+ * credentials but closes the script; only the wrapper itself has it open.
+ * The Qt 4 start script (firmware 1.7.x/2.0.2) has none: the wrapper must be
+ * the display's direct parent there. */
 #define SHELL_FORKS 2
 
 static int station_gui(int gui)
@@ -177,9 +180,9 @@ static int station_gui(int gui)
     int shell[SHELL_FORKS + 1];
     unsigned pid[SHELL_FORKS + 2];
     enum launch launch = UNKNOWN;
-    int depth = 0;
+    int depth = 0, forks = c300x_device_display_is_qt5() ? SHELL_FORKS : 0;
     pid[0] = trusted_parent(gui);
-    while (depth <= SHELL_FORKS && pid[depth]) {
+    while (depth <= forks && pid[depth]) {
         int proc = open_process(pid[depth]);
         if (proc < 0) break;
         enum launch seen = shell_launch(proc, 0);
@@ -187,6 +190,7 @@ static int station_gui(int gui)
         launch = seen;
         shell[depth] = proc;
         pid[++depth] = trusted_parent(proc);
+        if (depth > forks) break;
         int next = pid[depth] ? open_process(pid[depth]) : -1;
         int forked = next >= 0 && shell_launch(next, 0) == launch;
         if (next >= 0) close(next);

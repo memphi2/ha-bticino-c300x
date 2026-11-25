@@ -50,6 +50,14 @@ firmware assets, and their values are examples.
   the skin of firmware 1.7.19 in an emulator on a PC, in English, 800 x 480
   pixels. Station pages such as Settings and the home page are the station's
   own pages with the integration's changes applied.
+- The `c100x-display-*-en` images are renders of the integration's own pages
+  for the Classe 100X, not captures from a station and not station pages. The
+  pages run in Qt 5 on a PC, in English, 800 x 480 pixels, with free fonts of
+  that PC. The background is a plain blue gradient drawn for these pictures;
+  the station's wallpaper and its other artwork are not in them, and the two
+  pictures the pages take from the station (a key symbol and the EXIT symbol)
+  were replaced by drawings of our own for the render. No firmware file was
+  read for them.
 - The contents of the rendered pages are examples: the integration builds the
   page data from example entities, appointments, energy values and consumer
   names. The two camera pictures are AI-generated views of an entrance and a

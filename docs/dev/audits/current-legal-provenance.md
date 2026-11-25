@@ -100,6 +100,14 @@ AI-generated views supplied by the maintainer.
 These are illustrative documentation assets, not extracted firmware files or
 pixel-exact runtime captures.
 
+The seven `c100x-display-*-en` pictures are renders of the integration's own
+Classe 100X pages (`device_qml/c100x/` and the pages generated from the shared
+ones) in Qt 5 on a PC, with example data. The background is a gradient drawn
+for the pictures, the key and EXIT symbols are drawings of our own, the fonts
+are DejaVu Sans and Noto Sans of the PC. A file-access trace of the renders
+shows no firmware file: the only pictures opened are the adapter's own three
+SVG files and the three stand-ins.
+
 ## Not Verified Here
 
 - No new internet source-similarity, trademark, patent, or advisory search.

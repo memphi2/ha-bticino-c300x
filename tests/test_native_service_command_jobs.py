@@ -12,7 +12,7 @@ from http.client import RemoteDisconnected
 from pathlib import Path
 
 import pytest
-from test_native_agent_maintenance_jobs import QML, ROOT, response, wait_until
+from test_native_agent_maintenance_jobs import GUI, QML, ROOT, response, wait_until
 from test_native_agent_maintenance_jobs import lab as lab
 
 from native_agent.test.smoke import TOKEN, api_get
@@ -169,6 +169,21 @@ def test_reload_requires_exact_immutable_wrapper(lab):
         assert display(lab, launcher=launcher, status=403, **ui)["ok"] is False
     (lab.root / "firmware-writable").touch()
     assert display(lab, launcher=[shell, wrapper], status=403, **ui)["ok"] is False
+
+
+@pytest.mark.parametrize("qt5", [False, True])
+def test_a_gui_restart_may_take_longer_than_a_status_read_on_qt5(lab, qt5):
+    """The Qt 5 restart waits for the old display to end, then watches the start;
+    1.7.x/2.0.2 keep the 10 s limit of the release."""
+
+    if qt5:
+        (lab.root / "qt5-mark").touch()
+    lab.script('sleep 11\nprintf \'{"ok":true,"action":"reload_gui"}\'\n')
+    pending = lab.request(GUI, {"confirm": "reload_gui"})
+    if qt5:
+        assert response(pending)["action"] == "reload_gui"
+    else:
+        assert response(pending, 502)["error"] == "reload_failed"
 
 
 def qt5_start_script(lab):

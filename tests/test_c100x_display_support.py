@@ -88,6 +88,23 @@ def test_notification_refusals_name_the_model_of_the_entry(info, model):
             asyncio.run(async_send_display_alert(None, device, "test"))
 
 
+@pytest.mark.parametrize("info,expected", [
+    (INFO, "^C100X display alerts need the Home Assistant pages on the display. Activate them "
+           "with Activate display pages on the device page and reload the integration before sending.$"),
+    ({"model": "C300X"}, "^C300X display alerts require an update of the device agent and Display patch. "
+                         "Update both and reload the integration before sending.$"),
+])
+def test_missing_display_alerts_name_the_display_mechanism_of_the_model(monkeypatch, info, expected):
+    """A C100X has no Display patch; the C300X text stays as released."""
+    device = entry()
+    device.runtime_data.agent_info = info
+    monkeypatch.setattr("custom_components.bticino_c300x.display_alerts.entry_device_ui_enabled_or_patch_active",
+                        lambda _entry: True)
+    with pytest.raises(ServiceValidationError, match=expected) as refusal:
+        asyncio.run(async_send_display_alert(None, device, "test"))
+    assert ("Display patch" in str(refusal.value)) is (info is not INFO)
+
+
 def test_remembered_exclusion_survives_offline_without_erasing_preferences():
     device = entry()
     before = dict(device.options)

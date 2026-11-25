@@ -19,7 +19,7 @@ from .display_notifications import (
     show_notification,
 )
 from .entry_types import BticinoC300XConfigEntry
-from .model_names import C300X, entry_model
+from .model_names import C100X, C300X, entry_model
 from .schema_compat import vol
 
 _LOGGER = logging.getLogger(__name__)
@@ -167,6 +167,13 @@ async def async_send_display_alert(
         raise ServiceValidationError(f"{model} display integration is disabled")
     runtime = entry.runtime_data
     if options["display"] and runtime.capabilities.get("display_alerts") is not True:
+        if model == C100X:
+            # A C100X has no Display patch: its pages come with the activation.
+            raise ServiceValidationError(
+                "C100X display alerts need the Home Assistant pages on the display. "
+                "Activate them with Activate display pages on the device page and "
+                "reload the integration before sending."
+            )
         raise ServiceValidationError(
             f"{model} display alerts require an update of the device agent and "
             "Display patch. Update both and reload the integration before sending."

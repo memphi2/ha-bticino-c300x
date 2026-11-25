@@ -231,6 +231,38 @@ def test_a_recovery_killed_at_any_step_is_finished_by_the_next_one(
     assert _calls(tmp_path, "mount") == [] and _calls(tmp_path, "killall") == []
 
 
+@pytest.mark.parametrize("action", ["recover", "apply"])
+@pytest.mark.parametrize("hold", [
+    ("mv", "*/.c300x-qml-transaction.*/MainApp.qml *"),
+    ("killall", "*"),
+    ("rm", "-f */.c300x-v2"),
+    ("mount", "-o remount,ro /"),
+])
+def test_a_sigterm_during_the_recovery_finishes_it_before_the_script_goes(
+    tmp_path: Path, action: str, hold: tuple[str, str],
+) -> None:
+    """The agent's deadline SIGTERM meets the recovery itself: the job at
+    agent start, or the recovery that runs ahead of a write. The cut step is
+    repeated, so no leftover, no writable / and no stopped GUI wait for the
+    next agent start; the write does not begin."""
+
+    gui, backup, before = _killed_apply(tmp_path)
+    env = _commands(tmp_path, hold)
+    (tmp_path / "calls.log").unlink(missing_ok=True)
+    result = qml._terminate_when_held(tmp_path, gui, backup, action, env)
+    assert result.returncode == 131, result.stderr
+    assert result.stdout == ""
+    assert _gui_files(gui) == before
+    assert not list(gui.glob(".c300x-qml-transaction.*"))
+    # The files moved back need a GUI restart, also when the signal cut it.
+    assert "killall BtClass" in _calls(tmp_path, "killall")
+    assert _calls(tmp_path, "mount")[-1] == "mount -o remount,ro /"
+    assert not (tmp_path / "c300x-qml-root-rw").exists()
+    finished = _run(tmp_path, gui, backup, "recover", _commands(tmp_path))
+    assert "transaction" not in json.loads(finished.stdout)
+    assert _calls(tmp_path, "mount") == [] and _calls(tmp_path, "killall") == []
+
+
 def test_a_sigterm_during_the_rollback_gui_restart_still_restarts_the_gui_and_remounts(
     tmp_path: Path,
 ) -> None:
@@ -254,13 +286,38 @@ def test_a_sigterm_during_the_rollback_gui_restart_still_restarts_the_gui_and_re
         f'#!/bin/sh\nprintf "%s\\n" "pidof $*" >> "{log}"\n'
         f'[ "$(grep -c "^killall" "{log}")" -ge 3 ]\n')
     log.unlink(missing_ok=True)
+    env["C300X_QML_STAGING_DIR"] = str(tmp_path / "stage")
     result = qml._terminate_when_held(tmp_path, gui, backup, "core-apply", env)
     assert result.returncode == 130, result.stderr
+    # The generated files (in RAM on the device) go with the script.
+    assert not (tmp_path / "stage").exists()
     assert result.stdout == ""
     assert _gui_files(gui) == before
     assert _calls(tmp_path, "killall") == ["killall BtClass"] * 3
     assert _calls(tmp_path, "mount") == ["mount -o remount,rw /", "mount -o remount,ro /"]
     assert not (tmp_path / "c300x-qml-root-rw").exists()
+
+
+def test_a_sigterm_during_a_standalone_gui_restart_repeats_the_restart(tmp_path: Path) -> None:
+    """The reload job's deadline SIGTERM falls between the GUI's stop and its
+    start: the script must not go with the display off."""
+
+    gui, backup = tmp_path / "gui", tmp_path / "backup"
+    gui.mkdir()
+    _write_original_gui(gui)
+    env = _commands(tmp_path, ("killall", "*"))
+    log = tmp_path / "calls.log"
+    # The GUI is down after the cut stop and up after the repeated restart.
+    (tmp_path / "recovery-commands" / "pidof").write_text(
+        f'#!/bin/sh\nprintf "%s\\n" "pidof $*" >> "{log}"\n'
+        f'[ "$(grep -c "^killall" "{log}")" -ge 2 ]\n')
+    log.unlink(missing_ok=True)
+    result = qml._terminate_when_held(tmp_path, gui, backup, "reload", env)
+    assert result.returncode == 131, result.stderr
+    assert result.stdout == ""
+    assert _calls(tmp_path, "killall") == ["killall BtClass"] * 2
+    assert log.read_text().splitlines()[-1] == "pidof BtClass"
+    assert _calls(tmp_path, "mount") == []
 
 
 def test_a_sigterm_during_the_final_remount_retries_it_and_exits_131(tmp_path: Path) -> None:
@@ -270,8 +327,10 @@ def test_a_sigterm_during_the_final_remount_retries_it_and_exits_131(tmp_path: P
     gui.mkdir()
     _write_original_gui(gui)
     env = _commands(tmp_path, ("mount", "-o remount,ro /"))
+    env["C300X_QML_STAGING_DIR"] = str(tmp_path / "stage")
     result = qml._terminate_when_held(tmp_path, gui, backup, "core-apply", env)
     assert result.returncode == 131, result.stderr
+    assert not (tmp_path / "stage").exists()
     assert result.stdout == ""
     assert not list(gui.glob(".c300x-qml-transaction.*"))
     assert _calls(tmp_path, "mount") == ["mount -o remount,rw /", "mount -o remount,ro /",

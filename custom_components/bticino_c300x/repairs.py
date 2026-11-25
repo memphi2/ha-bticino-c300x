@@ -60,6 +60,7 @@ from .const import (
     SIGNAL_QML_PATCH_CHANGED,
 )
 from .device_installer import (
+    DISPLAY_WRITE_TIMEOUT,
     C300XDeviceInstallError,
     C300XDeviceInstallRequest,
     async_ensure_installer_dependencies,
@@ -460,6 +461,13 @@ class DeviceCoreQmlHookRepairFlow(RepairsFlow):
         return self.async_create_entry(data={})
 
 
+def _ssh_install_error(err: BaseException) -> str:
+    """Return the translated error of a failed SSH install."""
+
+    reason = err.reason if isinstance(err, C300XDeviceInstallError) else ""
+    return reason if reason in (LOGIN_REFUSED, DISPLAY_WRITE_TIMEOUT) else "ssh_install_failed"
+
+
 def _install_error_log_text(err: BaseException) -> str:
     """Return the log text of a failed SSH install, with the kind of its cause.
 
@@ -731,7 +739,7 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
             return self.async_show_form(
                 step_id="ssh_install",
                 data_schema=_ssh_install_schema(self._ask_ssh_login),
-                errors={"base": LOGIN_REFUSED if refused else "ssh_install_failed"},
+                errors={"base": _ssh_install_error(err)},
                 description_placeholders=placeholders,
             )
 

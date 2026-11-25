@@ -1253,6 +1253,25 @@ reboot makes it read-only. The agent remembers that root as its own, also
 across an agent restart, and its next device write or agent update tries the
 read-only remount again.
 
+The label is then written by `qml_patch.sh media-user-label-apply` (not on a
+Qt 5 display), as a QML write job: the request stays open, other maintenance
+requests get `409 maintenance_busy`, and the agent keeps serving everything
+else. A script that fails, or reports `"ok":false`, is answered `500` with
+`media_user_label_setup_failed`. A script still running after the 30-second
+QML write deadline gets `SIGTERM` for its process group and the same 15
+seconds for its rollback trap before `SIGKILL`; the request is answered once
+the script has ended, with `504`:
+
+```json
+{"ok": false, "error": "media_user_label_timeout", "rolled_back": true}
+```
+
+`rolled_back` has the meaning it has for `qml_patch_timeout`: `true` only for
+exit status 130, the label files as before and `/` read-only. The media user
+and the routing set up by this request stay; a repeated ensure writes the
+label. Agent shutdown during the label write sends the `SIGTERM` once and
+waits up to the 15 seconds; the request is closed without an answer.
+
 ### `POST /api/v1/maintenance/device-user/actions/restore-homeassistant-setup`
 
 Authentication: maintenance.
@@ -1265,6 +1284,9 @@ that script fails, or exits zero and reports `"ok":false` (a display restart
 that failed, after which it put the labelled files back), the agent answers
 `500` with `media_user_label_restore_failed` and leaves the media user and the
 routing as they are. A script that prints no JSON counts by its exit status.
+The script runs as the same QML write job as the label write of ensure: past
+30 seconds it is answered `504` with `media_user_label_timeout` as described
+there, and the media user and the routing are left as they are.
 
 Request fields:
 
@@ -1353,7 +1375,8 @@ new busy status or execution deadline. The 500ms receive deadline applies to
 incomplete input, not a complete deferred SSH request. Unauthorized and disabled
 SSH requests are not deferred. Retrying a busy request must wait for completion.
 
-QML status and standalone GUI reload retain a 10-second script deadline; QML
+QML status and standalone GUI reload retain a 10-second script deadline (the
+reload is not killed at it, see below); QML
 writes retain 30 seconds for a failed start, rollback and restart of the previous
 GUI. Their failed execution, timeout and overflowing 4096-byte output retain
 the existing `502` responses, with one exception: a QML write (apply,
@@ -1385,7 +1408,8 @@ write finishes it (see QML Patch).
 Graceful agent shutdown during a QML write sends that `SIGTERM` once, as the
 first step of its clean-up, and waits up to the same 15 seconds before
 `SIGKILL` at the end of it; that request is closed without an answer. The init
-script's own stop sends `SIGKILL` to the agent after 3 seconds; the script, in
+script's own stop sends `SIGKILL` to the agent after 5 seconds (50 waits of
+100 ms); the script, in
 a process group of its own, has its signal by then and still finishes its
 rollback. A write cut off even so is finished at the next agent start.
 
@@ -1394,7 +1418,17 @@ enabled and the script exists: a job without a client, with the QML write
 deadline and grace period. It finishes a transaction that a power loss, a
 crash or a killed write left behind (see QML Patch) and returns at once when
 there is none. Meanwhile other maintenance requests get `409
-maintenance_busy`, like during any other job. Device-user status alone also has a 10-second
+maintenance_busy`, like during any other job. The device-user label writes
+(ensure, restore) are QML write jobs with the same deadline and grace period.
+The deadline's `SIGTERM` does
+not stop a recovery half-way, neither this job nor the recovery that runs
+ahead of every QML write: the script repeats the recovery once from its
+start, which finishes the step the signal cut (files back in place, GUI
+restart, removal of the leftover, `/` read-only), and then exits with status
+131 without an answer on stdout. A write cut that way has not begun; its
+request is answered `504` with `rolled_back: false`. Only a recovery that
+also outlasts the grace period is killed and left to the next write or agent
+start. Device-user status alone also has a 10-second
 deadline and a 4096-byte bounded-prefix capture; script failure retains HTTP 200
 with unavailable/unknown label status. SSH start and stop have a 60-second
 deadline and SSH status a 15-second one; at the deadline the process group is
@@ -1485,7 +1519,15 @@ Restarts the native agent.
 {"confirm": "reload_gui"}
 ```
 
-Reloads the C300X graphical interface.
+Reloads the C300X graphical interface. Failures are answered `502` with
+`{"ok": false, "error": "reload_failed"}` (`reload_script_missing` without the
+script). A reload past its 10 seconds gets `SIGTERM` for its process group and
+the 15-second grace period of a QML write, not `SIGKILL` at once: the signal
+can fall between the stop and the start of the GUI, so the script repeats the
+restart once and exits 131. The request stays open until the script has ended
+and is then answered with the same `502 reload_failed`, up to 25 seconds after
+it was sent; `gui_running` of `GET /api/v1/maintenance/qml-patch` says whether
+the display is up.
 
 ### Agent Self-Update
 

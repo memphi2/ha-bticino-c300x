@@ -672,6 +672,7 @@
     "error": {
       "agent_bundle_missing": "Il bundle ARMHF dell'agent non e incluso. Compila/prepara il bundle di release prima di usare l'installer.",
       "device_install_failed": "Installazione SSH non riuscita. Controlla l'accesso SSH e riprova.",
+      "device_display_timeout": "I file del display non sono stati scritti entro il tempo limite; al dispositivo è stato chiesto di ripristinare i file precedenti. Controlla che il display funzioni e riprova.",
       "device_install_verify_failed": "L'installazione è terminata, ma l'agent nativo non risponde con la chiave di accesso generata.",
       "invalid_agent_port": "Inserisci una porta valida per il device agent.",
       "invalid_agent_host": "Inserisci l'host del device agent.",
@@ -1404,7 +1405,21 @@
         "name": "Patch utente Home Assistant"
       },
       "stream_snapshots": {
-        "name": "Salva immagini"
+        "name": "Salva immagini",
+        "state_attributes": {
+          "last_failure": {
+            "name": "Ultimo errore",
+            "state": {
+              "snapshot_unavailable": "Impossibile leggere l'immagine del display",
+              "snapshot_throttled": "Richiesta troppo presto dopo l'immagine precedente",
+              "invalid_snapshot_size": "Il dispositivo ha rifiutato la dimensione dell'immagine",
+              "invalid_image": "Il dispositivo ha fornito un'immagine non valida",
+              "agent_unreachable": "Agente del dispositivo non raggiungibile",
+              "agent_error": "L'agente del dispositivo ha segnalato un errore",
+              "save_failed": "Home Assistant non ha potuto salvare l'immagine"
+            }
+          }
+        }
       }
     }
   },
@@ -1518,6 +1533,7 @@
         },
         "error": {
           "ssh_install_failed": "Installazione di riparazione SSH non riuscita. Controlla l'accesso SSH e riprova.",
+          "device_display_timeout": "I file del display non sono stati scritti entro il tempo limite; al dispositivo è stato chiesto di ripristinare i file precedenti. Controlla che il display funzioni e riprova.",
           "update_failed": "Aggiornamento del device agent non riuscito. Verifica che l'accesso di manutenzione sia attivo e riprova.",
           "update_root_already_writable": "L'aggiornamento è stato rifiutato prima dell'applicazione perché il filesystem radice (/) era già scrivibile. Se in precedenza hai rimontato manualmente / in scrittura, riavvia normalmente il dispositivo, poi ripeti questa riparazione. Altrimenti verifica perché / è scrivibile prima di riprovare.",
           "update_root_readonly_failed": "L'aggiornamento non è riuscito a riportare il filesystem radice (/) in sola lettura. Lo stato finale del dispositivo è incerto; il ripristino non è confermato. Conserva i file di recupero e verifica l'agente e il filesystem prima di un altro aggiornamento.",

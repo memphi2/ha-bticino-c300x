@@ -106,9 +106,15 @@ int main(int argc, char **argv)
     config->maintenance_enabled = config->api_no_auth = config->maintenance_no_auth_allowed = 1;
     config->maintenance_qml_patch_enabled = 1;
     c300x_copy_string(config->maintenance_qml_patch_script, sizeof(config->maintenance_qml_patch_script), argv[1]);
+    config->maintenance_gui_reload_enabled = 1;
+    c300x_copy_string(config->maintenance_gui_reload_script, sizeof(config->maintenance_gui_reload_script), argv[1]);
     if (strcmp(mode, "status") == 0) {
         c300x_copy_string(request->method, sizeof(request->method), "GET");
         c300x_copy_string(request->path, sizeof(request->path), "/api/v1/maintenance/qml-patch");
+    } else if (strncmp(mode, "reload", 6) == 0) {
+        c300x_copy_string(request->method, sizeof(request->method), "POST");
+        c300x_copy_string(request->path, sizeof(request->path), "/api/v1/maintenance/gui/actions/reload");
+        c300x_copy_string(request->body, sizeof(request->body), "{\"confirm\":\"reload_gui\"}");
     } else {
         c300x_copy_string(request->method, sizeof(request->method), "POST");
         c300x_copy_string(request->path, sizeof(request->path), "/api/v1/maintenance/qml-patch/actions/apply");
@@ -205,6 +211,23 @@ int main(int argc, char **argv)
         assert(access("rolled", F_OK) == 0);
         assert(kill(child, 0) == -1 && errno == ESRCH);
         assert(responses == 0 && !c300x_http_maintenance_busy(&owner));
+    } else if (strncmp(mode, "reload", 6) == 0) {
+        /* A GUI restart past its 10 seconds: SIGTERM, the trap finishes the
+         * restart, and only then the unchanged answer. */
+        offset_ms += 10001;
+        run_for(&owner, 100, NULL);
+        assert(responses == 0 && owner.job.pid == child && kill(child, 0) == 0);
+        if (strcmp(mode, "reload-ignore") == 0) {
+            offset_ms += 15001;
+        }
+        run_for(&owner, 5000, answered);
+        assert(responses == 1 && response_status == 502 && writes == 0);
+        assert(strstr(response_body, "\"error\":\"reload_failed\"") != NULL);
+        if (strcmp(mode, "reload") == 0) {
+            assert(access("rolled", F_OK) == 0 && lines("terms") == 1);
+        }
+        assert(kill(child, 0) == -1 && errno == ESRCH);
+        assert(!c300x_http_maintenance_busy(&owner));
     } else if (strcmp(mode, "status") == 0) {
         /* No grace for a read: killed at its deadline, answered at once. */
         offset_ms += 10001;

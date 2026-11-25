@@ -100,6 +100,53 @@ def test_the_speaker_shows_its_state_and_last_result_in_words_with_a_state_icon(
     assert icons == {"default": "mdi:bullhorn-outline", "state": {"playing": "mdi:bullhorn"}}
 
 
+# Every cause the capture can record for a visitor image that was not taken.
+SNAPSHOT_FAILURES = {
+    "snapshot_unavailable", "snapshot_throttled", "invalid_snapshot_size", "invalid_image",
+    "agent_unreachable", "agent_error", "save_failed",
+}
+
+
+def _snapshot_failure_codes() -> set[str]:
+    """Read the causes out of snapshot_capture.py: what ``_failed`` is called
+    with and what ``snapshot_failure_cause`` can return."""
+
+    tree = ast.parse((INTEGRATION / "snapshot_capture.py").read_text(encoding="utf-8"))
+    sources: list[ast.AST] = []
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "_failed"):
+            sources.extend(node.args)
+        elif isinstance(node, ast.FunctionDef) and node.name == "snapshot_failure_cause":
+            # Skip the docstring; every other text in it is a cause.
+            sources.extend(node.body[1:])
+    return {
+        child.value for source in sources for child in ast.walk(source)
+        if isinstance(child, ast.Constant) and isinstance(child.value, str)
+    }
+
+
+def test_every_visitor_image_failure_is_shown_in_words_in_every_language() -> None:
+    """The switch attribute keeps the code; the frontend shows the translated text."""
+
+    assert _snapshot_failure_codes() == SNAPSHOT_FAILURES
+    english = _load_json(TRANSLATIONS / "en.json")["entity"]["switch"]["stream_snapshots"]
+    for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
+        switch = _load_json(path)["entity"]["switch"]["stream_snapshots"]
+        last_failure = switch["state_attributes"]["last_failure"]
+        assert last_failure["name"], path.name
+        assert set(last_failure["state"]) == SNAPSHOT_FAILURES, path.name
+        assert all(last_failure["state"].values()), path.name
+        if path.stem not in ("strings", "en"):
+            # A copied English text is not a translation.
+            assert last_failure["name"] != english["state_attributes"]["last_failure"]["name"]
+            for code, text in last_failure["state"].items():
+                assert text != english["state_attributes"]["last_failure"]["state"][code], (path.name, code)
+    guide = (ROOT / "docs" / "user-guide.md").read_text(encoding="utf-8")
+    for code, text in english["state_attributes"]["last_failure"]["state"].items():
+        assert f"| `{code}` | {text} |" in guide, code
+
+
 def test_native_camera_audio_explains_prerequisites_on_all_feature_forms() -> None:
     for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
         data = _load_json(path)

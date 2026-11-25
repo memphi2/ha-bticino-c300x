@@ -126,7 +126,8 @@ for (const [name, prop, count] of [['energyHoursTap', 'selectedHour', 24], ['ene
     assert(!block.includes('BeepingMouseArea'));
 }
 assert(qml.includes('onPowerHistoryChanged: selectedPower = -1'));
-assert(qml.includes('onShownChanged: { selectedHour = -1; selectedPower = -1 }'));
+assert(qml.includes('onShownChanged: { selectedHour = -1; selectedPower = -1; keepConsumers() }'));
+assert(qml.includes('onVisibleChanged: { if (!visible) { selectedHour = -1; selectedPower = -1 } keepConsumers() }'));
 const sync = qml.match(/function syncPower\(\) \{[\s\S]*?\n    }/)[0];
 const old = {revision: 'old'}, fresh = {revision: 'new'};
 const cache = vm.createContext({energy: {power: {revision: 'old'}}, powerHistory: old});

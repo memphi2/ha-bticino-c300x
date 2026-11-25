@@ -3348,3 +3348,19 @@ def test_the_core_repair_runs_the_whole_owed_display_followup_and_clears_it() ->
     assert api.calls[:2] == ["apply_qml_core", "apply_qml"]
     assert "reload_gui" in api.calls
     assert "display_followup_pending" not in entry.data
+
+
+def test_a_display_write_timeout_of_the_ssh_install_keeps_its_own_error() -> None:
+    import json
+    from pathlib import Path
+
+    from custom_components.bticino_c300x import repairs
+    from custom_components.bticino_c300x.device_installer import C300XDeviceInstallError
+
+    assert repairs._ssh_install_error(C300XDeviceInstallError("device_display_timeout")) == (
+        "device_display_timeout")
+    assert repairs._ssh_install_error(C300XDeviceInstallError("ssh_login_refused")) == "ssh_login_refused"
+    assert repairs._ssh_install_error(C300XDeviceInstallError("device_install_failed")) == "ssh_install_failed"
+    assert repairs._ssh_install_error(RuntimeError("x")) == "ssh_install_failed"
+    strings = json.loads((Path(repairs.__file__).parent / "strings.json").read_text(encoding="utf-8"))
+    assert "device_display_timeout" in strings["config"]["error"]

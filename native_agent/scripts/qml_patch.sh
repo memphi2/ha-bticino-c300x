@@ -832,6 +832,19 @@ reload_gui() {
     fi
 }
 
+# The agent's SIGTERM at the job deadline can fall between the stop and the
+# start of the GUI. The restart is repeated once, so the display is not left off.
+# On the Qt 5 display the restart worker, in a session of its own, stops and
+# starts the display; it serves the filed request without this script, and a
+# repeat here would file a second restart.
+abort_reload() {
+    trap : HUP INT TERM
+    if [ "$QT5_DISPLAY" != "1" ]; then
+        reload_gui || true
+    fi
+    exit 131
+}
+
 remount_rw() {
     if [ "$NO_REMOUNT" = "1" ]; then
         return 0
@@ -851,7 +864,8 @@ remount_ro() {
 root_left_writable() {
     [ "$NO_REMOUNT" != "1" ] && [ -f "$ROOT_RW_MARK" ] || return 1
     read -r mark_pid mark_gui < "$ROOT_RW_MARK" || return 1
-    [ "$mark_gui" = "$GUI_DIR" ] && ! transaction_owner_running "$mark_pid"
+    [ "$mark_gui" = "$GUI_DIR" ] || return 1
+    [ "$mark_pid" = "$$" ] || ! transaction_owner_running "$mark_pid"
 }
 
 rollback_transaction() {
@@ -990,7 +1004,7 @@ transaction_report() {
     done
 }
 
-recover_transactions() {
+recover_pass() {
     transaction_report
     [ "$TRANSACTION_LIVE" = "0" ] || return 1
     recover_ro=0
@@ -1043,6 +1057,24 @@ recover_transactions() {
         remount_ro || true
     fi
     [ "$recover_blocked" = "0" ]
+}
+
+# The agent's SIGTERM at the job deadline ends the command it meets as well.
+# Every step can be repeated, so one more pass finishes the recovery, the GUI
+# restart and the read-only remount included. The signal stays caught, not
+# ignored: a GUI started here must not inherit an ignored SIGTERM.
+abort_recovery() {
+    trap : HUP INT TERM
+    recover_pass || true
+    exit 131
+}
+
+recover_transactions() {
+    trap abort_recovery HUP INT TERM
+    recover_rc=0
+    recover_pass || recover_rc=$?
+    trap - HUP INT TERM
+    return "$recover_rc"
 }
 
 finish_signal() {
@@ -1110,6 +1142,7 @@ finish_write_action() {
 }
 
 exit_write_signal() {
+    cleanup_staging
     if [ "$recovery_ok" = "1" ] && [ "$write_root_ro" = "1" ] && [ "${WRITE_TRANSACTION_COMMITTED:-0}" != "1" ]; then
         exit 130
     fi
@@ -3081,7 +3114,9 @@ case "$ACTION" in
         json_write_status
         ;;
     reload)
+        trap abort_reload HUP INT TERM
         reload_gui
+        trap - HUP INT TERM
         json_status
         ;;
     gui-worker)

@@ -4041,6 +4041,25 @@ def test_script_backed_maintenance_requests_outlast_the_agent_script(
     assert session.requests[0]["kwargs"]["timeout"] == expected
 
 
+@pytest.mark.parametrize(("configured", "expected"), [(5.0, 30.0), (45.0, 45.0)])
+def test_gui_reload_request_outlasts_the_restart_the_agent_lets_finish(configured, expected) -> None:
+    # Past its 10 s the reload script gets SIGTERM and 15 s to finish the
+    # restart; the agent answers only then. A 15 s wait gave up before that
+    # and reported a timeout instead of the agent's ``reload_failed``.
+    session = _FakeSession('{"ok": true, "action": "reload_gui"}')
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+        maintenance_token="maintenance-token",
+        timeout=configured,
+    )
+
+    asyncio.run(api.async_reload_gui())
+
+    assert session.requests[0]["kwargs"]["timeout"] == expected
+
+
 @pytest.mark.parametrize("method,kwargs,path", [
     ("async_apply_qml_patch", {"dynamic_homepage": True}, "apply"),
     ("async_apply_qml_core_patch", {}, "apply-core"),

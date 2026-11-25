@@ -30,11 +30,16 @@ Item {
     property int selectedHour: -1
     property int selectedPower: -1
     property int powerBuckets: EnergyChart.count(powerSeries)
-    onShownChanged: { selectedHour = -1; selectedPower = -1 }
-    onVisibleChanged: { if (!visible) { selectedHour = -1; selectedPower = -1 } }
+    property bool consumersKept: false
+    onShownChanged: { selectedHour = -1; selectedPower = -1; keepConsumers() }
+    onVisibleChanged: { if (!visible) { selectedHour = -1; selectedPower = -1 } keepConsumers() }
     onPowerHistoryChanged: selectedPower = -1
     onEnergyChanged: syncPower()
-    Component.onCompleted: syncPower()
+    Component.onCompleted: { syncPower(); keepConsumers() }
+
+    function keepConsumers() {
+        consumersKept = shown === "consumers" && (visible || consumersKept)
+    }
 
     function syncPower() {
         var next = energy && energy.power ? energy.power : ({})
@@ -142,18 +147,22 @@ Item {
                     opacity: link.flow === 0 ? 0.35 : 1
                 }
 
-                UbuntuLightText {
+                Item {
                     id: flowArrow
                     visible: link.flow !== 0
                     anchors.centerIn: parent
                     width: 20
                     height: 20
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                    text: "\u25B6"
-                    font.pixelSize: 18
-                    color: link.flowColor
                     rotation: (modelData === "solar" ? 180 : 0) + (link.flow < 0 ? 180 : 0)
+
+                    UbuntuLightText {
+                        anchors.fill: parent
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                        text: "\u25B6"
+                        font.pixelSize: 18
+                        color: link.flowColor
+                    }
                 }
 
                 UbuntuLightText {
@@ -360,11 +369,11 @@ Item {
             model: [0, 6, 12, 18, 24]
 
             UbuntuLightText {
+                objectName: "energyHourLabel"
                 x: bars.x + modelData * bars.slotWidth - (modelData === 24 ? width : modelData === 0 ? 0 : width / 2)
+                y: bars.y + bars.height + 1
                 width: 40
                 height: 17
-                anchors.top: bars.bottom
-                anchors.topMargin: 1
                 text: (modelData < 10 ? "0" : "") + modelData + ":00"
                 color: "white"
                 font.pixelSize: 12
@@ -613,7 +622,7 @@ Item {
         id: consumersLoader
         width: parent.width
         height: bodyHeight
-        source: root.visible && shown === "consumers" ? "C300XEnergyConsumers.qml" : ""
+        source: root.consumersKept ? "C300XEnergyConsumers.qml" : ""
         Binding {
             target: consumersLoader.item
             property: "consumers"

@@ -33,6 +33,8 @@ _MAINTENANCE_JOB_TIMEOUT = 15.0
 # 30 s native deadline, 15 s for the script's rollback after SIGTERM, margin.
 # The media-user label is set and restored by such a write, GUI restart included.
 _QML_WRITE_JOB_TIMEOUT = 50.0
+# 10 s native deadline, the same 15 s for the script to finish the restart, margin.
+_GUI_RELOAD_JOB_TIMEOUT = 30.0
 _UPDATE_REQUEST_TIMEOUT = 20.0
 
 
@@ -489,7 +491,8 @@ class _ApiMaintenanceMixin(_C300XApiCore):
 
         Allow response overhead beyond the native job deadline: 10 s normally,
         or 30 s for QML writes plus the 15 s the agent then gives the script
-        for its rollback before it answers ``qml_patch_timeout``.
+        for its rollback before it answers ``qml_patch_timeout``. A GUI reload
+        gets the same 15 s after its 10 s to finish the restart.
         Update requests also write to the device's flash and get longer.
         """
 
@@ -509,7 +512,7 @@ class _ApiMaintenanceMixin(_C300XApiCore):
             json_data={"confirm": "reload_gui"},
             extra_headers=self._maintenance_headers(),
             request_timeout=self._job_timeout(
-                _QML_WRITE_JOB_TIMEOUT if display_restart else _MAINTENANCE_JOB_TIMEOUT
+                _QML_WRITE_JOB_TIMEOUT if display_restart else _GUI_RELOAD_JOB_TIMEOUT
             ),
         )
         return _ok_response(data)

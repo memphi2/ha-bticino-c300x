@@ -38,14 +38,6 @@ def _boolean(value: Any) -> bool:
 
 
 CHANNELS = ("display", "tts", "led")
-# Legacy mode: the switches it stands for, and whether its notice lights the
-# LED where the agent supports it, without requiring that support.
-LEGACY_MODES = {
-    "display": ({"display"}, True),
-    "speech": ({"tts"}, False),
-    "both": ({"display", "tts"}, True),
-    "led": ({"led"}, True),
-}
 _NOTICE_FIELDS = ("severity", "expires_in", "notification_id")
 
 
@@ -62,7 +54,6 @@ ALERT_DATA_SCHEMA = vol.Schema(
         vol.Optional("expires_in", default=3600): vol.All(
             _integer, vol.Range(min=1, max=604800)
         ),
-        vol.Optional("mode"): vol.In(set(LEGACY_MODES)),
         **{vol.Optional(channel): _boolean for channel in CHANNELS},
         vol.Optional("tts_engine"): vol.All(str, vol.Length(min=1, max=255)),
         vol.Optional("language"): vol.All(str, vol.Length(min=1, max=35)),
@@ -77,12 +68,6 @@ def _invalid(reason: str, model: str) -> ServiceValidationError:
 def _switch_channels(data: dict[str, Any], options: dict[str, Any], model: str) -> set[str]:
     """The switched-on channels; fields of a channel that is off are refused."""
 
-    if "mode" in data:
-        raise _invalid(
-            "mode conflicts with the switches display, tts and led; "
-            "use only the switches",
-            model,
-        )
     channels = {channel for channel in CHANNELS if options.get(channel)}
     if not channels:
         raise _invalid("switch on at least one of display, tts and led", model)
@@ -113,27 +98,22 @@ def alert_options(data: dict[str, Any] | None, model: str = C300X) -> dict[str, 
     """
 
     data = {} if data is None else data
+    if "mode" in data:
+        raise _invalid("mode was removed; use the switches display, tts and led", model)
     try:
         options = dict(ALERT_DATA_SCHEMA(data))
     except vol.Invalid as err:
         raise _invalid(str(err), model) from err
     if any(channel in data for channel in CHANNELS):
         channels = _switch_channels(data, options, model)
-        mode, led = None, "led" in channels
+        led = "led" in channels
     else:
-        mode = options.get("mode", "display")
-        channels, led = LEGACY_MODES[mode]
-    if mode == "led" and (
-        data.get("wake_duration") or data.get("sound_duration")
-        or "tts_engine" in data or "language" in data
-    ):
-        raise _invalid(
-            "mode led does not wake, play sound "
-            "or speak; omit positive durations and TTS settings",
-            model,
-        )
+        # Without switches: the display, and the notice lights the LED where
+        # the agent supports it, without requiring that support.
+        channels = _switch_channels({**data, "display": True}, {**options, "display": True}, model)
+        led = True
     options.update(
-        mode=mode, display="display" in channels, tts="tts" in channels, led=led,
+        display="display" in channels, tts="tts" in channels, led=led,
         led_required="led" in channels,
     )
     return options
@@ -179,12 +159,6 @@ async def async_send_display_alert(
             "Display patch. Update both and reload the integration before sending."
         )
     if options["led_required"] and runtime.capabilities.get("memo_led") is not True:
-        if options["mode"] == "led":
-            raise ServiceValidationError(
-                f"{model} mode led requires a device agent that reports memo LED support. "
-                "Update the agent and reload the integration, or choose another mode "
-                "if the device has no memo LED."
-            )
         raise ServiceValidationError(
             f"{model} led requires a device agent that reports memo LED support. "
             "Update the agent and reload the integration, or leave led off "

@@ -1,4 +1,4 @@
-"""The Notify switches display, tts and led, and the legacy mode as their alias."""
+"""The Notify switches display, tts and led; the old mode field is gone."""
 
 import asyncio
 from itertools import product
@@ -63,9 +63,7 @@ def test_every_switch_combination_runs_exactly_its_channels(
     asyncio.run(run())
 
 
-@pytest.mark.parametrize("channels", [
-    {"display": True, "tts": True}, {"mode": "both"},
-], ids=["switches", "legacy both"])
+@pytest.mark.parametrize("channels", [{"display": True, "tts": True}], ids=["switches"])
 def test_display_and_tts_accept_a_tone_but_the_speech_replaces_it(tmp_path, monkeypatch, channels):
     async def run():
         async with speech_context(tmp_path, monkeypatch) as (hass, entry, spoken):
@@ -79,18 +77,14 @@ def test_display_and_tts_accept_a_tone_but_the_speech_replaces_it(tmp_path, monk
 
 @pytest.mark.parametrize("data,switches,led", [
     (None, {"display": True}, True),
-    ({"mode": "display"}, {"display": True}, True),
-    ({"mode": "speech"}, {"tts": True}, False),
-    ({"mode": "both"}, {"display": True, "tts": True}, True),
-    ({"mode": "led"}, {"led": True}, True),
-], ids=["no mode", "display", "speech", "both", "led"])
-def test_legacy_modes_are_aliases_of_the_switches(tmp_path, monkeypatch, data, switches, led):
+], ids=["no switches"])
+def test_no_switches_mean_the_display(tmp_path, monkeypatch, data, switches, led):
     async def run():
         async with speech_context(tmp_path, monkeypatch) as (hass, entry, spoken):
             entry.runtime_data.capabilities["memo_led"] = True
             await send(hass, entry, data=data or {})
             legacy = effects(entry, spoken)
-            # Every notice of a legacy mode lights the LED, as all notices did.
+            # The notice lights the LED, as all notices did before the switches.
             assert legacy["led"] is led
             if entry.runtime_data.display_notifications is not None:
                 entry.runtime_data.display_notifications.close()
@@ -102,7 +96,7 @@ def test_legacy_modes_are_aliases_of_the_switches(tmp_path, monkeypatch, data, s
     asyncio.run(run())
 
 
-def test_legacy_display_lights_the_led_without_asking_for_it(tmp_path, monkeypatch):
+def test_no_switches_light_the_led_without_asking_for_it(tmp_path, monkeypatch):
     async def run():
         async with speech_context(tmp_path, monkeypatch) as (hass, entry, spoken):
             # No memo LED support: the old default must not start to fail.
@@ -116,9 +110,10 @@ def test_legacy_display_lights_the_led_without_asking_for_it(tmp_path, monkeypat
 
 
 @pytest.mark.parametrize("bad,reason", [
-    ({"mode": "display", "display": True}, "mode conflicts with the switches"),
-    ({"mode": "speech", "led": False}, "mode conflicts with the switches"),
-    ({"mode": "both", "tts": True}, "mode conflicts with the switches"),
+    # 3.1.0 removed mode; it is named instead of being ignored.
+    ({"mode": "display"}, "mode was removed; use the switches display, tts and led"),
+    ({"mode": "speech", "tts": True}, "mode was removed"),
+    ({"mode": "led", "led": True}, "mode was removed"),
     ({"display": False}, "switch on at least one of display, tts and led"),
     ({"display": False, "tts": False, "led": False}, "switch on at least one"),
     ({"display": "true"}, "expected true or false"),

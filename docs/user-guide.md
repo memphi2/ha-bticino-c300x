@@ -537,19 +537,19 @@ data:
     led: true
 ```
 
-**Without switches** (and without `mode`) the call works as `mode: display`
-always did: notice, popup, wake and tone, and the notice also lights the LED
-where the agent supports it.
+**Without switches** the call shows the notice with popup, wake and tone, and
+the notice also lights the LED where the agent supports it, without requiring
+that support.
 
-**Legacy `mode`.** Existing automations keep working; new ones should use the
-switches. `mode` cannot be combined with any switch; HA refuses that.
+The `mode` field of earlier releases is gone; a call that still sends it is
+refused and names the switches. Replace it like this:
 
-| `mode` | Same as | Difference |
-| --- | --- | --- |
-| `display` | `display` | The notice also lights the LED where supported, without requiring it. `tts_engine` and `language` are ignored instead of refused. |
-| `speech` | `tts` | Durations, `severity`, `expires_in` and `notification_id` are ignored instead of refused. |
-| `both` | `display`, `tts` | Lights the LED like `display`. |
-| `led` | `led` | None. |
+| Old `mode` | Switches in `data` |
+| --- | --- |
+| `display` | `display: true` |
+| `speech` | `tts: true` |
+| `both` | `display: true`, `tts: true` |
+| `led` | `led: true` |
 
 Set engine and language for the speech once under **Configure > Speech** (for
 example `tts.piper`); a language is saved the way the engine names it, such as

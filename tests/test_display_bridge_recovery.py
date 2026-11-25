@@ -99,7 +99,7 @@ def test_patched_entry_registration_matches_led_notify(monkeypatch, setting):
         api.async_display_bridge_status.return_value = {"configured": True}
         try:
             await runtime_manager._async_configure_display_bridge(hass, entry, api)
-            notify = async_send_display_alert(hass, entry, "Door", data={"mode": "led"})
+            notify = async_send_display_alert(hass, entry, "Door", data={"led": True})
             if setting is False:
                 api.async_configure_display_bridge.assert_awaited_once_with(
                     enabled=False, webhook_url="", shared_secret="",

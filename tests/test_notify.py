@@ -739,7 +739,7 @@ async def speech_context(
         yield hass, entry, spoken
 
 
-def test_default_mode_shows_the_message_and_speaks_nothing(tmp_path, monkeypatch):
+def test_no_switches_show_the_message_and_speak_nothing(tmp_path, monkeypatch):
     async def run():
         async with speech_context(tmp_path, monkeypatch) as (hass, entry, spoken):
             await send(hass, entry)
@@ -748,11 +748,11 @@ def test_default_mode_shows_the_message_and_speaks_nothing(tmp_path, monkeypatch
     asyncio.run(run())
 
 
-def test_speech_mode_only_speaks_the_message(tmp_path, monkeypatch):
+def test_tts_alone_only_speaks_the_message(tmp_path, monkeypatch):
     async def run():
         async with speech_context(tmp_path, monkeypatch) as (hass, entry, spoken):
             await send(hass, entry, title="Not spoken",
-                       data={"mode": "speech", "tts_engine": "tts.piper", "language": "de"})
+                       data={"tts": True, "tts_engine": "tts.piper", "language": "de"})
             assert spoken == [{
                 "entity_id": "media_player.front_door_speaker",
                 # As the engine names the language.
@@ -764,16 +764,18 @@ def test_speech_mode_only_speaks_the_message(tmp_path, monkeypatch):
     asyncio.run(run())
 
 
-def test_led_mode_stores_without_effects(tmp_path, monkeypatch):
+def test_led_alone_stores_without_effects(tmp_path, monkeypatch):
     async def run():
         async with notify_context(tmp_path, monkeypatch) as (hass, entry):
             entry.runtime_data.capabilities = {"memo_led": True}
-            for conflict in ({"wake_duration": 1}, {"sound_duration": 1},
-                             {"tts_engine": "tts.piper"}, {"language": "de"}):
-                with pytest.raises(ServiceValidationError, match="mode led"):
-                    await send(hass, entry, data={"mode": "led", **conflict})
+            for conflict, reason in (
+                ({"wake_duration": 1}, "need display"), ({"sound_duration": 1}, "need display"),
+                ({"tts_engine": "tts.piper"}, "need tts"), ({"language": "de"}, "need tts"),
+            ):
+                with pytest.raises(ServiceValidationError, match=reason):
+                    await send(hass, entry, data={"led": True, **conflict})
             assert notification_payload(entry) == []
-            options = {"mode": "led", "notification_id": "door", "severity": "warning"}
+            options = {"led": True, "notification_id": "door", "severity": "warning"}
             await send(hass, entry, data=options)
             first, = notification_payload(entry)
             await send(hass, entry, data={**options, "wake_duration": 0, "sound_duration": 0})
@@ -790,7 +792,7 @@ def test_led_requires_advertised_support_before_storage(tmp_path, monkeypatch, c
         async with notify_context(tmp_path, monkeypatch) as (hass, entry):
             entry.runtime_data.capabilities.update(capabilities)
             with pytest.raises(ServiceValidationError, match="memo LED support"):
-                await send(hass, entry, data={"mode": "led"})
+                await send(hass, entry, data={"led": True})
             assert entry.runtime_data.display_notifications is None
             entry.runtime_data.api.async_send_display_alert.assert_not_awaited()
             await send(hass, entry)
@@ -798,20 +800,20 @@ def test_led_requires_advertised_support_before_storage(tmp_path, monkeypatch, c
     asyncio.run(run())
 
 
-def test_both_mode_shows_the_message_without_tone_and_speaks_it(tmp_path, monkeypatch):
+def test_display_and_tts_show_the_message_without_tone_and_speak_it(tmp_path, monkeypatch):
     async def run():
         async with speech_context(tmp_path, monkeypatch) as (hass, entry, spoken):
-            await send(hass, entry, data={"mode": "both"})
+            await send(hass, entry, data={"display": True, "tts": True})
             alert = entry.runtime_data.api.async_send_display_alert.call_args.args[0]
             assert (alert["message"], alert["sound_duration"], alert["wake_duration"]) == ("Test message", 0, 30)
             assert [item["media_content_id"] for item in spoken] == [
                 "media-source://tts/default?message=Test message&language=None"]
             # The tone would hold the speaker the speech needs: the speech wins.
-            await send(hass, entry, data={"mode": "both", "sound_duration": 5, "wake_duration": 20})
+            await send(hass, entry, data={"display": True, "tts": True, "sound_duration": 5, "wake_duration": 20})
             alert = entry.runtime_data.api.async_send_display_alert.call_args.args[0]
             assert (alert["sound_duration"], alert["wake_duration"]) == (0, 20)
             assert len(spoken) == 2
-            await send(hass, entry, data={"mode": "both", "sound_duration": 0})
+            await send(hass, entry, data={"display": True, "tts": True, "sound_duration": 0})
             assert entry.runtime_data.api.async_send_display_alert.call_args.args[0]["sound_duration"] == 0
             assert entry.runtime_data.api.async_send_display_alert.await_count == 3
     asyncio.run(run())
@@ -820,36 +822,36 @@ def test_both_mode_shows_the_message_without_tone_and_speaks_it(tmp_path, monkey
 @pytest.mark.parametrize("options", [
     {"announcements": False}, {"speaker": None}, {"speaker_state": "unavailable"},
 ], ids=["old agent", "no speaker entity", "speaker unavailable"])
-@pytest.mark.parametrize("mode", ["speech", "both"])
+@pytest.mark.parametrize("mode", [{"tts": True}, {"display": True, "tts": True}], ids=["tts", "display and tts"])
 def test_nothing_is_shown_when_the_speaker_cannot_be_used(tmp_path, monkeypatch, options, mode):
     async def run():
         async with speech_context(tmp_path, monkeypatch, **options) as (hass, entry, spoken):
             with pytest.raises(ServiceValidationError, match="agent|speaker"):
-                await send(hass, entry, data={"mode": mode})
+                await send(hass, entry, data=mode)
             entry.runtime_data.api.async_send_display_alert.assert_not_awaited()
             assert notification_payload(entry) == [] and spoken == []
     asyncio.run(run())
 
 
-@pytest.mark.parametrize("mode", ["speech", "both"])
+@pytest.mark.parametrize("mode", [{"tts": True}, {"display": True, "tts": True}], ids=["tts", "display and tts"])
 def test_missing_text_to_speech_engine_is_named_and_nothing_is_shown(tmp_path, monkeypatch, mode):
     async def run():
         async with speech_context(tmp_path, monkeypatch) as (hass, entry, spoken):
             with pytest.raises(ServiceValidationError, match="text-to-speech engine"):
-                await send(hass, entry, data={"mode": mode, "tts_engine": "tts.missing"})
+                await send(hass, entry, data={**mode, "tts_engine": "tts.missing"})
             entry.runtime_data.api.async_send_display_alert.assert_not_awaited()
             assert notification_payload(entry) == [] and spoken == []
     asyncio.run(run())
 
 
-def test_both_mode_still_speaks_when_the_display_did_not_confirm(tmp_path, monkeypatch):
+def test_display_and_tts_still_speak_when_the_display_did_not_confirm(tmp_path, monkeypatch):
     from custom_components.bticino_c300x.api_errors import C300XAgentApiError
 
     async def run():
         async with speech_context(tmp_path, monkeypatch) as (hass, entry, spoken):
             entry.runtime_data.api.async_send_display_alert.side_effect = C300XAgentApiError("lost")
             with pytest.raises(HomeAssistantError, match="not confirmed"):
-                await send(hass, entry, data={"mode": "both"})
+                await send(hass, entry, data={"display": True, "tts": True})
             assert len(spoken) == 1
     asyncio.run(run())
 
@@ -858,26 +860,26 @@ def test_a_named_engine_does_not_take_the_language_saved_for_another(tmp_path, m
     async def run():
         async with speech_context(tmp_path, monkeypatch) as (hass, entry, spoken):
             entry.options = {**entry.options, "tts_engine": "tts.piper", "tts_language": "de_DE"}
-            await send(hass, entry, data={"mode": "speech", "tts_engine": "tts.cloud"})
+            await send(hass, entry, data={"tts": True, "tts_engine": "tts.cloud"})
             assert [item["media_content_id"] for item in spoken] == [
                 "media-source://tts/tts.cloud?message=Test message&language=None"]
     asyncio.run(run())
 
 
-@pytest.mark.parametrize("mode", ["speech", "both"])
+@pytest.mark.parametrize("mode", [{"tts": True}, {"display": True, "tts": True}], ids=["tts", "display and tts"])
 def test_a_language_the_engine_cannot_speak_is_named_and_nothing_is_shown(tmp_path, monkeypatch, mode):
     async def run():
         async with speech_context(tmp_path, monkeypatch) as (hass, entry, spoken):
             with pytest.raises(ServiceValidationError, match="cannot speak the language 'fr'"):
-                await send(hass, entry, data={"mode": mode, "tts_engine": "tts.piper", "language": "fr"})
+                await send(hass, entry, data={**mode, "tts_engine": "tts.piper", "language": "fr"})
             entry.runtime_data.api.async_send_display_alert.assert_not_awaited()
             assert notification_payload(entry) == [] and spoken == []
     asyncio.run(run())
 
 
 @pytest.mark.parametrize("bad", [
-    {"mode": "loud"}, {"mode": True}, {"mode": "speech", "tts_engine": ""},
-    {"mode": "speech", "language": 5}, {"mode": "speech", "volume": 50},
+    {"mode": "speech"}, {"mode": True}, {"tts": True, "tts_engine": ""},
+    {"tts": True, "language": 5}, {"tts": True, "volume": 50},
 ])
 def test_invalid_speech_data_has_no_effect(tmp_path, monkeypatch, bad):
     async def run():
@@ -893,9 +895,9 @@ def test_spoken_notification_uses_the_engine_and_language_of_the_settings(tmp_pa
     async def run():
         async with speech_context(tmp_path, monkeypatch) as (hass, entry, spoken):
             entry.options = {**entry.options, "tts_engine": "tts.piper", "tts_language": "de"}
-            await send(hass, entry, data={"mode": "speech"})
+            await send(hass, entry, data={"tts": True})
             # What the call names comes before the settings.
-            await send(hass, entry, data={"mode": "speech", "tts_engine": "tts.cloud", "language": "en"})
+            await send(hass, entry, data={"tts": True, "tts_engine": "tts.cloud", "language": "en"})
             assert [item["media_content_id"] for item in spoken] == [
                 "media-source://tts/tts.piper?message=Test message&language=de_DE",
                 "media-source://tts/tts.cloud?message=Test message&language=en-US",

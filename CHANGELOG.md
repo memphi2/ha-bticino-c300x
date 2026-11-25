@@ -40,6 +40,10 @@ devices, entities and services; a Repair lists what to redo after the update.
   entities, or the `bticino_c300x_agent_event_received` event for the other
   station events).
 - Station events now reach Home Assistant whatever entities are enabled.
+- **Notifications:** the `mode` field is gone; a call that still sends it is
+  refused. Use the switches instead: `display` -> `display: true`, `speech` ->
+  `tts: true`, `both` -> `display: true` and `tts: true`, `led` -> `led: true`.
+  Without switches a notification is shown as before.
 - The native agent changed; an agent update is required.
 
 ## v3.0.0b1 - 2026-11-25

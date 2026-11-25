@@ -1394,7 +1394,15 @@ enabled and the script exists: a job without a client, with the QML write
 deadline and grace period. It finishes a transaction that a power loss, a
 crash or a killed write left behind (see QML Patch) and returns at once when
 there is none. Meanwhile other maintenance requests get `409
-maintenance_busy`, like during any other job. Device-user status alone also has a 10-second
+maintenance_busy`, like during any other job. The deadline's `SIGTERM` does
+not stop a recovery half-way, neither this job nor the recovery that runs
+ahead of every QML write: the script repeats the recovery once from its
+start, which finishes the step the signal cut (files back in place, GUI
+restart, removal of the leftover, `/` read-only), and then exits with status
+131 without an answer on stdout. A write cut that way has not begun; its
+request is answered `504` with `rolled_back: false`. Only a recovery that
+also outlasts the grace period is killed and left to the next write or agent
+start. Device-user status alone also has a 10-second
 deadline and a 4096-byte bounded-prefix capture; script failure retains HTTP 200
 with unavailable/unknown label status. SSH start and stop have a 60-second
 deadline and SSH status a 15-second one; at the deadline the process group is

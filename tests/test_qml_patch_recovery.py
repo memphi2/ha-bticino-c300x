@@ -231,6 +231,38 @@ def test_a_recovery_killed_at_any_step_is_finished_by_the_next_one(
     assert _calls(tmp_path, "mount") == [] and _calls(tmp_path, "killall") == []
 
 
+@pytest.mark.parametrize("action", ["recover", "apply"])
+@pytest.mark.parametrize("hold", [
+    ("mv", "*/.c300x-qml-transaction.*/MainApp.qml *"),
+    ("killall", "*"),
+    ("rm", "-f */.c300x-v2"),
+    ("mount", "-o remount,ro /"),
+])
+def test_a_sigterm_during_the_recovery_finishes_it_before_the_script_goes(
+    tmp_path: Path, action: str, hold: tuple[str, str],
+) -> None:
+    """The agent's deadline SIGTERM meets the recovery itself: the job at
+    agent start, or the recovery that runs ahead of a write. The cut step is
+    repeated, so no leftover, no writable / and no stopped GUI wait for the
+    next agent start; the write does not begin."""
+
+    gui, backup, before = _killed_apply(tmp_path)
+    env = _commands(tmp_path, hold)
+    (tmp_path / "calls.log").unlink(missing_ok=True)
+    result = qml._terminate_when_held(tmp_path, gui, backup, action, env)
+    assert result.returncode == 131, result.stderr
+    assert result.stdout == ""
+    assert _gui_files(gui) == before
+    assert not list(gui.glob(".c300x-qml-transaction.*"))
+    # The files moved back need a GUI restart, also when the signal cut it.
+    assert "killall BtClass" in _calls(tmp_path, "killall")
+    assert _calls(tmp_path, "mount")[-1] == "mount -o remount,ro /"
+    assert not (tmp_path / "c300x-qml-root-rw").exists()
+    finished = _run(tmp_path, gui, backup, "recover", _commands(tmp_path))
+    assert "transaction" not in json.loads(finished.stdout)
+    assert _calls(tmp_path, "mount") == [] and _calls(tmp_path, "killall") == []
+
+
 def test_a_sigterm_during_the_rollback_gui_restart_still_restarts_the_gui_and_remounts(
     tmp_path: Path,
 ) -> None:

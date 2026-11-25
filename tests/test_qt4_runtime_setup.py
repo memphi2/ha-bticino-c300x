@@ -68,6 +68,41 @@ def test_partial_explicit_setup_is_not_silently_ignored(isolated_cache, monkeypa
         setup.runtime_paths()
 
 
+def test_compile_test_variables_alone_leave_the_runtime_unconfigured(isolated_cache, monkeypatch, tmp_path):
+    """QEMU and ROOTFS also belong to the compile and render tests.
+
+    With those two set and no runtime built, every test of this runtime
+    failed with "Qt 4 runtime needs QEMU, ROOTFS, PROBE and IMPORTS paths"
+    instead of skipping.
+    """
+    qemu = tmp_path / "qemu"
+    qemu.write_bytes(b"placeholder")
+    qemu.chmod(0o700)
+    monkeypatch.setenv("C300X_QT4_QEMU", str(qemu))
+    monkeypatch.setenv("C300X_QT4_ROOTFS", str(tmp_path))
+    monkeypatch.setenv("C300X_QT4_COMPILE_IMPORTS", str(tmp_path))
+    monkeypatch.setenv("C300X_QT4_GUI", str(tmp_path))
+    assert setup.runtime_paths() is None
+
+
+def test_shared_variables_are_completed_from_the_built_setup(isolated_cache, monkeypatch, tmp_path):
+    built = cached_runtime(isolated_cache)["paths"]
+    qemu, rootfs = tmp_path / "qemu", tmp_path / "rootfs"
+    qemu.write_bytes(b"placeholder")
+    qemu.chmod(0o700)
+    rootfs.mkdir()
+    monkeypatch.setenv("C300X_QT4_QEMU", str(qemu))
+    monkeypatch.setenv("C300X_QT4_ROOTFS", str(rootfs))
+    assert setup.runtime_paths() == [str(qemu), str(rootfs), built[2], built[3]]
+
+
+@pytest.mark.parametrize("key", ["PROBE", "IMPORTS"])
+def test_a_runtime_variable_without_the_rest_names_what_is_missing(isolated_cache, monkeypatch, tmp_path, key):
+    monkeypatch.setenv("C300X_QT4_" + key, str(tmp_path))
+    with pytest.raises(ValueError, match="C300X_QT4_QEMU, C300X_QT4_ROOTFS, C300X_QT4_" + ("IMPORTS" if key == "PROBE" else "PROBE")):
+        setup.runtime_paths()
+
+
 def test_explicit_setup_takes_precedence(isolated_cache, monkeypatch):
     paths = cached_runtime(isolated_cache)["paths"]
     for key, path in zip(setup.KEYS, paths, strict=True):

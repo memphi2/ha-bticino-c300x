@@ -234,8 +234,12 @@ python -m pytest tests/test_energy_consumers_layout.py::test_consumers_qt4_runti
 Setup builds and verifies the ARM probe in `$XDG_CACHE_HOME/c300x-dev/qt4-runtime`
 (default `~/.cache/c300x-dev/qt4-runtime`). Pytest discovers it automatically.
 Changed probe sources or damaged cache files fail explicitly: rerun setup.
-The existing `C300X_QT4_QEMU`, `C300X_QT4_ROOTFS`, `C300X_QT4_PROBE` and
-`C300X_QT4_IMPORTS` overrides remain supported when all four are set.
+`C300X_QT4_QEMU`, `C300X_QT4_ROOTFS`, `C300X_QT4_PROBE` and `C300X_QT4_IMPORTS`
+override the built setup; one that is not set comes from the built setup.
+`C300X_QT4_QEMU` and `C300X_QT4_ROOTFS` also belong to the compile and render
+checks below: set without a built setup, they leave this runtime unconfigured
+and its tests skip. `C300X_QT4_PROBE` or `C300X_QT4_IMPORTS` without the rest
+is an error that names the missing variables.
 The separate compile-only checks use `C300X_QT4_COMPILE_PROBE` and
 `C300X_QT4_COMPILE_IMPORTS` for the compiler and its placeholder modules.
 Do not use the compile-only executable as the runtime probe.
@@ -269,16 +273,20 @@ Every generated source is compared with the package, then `restore-all` must
 recover the original GUI. The separate legacy-bootstrap test retains the inert
 Distribution input required by file-set 4; it must not become an active view.
 
-After every display change, run the compile-only probe
-(`C300X_QT4_COMPILE_PROBE`, `C300X_QT4_COMPILE_IMPORTS`): it compiles the
+After every display change, run the compile-only probe in
+`tests/test_device_qt4_grammar.py` (`C300X_QT4_COMPILE_PROBE`,
+`C300X_QT4_COMPILE_IMPORTS`, with `C300X_QT4_QEMU`, `C300X_QT4_ROOTFS` and
+`C300X_QT4_GUI`, a private copy of the firmware skin directory; the test must
+report passed, not skipped): it compiles the
 display components under QEMU ARM against the private firmware 1.7.19 Qt 4.8.7
 libraries and stock Styles module, with an import-only `BtObjects` placeholder,
 and must report `compile_failed=0`. It does not instantiate or render the GUI,
 execute the vendor plugin, or test device startup/reboot behaviour; it is
 separate from the Qt 6 layout checks and is not hardware validation.
 
-With the same variables, without the compile probe, `tests/test_qt4_display_render.py`
-shows pages on those libraries with a GUI: it builds `tests/qml/qt4_render_probe.c`
+`tests/test_qt4_display_render.py` shows pages on those libraries with a GUI.
+It needs `C300X_QT4_QEMU`, `C300X_QT4_ROOTFS`, `C300X_QT4_COMPILE_IMPORTS` and
+`C300X_QT4_GUI`, but neither probe variable: it builds `tests/qml/qt4_render_probe.c`
 with `arm-linux-gnueabihf-gcc` into `~/.cache/c300x-dev/qt4-render`, writes the
 display files into a copy of the skin and draws into a file instead of a
 framebuffer. It checks positions the Qt 6 renderer gets right and Qt 4.8 does

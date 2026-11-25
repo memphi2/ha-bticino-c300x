@@ -13,7 +13,8 @@ from typing import Any, cast
 import voluptuous as vol
 from homeassistant.config_entries import ConfigFlowResult
 
-from .device_profile import C100X_CONFIRMATION_REQUIRED, setup_profile
+from .device_profile import C100X_CONFIRMATION_REQUIRED, QT5_ONDISK, setup_profile
+from .factory_login import login_model
 
 CONF_C100X_EXPERIMENTAL = "c100x_experimental"
 
@@ -26,6 +27,22 @@ class C100XOptInSteps:
 
     def _c100x_opt_in_missing(self, setup: Any) -> bool:
         return setup_profile(setup).is_c100x and not self._c100x_confirmed
+
+    def _note_installed_station(self: Any, install_result: object) -> None:
+        """Use what the installer read from the station when the agent did not answer.
+
+        The identity read after a successful install can fail. The installer
+        admitted the station by its own read, so the model is known anyway:
+        a Classe 300X gets its legacy MQTT migration as before, a Classe 100X
+        none of the Classe 300X display steps.
+        """
+
+        kind = getattr(install_result, "display_kind", "")
+        if not isinstance(kind, str) or not kind or login_model(self._setup_agent_info):
+            return
+        self._setup_agent_info.update(
+            model="C100X" if kind == QT5_ONDISK else "C300X", display_kind=kind,
+        )
 
     @staticmethod
     def _c100x_install_refused(err: Exception) -> bool:

@@ -418,9 +418,9 @@ class BticinoC300XConfigFlow(ModelTextConfigFlow, config_flow_auth.AuthFlowSteps
                     errors["base"] = "device_install_verify_failed"
                 else:
                     await self._async_adopt_agent_unique_id(api_token=api_token)
+                    self._note_installed_station(install_result)
                     try:
-                        # Legacy MQTT is migrated on a C300X only; a C100X or
-                        # an unknown model is no permission to stop a service.
+                        # Legacy MQTT is migrated on a C300X only.
                         if login_model(self._setup_agent_info) == "C300X":
                             await async_migrate_legacy_mqtt_for_connection(
                                 self.hass,

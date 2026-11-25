@@ -147,13 +147,16 @@ class C300XDeviceInstallResult:
     # The display step ran and failed on the Qt 5 display: the agent is
     # installed, the step is owed (HA records it, the core Repair runs it).
     display_pending: bool = False
+    # The display kind the installer read from the station at admission.
+    display_kind: str = ""
 
 
 @dataclass(slots=True)
 class _DisplaySteps:
-    """What the display steps of one install left undone."""
+    """What the display steps of one install left undone, and the station's kind."""
 
     pending: bool = False
+    kind: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -206,6 +209,7 @@ async def async_install_device_agent(
         ),
         changed_files=changed_files,
         display_pending=display.pending,
+        display_kind=display.kind,
     )
 
 
@@ -282,6 +286,8 @@ def _install_device_agent_sync(
         config_path = f"{request.remote_dir}/{REMOTE_CONFIG_NAME}"
         existing = _read_remote_config_sync(client, config_path)
         kind = _admit_station_sync(client, bundle, request.remote_dir, request.c100x_confirmed)
+        if display is not None:
+            display.kind = kind
         if request.apply_gui_patch and kind == QT5_ONDISK:
             raise C300XDeviceInstallError("device_install_verify_failed")
         manage_firewall = request.apply_firewall_patch and _firewall_hook_present_sync(client)

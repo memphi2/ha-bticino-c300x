@@ -268,24 +268,38 @@ def test_home_button_layout_is_offered_only_where_the_display_patch_uses_it(mode
 
 
 
-def test_a_failed_identity_read_after_install_skips_the_display_steps(monkeypatch):
-    # The installer accepts only a C100X. When the identity read after it
-    # fails, setup must not offer the display steps that C100X lacks.
+def _flow_after_install(monkeypatch, display_kind):
+    """A successful install whose identity read afterwards fails: nothing adopted."""
+
     flow = config_flow.BticinoC300XConfigFlow()
     flow.hass = SimpleNamespace()
     flow.context = {"source": "user"}
     flow._setup_connection = {"name": "Door", "agent_host": "a.local", "agent_port": 8091}
     flow._async_abort_if_manual_setup_duplicate = AsyncMock()
-    flow._async_adopt_agent_unique_id = AsyncMock()  # the read failed: nothing adopted
+    flow._async_adopt_agent_unique_id = AsyncMock()
     flow.async_abort = lambda **kwargs: kwargs
     monkeypatch.setattr(config_flow, "async_ensure_installer_dependencies", AsyncMock())
-    monkeypatch.setattr(config_flow, "async_install_device_agent", AsyncMock())
+    result = SimpleNamespace(display_pending=False, display_kind=display_kind)
+    monkeypatch.setattr(config_flow, "async_install_device_agent", AsyncMock(return_value=result))
     monkeypatch.setattr(config_flow, "_async_probe_agent", AsyncMock(return_value="reachable"))
     migrate = AsyncMock()
     monkeypatch.setattr(config_flow, "async_migrate_legacy_mqtt_for_connection", migrate)
-    result = asyncio.run(flow.async_step_bootstrap_install({}))
-    assert result["step_id"] == "user_features"
+    assert asyncio.run(flow.async_step_bootstrap_install({}))["step_id"] == "user_features"
+    return flow, migrate
+
+
+@pytest.mark.parametrize("display_kind", ["qt4_ondisk", "qt5_rcc"])
+def test_a_c300x_keeps_its_mqtt_migration_when_the_identity_read_fails(monkeypatch, display_kind):
+    # As in 2.10.0: the installer read the station, the migration does not wait for the agent.
+    flow, migrate = _flow_after_install(monkeypatch, display_kind)
+    migrate.assert_awaited_once()
+    assert flow._setup_agent_info == {"model": "C300X", "display_kind": display_kind}
+
+
+def test_a_c100x_skips_the_c300x_steps_when_the_identity_read_fails(monkeypatch):
+    flow, migrate = _flow_after_install(monkeypatch, "qt5_ondisk")
     migrate.assert_not_awaited()
+    assert flow._setup_agent_info == {"model": "C100X", "display_kind": "qt5_ondisk"}
     flow._setup_feature_data = {"video_enabled": True}
 
     async def create(_errors):
@@ -296,3 +310,13 @@ def test_a_failed_identity_read_after_install_skips_the_display_steps(monkeypatc
     assert result[CONF_DEVICE_UI_ENABLED] is False
     flow._setup_dashboard_input = {CONF_DEVICE_UI_ENABLED: True}
     assert asyncio.run(flow.async_step_user_dashboard_pages())["reason"] == "unsupported_display"
+
+
+def test_the_agent_s_own_answer_is_not_overwritten_by_the_installer_s_read(monkeypatch):
+    flow = config_flow.BticinoC300XConfigFlow()
+    flow._setup_agent_info = {"model": "C300X", "display_kind": "qt5_rcc"}
+    flow._note_installed_station(SimpleNamespace(display_kind="qt5_ondisk"))
+    assert flow._setup_agent_info == {"model": "C300X", "display_kind": "qt5_rcc"}
+    flow._setup_agent_info = {}
+    flow._note_installed_station(SimpleNamespace())
+    assert flow._setup_agent_info == {}

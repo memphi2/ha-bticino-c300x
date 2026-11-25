@@ -23,8 +23,11 @@ vendor files. Rooting is described by the community project
 third-party project that is not part of this project and is used at your own
 risk; flashing a station can brick it. If a separate rooting or SSH-enablement
 workflow asks for a firmware target, use `1.7.19`. A station on `2.0.2` or
-`3.0.6` needs a workflow made for that firmware. Everything is used at your own
-risk and without warranty.
+`3.0.6` needs a workflow made for that firmware. Dave describes one in
+[davemajor/c300x-root](https://github.com/davemajor/c300x-root), also a
+third-party project used at your own risk; it works on the circuit board over
+a serial console and USB recovery and can destroy the station. Everything is
+used at your own risk and without warranty.
 
 ### Firmware 3.0.6
 

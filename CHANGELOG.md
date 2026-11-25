@@ -40,6 +40,9 @@ Firmware 3.0.6:
 - The camera's stream on 3.0.6 offers the sizes 320x240, 352x288, 400x288
   (factory), 480x288, 640x384, 640x480, 704x576, 720x432 and 720x576. Sizes
   other than the factory one are not yet tested on a station.
+- **Quick Start** also links Dave's guide for rooting a station on 2.0.2 or
+  3.0.6 ([davemajor/c300x-root](https://github.com/davemajor/c300x-root)), a
+  third-party project used at your own risk.
 
 Station (all firmwares):
 

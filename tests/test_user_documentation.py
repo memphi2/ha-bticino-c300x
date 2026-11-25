@@ -101,15 +101,18 @@ def test_quickstart_names_where_rooting_is_described_as_a_third_party_project():
     requirements = " ".join(section("quickstart.md", "Requirements").split())
     assert "This project provides no firmware images" in requirements
     assert "rooting instructions" in requirements
-    # The one link out of the requirements goes to a rooting guide of others.
+    # The links out of the requirements go to rooting guides of others, each
+    # marked as a third-party project used at the reader's own risk.
     links = re.findall(r"\]\((https?://[^)]+)\)", requirements)
-    assert len(links) == 1
-    assert links[0].startswith("https://github.com/") and "ha-bticino-c300x" not in links[0]
-    sentence = next(part for part in requirements.split(". ") if links[0] in part)
-    assert sentence.startswith("Rooting is described by the community project [")
+    assert len(links) == 2 and links[1] == "https://github.com/davemajor/c300x-root"
+    assert all(link.startswith("https://github.com/") and "ha-bticino-c300x" not in link for link in links)
+    sentences = [next(part for part in requirements.split(". ") if link in part) for link in links]
+    assert sentences[0].startswith("Rooting is described by the community project [")
     for phrase in ("third-party project", "not part of this project", "at your own risk",
                    "flashing a station can brick it"):
-        assert phrase in sentence, phrase
+        assert phrase in sentences[0], phrase
+    for phrase in ("third-party project", "at your own risk", "can destroy the station"):
+        assert phrase in sentences[1], phrase
 
 
 def test_removal_docs_distinguish_entry_package_device_and_retained_data():

@@ -1,10 +1,8 @@
 """A C300X keeps every text it had; a C100X reads its own model name.
 
-The texts name the model through ``{model}``. Rendered for a C300X, each area
-must stay byte-identical to the texts before the change; the pinned digests
-were taken from the translations of 04a99ea6, the exceptions with the
-"station_busy" message of release 2.9.2 and the
-"device_display_timeout" texts of the fixes after it added.
+The texts name the model through ``{model}``. Rendered for a C300X, every text
+of release 2.10.0 must stay byte-identical; the pinned digests were taken from
+the translations of f4f75ea3. What was added or changed since is listed here.
 """
 
 from __future__ import annotations
@@ -32,23 +30,6 @@ LANGUAGES = {
 }
 
 
-def _reconfigure(path: tuple[str, ...]) -> bool:
-    if path[0] == "options":
-        return True
-    return path[0] == "config" and (
-        (path[1] == "step" and path[2].startswith("reconfigure"))
-        or path[:3] == ("config", "abort", "reconfigure_successful")
-    )
-
-
-AREAS = {
-    "setup": lambda path: path[0] == "config" and not _reconfigure(path),
-    "reconfigure": _reconfigure,
-    "repairs": lambda path: path[0] == "issues",
-    "exceptions": lambda path: path[0] == "exceptions",
-}
-
-
 def _leaves(value: object, path: tuple[str, ...] = ()) -> dict[tuple[str, ...], str]:
     if isinstance(value, str):
         return {path: value}
@@ -71,52 +52,68 @@ def text(lang: str, *path: str, model: str) -> str:
     return value.replace("{model}", model)
 
 
-def c300x_digest(lang: str, area: str) -> str:
-    """Every text of an area as a C300X reads it; the C100X twins are not his."""
+# Texts a C300X reads that 2.10.0 did not have. The C100X twins ("..._c100x")
+# are not his and need no entry here.
+ADDED_SINCE_2_10_0 = frozenset({
+    "config/abort/c100x_package_only",
+    "config/abort/model_mismatch",
+    "config/abort/unsupported_display",
+    "config/error/device_model_incompatible",
+    "config/error/installer_firewall_hook_unsupported",
+    "entity/button/activate_display_pages/name",
+    "entity/button/restore_display_pages/name",
+    "issues/c100x_display_boot_check_failed/description",
+    "issues/c100x_display_boot_check_failed/title",
+    "issues/c100x_display_rolled_back/description",
+    "issues/c100x_display_rolled_back/title",
+    "issues/device_agent_update_regular_package/description",
+    "issues/device_agent_update_regular_package/title",
+    "issues/device_agent_update_required/description",
+    "issues/device_agent_update_required/fix_flow/abort/device_model_incompatible",
+    "options/abort/unsupported_display",
+    "options/step/init/menu_option_descriptions/dashboard_alarm",
+    "options/step/init/menu_options/dashboard_alarm",
+})
+# Texts of 2.10.0 that read differently now: the SSH package message names the
+# package and the way out, and the service name lost the model (neutral names).
+CHANGED_SINCE_2_10_0 = frozenset({
+    "config/error/installer_dependency_missing",
+    "services/capture_doorbell_call/name",
+})
+# sha256 over every text of 2.10.0 (f4f75ea3) but the changed ones, per file:
+#   json.dumps({"a/b/c": text}, sort_keys=True, ensure_ascii=False)
+DIGESTS_2_10_0 = {
+    "base": "42a0903b48c9225b7faebd421ffa4fb8700c4f4527f442c61d3490c4dd315018",
+    "en": "42a0903b48c9225b7faebd421ffa4fb8700c4f4527f442c61d3490c4dd315018",
+    "de": "611a1c2c360ad1a773913043b7abea0761342b6c067604ea2605e96f531bb21f",
+    "it": "bdf851941d345b5d0258e0b5fec801c86058684367a7d42362ef62893a6d0fc4",
+    "fr": "49180b6d423ee2157d350ed7e39ea5143a89f863a2015907af658609a7d7e583",
+}
+
+
+def c300x_digest(lang: str) -> str:
+    """Every text a C300X reads that 2.10.0 had, as he reads it now."""
 
     texts = {
         "/".join(path): value.replace("{model}", "C300X")
         for path, value in _leaves(_load(lang)).items()
-        if AREAS[area](path) and not any(key.endswith("_c100x") for key in path)
+        if not any(key.endswith("_c100x") for key in path)
+        and "/".join(path) not in ADDED_SINCE_2_10_0 | CHANGED_SINCE_2_10_0
     }
     return hashlib.sha256(json.dumps(texts, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
 
-HEAD_DIGESTS = {
-    "setup": {
-        "base": "ee8bbdcaeed7a396d914cb89434052e8610c2d4e1cfb49b039d9896a0819870d",
-        "en": "ee8bbdcaeed7a396d914cb89434052e8610c2d4e1cfb49b039d9896a0819870d",
-        "de": "26ef6e5549d11f42a755c280f03a03c1e3a5c64697a7cbb3d34a40e08ec956df",
-        "it": "8d669738eac667722a490f1f6dad94c709ba75730cea9a9ff89c72960c5d56a7",
-        "fr": "efcf0e32be661c23658cf42a4eea87cb6748ccea4d8784d63f7c86ba93880a1d",
-    },
-    "reconfigure": {
-        "base": "eb919185d61b32f7d46b3491e3338277a36b4ce309196ec8db83f307d1f14985",
-        "en": "eb919185d61b32f7d46b3491e3338277a36b4ce309196ec8db83f307d1f14985",
-        "de": "9a9f59087b53b0a2bfdc6801a53a98f8228e950dc98851d906b318a3709265e0",
-        "it": "590bd5171cf24d8b0848bd9109bf37b2eae32a71afa19de1e340f2d1446bac7f",
-        "fr": "15ba9bfbfdac812fedb6933627f0de149147a01290ffd48c5312d71b9424052f",
-    },
-    "repairs": {
-        "base": "9cedea8a6a95514e60b9306551dd27c1d445f8788e2551973cd528276ce2f07e",
-        "en": "9cedea8a6a95514e60b9306551dd27c1d445f8788e2551973cd528276ce2f07e",
-        "de": "b3583647b21d9ece2d971be18b22072bce436c52537334293d9c7c795eb4fe4d",
-        "it": "086eab017ffc0d02a9ff5badb6aaf9633d097ae88535f57509a6bacdc48c1478",
-        "fr": "866da3f59a13d7a408422153e14eb2219b0799391e15fa1729072876450892c3",
-    },
-    "exceptions": {
-        "base": "d1682fd87a2f26b1065134323ba5f007cd87bbb75d9ee2f18573248b1f1b4f78",
-        "en": "d1682fd87a2f26b1065134323ba5f007cd87bbb75d9ee2f18573248b1f1b4f78",
-        "de": "1f8a1c0dae39b26c8d961e0a8d7cd4c42035661732b792d0bd97b312667ed70a",
-        "it": "51f5849a371e5d84961ab9a1a4878d06102942ae3636b518719767365fc6d047",
-        "fr": "08f03d522233fe816dc5452fdee1231ae425cf240b9758c4fa410641b47efc7b",
-    },
-}
-
-
-def assert_c300x_unchanged(area: str) -> None:
+def assert_c300x_unchanged(area: str = "") -> None:
     for lang in LANGUAGES:
-        assert c300x_digest(lang, area) == HEAD_DIGESTS[area][lang], (area, lang)
+        assert c300x_digest(lang) == DIGESTS_2_10_0[lang], (area, lang)
+
+
+def test_a_c300x_reads_the_texts_of_2_10_0():
+    assert_c300x_unchanged()
+    for lang in LANGUAGES:
+        paths = {"/".join(path) for path in _leaves(_load(lang))}
+        # The declared additions and changes exist; nothing is listed for nothing.
+        assert paths >= ADDED_SINCE_2_10_0 | CHANGED_SINCE_2_10_0, lang
 
 
 def _setup_flow(monkeypatch, info=None, hint=""):

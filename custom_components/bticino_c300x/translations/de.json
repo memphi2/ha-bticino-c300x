@@ -1404,7 +1404,21 @@
         "name": "Home Assistant User-Patch"
       },
       "stream_snapshots": {
-        "name": "Bilder speichern"
+        "name": "Bilder speichern",
+        "state_attributes": {
+          "last_failure": {
+            "name": "Letzter Fehler",
+            "state": {
+              "snapshot_unavailable": "Displaybild konnte nicht gelesen werden",
+              "snapshot_throttled": "Zu kurz nach dem vorherigen Bild angefordert",
+              "invalid_snapshot_size": "Türstation hat die Bildgröße abgelehnt",
+              "invalid_image": "Türstation hat ein ungültiges Bild geliefert",
+              "agent_unreachable": "Device-Agent nicht erreichbar",
+              "agent_error": "Device-Agent hat einen Fehler gemeldet",
+              "save_failed": "Home Assistant konnte das Bild nicht speichern"
+            }
+          }
+        }
       }
     }
   },

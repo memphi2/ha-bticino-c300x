@@ -215,8 +215,8 @@ class SnapshotCapture:
             options = snapshot_options(self.manager.entry)
             await asyncio.sleep(options.delay_seconds)
             # The configurable settling delay is separate from the bounded
-            # acquisition budget (including retries, conversion and save).
-            async with asyncio.timeout(CAPTURE_TIMEOUT):
+            # acquisition budget: retries, conversion and the wait for the store.
+            async with asyncio.timeout(CAPTURE_TIMEOUT) as limit:
                 for attempt in range(MAX_ATTEMPTS):
                     if not self._current(generation):
                         return
@@ -242,10 +242,16 @@ class SnapshotCapture:
                 if not self._current(generation):
                     return
                 stage = "save"
-                item = await self.manager.save(image, identity, is_current=lambda: self._current(generation))
-                stage = "stored"
-                self._failed(None)
-                if self._current(generation) and self.manager.journal is not None:
+                # A write the store has begun cannot be abandoned: the limit
+                # ends there, and the image counts as what the store reports.
+                item = await self.manager.save(
+                    image, identity, is_current=lambda: self._current(generation),
+                    writing=lambda: limit.reschedule(None),
+                )
+            stage = "stored"
+            self._failed(None)
+            if self._current(generation) and self.manager.journal is not None:
+                async with asyncio.timeout(CAPTURE_TIMEOUT):
                     # Read now: a ring during the settling delay adopts this image.
                     await self.manager.journal.attach_snapshot(self.visitor_id, item.name, image)
         except asyncio.CancelledError:

@@ -1404,7 +1404,21 @@
         "name": "Patch utente Home Assistant"
       },
       "stream_snapshots": {
-        "name": "Salva immagini"
+        "name": "Salva immagini",
+        "state_attributes": {
+          "last_failure": {
+            "name": "Ultimo errore",
+            "state": {
+              "snapshot_unavailable": "Impossibile leggere l'immagine del display",
+              "snapshot_throttled": "Richiesta troppo presto dopo l'immagine precedente",
+              "invalid_snapshot_size": "Il dispositivo ha rifiutato la dimensione dell'immagine",
+              "invalid_image": "Il dispositivo ha fornito un'immagine non valida",
+              "agent_unreachable": "Agente del dispositivo non raggiungibile",
+              "agent_error": "L'agente del dispositivo ha segnalato un errore",
+              "save_failed": "Home Assistant non ha potuto salvare l'immagine"
+            }
+          }
+        }
       }
     }
   },

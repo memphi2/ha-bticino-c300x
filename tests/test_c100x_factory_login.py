@@ -4,6 +4,7 @@ import asyncio
 import hmac
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -124,3 +125,36 @@ def test_factory_passwords_are_not_plaintext_in_checkout():
             if any(value in content for value in defaults):
                 matches.append(name)
     assert not matches, f"Plaintext factory credential in tracked source paths: {matches}"
+
+
+class SshError(Exception):
+    pass
+
+
+class Denied(SshError):
+    pass
+
+
+@pytest.mark.parametrize(("raised", "reason", "logged"), [
+    (TimeoutError("timed out talking to 192.0.2.60"), "device_install_failed", "TimeoutError"),
+    (OSError("No route to host 192.0.2.60"), "device_install_failed", "OSError"),
+    (SshError("Connection lost to 192.0.2.60"), "device_install_failed", "SshError"),
+    (Denied("Permission denied for root"), "ssh_login_refused", "Denied"),
+])
+def test_a_failed_connect_keeps_its_cause_for_the_log(monkeypatch, raised, reason, logged):
+    """The Repair logs the kind of the SSH failure; without the chain a timeout reads like any other."""
+
+    from custom_components.bticino_c300x import device_installer
+    from custom_components.bticino_c300x.repairs import _install_error_log_text
+
+    fake = SimpleNamespace(
+        __version__=device_installer._REQUIRED_ASYNCSSH_VERSION, Error=SshError,
+        PermissionDenied=Denied, connect=AsyncMock(side_effect=raised),
+    )
+    monkeypatch.setitem(sys.modules, "asyncssh", fake)
+    with pytest.raises(device_installer.C300XDeviceInstallError) as caught:
+        _AsyncSshDeviceSshClient(request("C300X", automatic=False, manual=True))
+    assert caught.value.reason == reason
+    assert caught.value.__cause__ is raised
+    text = _install_error_log_text(caught.value)
+    assert text.endswith(f"(cause: {logged})") and "192.0.2.60" not in text and "root" not in text

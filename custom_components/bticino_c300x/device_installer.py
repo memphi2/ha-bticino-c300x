@@ -776,9 +776,10 @@ class _AsyncSshDeviceSshClient(_DeviceSshClient):
             self._runner.close()
             self._closed = True
             # Nothing was changed on the device: another login can be asked for.
+            # The cause stays attached: the log names its type, never its text.
             if isinstance(err, getattr(asyncssh, "PermissionDenied", ())):
-                raise C300XDeviceInstallError(LOGIN_REFUSED) from None
-            raise C300XDeviceInstallError("device_install_failed") from None
+                raise C300XDeviceInstallError(LOGIN_REFUSED) from err
+            raise C300XDeviceInstallError("device_install_failed") from err
 
     async def _connect(self, request: C300XDeviceInstallRequest) -> Any:
         candidates: tuple[tuple[str, str], ...] = ((request.ssh_username, request.ssh_password),)

@@ -1386,7 +1386,7 @@ def test_bootstrap_firewall_uses_final_device_video_config(monkeypatch, kind, ex
     from types import SimpleNamespace
 
     commands, configs = [], []
-    client = SimpleNamespace(run=commands.append, close=lambda: None)
+    client = SimpleNamespace(run=lambda command, *_: commands.append(command), close=lambda: None)
     monkeypatch.setattr(device_installer, "_connect_device_client", lambda _: client)
     monkeypatch.setattr(device_installer, "_admit_station_sync", lambda *_: kind)
     monkeypatch.setattr(device_installer, "_read_remote_config_sync", lambda *_: existing)
@@ -1394,6 +1394,7 @@ def test_bootstrap_firewall_uses_final_device_video_config(monkeypatch, kind, ex
     monkeypatch.setattr(device_installer, "_write_remote_file_sync",
                         lambda _c, _p, data, **_: configs.append(json.loads(data)))
     monkeypatch.setattr(device_installer, "_install_startup_script_sync", lambda *_: [])
+    monkeypatch.setattr(device_installer, "_render_startup_script", lambda *_: b"")
     monkeypatch.setattr(device_installer, "_verify_startup_sync", lambda *_: None)
     monkeypatch.setattr(device_installer, "_apply_qml_patch_sync", lambda *_: None)
     monkeypatch.setattr(device_installer, "_remove_obsolete_display_source_sync", lambda *_: None)

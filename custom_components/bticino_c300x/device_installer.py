@@ -316,7 +316,10 @@ def _install_device_agent_sync(
                 changed_files.append(payload.remote_path)
 
         if _replaces_keys(existing, merged_config):
-            _retire_old_keys_sync(client, request.remote_dir)
+            _retire_old_keys_sync(
+                client, request.remote_dir,
+                _render_startup_script(bundle.init_script, request.remote_dir),
+            )
         if _write_remote_file_sync(
             client,
             config_path,
@@ -685,21 +688,23 @@ def _replaces_keys(existing: Any, config: bytes) -> bool:
     return isinstance(existing, dict) and _agent_keys(existing) != _agent_keys(json.loads(config))
 
 
-def _retire_old_keys_sync(client: _DeviceSshClient, remote_dir: str) -> None:
+def _retire_old_keys_sync(client: _DeviceSshClient, remote_dir: str, init_script: bytes) -> None:
     """Stop the installed agent before its keys are replaced.
 
     A running agent saves its whole configuration when a setting changes and
-    would write its old keys over the new file. It is stopped by its own init
-    script (PID file, agent binary only); the install starts the new one. An
-    unfinished copy of the old configuration, left by a cut save or upload,
-    holds the old keys as well and is removed.
+    would write its old keys over the new file. It is stopped by the bundled
+    init script, read from standard input: it signals the PID of its PID file
+    only while that PID runs the agent binary. The init script on the station
+    can be older (2.9.0 and before) and signal a PID that is no longer the
+    agent; it is replaced later in the install. The install starts the new
+    agent. An unfinished copy of the old configuration, left by a cut save or
+    upload, holds the old keys as well and is removed.
     """
 
-    init = _quote(REMOTE_INIT_SCRIPT)
     config = _quote(f"{remote_dir}/{REMOTE_CONFIG_NAME}")
     client.run(
-        f"if [ -x {init} ]; then {init} stop || exit 1; fi; "
-        f"rm -f {config}.tmp.* {config}.c300x-*.new"
+        f"sh -s stop || exit 1; rm -f {config}.tmp.* {config}.c300x-*.new",
+        init_script,
     )
 
 

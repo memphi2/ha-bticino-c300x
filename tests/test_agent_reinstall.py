@@ -256,7 +256,9 @@ class _Station:
     def run(self, command: str, input_data: bytes | None = None) -> str:
         if command.startswith("if [ -e "):
             return "M" if self.existing is None else "F" + json.dumps(self.existing)
-        if f"{device_installer.REMOTE_INIT_SCRIPT} stop" in command:
+        if command.startswith("sh -s stop"):
+            # The bundled init script stops the agent, not the one on the station.
+            assert input_data and input_data.startswith(b"#!/bin/sh")
             self.steps.append("stop")
             assert "killall" not in command and "pkill" not in command and "bt_" not in command
         elif command.endswith(" restart"):
@@ -278,7 +280,7 @@ class _Station:
 def _install(monkeypatch, tmp_path, existing, api="new-access", maintenance="new-maintenance"):
     station = _Station(existing)
     init_script = tmp_path / "c300x-native-agent"
-    init_script.write_text(f'DEFAULT_AGENT_DIR="{DEFAULT_REMOTE_DIR}"\n', encoding="utf-8")
+    init_script.write_text(f'#!/bin/sh\nDEFAULT_AGENT_DIR="{DEFAULT_REMOTE_DIR}"\n', encoding="utf-8")
     monkeypatch.setattr(device_installer, "_admit_station_sync", lambda *_: "qt4_ondisk")
     monkeypatch.setattr(device_installer, "_connect_device_client", lambda _r: station)
     monkeypatch.setattr(device_installer, "_verify_startup_sync", lambda _c: None)
@@ -332,13 +334,22 @@ class _Shell:
             raise C300XDeviceInstallError("device_install_failed")
         return result.stdout.decode()
 
+    def put_file(self, source: Path, remote_path: str, mode: str | None = None) -> bool:
+        raise AssertionError("no payload in these tests")
 
-def test_the_running_agent_is_stopped_by_its_init_script_on_the_station_busybox(tmp_path, monkeypatch):
+    def close(self) -> None:
+        pass
+
+
+def _station_shell(tmp_path: Path, log: Path, port: int) -> _Shell:
+    """The station's busybox shell runs the commands, as over SSH."""
+    return _Shell({**os.environ, "PATH": f"{tmp_path / 'commands'}:{os.environ['PATH']}",
+                   "C300X_AGENT_DIR": str(tmp_path), "C300X_AGENT_ENV": str(tmp_path / "absent"),
+                   "STUB_LOG": str(log), "STUB_PORT": str(port)})
+
+
+def test_the_running_agent_is_stopped_by_the_bundled_init_script_on_the_station_busybox(tmp_path):
     run, log, pidfile, port = _device_init(tmp_path)
-    init = tmp_path / "init"
-    env = {**os.environ, "C300X_AGENT_DIR": str(tmp_path), "C300X_AGENT_ENV": str(tmp_path / "absent"),
-           "STUB_LOG": str(log), "STUB_PORT": str(port)}
-    monkeypatch.setattr(device_installer, "REMOTE_INIT_SCRIPT", str(init))
     config = tmp_path / "config.json"
     leftovers = [tmp_path / "config.json.tmp.Ab12Cd", tmp_path / "config.json.c300x-0011223344556677.new"]
     bystander = subprocess.Popen(["sleep", "300"])
@@ -347,7 +358,9 @@ def test_the_running_agent_is_stopped_by_its_init_script_on_the_station_busybox(
         agent = _wait_started(pidfile, log)
         for leftover in leftovers:
             leftover.write_text('{"api": {"token": "old-access"}}')
-        device_installer._retire_old_keys_sync(_Shell(env), str(tmp_path))
+        device_installer._retire_old_keys_sync(
+            _station_shell(tmp_path, log, port), str(tmp_path), (tmp_path / "init").read_bytes(),
+        )
         assert not _alive(agent) and not pidfile.exists()
         assert f"stopped {agent}" in log.read_text()
         assert not any(leftover.exists() for leftover in leftovers)
@@ -359,22 +372,104 @@ def test_the_running_agent_is_stopped_by_its_init_script_on_the_station_busybox(
         _reap_all(tmp_path)
 
 
-def test_an_agent_that_cannot_be_stopped_keeps_its_configuration(tmp_path, monkeypatch):
-    init = tmp_path / "init"
-    init.write_text("#!/bin/sh\nexit 1\n")
-    init.chmod(0o700)
-    monkeypatch.setattr(device_installer, "REMOTE_INIT_SCRIPT", str(init))
+def test_an_agent_that_cannot_be_stopped_keeps_its_configuration(tmp_path):
     leftover = tmp_path / "config.json.tmp.Ab12Cd"
     leftover.write_text("{}")
     with pytest.raises(C300XDeviceInstallError):
-        device_installer._retire_old_keys_sync(_Shell(dict(os.environ)), str(tmp_path))
+        device_installer._retire_old_keys_sync(_Shell(dict(os.environ)), str(tmp_path), b"#!/bin/sh\nexit 1\n")
     assert leftover.exists()
 
 
-def test_a_station_without_the_init_script_only_loses_the_unfinished_copies(tmp_path, monkeypatch):
-    monkeypatch.setattr(device_installer, "REMOTE_INIT_SCRIPT", str(tmp_path / "absent-init"))
+def test_a_station_without_a_running_agent_only_loses_the_unfinished_copies(tmp_path):
+    _run, log, _pidfile, port = _device_init(tmp_path)
     leftover = tmp_path / "config.json.tmp.Ab12Cd"
     leftover.write_text("{}")
-    (tmp_path / "config.json").write_text("{}")
-    device_installer._retire_old_keys_sync(_Shell(dict(os.environ)), str(tmp_path))
+    device_installer._retire_old_keys_sync(
+        _station_shell(tmp_path, log, port), str(tmp_path), (tmp_path / "init").read_bytes(),
+    )
     assert not leftover.exists() and (tmp_path / "config.json").exists()
+
+
+# The init script of 2.9.0 and older stops whatever PID its PID file names.
+INIT_2_9_0 = """#!/bin/sh
+PATH=/sbin:/usr/sbin:/bin:/usr/bin
+DEFAULT_AGENT_DIR="/home/bticino/cfg/extra/c300x-native-agent"
+AGENT_ENV="${C300X_AGENT_ENV:-$DEFAULT_AGENT_DIR/c300x-agent.env}"
+[ -r "$AGENT_ENV" ] && . "$AGENT_ENV"
+AGENT_DIR="${C300X_AGENT_DIR:-${AGENT_DIR:-$DEFAULT_AGENT_DIR}}"
+AGENT_BIN="$AGENT_DIR/c300x-agent-native"
+AGENT_CONFIG="$AGENT_DIR/config.json"
+AGENT_PID="$AGENT_DIR/c300x-agent-native.pid"
+case "$1" in
+    start)
+        start-stop-daemon --start --quiet --oknodo --background \\
+            --make-pidfile --pidfile "$AGENT_PID" \\
+            --exec "$AGENT_BIN" -- --config "$AGENT_CONFIG"
+        exit $?
+        ;;
+    stop)
+        start-stop-daemon --stop --quiet --oknodo \\
+            --pidfile "$AGENT_PID" --retry=TERM/3/KILL/2 || exit $?
+        rm -f "$AGENT_PID" || exit $?
+        ;;
+    status)
+        if [ -f "$AGENT_PID" ] && kill -0 "$(cat "$AGENT_PID")" >/dev/null 2>&1; then
+            exit 0
+        fi
+        exit 3
+        ;;
+esac
+exit 0
+"""
+
+
+def test_a_reinstall_over_an_old_init_script_never_signals_a_stale_pid(tmp_path, monkeypatch):
+    import shutil
+
+    from tests.test_agent_init_script import SCRIPT
+
+    run, log, pidfile, port = _device_init(tmp_path, INIT_2_9_0)
+    commands = tmp_path / "commands"
+    bundled = tmp_path / "bundled-init"
+    bundled.write_text(SCRIPT.read_text().replace(
+        "[ -f /etc/init.d/functions ] && . /etc/init.d/functions", "").replace(
+        "#!/bin/sh", f"#!{commands}/sh", 1).replace(
+        "PATH=/sbin:/usr/sbin:/bin:/usr/bin", f"PATH={commands}:/bin:/usr/bin"))
+    stubs = tmp_path / "stubs"
+    stubs.mkdir()
+    (stubs / "mount").write_text("#!/bin/sh\nexit 0\n")
+    (stubs / "mount").chmod(0o700)
+    (tmp_path / "config.json").write_text(json.dumps(_installed("old-access", "old-maintenance")))
+    env = {**os.environ, "PATH": f"{stubs}:{os.environ['PATH']}", "C300X_AGENT_DIR": str(tmp_path),
+           "C300X_AGENT_ENV": str(tmp_path / "absent"), "STUB_LOG": str(log), "STUB_PORT": str(port)}
+    monkeypatch.setattr(device_installer, "REMOTE_INIT_SCRIPT", str(tmp_path / "init"))
+    monkeypatch.setattr(device_installer, "REMOTE_INIT_LINK", str(tmp_path / "S40c300x-native-agent"))
+    monkeypatch.setattr(device_installer, "_admit_station_sync", lambda *_: "qt4_ondisk")
+    monkeypatch.setattr(device_installer, "_display_actions", lambda *_: ())
+    monkeypatch.setattr(device_installer, "_connect_device_client", lambda _r: _Shell(env))
+    # A program with a name of its own: the agent stopped long ago, its PID is
+    # someone else's now (on the station possibly a watched bt_* process).
+    stand_in = tmp_path / "c300x-reinstall-bystander"
+    (tmp_path / "bystander.c").write_text("#include <unistd.h>\nint main(void) { for (;;) pause(); }\n")
+    subprocess.run([shutil.which("cc"), "-o", str(stand_in), str(tmp_path / "bystander.c")], check=True)
+    bystander = subprocess.Popen([str(stand_in)])
+    try:
+        pidfile.write_text(f"{bystander.pid}\n")
+        config = device_installer._device_config_json(
+            api_token="new-access", maintenance_token="new-maintenance", agent_port=port,
+        ).encode()
+        device_installer._install_device_agent_sync(
+            C300XDeviceInstallRequest(
+                host="c300x.local", ssh_username="root", ssh_password="secret",
+                remote_dir=str(tmp_path), apply_firewall_patch=False,
+            ),
+            device_installer._ResolvedBundle((), bundled), config,
+        )
+        assert bystander.poll() is None
+        agent = _wait_started(pidfile, log)
+        assert agent != bystander.pid and _alive(agent)
+        assert json.loads((tmp_path / "config.json").read_text())["api"]["token"] == "new-access"
+    finally:
+        bystander.kill()
+        bystander.wait()
+        _reap_all(tmp_path)

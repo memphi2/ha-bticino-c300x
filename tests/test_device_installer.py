@@ -1134,7 +1134,10 @@ def test_asyncssh_connect_kwargs_force_legacy_ssh_rsa() -> None:
     assert kwargs["config"] is None
     assert kwargs["known_hosts"] is None
     assert kwargs["preferred_auth"] == ["password"]
-    assert kwargs["server_host_key_algs"] == ["ssh-rsa"]
+    # Modern host keys first, the factory station's RSA/SHA-1 last.
+    assert kwargs["server_host_key_algs"] == [
+        "ssh-ed25519", "ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521", "ssh-rsa",
+    ]
     assert kwargs["kex_algs"] == "+diffie-hellman-group1-sha1"
     assert kwargs["encryption_algs"] == "+aes128-cbc,3des-cbc"
 

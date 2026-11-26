@@ -71,6 +71,13 @@ _SSH_CONNECT_TIMEOUT = 12.0
 # Probes, uploads of at most the agent binary, the init script and its
 # restart (5 s stop wait, 2 s after SIGKILL, 20 status checks of 100 ms).
 _SSH_COMMAND_TIMEOUT = 30.0
+_SSH_HOST_KEY_ALGS = (
+    "ssh-ed25519",
+    "ecdsa-sha2-nistp256",
+    "ecdsa-sha2-nistp384",
+    "ecdsa-sha2-nistp521",
+    "ssh-rsa",
+)
 # A display write over SSH is the script the agent runs as a job, so it gets
 # the agent's handling (http_maintenance.h): this deadline, then SIGTERM for
 # the script's rollback trap and this grace period. On the Qt 5 display of
@@ -805,7 +812,7 @@ def _connect_device_client(request: C300XDeviceInstallRequest) -> _DeviceSshClie
 
 
 def _asyncssh_connect_kwargs(request: C300XDeviceInstallRequest) -> dict[str, Any]:
-    """Return C300X SSH connect arguments with legacy RSA compatibility."""
+    """Return station SSH connect arguments with legacy RSA compatibility."""
     return {
         "host": _ssh_host(request.host),
         "port": 22,
@@ -824,7 +831,9 @@ def _asyncssh_connect_kwargs(request: C300XDeviceInstallRequest) -> dict[str, An
         "host_based_auth": False,
         # LEGACY-SSH-001 in SECURITY.md: explicit local bootstrap/recovery only.
         "known_hosts": None,
-        "server_host_key_algs": ["ssh-rsa"],
+        # Modern host keys first; the factory Dropbear offers only RSA/SHA-1.
+        # Root tools can set it up with one ECDSA or Ed25519 key instead.
+        "server_host_key_algs": list(_SSH_HOST_KEY_ALGS),
         "kex_algs": "+diffie-hellman-group1-sha1",
         "encryption_algs": "+aes128-cbc,3des-cbc",
     }

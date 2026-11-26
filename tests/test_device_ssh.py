@@ -15,8 +15,14 @@ import pytest
 from custom_components.bticino_c300x import device_installer as installer
 
 
+@pytest.fixture
+def host_key_type() -> str:
+    """The host key of the factory station's Dropbear."""
+    return "ssh-rsa"
+
+
 @pytest.fixture(params=["diffie-hellman-group14-sha1", "diffie-hellman-group1-sha1"])
-def ssh_server(monkeypatch, request):
+def ssh_server(monkeypatch, request, host_key_type):
     ready = concurrent.futures.Future()
     failures = []
     state = {}
@@ -59,8 +65,11 @@ def ssh_server(monkeypatch, request):
         state["stop"] = asyncio.Event()
         async with asyncssh.listen(
             "127.0.0.1", 0, server_factory=Server,
-            server_host_keys=[asyncssh.generate_private_key("ssh-rsa", key_size=2048)],
-            signature_algs=["ssh-rsa"], kex_algs=[request.param],
+            server_host_keys=[asyncssh.generate_private_key(
+                host_key_type, **({"key_size": 2048} if host_key_type == "ssh-rsa" else {}),
+            )],
+            # Only this host key is offered, as by a Dropbear given one key (dropbear -r).
+            signature_algs=[host_key_type], kex_algs=[request.param],
             encryption_algs=["aes128-cbc"], process_factory=process_handler,
             encoding=None,
         ) as server:
@@ -108,6 +117,18 @@ def test_legacy_login_commands_binary_input_and_close(ssh_server):
         client.close()
     with pytest.raises(installer.C300XDeviceInstallError, match="device_install_failed"):
         client.run("true")
+
+
+@pytest.mark.parametrize("host_key_type", [
+    "ssh-rsa", "ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521", "ssh-ed25519",
+])
+def test_a_station_with_only_one_host_key_type_is_reached(ssh_server, host_key_type):
+    """Root tools can set up Dropbear with an ECDSA or Ed25519 key only."""
+    client = installer._connect_device_client(ssh_server)
+    try:
+        assert client.run("printf 'ready'") == "ready"
+    finally:
+        client.close()
 
 
 def test_command_failure_does_not_expose_remote_output(ssh_server):

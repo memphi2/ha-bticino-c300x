@@ -1796,8 +1796,11 @@ the meantime, which then wins. Without that record (an agent installed again
 after a removal) on makes the read bits of a bridge without execute bits its
 execute bits. Removing the agent gives the bridge its recorded mode back the
 same way before the record is deleted with the backups. A bridge that is a
-symbolic link is not changed. The migration to the native bridge (`migrate-legacy`) disables it the
-same way.
+symbolic link is not changed. Off changes the bridge before it removes the
+start link and on changes it before it creates the link; when the link step
+fails the bridge gets its previous mode back, and the request is answered
+`500` with `legacy_mqtt_disable_failed` or `legacy_mqtt_enable_failed`. The
+migration to the native bridge (`migrate-legacy`) disables it the same way.
 
 Status fields added for this: `bridge_blocked` (the bridge is there and not
 executable since that block) and `watchdog` (an installed

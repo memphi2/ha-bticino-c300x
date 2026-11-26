@@ -134,3 +134,59 @@ def test_on_without_a_record_makes_a_bridge_without_execute_bits_runnable(stub_t
     assert bridge.stat().st_mode & 0o7777 == 0o750
     assert not record.exists()
     assert os.readlink(lab.root / "foreign/etc/rc5.d/S99TcpDump2Mqtt") == "../tcpdump2mqtt/TcpDump2Mqtt.sh"
+
+
+BACKUPS = "foreign/home/bticino/cfg/extra/c300x-device-file-backups"
+START_LINK = "foreign/etc/rc5.d/S99TcpDump2Mqtt"
+
+
+def test_off_keeps_the_start_link_when_the_bridge_cannot_be_blocked(stub_tools, lab):
+    bridge = legacy_install(lab.root)
+    # The record cannot be written, so the block fails before any change.
+    (lab.root / BACKUPS).mkdir(parents=True)
+    (lab.root / BACKUPS / "legacy-mqtt").write_text("not a directory\n")
+
+    assert response(lab.request(LEGACY, {"enabled": False}), 500)["error"] == "legacy_mqtt_disable_failed"
+
+    assert os.readlink(lab.root / START_LINK) == "../tcpdump2mqtt/TcpDump2Mqtt.sh"
+    assert bridge.stat().st_mode & 0o7777 == 0o750
+    assert response(lab.request(LEGACY))["enabled"] is True
+
+
+def test_off_gives_the_bridge_its_mode_back_when_the_start_link_cannot_go(stub_tools, lab):
+    bridge = legacy_install(lab.root)
+    link = lab.root / START_LINK
+    link.unlink()
+    (link / "entry").mkdir(parents=True)
+
+    assert response(lab.request(LEGACY, {"enabled": False}), 500)["error"] == "legacy_mqtt_disable_failed"
+
+    assert bridge.stat().st_mode & 0o7777 == 0o750
+    assert not (lab.root / BACKUPS / "legacy-mqtt/bridge-mode").exists()
+    assert response(lab.request(LEGACY))["bridge_blocked"] is False
+
+
+def test_on_blocks_the_bridge_again_when_the_start_link_cannot_come(stub_tools, lab):
+    bridge = legacy_install(lab.root)
+    record = lab.root / BACKUPS / "legacy-mqtt/bridge-mode"
+    assert response(lab.request(LEGACY, {"enabled": False}))["bridge_blocked"] is True
+    (lab.root / START_LINK / "entry").mkdir(parents=True)
+
+    assert response(lab.request(LEGACY, {"enabled": True}), 500)["error"] == "legacy_mqtt_enable_failed"
+
+    assert bridge.stat().st_mode & 0o7777 == 0o640
+    assert record.read_text() == "0750\n"
+    assert response(lab.request(LEGACY))["bridge_blocked"] is True
+
+
+def test_on_creates_no_start_link_when_the_bridge_mode_cannot_come_back(stub_tools, lab):
+    legacy_install(lab.root)
+    record = lab.root / BACKUPS / "legacy-mqtt/bridge-mode"
+    assert response(lab.request(LEGACY, {"enabled": False}))["bridge_blocked"] is True
+    # The record cannot be dropped: unblock fails.
+    record.unlink()
+    (record / "entry").mkdir(parents=True)
+
+    assert response(lab.request(LEGACY, {"enabled": True}), 500)["error"] == "legacy_mqtt_enable_failed"
+
+    assert not (lab.root / START_LINK).exists() and not (lab.root / START_LINK).is_symlink()

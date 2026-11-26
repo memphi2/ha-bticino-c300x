@@ -65,7 +65,12 @@ def test_legacy_mqtt_disable_does_not_touch_flexisip_or_delete_patch_files() -> 
     assert "flexisip" not in disable.lower()
     assert "flexisip" not in migrate.lower()
     assert "mosquitto" not in http.lower()
-    assert "unlink_if_exists(C300X_LEGACY_MQTT_INIT_LINK" in disable
+    assert "c300x_legacy_mqtt_start_off(changed)" in disable
+    bridge = _read("native_agent/src/legacy_bridge.c")
+    start_off = bridge[bridge.index("int c300x_legacy_mqtt_start_off") : bridge.index("int c300x_legacy_mqtt_start_on")]
+    assert "unlink_if_exists(C300X_LEGACY_MQTT_INIT_LINK" in start_off
+    assert "flexisip" not in bridge.lower()
+    assert "remove_tree" not in bridge and "rm -rf" not in bridge
     assert "C300X_LEGACY_MQTT_BROKER" not in http
     assert "legacy_mqtt_start_broker_if_needed" not in http
     assert "legacy_mqtt_broker_running" not in http

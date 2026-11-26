@@ -114,6 +114,78 @@ int c300x_legacy_bridge_unblock(int *changed)
     return ok && (unlink(C300X_LEGACY_MQTT_BRIDGE_MODE) == 0 || errno == ENOENT);
 }
 
+static int unlink_if_exists(const char *path, int *changed)
+{
+    if (unlink(path) == 0) {
+        if (changed != NULL) {
+            *changed = 1;
+        }
+        return 1;
+    }
+    return errno == ENOENT;
+}
+
+static int ensure_symlink_target(const char *link_path, const char *target, int *changed)
+{
+    char current[256];
+    ssize_t len = readlink(link_path, current, sizeof(current) - 1);
+
+    if (len >= 0) {
+        current[len] = '\0';
+        if (strcmp(current, target) == 0) {
+            return 1;
+        }
+        if (unlink(link_path) != 0) {
+            return 0;
+        }
+    } else if (errno != ENOENT) {
+        return 0;
+    }
+    if (symlink(target, link_path) != 0) {
+        return 0;
+    }
+    if (changed != NULL) {
+        *changed = 1;
+    }
+    return 1;
+}
+
+int c300x_legacy_mqtt_start_off(int *changed)
+{
+    int blocked = 0;
+
+    if (!c300x_legacy_bridge_block(&blocked)) {
+        return 0;
+    }
+    if (!unlink_if_exists(C300X_LEGACY_MQTT_INIT_LINK, changed)) {
+        if (blocked) {
+            (void)c300x_legacy_bridge_unblock(NULL);
+        }
+        return 0;
+    }
+    if (blocked && changed != NULL) {
+        *changed = 1;
+    }
+    return 1;
+}
+
+int c300x_legacy_mqtt_start_on(int *changed)
+{
+    int unblocked = 0;
+
+    if (!c300x_legacy_bridge_unblock(&unblocked)
+        || !ensure_symlink_target(C300X_LEGACY_MQTT_INIT_LINK, C300X_LEGACY_MQTT_INIT_TARGET, changed)) {
+        if (unblocked) {
+            (void)c300x_legacy_bridge_block(NULL);
+        }
+        return 0;
+    }
+    if (unblocked && changed != NULL) {
+        *changed = 1;
+    }
+    return 1;
+}
+
 int c300x_legacy_bridge_blocked(void)
 {
     mode_t mode = 0;

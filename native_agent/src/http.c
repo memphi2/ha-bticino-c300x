@@ -115,8 +115,6 @@
 #define C300X_LEGACY_MQTT_DIR C300X_FOREIGN_ROOT "/etc/tcpdump2mqtt"
 #define C300X_LEGACY_MQTT_CONFIG C300X_LEGACY_MQTT_DIR "/TcpDump2Mqtt.conf"
 #define C300X_LEGACY_MQTT_SCRIPT C300X_LEGACY_MQTT_DIR "/TcpDump2Mqtt.sh"
-#define C300X_LEGACY_MQTT_INIT_LINK C300X_FOREIGN_ROOT "/etc/rc5.d/S99TcpDump2Mqtt"
-#define C300X_LEGACY_MQTT_INIT_TARGET "../tcpdump2mqtt/TcpDump2Mqtt.sh"
 #define C300X_LEGACY_MQTT_BACKUP_DIR "/home/bticino/cfg/extra/c300x-device-file-backups/legacy-mqtt"
 #define C300X_LEGACY_MQTT_BACKUP_MARKER "/home/bticino/cfg/extra/c300x-device-file-backups/legacy-mqtt/.complete"
 #define C300X_FLEXISIP_INIT_SCRIPT "/etc/init.d/flexisipsh"
@@ -3690,43 +3688,6 @@ static int legacy_mqtt_restore_from_backup(int *changed)
     return 1;
 }
 
-static int ensure_symlink_target(const char *link_path, const char *target, int *changed)
-{
-    char current[256];
-    ssize_t len;
-
-    len = readlink(link_path, current, sizeof(current) - 1);
-    if (len >= 0) {
-        current[len] = '\0';
-        if (strcmp(current, target) == 0) {
-            return 1;
-        }
-        if (unlink(link_path) != 0) {
-            return 0;
-        }
-    } else if (errno != ENOENT) {
-        return 0;
-    }
-    if (symlink(target, link_path) != 0) {
-        return 0;
-    }
-    if (changed != NULL) {
-        *changed = 1;
-    }
-    return 1;
-}
-
-static int unlink_if_exists(const char *path, int *changed)
-{
-    if (unlink(path) == 0) {
-        if (changed != NULL) {
-            *changed = 1;
-        }
-        return 1;
-    }
-    return errno == ENOENT;
-}
-
 static int legacy_mqtt_enable_patch(int *changed)
 {
     if (changed != NULL) {
@@ -3737,8 +3698,7 @@ static int legacy_mqtt_enable_patch(int *changed)
             return 0;
         }
     }
-    return c300x_legacy_bridge_unblock(changed)
-        && ensure_symlink_target(C300X_LEGACY_MQTT_INIT_LINK, C300X_LEGACY_MQTT_INIT_TARGET, changed);
+    return c300x_legacy_mqtt_start_on(changed);
 }
 
 static int legacy_mqtt_disable_patch(int *changed)
@@ -3746,7 +3706,7 @@ static int legacy_mqtt_disable_patch(int *changed)
     if (changed != NULL) {
         *changed = 0;
     }
-    return unlink_if_exists(C300X_LEGACY_MQTT_INIT_LINK, changed) && c300x_legacy_bridge_block(changed);
+    return c300x_legacy_mqtt_start_off(changed);
 }
 
 static void handle_legacy_mqtt_status(

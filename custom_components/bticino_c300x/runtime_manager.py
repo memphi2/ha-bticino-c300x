@@ -365,10 +365,9 @@ class C300XRuntimeManager:
             load_stored_units,
         )
         from .identity_migration import (
-            async_migrate_identity,
+            async_migrate_entry_identity,
             identity_migration_needed,
         )
-        from .repair_issues import async_create_breaking_change_issue
 
         registry = self.entry.runtime_data.calls
         load_stored_units(self.entry, registry)
@@ -383,10 +382,7 @@ class C300XRuntimeManager:
             # Before the platforms build any entity: they take the new ids.
             default_unit = registry.unit(registry.default_unit)
             if default_unit is not None:
-                moved = async_migrate_identity(self.hass, self.entry, str(agent_station_id), default_unit)
-                if moved["moved"] or moved["removed"]:
-                    # Only an entry from 2.x has something to redo.
-                    async_create_breaking_change_issue(self.hass, self.entry)
+                async_migrate_entry_identity(self.hass, self.entry, str(agent_station_id), default_unit)
 
     async def async_sync_activation_state(self) -> None:
         """Synchronize device activations before platform entity creation."""

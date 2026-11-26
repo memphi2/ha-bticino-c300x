@@ -146,3 +146,52 @@ def test_a_unit_the_station_renames_renames_its_device(tmp_path: Path) -> None:
         await hass.async_stop(force=True)
 
     asyncio.run(run())
+
+
+def test_only_an_entry_from_before_3_1_gets_the_breaking_change_repair(tmp_path: Path) -> None:
+    # A 3.1 entry set up while the station was offline kept the entry-id camera
+    # id; its migration moves it, but the entry has nothing to redo.
+    from types import SimpleNamespace
+
+    from homeassistant.helpers import issue_registry as ir
+
+    from custom_components.bticino_c300x.call_registry import C300XCallRegistry
+    from custom_components.bticino_c300x.repair_issues import (
+        OUTDOOR_UNITS_BREAKING_CHANGE_ISSUE,
+        repair_issue_id,
+    )
+    from custom_components.bticino_c300x.runtime_manager import C300XRuntimeManager
+
+    class Api:
+        async def async_outdoor_units(self) -> Any:
+            return UNITS
+
+        async def async_calls(self) -> Any:
+            from custom_components.bticino_c300x._api_calls import normalize_calls
+
+            return normalize_calls({"calls": []})
+
+    async def run() -> None:
+        hass = await _hass(tmp_path)
+        issues = ir.async_get(hass)
+        capabilities = {"calls": True, "outdoor_units": True}
+        for version, repaired in ((identity_migration.ENTRY_VERSION, False), (1, True)):
+            entry = _entry(hass, {"host": "door"}, version)
+            station = dr.async_get(hass).async_get_or_create(
+                config_entry_id=entry.entry_id, identifiers={(DOMAIN, entry.entry_id)})
+            camera = _register(er.async_get(hass), entry, station, "camera", f"{entry.entry_id}_doorbell_camera")
+            entry.runtime_data = SimpleNamespace(calls=C300XCallRegistry(), api=Api(), capabilities=capabilities)
+            manager = SimpleNamespace(
+                hass=hass, entry=entry, capabilities=capabilities,
+                connection_state=SimpleNamespace(available=True),
+                setup_data={"device_id": f"c300x-00000000000{version}"},
+            )
+
+            await C300XRuntimeManager.async_sync_calls(manager)  # type: ignore[arg-type]
+
+            assert er.async_get(hass).async_get(camera).unique_id == f"c300x-00000000000{version}_unit_20_camera"
+            issue = issues.async_get_issue(DOMAIN, repair_issue_id(OUTDOOR_UNITS_BREAKING_CHANGE_ISSUE, entry.entry_id))
+            assert (issue is not None) is repaired, version
+        await hass.async_stop(force=True)
+
+    asyncio.run(run())

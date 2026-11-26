@@ -130,3 +130,24 @@ def async_migrate_identity(
         entry.entry_id, new, result["moved"], result["removed"],
     )
     return result
+
+
+def async_migrate_entry_identity(
+    hass: HomeAssistant,
+    entry: BticinoC300XConfigEntry,
+    agent_station_id: str,
+    default_unit: OutdoorUnit,
+) -> dict[str, list[str]]:
+    """Migrate, and tell an entry from before 3.1.0 once what to redo.
+
+    Entries made by 3.1.0 start at ENTRY_VERSION. Such an entry set up while
+    the station was offline also has ids to move, but nothing to redo.
+    """
+
+    from_2x = entry.version < ENTRY_VERSION
+    result = async_migrate_identity(hass, entry, agent_station_id, default_unit)
+    if from_2x and (result["moved"] or result["removed"]):
+        from .repair_issues import async_create_breaking_change_issue
+
+        async_create_breaking_change_issue(hass, entry)
+    return result

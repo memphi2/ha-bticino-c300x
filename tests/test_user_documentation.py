@@ -625,3 +625,18 @@ def test_the_quarantine_texts_name_the_controls_that_retry_the_pages():
         assert "pplying the Display patch" not in flat, name
         assert "the **Display patch** switch on" in flat, name
         assert "saving the display settings does not" in flat, name
+
+
+def test_the_outdoor_units_and_calls_texts_say_what_the_agent_does():
+    # GET /outdoor-units loads the units again on every request; the count of
+    # ignored caller frames is part of GET /calls, not of the diagnostics.
+    routes = (ROOT / "native_agent/src/http_calls.c").read_text()
+    get_units = routes.split('"/api/v1/outdoor-units") == 0 && get', 1)[1].split("return 1;", 1)[0]
+    assert "load_units(hub);" in get_units and "loaded" not in get_units
+    assert '\\"caller_frames_ignored\\"' in (ROOT / "native_agent/src/call_table.c").read_text()
+    api = " ".join((ROOT / "native_agent/API.md").read_text().split())
+    contract = " ".join((ROOT / "docs/dev/multi-outdoor-units.md").read_text().split())
+    assert "when it changed" not in api
+    assert "| `GET` | `/api/v1/outdoor-units` | API | None (reads the station's archive on every request). |" in api
+    assert "`caller_frames_ignored` in diagnostics" not in contract
+    assert "`caller_frames_ignored` in `GET /api/v1/calls`" in contract

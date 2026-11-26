@@ -116,7 +116,7 @@ A call has `call_id`, `kind` (`ring` or `view`), `state`, `unit`
      newest call got its unit, and at most 1000 ms ago: a second unit is
      ringing. A new call opens with that unit already bound; `doorbell.pressed`
      (with `unit`) and `call.caller_identified` go out;
-   - otherwise it is counted (`caller_frames_ignored` in diagnostics) and
+   - otherwise it is counted (`caller_frames_ignored` in `GET /api/v1/calls`) and
      dropped. This covers a late frame after the fallback.
 6. If the bound unit already had a live `ringing` call, that older call ends
    with `reason: "superseded"`: the same visitor pressed again.

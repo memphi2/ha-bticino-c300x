@@ -238,7 +238,7 @@ for example `config_error`, `api_token_missing`, `api_bind_failed`,
 | `GET` | `/api/v1/calls` | API | None. |
 | `POST` | `/api/v1/calls/{call_id}/actions/answer` | API | Answers the current ring call locally. |
 | `POST` | `/api/v1/calls/{call_id}/actions/hangup` | API | Hangs up the current ring call. |
-| `GET` | `/api/v1/outdoor-units` | API | None (reads the station's archive when it changed). |
+| `GET` | `/api/v1/outdoor-units` | API | None (reads the station's archive on every request). |
 | `POST` | `/api/v1/outdoor-units/{unit_id}/actions/unlock` | API | Sends the lock command of that outdoor unit. |
 | `POST` | `/api/v1/calls/doorbell/actions/capture` | API | Marks native capture action accepted. |
 | `GET` | `/api/v1/calls/home` | API | None. |
@@ -1207,8 +1207,8 @@ Capabilities report `api_version: "2"`, `capabilities.outdoor_units` and
 
 - `GET /api/v1/outdoor-units`: the units (`id`, `where`, `action_where`,
   `lock_where`, `name`, `source`, `default`), `default_unit` and `archive`.
-- `GET /api/v1/calls`: `boot_id`, `current_call_id` and live calls plus calls
-  ended in the last 60 s.
+- `GET /api/v1/calls`: `boot_id` (drawn at agent start), `current_call_id`,
+  `caller_frames_ignored` and live calls plus calls ended in the last 60 s.
 - `POST /api/v1/calls/{call_id}/actions/answer`, `.../hangup`: answer or hang
   up the current ring call. A call id that is unknown, ended or not current
   gets `409 call_not_current` with `current_call_id`; nothing reaches the

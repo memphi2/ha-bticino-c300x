@@ -382,6 +382,8 @@ def test_a_legacy_entry_of_the_station_is_proven_and_gets_the_keys(network, tmp_
     assert [(item.host, item.port) for item in proofs] == [(IP, PORT), (IP, PORT)]
     assert [item for item in network.requests if item.host == "door.local"] == []
     _assert_keys_only_to(network, IP)
+    # A Classe 100X was confirmed before anything was written; a Classe 300X was not asked.
+    _check_confirmation(ha, station, files)
 
 
 @pytest.mark.parametrize("firmware", FIRMWARES)
@@ -410,6 +412,7 @@ def test_an_unproven_legacy_entry_is_left_alone_and_a_new_entry_created(network,
     network.names["door-old.local"] = "192.0.2.99"
     if other == "another_station":
         _station(network, tmp_path, "2.0.2", ip="192.0.2.99", device_id="c300x-0003504affff")
+    files = station.files()
     legacy = _saved_entry(f"{DOMAIN}:{host}:{PORT}", host, title="Other")
     before = (dict(legacy.data), dict(legacy.options), legacy.unique_id)
     ha = HA([legacy])
@@ -429,6 +432,8 @@ def test_an_unproven_legacy_entry_is_left_alone_and_a_new_entry_created(network,
     proofs = [(item.host, item.port) for item in network.requests if item.path == "/api/v1/identity/proof"]
     # The setup's address proved the station first; an address without IPv4 asks nothing.
     assert proofs == ([(IP, PORT), ("192.0.2.99", PORT)] if host == "door-old.local" else [])
+    # A Classe 100X was confirmed before anything was written; a Classe 300X was not asked.
+    _check_confirmation(ha, station, files)
 
 
 @pytest.mark.parametrize("how", ["keys_known", "reinstall", "reinstall_restart_fails"])
@@ -437,6 +442,7 @@ def test_an_ignored_discovery_of_the_station_gives_way_to_its_legacy_entry(netwo
     """The dismissed announcement holds the station's identity; the proven entry takes it over."""
 
     station = _station(network, tmp_path, firmware, "door.local")
+    files = station.files()
     legacy = _saved_entry(f"{DOMAIN}:door.local:{PORT}", "door.local")
     ignored = station_flow_harness.entry("entry-ignored", UNIQUE_ID, {}, title="Ignored", source=SOURCE_IGNORE)
     ha = HA([legacy, ignored])
@@ -459,6 +465,8 @@ def test_an_ignored_discovery_of_the_station_gives_way_to_its_legacy_entry(netwo
     assert ha.entries == [legacy] and ha.registry.removed == ["entry-ignored"]
     _assert_entry_holds_the_station_keys(legacy, station)
     _assert_keys_only_to(network, IP)
+    # A Classe 100X was confirmed before anything was written; a Classe 300X was not asked.
+    _check_confirmation(ha, station, files)
 
 
 def test_an_entry_holding_the_station_identity_keeps_it_and_the_older_entry_stays():
@@ -481,6 +489,7 @@ def test_a_disabled_legacy_entry_of_the_station_is_left_alone(network, tmp_path,
     """The user switched it off: the setup creates a working entry of its own, as before."""
 
     station = _station(network, tmp_path, firmware, "door.local")
+    files = station.files()
     legacy = _saved_entry(f"{DOMAIN}:door.local:{PORT}", "door.local")
     legacy.disabled_by = "user"
     before = (dict(legacy.data), dict(legacy.options), legacy.unique_id)
@@ -495,6 +504,8 @@ def test_a_disabled_legacy_entry_of_the_station_is_left_alone(network, tmp_path,
     # The switched-off entry was not even asked about.
     assert [item for item in network.requests if item.path == "/api/v1/identity/proof"] == []
     _assert_keys_only_to(network, IP)
+    # A Classe 100X was confirmed before anything was written; a Classe 300X was not asked.
+    _check_confirmation(ha, station, files)
 
 
 @pytest.mark.parametrize("keys", ["both", "access_only", "lost"])
@@ -506,6 +517,7 @@ def test_a_legacy_entry_is_not_handed_to_a_setup_address_that_does_not_prove_the
 
     station = _station(network, tmp_path, firmware, "door.local")
     network.relay(RELAY, station)
+    files = station.files()
     legacy = _saved_entry(f"{DOMAIN}:door.local:{PORT}", "door.local")
     before = (dict(legacy.data), dict(legacy.options), legacy.unique_id)
     ha = HA([legacy])
@@ -521,6 +533,8 @@ def test_a_legacy_entry_is_not_handed_to_a_setup_address_that_does_not_prove_the
     assert proofs == [(RELAY, PORT)]
     assert [item for item in network.requests if item.host == "door.local"] == []
     _assert_keys_only_to(network, RELAY)
+    # A Classe 100X was confirmed before anything was written; a Classe 300X was not asked.
+    _check_confirmation(ha, station, files)
 
 
 # 5. A failure after the new keys were written: HA keeps them, the agent

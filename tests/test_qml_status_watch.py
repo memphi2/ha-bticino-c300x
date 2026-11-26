@@ -179,3 +179,23 @@ def test_no_read_without_the_status_action(ha: SimpleNamespace) -> None:
         assert entry.tasks == []
 
     asyncio.run(run())
+
+
+def test_an_agent_restart_reads_the_units_and_calls_again(ha: SimpleNamespace, monkeypatch: pytest.MonkeyPatch) -> None:
+    from custom_components.bticino_c300x import call_sync
+
+    resynced: list[str] = []
+
+    async def resync(_hass: Any, entry: Any) -> None:
+        resynced.append(entry.entry_id)
+
+    monkeypatch.setattr(call_sync, "async_resync", resync)
+
+    async def run() -> None:
+        entry = _entry(_Api(FINISHED), stored_at=None)
+        apply_system_metrics(entry, _metrics("a" * 32), hass=SimpleNamespace())
+        apply_system_metrics(entry, _metrics("b" * 32), hass=SimpleNamespace())
+        await asyncio.gather(*entry.tasks)
+
+    asyncio.run(run())
+    assert resynced == ["entry-1"]

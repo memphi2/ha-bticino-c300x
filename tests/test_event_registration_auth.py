@@ -158,3 +158,17 @@ def test_no_events_cleanup_does_not_delete_after_unload(monkeypatch):
         assert worker._api.delete_calls == []
 
     asyncio.run(exercise())
+
+
+def test_every_registration_pass_reads_units_and_calls_again(monkeypatch):
+    # The agent does not resend a lost callback; a pass (setup, reconnect,
+    # renewal) replaces the call mirror with the agent's list.
+    from custom_components.bticino_c300x import call_sync
+
+    resync = AsyncMock()
+    monkeypatch.setattr(call_sync, "async_resync", resync)
+    worker = registration(_FakeApi([{"subscription": {"id": "sub"}}] * 2))
+    asyncio.run(worker._register())
+    asyncio.run(worker._register())
+    assert resync.await_count == 2
+    worker.unregister()

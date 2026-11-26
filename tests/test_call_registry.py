@@ -161,3 +161,65 @@ def test_an_unreachable_agent_keeps_the_known_units(monkeypatch: pytest.MonkeyPa
     assert not asyncio.run(call_sync.async_refresh_units(hass, entry))  # type: ignore[arg-type]
     assert list(entry.runtime_data.calls.units) == ["20_2", "21"]
     assert hass.config_entries.updates == []
+
+
+def _calls(*calls: dict[str, Any], current: str | None) -> Any:
+    return normalize_calls({"boot_id": "0badc0de", "current_call_id": current, "calls": list(calls)})
+
+
+def _ring(call_id: str, state: str) -> dict[str, Any]:
+    return {"call_id": call_id, "kind": "ring", "state": state, "unit": "20_2", "attribution": "single_unit"}
+
+
+def test_a_new_ring_resyncs_a_stale_answered_call(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The agent does not retry a callback: a lost call_ended left aaaaaaaa-1
+    # "answered" in the mirror, which would shadow every later ring.
+    monkeypatch.setattr(call_sync, "async_dispatcher_send", lambda *args: None)
+
+    class Api:
+        async def async_calls(self) -> Any:
+            return _calls(_ring("bbbbbbbb-1", "ringing"), current="bbbbbbbb-1")
+
+    tasks: list[Any] = []
+    hass = SimpleNamespace(
+        config_entries=_Entries(),
+        async_create_background_task=lambda work, _name: tasks.append(work),
+    )
+    entry = _entry(Api())
+    registry = entry.runtime_data.calls
+    registry.set_calls(_calls(_ring("aaaaaaaa-1", "answered"), current="aaaaaaaa-1"))
+
+    call_sync.async_apply_call_event(hass, entry, "doorbell_pressed", {"call_id": "bbbbbbbb-1", "unit": "20_2"})  # type: ignore[arg-type]
+    assert tasks, "a ring next to a live call must ask the agent"
+
+    async def run() -> None:
+        for work in tasks:
+            await work
+
+    asyncio.run(run())
+    assert registry.current_call_id == "bbbbbbbb-1"
+    assert registry.call("aaaaaaaa-1") is None
+
+
+def test_a_ring_with_no_other_live_call_asks_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(call_sync, "async_dispatcher_send", lambda *args: None)
+    tasks: list[Any] = []
+    hass = SimpleNamespace(async_create_background_task=lambda work, _name: tasks.append(work))
+    entry = _entry(SimpleNamespace())
+    call_sync.async_apply_call_event(hass, entry, "doorbell_pressed", {"call_id": "bbbbbbbb-1", "unit": "20_2"})  # type: ignore[arg-type]
+    assert tasks == []
+    assert entry.runtime_data.calls.current_call_id == "bbbbbbbb-1"
+
+
+def test_an_agent_restart_reads_the_calls_again(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(call_sync, "async_dispatcher_send", lambda *args: None)
+    names: list[str] = []
+
+    def schedule(work: Any, name: str) -> None:
+        names.append(name)
+        work.close()
+
+    hass = SimpleNamespace(async_create_background_task=schedule)
+    entry = _entry(SimpleNamespace())
+    call_sync.async_apply_call_event(hass, entry, "agent_restarted", {})  # type: ignore[arg-type]
+    assert any("calls" in name for name in names), names

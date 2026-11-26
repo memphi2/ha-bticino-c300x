@@ -166,6 +166,12 @@ def apply_system_metrics(
             async_dispatcher_send(hass, SIGNAL_AGENT_INFO_CHANGED, entry.entry_id)
             # The new agent may have finished or found a cut-off display write.
             async_schedule_qml_status_refresh(hass, entry, restarted=True)
+            # Its calls began with the restart; the mirror reads them again.
+            from .call_sync import async_resync
+
+            entry.async_create_background_task(
+                hass, async_resync(hass, entry), f"bticino_c300x_resync_{entry.entry_id}",
+            )
         if notify:
             async_dispatcher_send(hass, SIGNAL_SYSTEM_METRICS_CHANGED, entry.entry_id)
     return True

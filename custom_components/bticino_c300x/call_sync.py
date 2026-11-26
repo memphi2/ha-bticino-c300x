@@ -93,6 +93,17 @@ async def async_refresh_calls(hass: HomeAssistant, entry: BticinoC300XConfigEntr
         async_dispatcher_send(hass, SIGNAL_CALLS_CHANGED, entry.entry_id)
 
 
+async def async_resync(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> None:
+    """Units and calls again from the agent.
+
+    After every event registration pass (setup, reconnect, renewal) and an
+    agent restart: a callback the agent could not deliver is never resent.
+    """
+
+    await async_refresh_units(hass, entry)
+    await async_refresh_calls(hass, entry)
+
+
 @callback
 def async_apply_call_event(
     hass: HomeAssistant,
@@ -108,7 +119,7 @@ def async_apply_call_event(
     if event_type == "agent_restarted":
         registry.clear_calls()
         async_dispatcher_send(hass, SIGNAL_CALLS_CHANGED, entry.entry_id)
-        _schedule(hass, entry, async_refresh_units(hass, entry), "units")
+        _schedule(hass, entry, async_resync(hass, entry), "units_calls")
         return {}
     if event_type == "outdoor_units_changed":
         _schedule(hass, entry, async_refresh_units(hass, entry), "units")
@@ -116,6 +127,10 @@ def async_apply_call_event(
     call = registry.apply_event(event_type, data) if event_type in CALL_EVENT_TYPES else None
     if call is not None:
         async_dispatcher_send(hass, SIGNAL_CALLS_CHANGED, entry.entry_id)
+        if event_type == "doorbell_pressed" and registry.has_other_live_call(call.call_id):
+            # The agent does not resend a lost callback: a call it ended may
+            # still look live here and would shadow this ring. Ask the agent.
+            _schedule(hass, entry, async_refresh_calls(hass, entry), "calls")
     call_id = call.call_id if call is not None else data.get("call_id")
     if not isinstance(call_id, str):
         return {}

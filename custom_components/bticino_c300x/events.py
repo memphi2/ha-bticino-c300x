@@ -324,6 +324,15 @@ class _AgentEventRegistration:
         except Exception as err:  # noqa: BLE001 - optional diagnostics are not registration
             if not self._stopped:
                 _LOGGER.debug("C300X post-registration diagnostics failed: %s", compact_error_text(err))
+        self._registration_stage = "calls"
+        try:
+            from . import call_sync
+
+            # A callback the agent could not deliver is never resent.
+            await call_sync.async_resync(self._hass, self._entry)
+        except Exception as err:  # noqa: BLE001 - the call mirror is not registration
+            if not self._stopped:
+                _LOGGER.debug("C300X post-registration call sync failed: %s", compact_error_text(err))
 
     async def _handle_runtime_registration_created(self) -> None:
         """Refresh runtime-only agent features after a new agent subscription."""

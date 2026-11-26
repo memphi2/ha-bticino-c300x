@@ -76,6 +76,9 @@ class C300XCallRegistry:
         call = self.current_call
         return call.call_id if call is not None else None
 
+    def has_other_live_call(self, call_id: str) -> bool:
+        return any(other.state in _LIVE for other in self.calls.values() if other.call_id != call_id)
+
     def call(self, call_id: str | None) -> Call | None:
         return self.calls.get(call_id) if call_id is not None else None
 

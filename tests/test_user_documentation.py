@@ -172,6 +172,8 @@ def test_agent_removal_docs_disclose_writes_backup_removal_and_reboot():
         "scheduling a device reboot", "starts SSH for recovery",
         "retains agent files/backups", "not a promise that every earlier step was rolled back",
         "not a factory reset", "does not erase HA media or HA backups",
+        "gives fquinto's old MQTT bridge (`/etc/tcpdump2mqtt/TcpDump2Mqtt`) its start rights back",
+        "its start link stays as the legacy MQTT switch left it",
     ):
         assert phrase in text
     script = (ROOT / "native_agent/scripts/remove_agent.sh").read_text()

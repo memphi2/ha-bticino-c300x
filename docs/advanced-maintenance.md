@@ -323,6 +323,9 @@ promise that every earlier step was rolled back. Only a display library without 
 not stop it: the library keeps the wider tap tolerance. It is not a factory reset and does not erase HA media or
 HA backups. Review any remaining device users/settings separately; never assume
 all device credentials or unrelated firmware configuration were reset.
+Removing the agent gives fquinto's old MQTT bridge
+(`/etc/tcpdump2mqtt/TcpDump2Mqtt`) its start rights back; its start link stays
+as the legacy MQTT switch left it.
 
 On a C100X, removal first checks that the display files are the original ones,
 or restores them from their verified backups and checks the result, and

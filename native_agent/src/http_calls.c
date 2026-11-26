@@ -7,6 +7,7 @@
 #include "http_media_actions.h"
 #include "http_util.h"
 #include "json_util.h"
+#include "openwebnet_async.h"
 #include "openwebnet_call.h"
 #include "string_util.h"
 #include "time_util.h"
@@ -14,7 +15,7 @@
 
 #define CALLS_PREFIX "/api/v1/calls/"
 /* Well-formed call ids in requests: 1-32 characters (the agent's own are shorter). */
-#define REQUEST_CALL_ID_LEN 33
+#define REQUEST_CALL_ID_LEN ((int)sizeof(((struct c300x_unlock_resolved *)0)->call_id))
 #define UNITS_PREFIX "/api/v1/outdoor-units/"
 
 void c300x_call_hub_init(struct c300x_call_hub *hub, const struct c300x_config *config,
@@ -188,28 +189,36 @@ static void unlock(int client_fd, const struct c300x_call_routes *routes, const 
                    const char *unit_id)
 {
     struct c300x_call_hub *hub = routes->hub;
-    char call_id[REQUEST_CALL_ID_LEN] = "";
+    struct c300x_unlock_resolved *resolved = &hub->unlock;
     char press[48], release[48], error[C300X_MAX_ERROR_LEN], body[256];
     char error_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ERROR_LEN)];
-    int index = unit_index(hub, unit_id);
 
-    if (index < 0) {
-        c300x_http_send_json(client_fd, 404, "Not Found", "{\"ok\":false,\"error\":\"unknown_unit\"}\n");
-        return;
+    /* Its command may be out already: a later pass opens the unit the first
+     * one chose, whatever call is current by then. */
+    if (routes->openwebnet == NULL || !c300x_openwebnet_async_owns(routes->openwebnet)) {
+        int index = unit_index(hub, unit_id);
+        memset(resolved, 0, sizeof(*resolved));
+        if (index < 0) {
+            c300x_http_send_json(client_fd, 404, "Not Found", "{\"ok\":false,\"error\":\"unknown_unit\"}\n");
+            return;
+        }
+        if (c300x_json_string_field_checked(request->body, "call_id", resolved->call_id,
+                                            sizeof(resolved->call_id)) < 0) {
+            c300x_http_send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_call_id\"}\n");
+            return;
+        }
+        if (resolved->call_id[0] != '\0'
+            && !c300x_calls_unlock_allowed(&hub->calls, resolved->call_id, hub->units.items[index].id,
+                                           c300x_monotonic_ms())) {
+            send_not_current(client_fd, &hub->calls);
+            return;
+        }
+        c300x_copy_string(resolved->unit, sizeof(resolved->unit), hub->units.items[index].id);
+        c300x_copy_string(resolved->lock_where, sizeof(resolved->lock_where), hub->units.items[index].lock_where);
     }
-    const struct c300x_outdoor_unit *unit = &hub->units.items[index];
-    if (c300x_json_string_field_checked(request->body, "call_id", call_id, sizeof(call_id)) < 0) {
-        c300x_http_send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_call_id\"}\n");
-        return;
-    }
-    /* Stays true while the request runs again: the call is kept 60 s after its end. */
-    if (call_id[0] != '\0'
-        && !c300x_calls_unlock_allowed(&hub->calls, call_id, unit->id, c300x_monotonic_ms())) {
-        send_not_current(client_fd, &hub->calls);
-        return;
-    }
-    snprintf(press, sizeof(press), "*8*19*%s##", unit->lock_where);
-    snprintf(release, sizeof(release), "*8*20*%s##", unit->lock_where);
+    const char *call_id = resolved->call_id;
+    snprintf(press, sizeof(press), "*8*19*%s##", resolved->lock_where);
+    snprintf(release, sizeof(release), "*8*20*%s##", resolved->lock_where);
     if (!c300x_openwebnet_sequence(hub->config, press, hub->config->lock_release_delay_ms, release,
                                    error, sizeof(error))) {
         if (c300x_openwebnet_deferred()) {
@@ -221,7 +230,7 @@ static void unlock(int client_fd, const struct c300x_call_routes *routes, const 
         return;
     }
     snprintf(body, sizeof(body), "{\"ok\":true,\"unit\":\"%s\",\"lock_where\":\"%s\",\"call_id\":%s%s%s}\n",
-             unit->id, unit->lock_where, call_id[0] ? "\"" : "null", call_id, call_id[0] ? "\"" : "");
+             resolved->unit, resolved->lock_where, call_id[0] ? "\"" : "null", call_id, call_id[0] ? "\"" : "");
     c300x_http_send_json(client_fd, 200, "OK", body);
 }
 

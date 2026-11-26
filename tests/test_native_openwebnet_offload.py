@@ -477,3 +477,36 @@ def test_a_delete_with_its_command_out_is_answered_for_that_command(
     lab.bus.gate.set()
     assert finish(delete)["deleted"] is True
     assert lab.bus.frames.count(command) == 1
+
+
+@pytest.mark.parametrize("lab", [{"events": {"udp": {"enabled": True, "group": "239.255.76.67",
+                                                     "port": free_tcp_ports(1)[0]}}}], indirect=True)
+def test_an_unlock_of_the_current_unit_keeps_its_unit_while_it_waits(lab: Lab, tmp_path: Path) -> None:
+    # The unit of "current" and the call are resolved once: a ring of
+    # another unit while the press is out must not move the door.
+    from native_agent.test.smoke import send_udp_event
+
+    udp_port = json.loads((tmp_path / "config.json").read_text())["events"]["udp"]["port"]
+    send_udp_event(udp_port, "*8*1#1#4#21*11##")
+    time.sleep(0.1)
+    send_udp_event(udp_port, "*8*9#1#4*21##")
+    time.sleep(0.3)
+    calls = api_get(lab.api_port, "/api/v1/calls")
+    first = calls["current_call_id"]
+    assert [call["unit"] for call in calls["calls"]] == ["21"]
+
+    lab.bus.hold("*8*19*21##")
+    unlock = lab.start("/api/v1/outdoor-units/current/actions/unlock", body={"call_id": first})
+    assert lab.bus.seen.wait(5)
+    send_udp_event(udp_port, "*8*1#1#4#21*11##")
+    time.sleep(1.1)
+    send_udp_event(udp_port, "*8*1#1#4#21*11##")
+    time.sleep(0.1)
+    send_udp_event(udp_port, "*8*9#1#4*22##")
+    time.sleep(0.3)
+    assert api_get(lab.api_port, "/api/v1/calls")["current_call_id"] != first
+
+    lab.bus.gate.set()
+    body = finish(unlock)
+    assert (body["unit"], body["call_id"]) == ("21", first)
+    assert lab.bus.frames == ["*8*19*21##", "*8*20*21##"]

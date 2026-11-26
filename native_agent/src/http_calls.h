@@ -12,11 +12,20 @@ struct c300x_video;
 struct c300x_video_control;
 
 /* The station's outdoor units and calls, owned by the agent's loop. */
+/* What an unlock resolved on its first pass. Only the request that owns the
+ * OpenWebNet worker runs again, so one is enough. */
+struct c300x_unlock_resolved {
+    char unit[C300X_UNIT_WHERE_LEN];
+    char lock_where[C300X_UNIT_WHERE_LEN];
+    char call_id[33];
+};
+
 struct c300x_call_hub {
     struct c300x_calls calls;
     struct c300x_outdoor_units units;
     struct c300x_call_sink sink;
     const struct c300x_config *config;
+    struct c300x_unlock_resolved unlock;
 };
 
 void c300x_call_hub_init(struct c300x_call_hub *hub, const struct c300x_config *config,
@@ -32,10 +41,13 @@ void c300x_call_hub_media_closed(struct c300x_call_hub *hub, int station_holds_m
 int c300x_call_hub_timeout_ms(struct c300x_call_hub *hub);
 void c300x_call_hub_tick(struct c300x_call_hub *hub);
 
+struct c300x_openwebnet_async;
+
 struct c300x_call_routes {
     struct c300x_call_hub *hub;
     struct c300x_video_control *control;
     struct c300x_video *video;
+    const struct c300x_openwebnet_async *openwebnet; /* NULL: OpenWebNet runs in place */
 };
 
 /* Zero when the request is not one of these routes. */

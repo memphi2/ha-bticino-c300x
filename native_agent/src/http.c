@@ -8801,7 +8801,8 @@ static void handle_api_request(
         handle_doorbell_snapshot(client_fd, request);
         return;
     }
-    struct c300x_call_routes call_routes = {&runtime->calls, &runtime->video_control, runtime->video};
+    struct c300x_call_routes call_routes = {&runtime->calls, &runtime->video_control, runtime->video,
+                                            &runtime->openwebnet};
     if (c300x_http_calls_route(client_fd, &call_routes, request)) {
         return;
     }

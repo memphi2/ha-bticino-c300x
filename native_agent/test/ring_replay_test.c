@@ -497,7 +497,7 @@ static int calls_api(const char *method, const char *path, const char *body, cha
     snprintf(request.path, sizeof(request.path), "%s", path);
     snprintf(request.body, sizeof(request.body), "%s", body);
     request.body_len = strlen(request.body);
-    struct c300x_call_routes routes = {&runtime->calls, &runtime->video_control, runtime->video};
+    struct c300x_call_routes routes = {&runtime->calls, &runtime->video_control, runtime->video, NULL};
     assert(c300x_http_calls_route(fds[0], &routes, &request));
     close(fds[0]);
     ssize_t n = recv(fds[1], out, out_len - 1, 0);

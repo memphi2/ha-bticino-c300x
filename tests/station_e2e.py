@@ -334,6 +334,11 @@ class Network:
             self.names[name] = station.ip
         return station
 
+    def relay(self, address: str, station: Station) -> None:
+        """Another machine at ``address`` that forwards HTTP and SSH to ``station``."""
+
+        self.stations[address] = station
+
     def resolve(self, host: str) -> str | None:
         host = host.strip("[]")
         return self.names.get(host, host if re.fullmatch(r"[\d.]+|[0-9a-f:]+", host) else None)
@@ -382,8 +387,10 @@ class _Call:
         ))
         address = self._network.resolve(host)
         station = self._network.stations.get(address or "")
+        # The agent proves the address it sees itself reached on: its own,
+        # also through a relay.
         answer = None if station is None else station.answer(
-            self._method, parts.path, self._headers, self._body, (address or "", port),
+            self._method, parts.path, self._headers, self._body, (station.ip, port),
         )
         if answer is None:
             raise aiohttp.ClientConnectionError("connection refused")

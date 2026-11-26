@@ -42,6 +42,8 @@ from custom_components.bticino_c300x.const import (
 from custom_components.bticino_c300x.factory_login import factory_ssh_login
 
 IP = "192.0.2.10"
+# Forwards to the station; the station proves its own address, not this one.
+RELAY = "192.0.2.50"
 PORT = 8091
 DEVICE = "c300x-0003504a1b2c"
 UNIQUE_ID = "c300x0003504a1b2c"
@@ -375,8 +377,9 @@ def test_a_legacy_entry_of_the_station_is_proven_and_gets_the_keys(network, tmp_
         _assert_reinstalled(station)
     # The saved name was resolved to the station's IPv4 address, which proved
     # the identity; no request ever went to the name, none with a key to it.
+    # The setup's address proved it first.
     proofs = [item for item in network.requests if item.path == "/api/v1/identity/proof"]
-    assert [(item.host, item.port) for item in proofs] == [(IP, PORT)]
+    assert [(item.host, item.port) for item in proofs] == [(IP, PORT), (IP, PORT)]
     assert [item for item in network.requests if item.host == "door.local"] == []
     _assert_keys_only_to(network, IP)
 
@@ -424,7 +427,8 @@ def test_an_unproven_legacy_entry_is_left_alone_and_a_new_entry_created(network,
     # Only the nonce went to the other address.
     _assert_keys_only_to(network, IP)
     proofs = [(item.host, item.port) for item in network.requests if item.path == "/api/v1/identity/proof"]
-    assert proofs == ([("192.0.2.99", PORT)] if host == "door-old.local" else [])
+    # The setup's address proved the station first; an address without IPv4 asks nothing.
+    assert proofs == ([(IP, PORT), ("192.0.2.99", PORT)] if host == "door-old.local" else [])
 
 
 @pytest.mark.parametrize("how", ["keys_known", "reinstall", "reinstall_restart_fails"])
@@ -491,6 +495,32 @@ def test_a_disabled_legacy_entry_of_the_station_is_left_alone(network, tmp_path,
     # The switched-off entry was not even asked about.
     assert [item for item in network.requests if item.path == "/api/v1/identity/proof"] == []
     _assert_keys_only_to(network, IP)
+
+
+@pytest.mark.parametrize("keys", ["both", "access_only", "lost"])
+@pytest.mark.parametrize("firmware", FIRMWARES)
+def test_a_legacy_entry_is_not_handed_to_a_setup_address_that_does_not_prove_the_station(
+    network, tmp_path, firmware, keys,
+):
+    """A relay in front of the station: the older entry's keys never move to its address."""
+
+    station = _station(network, tmp_path, firmware, "door.local")
+    network.relay(RELAY, station)
+    legacy = _saved_entry(f"{DOMAIN}:door.local:{PORT}", "door.local")
+    before = (dict(legacy.data), dict(legacy.options), legacy.unique_id)
+    ha = HA([legacy])
+    ha.station = station
+    typed = {"both": KEYS, "access_only": (KEYS[0], ""), "lost": None}[keys]
+    _flow, result = asyncio.run(ha.setup(RELAY, keys=typed))
+    assert result["type"] == "create_entry"
+    assert len(ha.entries) == 2 and ha.entries[0] is legacy
+    assert (legacy.data, legacy.options, legacy.unique_id) == before
+    assert ha.registry.reloaded == []
+    # The relay's address was asked first and gave no proof: the older entry was not asked.
+    proofs = [(item.host, item.port) for item in network.requests if item.path == "/api/v1/identity/proof"]
+    assert proofs == [(RELAY, PORT)]
+    assert [item for item in network.requests if item.host == "door.local"] == []
+    _assert_keys_only_to(network, RELAY)
 
 
 # 5. A failure after the new keys were written: HA keeps them, the agent

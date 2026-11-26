@@ -54,10 +54,12 @@ async def async_station_entry(
 
     An entry under the station's identity is it. An entry under an address
     based identity (an older release) is it when its own address, resolved
-    to IPv4, proves that identity with the keys just written. The proof
-    request carries no key: an address that now belongs to another machine
-    never gets one. A disabled older entry is left alone: the user switched
-    it off, and the setup creates a working entry of its own.
+    to IPv4, proves that identity with the keys just written, and so does the
+    address of this setup, which the entry gets with what it keeps (a
+    maintenance key the setup did not get). The proof request carries no
+    key: an address that now belongs to another machine never gets one. A
+    disabled older entry is left alone: the user switched it off, and the
+    setup creates a working entry of its own.
     """
 
     if unique_id is None:
@@ -68,14 +70,31 @@ async def async_station_entry(
             return entry
     # The new agent listens on the port of this setup.
     port = int(connection.get(CONF_AGENT_PORT, DEFAULT_AGENT_PORT))
+    token = connection[CONF_AGENT_TOKEN]
+    setup_proven: bool | None = None
     for entry in entries:
         host = str(entry_config_value(entry, CONF_AGENT_HOST, "") or "").strip()
         if not host or not entry_uses_manual_setup_unique_id(entry) or getattr(entry, "disabled_by", None):
             continue
-        for address in await async_ipv4_addresses(host):
-            if await async_identity_proven(hass, address, port, unique_id, connection[CONF_AGENT_TOKEN]):
-                return entry
+        addresses = await async_ipv4_addresses(host)
+        if addresses and setup_proven is None:
+            setup_proven = await _async_proven_at(
+                hass, await async_ipv4_addresses(str(connection[CONF_AGENT_HOST])), port, unique_id, token,
+            )
+        if addresses and not setup_proven:
+            return None
+        if await _async_proven_at(hass, addresses, port, unique_id, token):
+            return entry
     return None
+
+
+async def _async_proven_at(hass: Any, addresses: list[str], port: int, unique_id: str, token: str) -> bool:
+    """Whether one of the IPv4 addresses proves the station's identity."""
+
+    for address in addresses:
+        if await async_identity_proven(hass, address, port, unique_id, token):
+            return True
+    return False
 
 
 async def _async_identity_free_for(hass: Any, entry: Any, unique_id: str) -> bool:

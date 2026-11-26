@@ -132,7 +132,7 @@ def _station_holding(keys):
 def test_an_entry_under_its_address_counts_when_that_address_proves_the_station(monkeypatch, host):
     existing = _entry(f"bticino_c300x:{host}:8080", host)
     keys: dict = {}
-    network = _Network(monkeypatch, {"door.local": "192.0.2.10"},
+    network = _Network(monkeypatch, {"door.local": "192.0.2.10", "station.example": "192.0.2.10"},
                        {("192.0.2.10", 8091): lambda: _station_holding(keys)()})
     read_setup = AsyncMock(return_value={"device_id": DEVICE})
 
@@ -142,8 +142,9 @@ def test_an_entry_under_its_address_counts_when_that_address_proves_the_station(
 
     flow, result, written, _ = _setup(monkeypatch, [existing], read_setup, AsyncMock(side_effect=install))
     assert result["reason"] == "reinstall_entry_updated"
-    # The name resolved to the IPv4 the agent sees, the port it now listens on.
-    assert network.proofs == [("192.0.2.10", 8091)]
+    # The names resolved to the IPv4 the agent sees, the port it now listens
+    # on: the setup's address proved the station, then the saved one.
+    assert network.proofs == [("192.0.2.10", 8091), ("192.0.2.10", 8091)]
     # No key went to the saved address: the only keyed request was the setup's own.
     assert {call.args[1][CONF_AGENT_HOST] for call in read_setup.await_args_list} <= {"station.example"}
     _assert_entry_has_the_new_keys(flow, existing, written)
@@ -162,14 +163,23 @@ def test_an_entry_under_its_address_counts_when_that_address_proves_the_station(
 def test_an_unproven_address_gets_no_key_and_keeps_its_entry(monkeypatch, host, agent):
     other = _entry(f"bticino_c300x:{host}:8080", host, title="Other")
     before = (dict(other.data), dict(other.options), other.unique_id)
-    agents = {("192.0.2.10", 8091): agent} if agent else {}
-    network = _Network(monkeypatch, {"door.local": "192.0.2.10"}, agents)
+    keys: dict = {}
+    # The station at the setup's address proves itself.
+    agents = {("192.0.2.30", 8091): lambda: _station_holding(keys)()}
+    if agent:
+        agents[("192.0.2.10", 8091)] = agent
+    network = _Network(monkeypatch, {"door.local": "192.0.2.10", "station.example": "192.0.2.30"}, agents)
     read_setup = AsyncMock(return_value={"device_id": DEVICE})
-    flow, result, keys, migrate = _setup(monkeypatch, [other], read_setup)
+
+    def install(*_args, **kwargs):
+        keys.update(kwargs)
+        return _INSTALLED
+
+    flow, result, keys, migrate = _setup(monkeypatch, [other], read_setup, AsyncMock(side_effect=install))
     assert result["step_id"] == "user_features"
     assert (other.data, other.options, other.unique_id) == before
     flow.hass.config_entries.async_update_entry.assert_not_called()
-    assert network.proofs == ([("192.0.2.10", 8091)] if host == "door.local" else [])
+    assert network.proofs == ([("192.0.2.30", 8091), ("192.0.2.10", 8091)] if host == "door.local" else [])
     assert {call.args[1][CONF_AGENT_HOST] for call in read_setup.await_args_list} <= {"station.example"}
     assert flow._setup_connection[CONF_AGENT_TOKEN] == keys["api_token"]
     migrate.assert_awaited_once()

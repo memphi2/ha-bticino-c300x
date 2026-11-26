@@ -12,8 +12,9 @@ struct c300x_video;
 struct c300x_video_control;
 
 /* The station's outdoor units and calls, owned by the agent's loop. */
-/* What an unlock resolved on its first pass. Only the request that owns the
- * OpenWebNet worker runs again, so one is enough. */
+/* What an unlock resolved for the command it sent. Only the request that
+ * owns the OpenWebNet worker runs again, so one is enough; it is stored
+ * when that request's command starts, never by a request that waits. */
 struct c300x_unlock_resolved {
     char unit[C300X_UNIT_WHERE_LEN];
     char lock_where[C300X_UNIT_WHERE_LEN];

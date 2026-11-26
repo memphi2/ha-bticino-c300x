@@ -510,3 +510,42 @@ def test_an_unlock_of_the_current_unit_keeps_its_unit_while_it_waits(lab: Lab, t
     body = finish(unlock)
     assert (body["unit"], body["call_id"]) == ("21", first)
     assert lab.bus.frames == ["*8*19*21##", "*8*20*21##"]
+
+
+def test_a_refused_unit_unlock_leaves_the_running_one_alone(lab: Lab) -> None:
+    # Another unlock while the press is out is refused for its unknown unit:
+    # the running one still releases its own door and names its unit.
+    lab.bus.hold(PRESS)
+    unlock = lab.start("/api/v1/outdoor-units/20/actions/unlock", post=True)
+    assert lab.bus.seen.wait(5)
+    assert finish(lab.start("/api/v1/outdoor-units/99/actions/unlock", post=True), 404)["error"] == "unknown_unit"
+    lab.health_ms()
+
+    lab.bus.gate.set()
+    body = finish(unlock)
+    assert (body["unit"], body["lock_where"]) == ("20", "20")
+    assert lab.bus.frames == [PRESS, RELEASE]
+
+
+@pytest.mark.parametrize("lab", [{"events": {"udp": {"enabled": True, "group": "239.255.76.67",
+                                                     "port": free_tcp_ports(1)[0]}}}], indirect=True)
+def test_a_waiting_unit_unlock_does_not_move_the_running_one(lab: Lab, tmp_path: Path) -> None:
+    from native_agent.test.smoke import send_udp_event
+
+    udp_port = json.loads((tmp_path / "config.json").read_text())["events"]["udp"]["port"]
+    send_udp_event(udp_port, "*8*1#1#4#21*11##")
+    time.sleep(0.1)
+    send_udp_event(udp_port, "*8*9#1#4*21##")
+    time.sleep(0.3)
+    assert [call["unit"] for call in api_get(lab.api_port, "/api/v1/calls")["calls"]] == ["21"]
+
+    lab.bus.hold("*8*19*21##")
+    first = lab.start("/api/v1/outdoor-units/21/actions/unlock", post=True)
+    assert lab.bus.seen.wait(5)
+    second = lab.start("/api/v1/outdoor-units/20/actions/unlock", post=True)
+    lab.health_ms()
+
+    lab.bus.gate.set()
+    assert finish(first)["unit"] == "21"
+    assert finish(second)["unit"] == "20"
+    assert lab.bus.frames == ["*8*19*21##", "*8*20*21##", PRESS, RELEASE]

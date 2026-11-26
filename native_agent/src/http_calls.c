@@ -186,43 +186,59 @@ static int unit_index(struct c300x_call_hub *hub, const char *unit_id)
     return c300x_outdoor_units_find_id(&hub->units, unit_id);
 }
 
+/* The unit, lock and call of an unlock; zero when it was answered with an error. */
+static int resolve_unlock(int client_fd, struct c300x_call_hub *hub, const struct request *request,
+                          const char *unit_id, struct c300x_unlock_resolved *resolved)
+{
+    int index = unit_index(hub, unit_id);
+
+    memset(resolved, 0, sizeof(*resolved));
+    if (index < 0) {
+        c300x_http_send_json(client_fd, 404, "Not Found", "{\"ok\":false,\"error\":\"unknown_unit\"}\n");
+        return 0;
+    }
+    if (c300x_json_string_field_checked(request->body, "call_id", resolved->call_id,
+                                        sizeof(resolved->call_id)) < 0) {
+        c300x_http_send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_call_id\"}\n");
+        return 0;
+    }
+    if (resolved->call_id[0] != '\0'
+        && !c300x_calls_unlock_allowed(&hub->calls, resolved->call_id, hub->units.items[index].id,
+                                       c300x_monotonic_ms())) {
+        send_not_current(client_fd, &hub->calls);
+        return 0;
+    }
+    c300x_copy_string(resolved->unit, sizeof(resolved->unit), hub->units.items[index].id);
+    c300x_copy_string(resolved->lock_where, sizeof(resolved->lock_where), hub->units.items[index].lock_where);
+    return 1;
+}
+
 static void unlock(int client_fd, const struct c300x_call_routes *routes, const struct request *request,
                    const char *unit_id)
 {
     struct c300x_call_hub *hub = routes->hub;
-    struct c300x_unlock_resolved *resolved = &hub->unlock;
+    struct c300x_unlock_resolved own;
+    const struct c300x_unlock_resolved *resolved = &own;
     char press[48], release[48], error[C300X_MAX_ERROR_LEN], body[256];
     char error_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ERROR_LEN)];
 
     /* Its command may be out already: a later pass opens the unit the first
      * one chose, whatever call is current by then. */
-    if (routes->openwebnet == NULL || !c300x_openwebnet_async_owns(routes->openwebnet)) {
-        int index = unit_index(hub, unit_id);
-        memset(resolved, 0, sizeof(*resolved));
-        if (index < 0) {
-            c300x_http_send_json(client_fd, 404, "Not Found", "{\"ok\":false,\"error\":\"unknown_unit\"}\n");
-            return;
-        }
-        if (c300x_json_string_field_checked(request->body, "call_id", resolved->call_id,
-                                            sizeof(resolved->call_id)) < 0) {
-            c300x_http_send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_call_id\"}\n");
-            return;
-        }
-        if (resolved->call_id[0] != '\0'
-            && !c300x_calls_unlock_allowed(&hub->calls, resolved->call_id, hub->units.items[index].id,
-                                           c300x_monotonic_ms())) {
-            send_not_current(client_fd, &hub->calls);
-            return;
-        }
-        c300x_copy_string(resolved->unit, sizeof(resolved->unit), hub->units.items[index].id);
-        c300x_copy_string(resolved->lock_where, sizeof(resolved->lock_where), hub->units.items[index].lock_where);
+    if (routes->openwebnet != NULL && c300x_openwebnet_async_owns(routes->openwebnet)) {
+        resolved = &hub->unlock;
+    } else if (!resolve_unlock(client_fd, hub, request, unit_id, &own)) {
+        return;
     }
-    const char *call_id = resolved->call_id;
     snprintf(press, sizeof(press), "*8*19*%s##", resolved->lock_where);
     snprintf(release, sizeof(release), "*8*20*%s##", resolved->lock_where);
     if (!c300x_openwebnet_sequence(hub->config, press, hub->config->lock_release_delay_ms, release,
                                    error, sizeof(error))) {
         if (c300x_openwebnet_deferred()) {
+            /* Kept only for the request whose command just started; one
+             * that waits for the worker resolves again when its turn comes. */
+            if (resolved == &own && routes->openwebnet != NULL && c300x_openwebnet_async_owns(routes->openwebnet)) {
+                hub->unlock = own;
+            }
             return;
         }
         snprintf(body, sizeof(body), "{\"ok\":false,\"error\":%s}\n",
@@ -230,6 +246,7 @@ static void unlock(int client_fd, const struct c300x_call_routes *routes, const 
         c300x_http_send_json(client_fd, 502, "Bad Gateway", body);
         return;
     }
+    const char *call_id = resolved->call_id;
     snprintf(body, sizeof(body), "{\"ok\":true,\"unit\":\"%s\",\"lock_where\":\"%s\",\"call_id\":%s%s%s}\n",
              resolved->unit, resolved->lock_where, call_id[0] ? "\"" : "null", call_id, call_id[0] ? "\"" : "");
     c300x_http_send_json(client_fd, 200, "OK", body);

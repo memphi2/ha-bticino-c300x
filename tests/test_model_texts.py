@@ -77,6 +77,7 @@ ADDED_SINCE_2_10_0 = frozenset({
     "entity/sensor/call/state/ringing",
     "entity/sensor/call/state/viewing",
     "exceptions/call_not_current/message",
+    "exceptions/target_unsupported/message",
     "exceptions/unit_video_unsupported/message",
     "exceptions/unknown_unit/message",
     "issues/c100x_display_boot_check_failed/description",
@@ -90,9 +91,11 @@ ADDED_SINCE_2_10_0 = frozenset({
     "options/step/init/menu_options/dashboard_alarm",
 })
 # Texts of 2.10.0 that read differently now: the SSH package message names the
-# package and the way out, and the service name lost the model (neutral names).
+# package and the way out, the service name lost the model (neutral names) and
+# the services ask for a target instead of an entry id (3.1.0).
 CHANGED_SINCE_2_10_0 = frozenset({
     "config/error/installer_dependency_missing",
+    "exceptions/entry_id_required/message",
     "services/capture_doorbell_call/name",
 })
 # Texts of 2.10.0 that 3.1.0 removed with the outdoor units and calls: the agent
@@ -134,11 +137,11 @@ REMOVED_SINCE_2_10_0 = frozenset({
 # sha256 over every text of 2.10.0 (f4f75ea3) but the changed and removed ones, per file:
 #   json.dumps({"a/b/c": text}, sort_keys=True, ensure_ascii=False)
 DIGESTS_2_10_0 = {
-    "base": "21b8b9aa83591cbdd321824c3d45ac12865697f5e6ec35221231b38c99892b72",
-    "en": "21b8b9aa83591cbdd321824c3d45ac12865697f5e6ec35221231b38c99892b72",
-    "de": "10137e81d45972c1e0bdbf18c2bf7fd565260941ab1e77d840427483e2aa8b0d",
-    "it": "d66cacb84cd0c60213c46f6625b4a1e55cc2f57d94c23544b1b12cd6fcde4964",
-    "fr": "1d012daf625fd2399ac281da458f062354f23f5ea11430c33c4240007e450274",
+    "base": "62bd15b1cf512ddc033dc0d821e1bad18de5062b4e0477f0dbed0150c7d6d50b",
+    "en": "62bd15b1cf512ddc033dc0d821e1bad18de5062b4e0477f0dbed0150c7d6d50b",
+    "de": "99c4eab5b770f4eb09cf4d8b8914ca7f73cea1241d1c58e9c788cecbf20506c8",
+    "it": "5f59ea72b709c5ee253c025fa9dfab13cce0d5943638864eaa3a06430d014307",
+    "fr": "3f69304b997fd19e9a4b40a3b57e2fb9b23e6f72d70cc1c3690629f2df35ce4b",
 }
 
 

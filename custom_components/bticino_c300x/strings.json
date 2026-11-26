@@ -1606,7 +1606,10 @@
       "message": "On-demand capture requires idle media. Close other camera streams or calls and try again."
     },
     "entry_id_required": {
-      "message": "Entry ID is required when more than one BTicino C300X entry exists."
+      "message": "More than one BTicino C300X station exists: select one station or outdoor unit as the target."
+    },
+    "target_unsupported": {
+      "message": "Select a BTicino C300X station or outdoor unit (device or entity) as the target; areas, floors, labels and \"all\" are not supported."
     },
     "invalid_action_id": {
       "message": "The action ID is invalid."

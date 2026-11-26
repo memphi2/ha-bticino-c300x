@@ -1606,7 +1606,10 @@
       "message": "L’enregistrement à la demande nécessite des médias libres. Fermez les autres flux vidéo ou appels, puis réessayez."
     },
     "entry_id_required": {
-      "message": "L'ID d'entrée est requis quand plusieurs entrées BTicino C300X existent."
+      "message": "Plusieurs stations BTicino C300X existent : sélectionnez une station ou une platine de rue comme cible."
+    },
+    "target_unsupported": {
+      "message": "Sélectionnez comme cible une station ou une platine de rue BTicino C300X (appareil ou entité) ; les pièces, étages, étiquettes et « all » ne sont pas pris en charge."
     },
     "invalid_action_id": {
       "message": "L'ID d'action est invalide."

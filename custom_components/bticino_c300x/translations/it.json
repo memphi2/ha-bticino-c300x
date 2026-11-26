@@ -1606,7 +1606,10 @@
       "message": "La registrazione a richiesta richiede risorse multimediali libere. Chiudi gli altri flussi video o chiamate e riprova."
     },
     "entry_id_required": {
-      "message": "L'ID della voce è richiesto quando esistono più voci BTicino C300X."
+      "message": "Esistono più stazioni BTicino C300X: seleziona come obiettivo una stazione o un posto esterno."
+    },
+    "target_unsupported": {
+      "message": "Seleziona come obiettivo una stazione o un posto esterno BTicino C300X (dispositivo o entità); aree, piani, etichette e \"all\" non sono supportati."
     },
     "invalid_action_id": {
       "message": "ID azione non valido."

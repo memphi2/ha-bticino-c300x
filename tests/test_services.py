@@ -480,11 +480,23 @@ def test_services_target_a_station_or_outdoor_unit_device_or_entity(monkeypatch)
             ({"device_id": "foreign"}, "unknown_entry"),
             ({"entity_id": "light.kitchen"}, "unknown_entry"),
             ({"entity_id": "camera.missing"}, "unknown_entry"),
+            # The target picker offers these too; the error says what to pick.
+            ({"area_id": "porch"}, "target_unsupported"),
+            ({"floor_id": ["ground"]}, "target_unsupported"),
+            ({"label_id": "doors"}, "target_unsupported"),
+            ({"entity_id": "all"}, "target_unsupported"),
+            ({"device_id": "all"}, "target_unsupported"),
         ):
             with pytest.raises(SERVICE_VALIDATION_ERROR) as err:
                 await stop(types.SimpleNamespace(data=data))
             assert err.value.translation_key == key, data
         assert ran == []
+        # The service schema lets them through to that error instead of a
+        # generic "extra keys not allowed".
+        from custom_components.bticino_c300x.schema_compat import vol
+        from custom_components.bticino_c300x.service_target import TARGET_FIELDS
+
+        vol.Schema(TARGET_FIELDS)({"area_id": "porch", "floor_id": ["ground"], "label_id": "doors"})
 
         await stop(types.SimpleNamespace(data={"device_id": "station-two"}))
         await stop(types.SimpleNamespace(data={"entity_id": ["camera.two"]}))

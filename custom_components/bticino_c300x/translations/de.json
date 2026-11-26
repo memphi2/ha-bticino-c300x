@@ -1606,7 +1606,10 @@
       "message": "Die Liveaufnahme benötigt freie Medien. Schließe andere Kamerastreams oder Anrufe und versuche es erneut."
     },
     "entry_id_required": {
-      "message": "Eine Entry-ID ist erforderlich, wenn mehrere BTicino-C300X-Einträge existieren."
+      "message": "Es gibt mehrere BTicino-C300X-Stationen: wähle eine Station oder Außenstelle als Ziel."
+    },
+    "target_unsupported": {
+      "message": "Wähle als Ziel eine BTicino-C300X-Station oder -Außenstelle (Gerät oder Entität); Bereiche, Etagen, Labels und „all“ werden nicht unterstützt."
     },
     "invalid_action_id": {
       "message": "Die Action-ID ist ungültig."

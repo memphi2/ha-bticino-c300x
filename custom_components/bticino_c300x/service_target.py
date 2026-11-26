@@ -12,7 +12,14 @@ from dataclasses import dataclass
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntryState
-from homeassistant.const import ATTR_DEVICE_ID, ATTR_ENTITY_ID
+from homeassistant.const import (
+    ATTR_AREA_ID,
+    ATTR_DEVICE_ID,
+    ATTR_ENTITY_ID,
+    ATTR_FLOOR_ID,
+    ATTR_LABEL_ID,
+    ENTITY_MATCH_ALL,
+)
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
@@ -23,10 +30,14 @@ from .schema_compat import vol
 
 _UNIT_MARK = ":unit:"
 
-# A station or outdoor unit device, or one of their entities.
+# A station or outdoor unit device, or one of their entities. The target
+# picker also offers areas, floors and labels; they are accepted by the
+# schema only to be refused with a message that says what to pick.
+_UNSUPPORTED_TARGETS = (ATTR_AREA_ID, ATTR_FLOOR_ID, ATTR_LABEL_ID)
 TARGET_FIELDS = {
     vol.Optional(ATTR_DEVICE_ID): vol.Any(str, [str]),
     vol.Optional(ATTR_ENTITY_ID): vol.Any(str, [str]),
+    **{vol.Optional(key): vol.Any(str, [str]) for key in _UNSUPPORTED_TARGETS},
 }
 
 
@@ -40,10 +51,15 @@ def _ids(value: Any) -> list[str]:
     if value is None or value == "none":
         return []
     items = [value] if isinstance(value, str) else value
-    return [item for item in items if isinstance(item, str) and item]
+    ids = [item for item in items if isinstance(item, str) and item]
+    if ENTITY_MATCH_ALL in ids:
+        raise service_validation_error("target_unsupported")
+    return ids
 
 
 def _device_ids(hass: HomeAssistant, call: ServiceCall) -> list[str]:
+    if any(_ids(call.data.get(key)) for key in _UNSUPPORTED_TARGETS):
+        raise service_validation_error("target_unsupported")
     devices = _ids(call.data.get(ATTR_DEVICE_ID))
     entity_ids = _ids(call.data.get(ATTR_ENTITY_ID))
     if entity_ids:

@@ -178,7 +178,8 @@ Actions take a target: the station or an outdoor unit, as a device or one of
 its entities. Without a target the only station serves the action; with more
 than one station a target is required (the analysis action works on files and
 has none). An outdoor unit target names that unit; a station target means the
-unit of the current call, else the default unit.
+unit of the current call, else the default unit. Areas, floors, labels and
+`all` are refused with a message: pick the device or entity.
 
 | Action `bticino_c300x.` | Purpose | Main fields |
 | --- | --- | --- |

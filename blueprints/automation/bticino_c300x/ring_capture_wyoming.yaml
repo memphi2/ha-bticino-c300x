@@ -76,7 +76,7 @@ variables:
   doorbell_device: "{{ device_id(doorbell_event) }}"
   c300x_device: "{{ device_attr(doorbell_device, 'via_device_id') or doorbell_device }}"
   c300x_entities: "{{ device_entities(c300x_device) | list }}"
-  call_id: "{{ trigger.to_state.attributes.call_id | default('', true) }}"
+  call_id: "{{ trigger.to_state.attributes.call_id | default('', true) if trigger.to_state else '' }}"
   media_readiness_entity: >-
     {% set ns = namespace(entity='') %}
     {% for entity_id in c300x_entities %}

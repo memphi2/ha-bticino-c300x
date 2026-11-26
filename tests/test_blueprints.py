@@ -146,7 +146,7 @@ def test_doorbell_blueprints_trigger_on_a_doorbell_event_entity() -> None:
             "not_from": ["unavailable"], "not_to": ["unavailable", "unknown"],
         }], filename
         variables = data["variables"]
-        assert variables["call_id"] == "{{ trigger.to_state.attributes.call_id | default('', true) }}"
+        assert variables["call_id"] == "{{ trigger.to_state.attributes.call_id | default('', true) if trigger.to_state else '' }}"
         assert variables["entry_id"] == "{{ config_entry_id(doorbell_event) or '' }}"
         if "capture" not in filename:
             assert variables["camera_entity"] == "{{ state_attr(doorbell_event, 'camera_entity_id') or '' }}"
@@ -193,7 +193,7 @@ def test_doorbell_blueprint_condition_needs_a_station_and_a_call(tmp_path: Path,
 def test_doorbell_notification_offers_the_call_to_the_action() -> None:
     variables = _blueprint("doorbell_notification.yaml")["variables"]
 
-    assert variables["unit_name"] == "{{ trigger.to_state.attributes.unit_name | default('', true) }}"
+    assert variables["unit_name"] == "{{ trigger.to_state.attributes.unit_name | default('', true) if trigger.to_state else '' }}"
     assert {"call_id", "camera_entity", "unit_name"} <= set(variables)
 
 
@@ -678,10 +678,10 @@ def test_blueprint_texts_fit_both_station_models() -> None:
 
 @pytest.mark.parametrize("filename", DOORBELL_BLUEPRINTS)
 def test_doorbell_blueprint_runs_for_a_ring_not_for_a_reload(tmp_path: Path, filename: str) -> None:
-    """The blueprint's trigger, call id and condition run by Home Assistant itself.
+    """The blueprint's trigger, variables and condition run by Home Assistant itself.
 
-    A reload of the event entity, with or without a previous state, and a
-    restart are no ring; only a new event time is.
+    A reload of the event entity, with or without a previous state, a restart
+    and the removal of the entity are no ring; only a new event time is.
     """
 
     import asyncio
@@ -719,19 +719,26 @@ def test_doorbell_blueprint_runs_for_a_ring_not_for_a_reload(tmp_path: Path, fil
             "automation", "doorbell", lambda *args, **kwargs: None,
         )
 
-        async def states(*values: str) -> None:
+        async def states(*values: str | None) -> None:
             for value in values:
-                hass.states.async_set(entity_id, value, {"call_id": "0badc0de-2"})
+                if value is None:
+                    hass.states.async_remove(entity_id)
+                else:
+                    hass.states.async_set(entity_id, value, {"call_id": "0badc0de-2"})
                 await hass.async_block_till_done()
 
         def runs() -> list[str]:
-            # The automation runs when its condition passes with the call id the
-            # blueprint takes from the trigger (the entry id is known here).
+            # The automation runs when its condition passes with the variables
+            # the blueprint takes from the trigger (the entry id is known here).
+            # A variable that fails to render fails the run with an error.
             condition = Template(blueprint["condition"][0]["value_template"], hass)
             started = []
             for item in triggered:
-                call_id = Template(blueprint["variables"]["call_id"], hass).async_render({"trigger": item})
-                variables = {"entry_id": "01JENTRY", "call_id": call_id}
+                variables = {
+                    name: Template(template, hass).async_render({"trigger": item})
+                    for name, template in blueprint["variables"].items() if "trigger." in str(template)
+                }
+                variables["entry_id"] = "01JENTRY"
                 if async_template(hass, condition, variables, trace_result=False):
                     started.append(item["to_state"].state)
             return started
@@ -741,6 +748,9 @@ def test_doorbell_blueprint_runs_for_a_ring_not_for_a_reload(tmp_path: Path, fil
         await states("unavailable", "unknown")
         await states("unavailable", ring_1)
         await states("unavailable", "unknown", "unavailable", ring_1)
+        # The entity is deleted (its stale unit device was removed) and comes
+        # back: Home Assistant's state trigger fires for the removed state.
+        await states(None, "unknown", None, "unavailable", ring_1)
         assert runs() == [], filename
         # A ring is a new event time.
         await states(ring_2)

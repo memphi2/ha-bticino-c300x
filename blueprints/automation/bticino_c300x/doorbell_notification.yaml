@@ -38,10 +38,10 @@ trigger:
 
 variables:
   doorbell_event: !input doorbell_event
-  call_id: "{{ trigger.to_state.attributes.call_id | default('', true) }}"
+  call_id: "{{ trigger.to_state.attributes.call_id | default('', true) if trigger.to_state else '' }}"
   entry_id: "{{ config_entry_id(doorbell_event) or '' }}"
   camera_entity: "{{ state_attr(doorbell_event, 'camera_entity_id') or '' }}"
-  unit_name: "{{ trigger.to_state.attributes.unit_name | default('', true) }}"
+  unit_name: "{{ trigger.to_state.attributes.unit_name | default('', true) if trigger.to_state else '' }}"
   dashboard_path: !input dashboard_path
 
 condition:

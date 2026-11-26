@@ -33,7 +33,7 @@
           "bootstrap_ssh_key_passphrase": "Passphrase des Schlüssels (optional)"
         },
         "data_description": {
-          "bootstrap_ssh_key": "Den ganzen privaten Schlüssel einfügen (OpenSSH oder PEM; ed25519, ECDSA oder RSA). Mit Schlüssel und ohne User wird root verwendet; ein zusätzlich eingegebenes Passwort wird versucht, wenn der Schlüssel abgelehnt wird."
+          "bootstrap_ssh_key": "Den ganzen privaten Schlüssel einfügen (OpenSSH oder PEM). Schlüsseltyp: RSA oder ECDSA bei 1.7.x, 2.0.2 und C100X 1.5.8; ed25519 nur bei 3.0.6. Mit Schlüssel und ohne User wird root verwendet; ein zusätzlich eingegebenes Passwort wird versucht, wenn der Schlüssel abgelehnt wird."
         }
       },
       "c100x_experimental": {
@@ -744,7 +744,7 @@
           "bootstrap_ssh_key_passphrase": "Passphrase des Schlüssels (optional)"
         },
         "data_description": {
-          "bootstrap_ssh_key": "Den ganzen privaten Schlüssel einfügen (OpenSSH oder PEM; ed25519, ECDSA oder RSA). Mit Schlüssel und ohne User wird root verwendet; ein zusätzlich eingegebenes Passwort wird versucht, wenn der Schlüssel abgelehnt wird."
+          "bootstrap_ssh_key": "Den ganzen privaten Schlüssel einfügen (OpenSSH oder PEM). Schlüsseltyp: RSA oder ECDSA bei 1.7.x, 2.0.2 und C100X 1.5.8; ed25519 nur bei 3.0.6. Mit Schlüssel und ohne User wird root verwendet; ein zusätzlich eingegebenes Passwort wird versucht, wenn der Schlüssel abgelehnt wird."
         }
       }
     },

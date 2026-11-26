@@ -33,7 +33,7 @@
           "bootstrap_ssh_key_passphrase": "Phrase secrète de la clé (facultatif)"
         },
         "data_description": {
-          "bootstrap_ssh_key": "Collez la clé privée entière (OpenSSH ou PEM ; ed25519, ECDSA ou RSA). Avec une clé et sans utilisateur, root est utilisé ; un mot de passe saisi en plus est essayé si la clé est refusée."
+          "bootstrap_ssh_key": "Collez la clé privée entière (OpenSSH ou PEM). Type de clé : RSA ou ECDSA sur 1.7.x, 2.0.2 et C100X 1.5.8 ; ed25519 seulement sur 3.0.6. Avec une clé et sans utilisateur, root est utilisé ; un mot de passe saisi en plus est essayé si la clé est refusée."
         }
       },
       "c100x_experimental": {
@@ -744,7 +744,7 @@
           "bootstrap_ssh_key_passphrase": "Phrase secrète de la clé (facultatif)"
         },
         "data_description": {
-          "bootstrap_ssh_key": "Collez la clé privée entière (OpenSSH ou PEM ; ed25519, ECDSA ou RSA). Avec une clé et sans utilisateur, root est utilisé ; un mot de passe saisi en plus est essayé si la clé est refusée."
+          "bootstrap_ssh_key": "Collez la clé privée entière (OpenSSH ou PEM). Type de clé : RSA ou ECDSA sur 1.7.x, 2.0.2 et C100X 1.5.8 ; ed25519 seulement sur 3.0.6. Avec une clé et sans utilisateur, root est utilisé ; un mot de passe saisi en plus est essayé si la clé est refusée."
         }
       }
     },

@@ -181,8 +181,6 @@ from .const import (
     CONF_AGENT_PORT,
     CONF_AGENT_TOKEN,
     CONF_BOOTSTRAP_INSTALL_AGENT,
-    CONF_BOOTSTRAP_SSH_PASSWORD,
-    CONF_BOOTSTRAP_SSH_USERNAME,
     CONF_CALLBACK_BASE_URL,
     CONF_CREATE_HOMEASSISTANT_USER,
     CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
@@ -229,7 +227,7 @@ from .display_support import (
     setup_is_c100x,
 )
 from .entry_types import BticinoC300XConfigEntry
-from .factory_login import login_model, ssh_login, uses_factory_login
+from .factory_login import install_login, login_model
 from .model_names import ModelTextConfigFlow, ModelTextOptionsFlow
 from .mqtt_migration import async_migrate_legacy_mqtt_for_connection
 
@@ -368,18 +366,9 @@ class BticinoC300XConfigFlow(ModelTextConfigFlow, config_flow_auth.AuthFlowSteps
             self._factory_login_tried = True
             await self._async_abort_if_manual_setup_duplicate()
             api_token, maintenance_token = self._setup_install_keys()
-            ssh_username, ssh_password = ssh_login(
-                user_input, CONF_BOOTSTRAP_SSH_USERNAME, CONF_BOOTSTRAP_SSH_PASSWORD,
-                login_model(self._setup_agent_info),
-            )
             request = C300XDeviceInstallRequest(
                 host=self._setup_connection[CONF_AGENT_HOST],
-                ssh_username=ssh_username,
-                ssh_password=ssh_password,
-                factory_login=uses_factory_login(
-                    user_input, CONF_BOOTSTRAP_SSH_USERNAME, CONF_BOOTSTRAP_SSH_PASSWORD
-                ),
-                device_model=login_model(self._setup_agent_info),
+                **install_login(user_input, login_model(self._setup_agent_info)),
                 agent_port=int(
                     self._setup_connection.get(CONF_AGENT_PORT, DEFAULT_AGENT_PORT)
                 ),

@@ -25,10 +25,15 @@
       },
       "bootstrap_install": {
         "title": "Install native {model} agent",
-        "description": "Home Assistant logs in with the factory login of the {model} first. Enter the SSH user and password only if the device refused it; left empty, the factory login is tried again. This writes the native agent, a configuration with generated keys, the startup script, and display support files to the {model} through SSH. SSH credentials are used only for this install step and are not stored.",
+        "description": "Home Assistant logs in with the factory login of the {model} first. Enter the SSH user and password, or a private key, only if the device refused it; left empty, the factory login is tried again. This writes the native agent, a configuration with generated keys, the startup script, and display support files to the {model} through SSH. SSH credentials and keys are used only for this install step and are not stored.",
         "data": {
           "bootstrap_ssh_username": "{model} SSH user",
-          "bootstrap_ssh_password": "{model} SSH password"
+          "bootstrap_ssh_password": "{model} SSH password",
+          "bootstrap_ssh_key": "{model} SSH private key (optional)",
+          "bootstrap_ssh_key_passphrase": "Key passphrase (optional)"
+        },
+        "data_description": {
+          "bootstrap_ssh_key": "Paste the whole private key (OpenSSH or PEM; ed25519, ECDSA or RSA). With a key and no user, root is used; a password entered as well is tried when the key is refused."
         }
       },
       "c100x_experimental": {
@@ -731,10 +736,15 @@
       },
       "reauth_reinstall": {
         "title": "Reinstall the {model} agent",
-        "description": "Home Assistant logs in with the factory login of the {model} first. Enter the SSH user and password only if the device refused it; left empty, the factory login is tried again. This stops the installed agent, writes the bundled agent and a configuration with newly generated keys to the {model} through SSH, and starts it again. The new keys are saved for {name}; the old ones stop working. Display pages and the other settings on the {model} stay, and the device is not restarted. SSH credentials are used only for this step and are not stored.",
+        "description": "Home Assistant logs in with the factory login of the {model} first. Enter the SSH user and password, or a private key, only if the device refused it; left empty, the factory login is tried again. This stops the installed agent, writes the bundled agent and a configuration with newly generated keys to the {model} through SSH, and starts it again. The new keys are saved for {name}; the old ones stop working. Display pages and the other settings on the {model} stay, and the device is not restarted. SSH credentials and keys are used only for this step and are not stored.",
         "data": {
           "bootstrap_ssh_username": "{model} SSH user",
-          "bootstrap_ssh_password": "{model} SSH password"
+          "bootstrap_ssh_password": "{model} SSH password",
+          "bootstrap_ssh_key": "{model} SSH private key (optional)",
+          "bootstrap_ssh_key_passphrase": "Key passphrase (optional)"
+        },
+        "data_description": {
+          "bootstrap_ssh_key": "Paste the whole private key (OpenSSH or PEM; ed25519, ECDSA or RSA). With a key and no user, root is used; a password entered as well is tried when the key is refused."
         }
       }
     },
@@ -783,6 +793,7 @@
       "invalid_maintenance_auth": "The {model} rejected the maintenance key. Enter the current maintenance key.",
       "cannot_connect": "The {model} could not be validated. Check its address and connection, then try again.",
       "ssh_login_refused": "The {model} refused the SSH login. Enter the SSH user and password of the device.",
+      "invalid_ssh_key": "The private key could not be read. Paste the whole key including its BEGIN and END lines, and its passphrase if it has one.",
       "installer_firewall_hook_unsupported": "The device firewall hook cannot be inspected safely. Installation stopped before changing the station. Check the hook type and permissions; do not create a placeholder.",
       "device_model_incompatible": "This package does not support this station, or the station's model could not be confirmed. No device files were replaced.",
       "c100x_confirmation_required": "Tick the box to set up the Classe 100X, or close this dialog to leave the station unchanged.",
@@ -1706,10 +1717,12 @@
           },
           "ssh_install": {
             "title": "Reinstall {model} device agent over SSH",
-            "description": "This installed agent cannot update itself yet. Home Assistant will log in with the factory login of the {model}, or with the SSH credentials entered here once the device refused it, to install the packaged agent, then refresh only active display and firewall patches when the packaged patch source changed. The SSH credentials are not stored. If you use local Ring Call handling, also verify the Home Assistant media-user setup in the integration options after the update.\n\nInstalled: {installed_version} (API {installed_api_version}, bundle {installed_bundle_hash})\nPackaged: {available_version} (API {available_api_version}, bundle {available_bundle_hash})\nUpdate path: {update_path}\nDisplay patch status: {qml_patch_status}\nReason: {reason}",
+            "description": "This installed agent cannot update itself yet. Home Assistant will log in with the factory login of the {model}, or with the SSH credentials or private key entered here once the device refused it, to install the packaged agent, then refresh only active display and firewall patches when the packaged patch source changed. The SSH credentials and the key are not stored. If you use local Ring Call handling, also verify the Home Assistant media-user setup in the integration options after the update.\n\nInstalled: {installed_version} (API {installed_api_version}, bundle {installed_bundle_hash})\nPackaged: {available_version} (API {available_api_version}, bundle {available_bundle_hash})\nUpdate path: {update_path}\nDisplay patch status: {qml_patch_status}\nReason: {reason}",
             "data": {
               "bootstrap_ssh_username": "SSH username",
-              "bootstrap_ssh_password": "SSH password"
+              "bootstrap_ssh_password": "SSH password",
+              "bootstrap_ssh_key": "SSH private key (optional)",
+              "bootstrap_ssh_key_passphrase": "Key passphrase (optional)"
             }
           }
         },
@@ -1722,6 +1735,7 @@
           "update_apply_failed": "The agent reported a generic update failure; the cause and final device state are unknown. If you previously remounted / writable manually, a normal device restart may help. Check the device state before retrying; this error does not confirm rollback.",
           "update_verify_failed": "The update was sent, but the agent still reports an older or incompatible bundle.",
           "ssh_login_refused": "The {model} refused the SSH login. Enter the SSH user and password of the device.",
+          "invalid_ssh_key": "The private key could not be read. Paste the whole key including its BEGIN and END lines, and its passphrase if it has one.",
           "not_a_bticino_station": "The device at this address is not a BTicino station. Nothing was written to it. Check the address."
         },
         "abort": {

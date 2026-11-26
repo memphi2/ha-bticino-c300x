@@ -25,10 +25,15 @@
       },
       "bootstrap_install": {
         "title": "Installer l'agent {model} natif",
-        "description": "Home Assistant se connecte d'abord avec l'identifiant d'usine du {model}. Saisissez l'utilisateur et le mot de passe SSH seulement si l'appareil l'a refusé ; laissés vides, l'identifiant d'usine est réessayé. Cette étape écrit l'agent natif, une configuration avec des clés générées, le script de démarrage et les fichiers de support display sur le {model} via SSH. Les identifiants SSH ne sont utilisés que pour cette installation et ne sont pas stockés.",
+        "description": "Home Assistant se connecte d'abord avec l'identifiant d'usine du {model}. Saisissez l'utilisateur et le mot de passe SSH, ou une clé privée, seulement si l'appareil l'a refusé ; laissés vides, l'identifiant d'usine est réessayé. Cette étape écrit l'agent natif, une configuration avec des clés générées, le script de démarrage et les fichiers de support display sur le {model} via SSH. Les identifiants SSH et les clés ne sont utilisés que pour cette installation et ne sont pas stockés.",
         "data": {
           "bootstrap_ssh_username": "Utilisateur SSH {model}",
-          "bootstrap_ssh_password": "Mot de passe SSH {model}"
+          "bootstrap_ssh_password": "Mot de passe SSH {model}",
+          "bootstrap_ssh_key": "Clé privée SSH {model} (facultatif)",
+          "bootstrap_ssh_key_passphrase": "Phrase secrète de la clé (facultatif)"
+        },
+        "data_description": {
+          "bootstrap_ssh_key": "Collez la clé privée entière (OpenSSH ou PEM ; ed25519, ECDSA ou RSA). Avec une clé et sans utilisateur, root est utilisé ; un mot de passe saisi en plus est essayé si la clé est refusée."
         }
       },
       "c100x_experimental": {
@@ -731,10 +736,15 @@
       },
       "reauth_reinstall": {
         "title": "Réinstaller l'agent {model}",
-        "description": "Home Assistant se connecte d'abord avec l'identifiant d'usine du {model}. Saisissez l'utilisateur et le mot de passe SSH seulement si l'appareil l'a refusé ; laissés vides, l'identifiant d'usine est réessayé. Cette étape arrête l'agent installé, écrit l'agent fourni et une configuration avec de nouvelles clés générées sur le {model} via SSH, puis le redémarre. Les nouvelles clés sont enregistrées pour {name} ; les anciennes ne fonctionnent plus. Les pages de l'écran et les autres réglages du {model} sont conservés, et l'appareil n'est pas redémarré. Les identifiants SSH ne sont utilisés que pour cette étape et ne sont pas stockés.",
+        "description": "Home Assistant se connecte d'abord avec l'identifiant d'usine du {model}. Saisissez l'utilisateur et le mot de passe SSH, ou une clé privée, seulement si l'appareil l'a refusé ; laissés vides, l'identifiant d'usine est réessayé. Cette étape arrête l'agent installé, écrit l'agent fourni et une configuration avec de nouvelles clés générées sur le {model} via SSH, puis le redémarre. Les nouvelles clés sont enregistrées pour {name} ; les anciennes ne fonctionnent plus. Les pages de l'écran et les autres réglages du {model} sont conservés, et l'appareil n'est pas redémarré. Les identifiants SSH et les clés ne sont utilisés que pour cette étape et ne sont pas stockés.",
         "data": {
           "bootstrap_ssh_username": "Utilisateur SSH {model}",
-          "bootstrap_ssh_password": "Mot de passe SSH {model}"
+          "bootstrap_ssh_password": "Mot de passe SSH {model}",
+          "bootstrap_ssh_key": "Clé privée SSH {model} (facultatif)",
+          "bootstrap_ssh_key_passphrase": "Phrase secrète de la clé (facultatif)"
+        },
+        "data_description": {
+          "bootstrap_ssh_key": "Collez la clé privée entière (OpenSSH ou PEM ; ed25519, ECDSA ou RSA). Avec une clé et sans utilisateur, root est utilisé ; un mot de passe saisi en plus est essayé si la clé est refusée."
         }
       }
     },
@@ -783,6 +793,7 @@
       "invalid_maintenance_auth": "Le {model} a refusé la clé de maintenance. Saisissez la clé de maintenance actuelle.",
       "cannot_connect": "Le {model} n'a pas pu être vérifié. Vérifiez son adresse et sa connexion, puis réessayez.",
       "ssh_login_refused": "Le {model} a refusé la connexion SSH. Saisissez l'utilisateur et le mot de passe SSH de l'appareil.",
+      "invalid_ssh_key": "La clé privée n'a pas pu être lue. Collez la clé entière avec ses lignes BEGIN et END, et sa phrase secrète si elle en a une.",
       "installer_firewall_hook_unsupported": "Impossible de vérifier le script de pare-feu en toute sécurité. Installation arrêtée avant toute modification. Vérifiez le type et les permissions du fichier, sans créer de script de substitution.",
       "device_model_incompatible": "Ce paquet ne prend pas en charge cette platine, ou le modèle de la platine n'a pas pu être confirmé. Aucun fichier de l'appareil n'a été remplacé.",
       "c100x_confirmation_required": "Cochez la case pour configurer le Classe 100X, ou fermez cette fenêtre pour laisser la platine inchangée.",
@@ -1706,10 +1717,12 @@
           },
           "ssh_install": {
             "title": "Réinstaller l'agent {model} via SSH",
-            "description": "Cet agent installé ne peut pas encore se mettre à jour lui-même. Home Assistant se connectera avec l'identifiant d'usine du {model}, ou avec les identifiants SSH saisis ici si l'appareil l'a refusé, pour installer l'agent package, puis rafraîchira uniquement les patchs display et pare-feu actifs si la source de patch packagée a changé. Les identifiants SSH ne sont pas stockés. Si vous utilisez les appels Ring Call Home Assistant uniquement, vérifiez aussi le patch utilisateur média Home Assistant / patch de routage dans les options de l'intégration après la mise à jour.\n\nInstallé : {installed_version} (API {installed_api_version}, bundle {installed_bundle_hash})\nPackage : {available_version} (API {available_api_version}, bundle {available_bundle_hash})\nChemin de mise à jour : {update_path}\nÉtat du patch display : {qml_patch_status}\nRaison : {reason}",
+            "description": "Cet agent installé ne peut pas encore se mettre à jour lui-même. Home Assistant se connectera avec l'identifiant d'usine du {model}, ou avec les identifiants SSH ou la clé privée saisis ici si l'appareil l'a refusé, pour installer l'agent package, puis rafraîchira uniquement les patchs display et pare-feu actifs si la source de patch packagée a changé. Les identifiants SSH et la clé ne sont pas stockés. Si vous utilisez les appels Ring Call Home Assistant uniquement, vérifiez aussi le patch utilisateur média Home Assistant / patch de routage dans les options de l'intégration après la mise à jour.\n\nInstallé : {installed_version} (API {installed_api_version}, bundle {installed_bundle_hash})\nPackage : {available_version} (API {available_api_version}, bundle {available_bundle_hash})\nChemin de mise à jour : {update_path}\nÉtat du patch display : {qml_patch_status}\nRaison : {reason}",
             "data": {
               "bootstrap_ssh_username": "Utilisateur SSH",
-              "bootstrap_ssh_password": "Mot de passe SSH"
+              "bootstrap_ssh_password": "Mot de passe SSH",
+              "bootstrap_ssh_key": "Clé privée SSH (facultatif)",
+              "bootstrap_ssh_key_passphrase": "Phrase secrète de la clé (facultatif)"
             }
           }
         },
@@ -1722,6 +1735,7 @@
           "update_apply_failed": "L'agent a signalé un échec générique de mise à jour ; la cause et l'état final de l'appareil sont inconnus. Si vous avez auparavant remonté / manuellement en écriture, un redémarrage normal de l'appareil peut aider. Vérifiez son état avant de réessayer ; cette erreur ne confirme pas le retour à l'état précédent.",
           "update_verify_failed": "La mise à jour a été envoyée, mais l'agent signale encore un bundle plus ancien ou incompatible.",
           "ssh_login_refused": "Le {model} a refusé la connexion SSH. Saisissez l'utilisateur et le mot de passe SSH de l'appareil.",
+          "invalid_ssh_key": "La clé privée n'a pas pu être lue. Collez la clé entière avec ses lignes BEGIN et END, et sa phrase secrète si elle en a une.",
           "not_a_bticino_station": "L'appareil à cette adresse n'est pas une platine BTicino. Rien n'y a été écrit. Vérifiez l'adresse."
         },
         "abort": {

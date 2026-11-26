@@ -37,6 +37,7 @@ from .config_flow_dashboard import (
 )
 from .config_flow_forms import optional_suggested as _optional_suggested
 from .config_flow_forms import password_selector as _password_selector
+from .config_flow_forms import ssh_key_fields
 from .config_schemas import stair_light_n as _stair_light_n
 from .config_schemas import stair_light_p as _stair_light_p
 from .config_snapshots import SNAPSHOT_DEFAULTS, snapshot_values
@@ -143,6 +144,7 @@ def _bootstrap_install_schema() -> vol.Schema:
         {
             vol.Optional(CONF_BOOTSTRAP_SSH_USERNAME, default=""): str,
             vol.Optional(CONF_BOOTSTRAP_SSH_PASSWORD, default=""): _password_selector(),
+            **ssh_key_fields(),
         }
     )
 

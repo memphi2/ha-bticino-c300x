@@ -351,6 +351,8 @@ def test_fixable_agent_update_repair_uses_ha_issue_fix_flow_schema() -> None:
         assert set(_path_value(ssh_install, "data")) == {
             "bootstrap_ssh_username",
             "bootstrap_ssh_password",
+            "bootstrap_ssh_key",
+            "bootstrap_ssh_key_passphrase",
         }
         assert _path_value(fix_flow, "error")["ssh_install_failed"]
         assert _path_value(fix_flow, "abort")["entry_not_loaded"]

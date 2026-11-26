@@ -41,6 +41,7 @@ from .capabilities import (
     maintenance_action_is_advertised,
     qml_patch_status_is_active,
 )
+from .config_flow_forms import ssh_key_fields
 from .const import (
     CONF_AGENT_HOST,
     CONF_AGENT_PORT,
@@ -74,12 +75,13 @@ from .device_installer import (
     async_install_device_agent,
 )
 from .device_profile import NOT_A_BTICINO_STATION
+from .device_ssh_login import INVALID_SSH_KEY
 from .device_user import homeassistant_account_label
 from .display_activation import display_is_qt5, display_unsupported
 from .display_support import setup_is_c100x
 from .entry_config import entry_config_value
 from .error_text import compact_error_text
-from .factory_login import LOGIN_REFUSED, login_model, ssh_login, uses_factory_login
+from .factory_login import LOGIN_REFUSED, install_login, login_model
 from .media_readiness import media_readiness
 from .mqtt_migration import async_migrate_legacy_mqtt_if_available
 from .qml_patch import (
@@ -493,7 +495,7 @@ def _ssh_install_error(err: BaseException) -> str:
     """Return the translated error of a failed SSH install."""
 
     reason = err.reason if isinstance(err, C300XDeviceInstallError) else ""
-    shown = (LOGIN_REFUSED, DISPLAY_WRITE_TIMEOUT, NOT_A_BTICINO_STATION)
+    shown = (LOGIN_REFUSED, DISPLAY_WRITE_TIMEOUT, NOT_A_BTICINO_STATION, INVALID_SSH_KEY)
     return reason if reason in shown else "ssh_install_failed"
 
 
@@ -706,10 +708,7 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
                 data_schema=_ssh_install_schema(self._ask_ssh_login),
                 description_placeholders=placeholders,
             )
-        ssh_username, ssh_password = ssh_login(
-            user_input, CONF_BOOTSTRAP_SSH_USERNAME, CONF_BOOTSTRAP_SSH_PASSWORD,
-            login_model(getattr(entry.runtime_data, "agent_info", None)),
-        )
+        login = install_login(user_input, login_model(getattr(entry.runtime_data, "agent_info", None)))
 
         try:
             patch_state = await _async_capture_external_patch_state(entry)
@@ -720,12 +719,7 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
                 install_result = await async_install_device_agent(
                     C300XDeviceInstallRequest(
                         host=str(entry_config_value(entry, CONF_AGENT_HOST, "")).strip(),
-                        ssh_username=ssh_username,
-                        ssh_password=ssh_password,
-                        factory_login=uses_factory_login(
-                            user_input, CONF_BOOTSTRAP_SSH_USERNAME, CONF_BOOTSTRAP_SSH_PASSWORD
-                        ),
-                        device_model=login_model(getattr(entry.runtime_data, "agent_info", None)),
+                        **login,
                         # The entry exists: its station was accepted at setup.
                         c100x_confirmed=True,
                         agent_port=int(
@@ -1264,6 +1258,7 @@ def _ssh_install_schema(ask_login: bool) -> vol.Schema:
         {
             vol.Optional(CONF_BOOTSTRAP_SSH_USERNAME, default=""): str,
             vol.Optional(CONF_BOOTSTRAP_SSH_PASSWORD, default=""): str,
+            **ssh_key_fields(),
         }
     )
 

@@ -277,7 +277,9 @@ def test_the_reinstall_texts_exist(language):
     for step in ("agent_auth", "reauth_confirm"):
         assert steps[step]["data"][CONF_REINSTALL_AGENT]
         assert steps[step]["data_description"][CONF_REINSTALL_AGENT]
-    assert steps["reauth_reinstall"]["data"].keys() == {CONF_BOOTSTRAP_SSH_USERNAME, CONF_BOOTSTRAP_SSH_PASSWORD}
+    assert steps["reauth_reinstall"]["data"].keys() == {
+        CONF_BOOTSTRAP_SSH_USERNAME, CONF_BOOTSTRAP_SSH_PASSWORD, "bootstrap_ssh_key", "bootstrap_ssh_key_passphrase",
+    }
     assert "{name}" in steps["reauth_reinstall"]["description"]
 
 

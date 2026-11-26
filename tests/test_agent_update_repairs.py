@@ -3312,7 +3312,9 @@ def test_ssh_install_uses_the_factory_login_and_asks_only_after_a_refusal(monkey
     assert logins == [factory_ssh_login(model)]
     assert refused["errors"] == {"base": "ssh_login_refused"}
     asked = refused["data_schema"]({})
-    assert set(asked) == {"bootstrap_ssh_username", "bootstrap_ssh_password"}
+    assert set(asked) == {
+        "bootstrap_ssh_username", "bootstrap_ssh_password", "bootstrap_ssh_key", "bootstrap_ssh_key_passphrase",
+    }
 
     asyncio.run(flow.async_step_ssh_install({
         "bootstrap_ssh_username": "admin", "bootstrap_ssh_password": "typed",

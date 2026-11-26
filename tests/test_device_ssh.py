@@ -21,8 +21,17 @@ def host_key_type() -> str:
     return "ssh-rsa"
 
 
+@pytest.fixture
+def station_login() -> dict:
+    """What the station's SSH server accepts: the factory Dropbear takes passwords only.
+
+    "keys": public keys of test-user; "password": False is a key-only build (dropbear -s).
+    """
+    return {"password": True, "keys": []}
+
+
 @pytest.fixture(params=["diffie-hellman-group14-sha1", "diffie-hellman-group1-sha1"])
-def ssh_server(monkeypatch, request, host_key_type):
+def ssh_server(monkeypatch, request, host_key_type, station_login):
     ready = concurrent.futures.Future()
     failures = []
     state = {}
@@ -32,10 +41,18 @@ def ssh_server(monkeypatch, request, host_key_type):
             return True
 
         def password_auth_supported(self):
-            return True
+            return station_login["password"]
 
         def validate_password(self, username, password):
             return username == "test-user" and password == "test-password"
+
+        def public_key_auth_supported(self):
+            return bool(station_login["keys"])
+
+        def validate_public_key(self, username, key):
+            return username == "test-user" and any(
+                key.public_data == known.public_data for known in station_login["keys"]
+            )
 
     async def process_handler(process):
         assert process.term_type is None
@@ -68,8 +85,9 @@ def ssh_server(monkeypatch, request, host_key_type):
             server_host_keys=[asyncssh.generate_private_key(
                 host_key_type, **({"key_size": 2048} if host_key_type == "ssh-rsa" else {}),
             )],
-            # Only this host key is offered, as by a Dropbear given one key (dropbear -r).
-            signature_algs=[host_key_type], kex_algs=[request.param],
+            # Only this host key is offered, as by a Dropbear given one key (dropbear -r);
+            # user keys sign with the algorithms the station takes besides.
+            signature_algs=[host_key_type, *station_login.get("sig_algs", [])], kex_algs=[request.param],
             encryption_algs=["aes128-cbc"], process_factory=process_handler,
             encoding=None,
         ) as server:
@@ -129,6 +147,80 @@ def test_a_station_with_only_one_host_key_type_is_reached(ssh_server, host_key_t
         assert client.run("printf 'ready'") == "ready"
     finally:
         client.close()
+
+
+def _user_key(key_type: str):
+    return asyncssh.generate_private_key(key_type, **({"key_size": 2048} if key_type == "ssh-rsa" else {}))
+
+
+@pytest.mark.parametrize("host_key_type", ["ssh-rsa"])
+@pytest.mark.parametrize(("key_type", "key_format", "passphrase", "sig_algs"), [
+    # Dropbear 2017.75 (1.7.19, 2.0.2, C100X 1.5.8): RSA signed with SHA-1, ECDSA.
+    ("ssh-rsa", "openssh", "", []),
+    ("ssh-rsa", "pkcs1-pem", "", []),
+    ("ecdsa-sha2-nistp256", "openssh", "secret phrase", ["ecdsa-sha2-nistp256"]),
+    ("ecdsa-sha2-nistp256", "pkcs8-pem", "secret phrase", ["ecdsa-sha2-nistp256"]),
+    # Dropbear 2020.81 (3.0.6): also Ed25519 and RSA with SHA-256.
+    ("ssh-ed25519", "openssh", "", ["ssh-ed25519"]),
+    ("ssh-ed25519", "openssh", "secret phrase", ["ssh-ed25519"]),
+    ("ssh-rsa", "openssh", "secret phrase", ["rsa-sha2-256"]),
+])
+@pytest.mark.parametrize("password", ["", "test-password"])
+def test_a_key_only_station_is_reached_with_a_pasted_private_key(
+    ssh_server, station_login, host_key_type, key_type, key_format, passphrase, sig_algs, password,
+):
+    """A root tool can turn password logins off (dropbear -s): the key logs in."""
+    from dataclasses import replace
+
+    key = _user_key(key_type)
+    station_login.update(password=False, keys=[key], sig_algs=sig_algs)
+    pasted = key.export_private_key(key_format, passphrase or None).decode()
+    # Pasted into a form: Windows line ends and surrounding blanks.
+    pasted = "  " + pasted.replace("\n", "\r\n") + "\n "
+    client = installer._connect_device_client(replace(
+        ssh_server, ssh_password=password, ssh_private_key=pasted, ssh_key_passphrase=passphrase,
+    ))
+    try:
+        assert client.run("printf 'ready'") == "ready"
+    finally:
+        client.close()
+
+
+@pytest.mark.parametrize("host_key_type", ["ssh-rsa"])
+def test_a_refused_key_falls_back_to_the_typed_password(ssh_server, station_login):
+    from dataclasses import replace
+
+    station_login.update(keys=[_user_key("ecdsa-sha2-nistp256")], sig_algs=["ecdsa-sha2-nistp256"])
+    other = _user_key("ecdsa-sha2-nistp256").export_private_key("openssh").decode()
+    client = installer._connect_device_client(replace(ssh_server, ssh_private_key=other))
+    try:
+        assert client.run("printf 'ready'") == "ready"
+    finally:
+        client.close()
+    with pytest.raises(installer.C300XDeviceInstallError, match="ssh_login_refused"):
+        installer._connect_device_client(replace(ssh_server, ssh_password="", ssh_private_key=other))
+
+
+@pytest.mark.parametrize("pasted", [
+    "not a key", "PUBLIC",
+    "ENCRYPTED",
+])
+def test_an_unreadable_key_is_named_and_never_quoted(ssh_server, caplog, pasted):
+    from dataclasses import replace
+
+    key = _user_key("ssh-ed25519")
+    text = {
+        "PUBLIC": key.export_public_key("openssh").decode(),
+        "ENCRYPTED": key.export_private_key("openssh", "right").decode(),
+    }.get(pasted, pasted)
+    with pytest.raises(installer.C300XDeviceInstallError) as caught:
+        # A wrong passphrase reads like no key at all.
+        installer._connect_device_client(replace(ssh_server, ssh_private_key=text, ssh_key_passphrase="wrong"))
+    assert caught.value.reason == "invalid_ssh_key"
+    # No library message rides along: it could quote the key.
+    assert caught.value.__cause__ is None and caught.value.__suppress_context__
+    assert text.strip() not in caplog.text and "wrong" not in caplog.text
+    assert text.strip() not in repr(replace(ssh_server, ssh_private_key=text))
 
 
 def test_command_failure_does_not_expose_remote_output(ssh_server):

@@ -1,8 +1,8 @@
 """One-shot C300X native-agent bootstrap installer.
 
 The config flow uses this module only after the user explicitly submits SSH
-credentials for a device bootstrap. Passwords stay in memory and are passed only
-to the in-process SSH client, never through command arguments.
+credentials for a device bootstrap. Passwords and private keys stay in memory and
+are passed only to the in-process SSH client, never through command arguments.
 """
 
 from __future__ import annotations
@@ -41,6 +41,7 @@ from .device_profile import (
     is_bticino_station,
     station_profile,
 )
+from .device_ssh_login import INVALID_SSH_KEY, key_login_options
 from .display_activation import (
     display_activation_confirmed,
     display_restart_pending,
@@ -139,6 +140,9 @@ class C300XDeviceInstallRequest:
     host: str
     ssh_username: str
     ssh_password: str = field(repr=False)
+    # Optional: a private key for this install only, tried before the password.
+    ssh_private_key: str = field(default="", repr=False)
+    ssh_key_passphrase: str = field(default="", repr=False)
     agent_port: int = DEFAULT_AGENT_PORT
     remote_dir: str = DEFAULT_REMOTE_DIR
     apply_firewall_patch: bool = True
@@ -189,7 +193,7 @@ async def async_install_device_agent(
     api_token: str,
     maintenance_token: str,
 ) -> C300XDeviceInstallResult:
-    """Install the bundled native agent on the device through password SSH."""
+    """Install the bundled native agent on the device through SSH."""
 
     _validate_request(request)
     # About 30 Path.exists() calls: never on the event loop.
@@ -459,7 +463,7 @@ def _validate_request(request: C300XDeviceInstallRequest) -> None:
         raise C300XDeviceInstallError("invalid_device_host")
     if not request.ssh_username.strip():
         raise C300XDeviceInstallError("invalid_ssh_username")
-    if not request.ssh_password:
+    if not request.ssh_password and not request.ssh_private_key.strip():
         raise C300XDeviceInstallError("invalid_ssh_password")
     if request.agent_port <= 0 or request.agent_port > 65535:
         raise C300XDeviceInstallError("invalid_agent_port")
@@ -867,6 +871,16 @@ class _AsyncSshDeviceSshClient(_DeviceSshClient):
         # private event loop/connection for the entire installation, never HA's.
         self._runner = asyncio.Runner()
         self._closed = False
+        self._key_options: dict[str, Any] = {}
+        if request.ssh_private_key.strip():
+            try:
+                self._key_options = key_login_options(
+                    asyncssh, request.ssh_private_key, request.ssh_key_passphrase, request.ssh_password,
+                )
+            except ValueError:
+                self._runner.close()
+                self._closed = True
+                raise C300XDeviceInstallError(INVALID_SSH_KEY) from None
         try:
             self._client = self._runner.run(self._connect(request))
         except (OSError, asyncssh.Error) as err:
@@ -885,9 +899,10 @@ class _AsyncSshDeviceSshClient(_DeviceSshClient):
             candidates = defaults
         for index, (username, password) in enumerate(candidates):
             try:
-                return await self._asyncssh.connect(**_asyncssh_connect_kwargs(
+                # A key login replaces the password-only options.
+                return await self._asyncssh.connect(**{**_asyncssh_connect_kwargs(
                     replace(request, ssh_username=username, ssh_password=password)
-                ))
+                ), **getattr(self, "_key_options", {})})
             except getattr(self._asyncssh, "PermissionDenied", ()):
                 if index + 1 == len(candidates):
                     raise

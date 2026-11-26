@@ -61,7 +61,11 @@ ADDED_SINCE_2_10_0 = frozenset({
     "config/error/c100x_confirmation_required",
     "config/error/device_model_incompatible",
     "config/error/installer_firewall_hook_unsupported",
+    "config/error/invalid_ssh_key",
     "config/error/not_a_bticino_station",
+    "config/step/bootstrap_install/data/bootstrap_ssh_key",
+    "config/step/bootstrap_install/data/bootstrap_ssh_key_passphrase",
+    "config/step/bootstrap_install/data_description/bootstrap_ssh_key",
     "config/step/c100x_experimental/data/c100x_experimental",
     "config/step/c100x_experimental/description",
     "config/step/c100x_experimental/title",
@@ -69,8 +73,11 @@ ADDED_SINCE_2_10_0 = frozenset({
     "config/step/agent_auth/data_description/reinstall_agent",
     "config/step/reauth_confirm/data/reinstall_agent",
     "config/step/reauth_confirm/data_description/reinstall_agent",
+    "config/step/reauth_reinstall/data/bootstrap_ssh_key",
+    "config/step/reauth_reinstall/data/bootstrap_ssh_key_passphrase",
     "config/step/reauth_reinstall/data/bootstrap_ssh_password",
     "config/step/reauth_reinstall/data/bootstrap_ssh_username",
+    "config/step/reauth_reinstall/data_description/bootstrap_ssh_key",
     "config/step/reauth_reinstall/description",
     "config/step/reauth_reinstall/title",
     "entity/button/activate_display_pages/name",
@@ -79,25 +86,31 @@ ADDED_SINCE_2_10_0 = frozenset({
     "issues/c100x_display_boot_check_failed/title",
     "issues/c100x_display_rolled_back/description",
     "issues/c100x_display_rolled_back/title",
+    "issues/device_agent_update_required/fix_flow/error/invalid_ssh_key",
     "issues/device_agent_update_required/fix_flow/error/not_a_bticino_station",
+    "issues/device_agent_update_required/fix_flow/step/ssh_install/data/bootstrap_ssh_key",
+    "issues/device_agent_update_required/fix_flow/step/ssh_install/data/bootstrap_ssh_key_passphrase",
     "options/abort/unsupported_display",
     "options/step/init/menu_option_descriptions/dashboard_alarm",
     "options/step/init/menu_options/dashboard_alarm",
 })
 # Texts of 2.10.0 that read differently now: the SSH package message names the
-# package and the way out, and the service name lost the model (neutral names).
+# package and the way out, the service name lost the model (neutral names), and
+# the SSH forms name the optional private key.
 CHANGED_SINCE_2_10_0 = frozenset({
     "config/error/installer_dependency_missing",
+    "config/step/bootstrap_install/description",
+    "issues/device_agent_update_required/fix_flow/step/ssh_install/description",
     "services/capture_doorbell_call/name",
 })
 # sha256 over every text of 2.10.0 (f4f75ea3) but the changed ones, per file:
 #   json.dumps({"a/b/c": text}, sort_keys=True, ensure_ascii=False)
 DIGESTS_2_10_0 = {
-    "base": "42a0903b48c9225b7faebd421ffa4fb8700c4f4527f442c61d3490c4dd315018",
-    "en": "42a0903b48c9225b7faebd421ffa4fb8700c4f4527f442c61d3490c4dd315018",
-    "de": "611a1c2c360ad1a773913043b7abea0761342b6c067604ea2605e96f531bb21f",
-    "it": "bdf851941d345b5d0258e0b5fec801c86058684367a7d42362ef62893a6d0fc4",
-    "fr": "49180b6d423ee2157d350ed7e39ea5143a89f863a2015907af658609a7d7e583",
+    "base": "947c16b2f7f0f05760e8e1f3cb78b3ab21fe2890769bca46f07b7a2a10b9bd2e",
+    "en": "947c16b2f7f0f05760e8e1f3cb78b3ab21fe2890769bca46f07b7a2a10b9bd2e",
+    "de": "fd9ac997bab978ce16da01b6749c3c7da7f29ca7f20da238ff15d35538b0a596",
+    "it": "dad4153ef446b4aa686732b8ee836e66276b5c12a47195174a67e4208b7946f4",
+    "fr": "23f7e05d50d9fda67c280e8dfd4fcfe168e46ea209270526e1d0110a5eb9d064",
 }
 
 

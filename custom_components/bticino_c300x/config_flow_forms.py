@@ -9,6 +9,8 @@ from homeassistant.helpers import selector
 
 from .const import (
     ALARM_DOMAIN,
+    CONF_BOOTSTRAP_SSH_KEY,
+    CONF_BOOTSTRAP_SSH_KEY_PASSPHRASE,
     DASHBOARD_ENTITY_NAME_DISPLAY_OPTIONS,
     DASHBOARD_ENTITY_SECONDARY_INFO_OPTIONS,
     DOMAIN,
@@ -116,6 +118,17 @@ def password_selector() -> Any:
     return selector.TextSelector(
         selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD),
     )
+
+
+def ssh_key_fields() -> dict[Any, Any]:
+    """The optional private key of an install and its passphrase; neither is stored."""
+
+    return {
+        vol.Optional(CONF_BOOTSTRAP_SSH_KEY, default=""): selector.TextSelector(
+            selector.TextSelectorConfig(multiline=True),
+        ),
+        vol.Optional(CONF_BOOTSTRAP_SSH_KEY_PASSPHRASE, default=""): password_selector(),
+    }
 
 
 def actions_json_field() -> Any:

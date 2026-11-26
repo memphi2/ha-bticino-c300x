@@ -22,8 +22,6 @@ from .const import (
     CONF_AGENT_HOST,
     CONF_AGENT_PORT,
     CONF_AGENT_TOKEN,
-    CONF_BOOTSTRAP_SSH_PASSWORD,
-    CONF_BOOTSTRAP_SSH_USERNAME,
     CONF_DEVICE_ACTIVATION_MODE,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
@@ -42,11 +40,10 @@ from .device_installer import (
     async_install_device_agent,
 )
 from .entry_config import entry_config_value
-from .factory_login import login_model, ssh_login, uses_factory_login
+from .factory_login import install_login, login_model
 
 _LOGGER = logging.getLogger(__name__)
 _KEYS = (CONF_AGENT_TOKEN, CONF_MAINTENANCE_TOKEN)
-_SSH = (CONF_BOOTSTRAP_SSH_USERNAME, CONF_BOOTSTRAP_SSH_PASSWORD)
 
 
 def entry_reinstall_request(
@@ -55,13 +52,9 @@ def entry_reinstall_request(
     """The install request for the station of an existing entry."""
 
     model = login_model(getattr(getattr(entry, "runtime_data", None), "agent_info", None))
-    username, password = ssh_login(user_input, *_SSH, model)
     return C300XDeviceInstallRequest(
         host=str(entry_config_value(entry, CONF_AGENT_HOST, "")).strip(),
-        ssh_username=username,
-        ssh_password=password,
-        factory_login=uses_factory_login(user_input, *_SSH),
-        device_model=model,
+        **install_login(user_input, model),
         # The entry exists: its station was accepted at setup.
         c100x_confirmed=True,
         agent_port=int(entry_config_value(entry, CONF_AGENT_PORT, DEFAULT_AGENT_PORT)),

@@ -148,10 +148,11 @@ by removing that dependency, not by hiding the scanner result.
   for a device you control on an isolated/trusted network.
 - **Credentials:** the installer first tries the C300X factory root login,
   which is the same on every device and therefore no secret. It is built in
-  encoded only so that it is not plain text in the code. A typed password is
-  used only when the device refuses that login, in process memory. No local
-  key discovery, SSH agent, user SSH config, proxy or interactive terminal is
-  used. Credentials are not stored by the integration.
+  encoded only so that it is not plain text in the code. A typed password, or
+  a private key pasted into the form (with its passphrase), is used only when
+  the device refuses that login, in process memory. No local key discovery,
+  SSH agent, user SSH config, proxy or interactive terminal is used.
+  Credentials and keys are not stored or logged by the integration.
 - **Exposure:** temporary first installation or explicit SSH recovery.
   Normal operation and supported agent self-updates use the authenticated agent
   API and existing maintenance credentials, not SSH. Startup never silently

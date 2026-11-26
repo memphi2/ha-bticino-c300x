@@ -25,10 +25,15 @@
       },
       "bootstrap_install": {
         "title": "Instalar el agente nativo del {model}",
-        "description": "Home Assistant inicia sesión primero con el acceso de fábrica del {model}. Introduce el usuario y la contraseña SSH solo si el dispositivo lo ha rechazado; si se dejan vacíos, se vuelve a probar el acceso de fábrica. Este paso escribe en el {model}, por SSH, el agente nativo, una configuración con claves generadas, el script de arranque y los archivos de soporte de pantalla. Las credenciales SSH solo se usan para este paso de instalación y no se guardan.",
+        "description": "Home Assistant inicia sesión primero con el acceso de fábrica del {model}. Introduce el usuario y la contraseña SSH, o una clave privada, solo si el dispositivo lo ha rechazado; si se dejan vacíos, se vuelve a probar el acceso de fábrica. Este paso escribe en el {model}, por SSH, el agente nativo, una configuración con claves generadas, el script de arranque y los archivos de soporte de pantalla. Las credenciales SSH y las claves solo se usan para este paso de instalación y no se guardan.",
         "data": {
           "bootstrap_ssh_username": "Usuario SSH del {model}",
-          "bootstrap_ssh_password": "Contraseña SSH del {model}"
+          "bootstrap_ssh_password": "Contraseña SSH del {model}",
+          "bootstrap_ssh_key": "Clave privada SSH del {model} (opcional)",
+          "bootstrap_ssh_key_passphrase": "Frase de contraseña de la clave (opcional)"
+        },
+        "data_description": {
+          "bootstrap_ssh_key": "Pega la clave privada completa (OpenSSH o PEM; ed25519, ECDSA o RSA). Con una clave y sin usuario se usa root; una contraseña introducida además se prueba si la clave es rechazada."
         }
       },
       "c100x_experimental": {
@@ -731,10 +736,15 @@
       },
       "reauth_reinstall": {
         "title": "Reinstalar el agente del {model}",
-        "description": "Home Assistant inicia sesión primero con el acceso de fábrica del {model}. Introduce el usuario y la contraseña SSH solo si el dispositivo lo ha rechazado; si se dejan vacíos, se vuelve a probar el acceso de fábrica. Este paso detiene el agente instalado, escribe en el {model}, por SSH, el agente incluido y una configuración con claves recién generadas, y lo vuelve a iniciar. Las claves nuevas se guardan para {name}; las antiguas dejan de funcionar. Las páginas de pantalla y los demás ajustes del {model} se conservan, y el dispositivo no se reinicia. Las credenciales SSH solo se usan para este paso y no se guardan.",
+        "description": "Home Assistant inicia sesión primero con el acceso de fábrica del {model}. Introduce el usuario y la contraseña SSH, o una clave privada, solo si el dispositivo lo ha rechazado; si se dejan vacíos, se vuelve a probar el acceso de fábrica. Este paso detiene el agente instalado, escribe en el {model}, por SSH, el agente incluido y una configuración con claves recién generadas, y lo vuelve a iniciar. Las claves nuevas se guardan para {name}; las antiguas dejan de funcionar. Las páginas de pantalla y los demás ajustes del {model} se conservan, y el dispositivo no se reinicia. Las credenciales SSH y las claves solo se usan para este paso y no se guardan.",
         "data": {
           "bootstrap_ssh_username": "Usuario SSH del {model}",
-          "bootstrap_ssh_password": "Contraseña SSH del {model}"
+          "bootstrap_ssh_password": "Contraseña SSH del {model}",
+          "bootstrap_ssh_key": "Clave privada SSH del {model} (opcional)",
+          "bootstrap_ssh_key_passphrase": "Frase de contraseña de la clave (opcional)"
+        },
+        "data_description": {
+          "bootstrap_ssh_key": "Pega la clave privada completa (OpenSSH o PEM; ed25519, ECDSA o RSA). Con una clave y sin usuario se usa root; una contraseña introducida además se prueba si la clave es rechazada."
         }
       }
     },
@@ -783,6 +793,7 @@
       "invalid_maintenance_auth": "El {model} ha rechazado la clave de mantenimiento. Introduce la clave de mantenimiento actual.",
       "cannot_connect": "No se ha podido validar el {model}. Comprueba su dirección y la conexión e inténtalo de nuevo.",
       "ssh_login_refused": "El {model} ha rechazado el inicio de sesión SSH. Introduce el usuario y la contraseña SSH del dispositivo.",
+      "invalid_ssh_key": "No se ha podido leer la clave privada. Pega la clave completa con sus líneas BEGIN y END, y su frase de contraseña si tiene una.",
       "installer_firewall_hook_unsupported": "El hook de cortafuegos del dispositivo no se puede inspeccionar de forma segura. La instalación se ha detenido antes de cambiar el videoportero. Comprueba el tipo de hook y los permisos; no crees un marcador de posición.",
       "device_model_incompatible": "Este paquete no es compatible con este videoportero, o no se ha podido confirmar el modelo del videoportero. No se ha sustituido ningún archivo del dispositivo.",
       "c100x_confirmation_required": "Marca la casilla para configurar el Classe 100X o cierra este diálogo para dejar el videoportero sin cambios.",
@@ -1706,10 +1717,12 @@
           },
           "ssh_install": {
             "title": "Reinstalar por SSH el agente del dispositivo del {model}",
-            "description": "Este agente instalado aún no puede actualizarse por sí mismo. Home Assistant iniciará sesión con el acceso de fábrica del {model}, o con las credenciales SSH introducidas aquí cuando el dispositivo lo haya rechazado, para instalar el agente incluido, y después renovará solo los parches de pantalla y de cortafuegos activos cuando haya cambiado el origen del parche incluido. Las credenciales SSH no se guardan. Si usas la gestión local de llamadas de timbre, comprueba también la configuración del usuario multimedia de Home Assistant en las opciones de la integración después de la actualización.\n\nInstalado: {installed_version} (API {installed_api_version}, paquete {installed_bundle_hash})\nIncluido: {available_version} (API {available_api_version}, paquete {available_bundle_hash})\nRuta de actualización: {update_path}\nEstado del parche de pantalla: {qml_patch_status}\nMotivo: {reason}",
+            "description": "Este agente instalado aún no puede actualizarse por sí mismo. Home Assistant iniciará sesión con el acceso de fábrica del {model}, o con las credenciales SSH o la clave privada introducidas aquí cuando el dispositivo lo haya rechazado, para instalar el agente incluido, y después renovará solo los parches de pantalla y de cortafuegos activos cuando haya cambiado el origen del parche incluido. Las credenciales SSH y la clave no se guardan. Si usas la gestión local de llamadas de timbre, comprueba también la configuración del usuario multimedia de Home Assistant en las opciones de la integración después de la actualización.\n\nInstalado: {installed_version} (API {installed_api_version}, paquete {installed_bundle_hash})\nIncluido: {available_version} (API {available_api_version}, paquete {available_bundle_hash})\nRuta de actualización: {update_path}\nEstado del parche de pantalla: {qml_patch_status}\nMotivo: {reason}",
             "data": {
               "bootstrap_ssh_username": "Usuario SSH",
-              "bootstrap_ssh_password": "Contraseña SSH"
+              "bootstrap_ssh_password": "Contraseña SSH",
+              "bootstrap_ssh_key": "Clave privada SSH (opcional)",
+              "bootstrap_ssh_key_passphrase": "Frase de contraseña de la clave (opcional)"
             }
           }
         },
@@ -1722,6 +1735,7 @@
           "update_apply_failed": "El agente ha informado de un fallo de actualización genérico; se desconocen la causa y el estado final del dispositivo. Si antes volviste a montar / como escribible manualmente, un reinicio normal del dispositivo puede ayudar. Comprueba el estado del dispositivo antes de volver a intentarlo; este error no confirma la reversión.",
           "update_verify_failed": "La actualización se ha enviado, pero el agente sigue informando de un paquete anterior o incompatible.",
           "ssh_login_refused": "El {model} ha rechazado el inicio de sesión SSH. Introduce el usuario y la contraseña SSH del dispositivo.",
+          "invalid_ssh_key": "No se ha podido leer la clave privada. Pega la clave completa con sus líneas BEGIN y END, y su frase de contraseña si tiene una.",
           "not_a_bticino_station": "El dispositivo de esta dirección no es un videoportero BTicino. No se ha escrito nada en él. Comprueba la dirección."
         },
         "abort": {

@@ -273,7 +273,9 @@ static void *agent_loop(void *arg) {
     while (!atomic_load(&loop_stop)) {
         struct pollfd fds[2] = {{.fd = udp_fd, .events = POLLIN}};
         int video_count = c300x_video_pollfds(runtime->video, &fds[1], 1);
-        if (poll(fds, (nfds_t)(1 + video_count), 20) <= 0) continue;
+        int ready = poll(fds, (nfds_t)(1 + video_count), 20);
+        c300x_call_hub_tick(&runtime->calls);
+        if (ready <= 0) continue;
         if (fds[0].revents & POLLIN) handle_udp_event(udp_fd, runtime->config, runtime);
         if (video_count) c300x_video_handle_pollfds(runtime->video, &fds[1], video_count);
     }
@@ -510,49 +512,42 @@ static int calls_api(const char *method, const char *path, const char *body, cha
 }
 
 /* Two units ring within a second (frames of a three-unit installation):
- * each gets its own call, a hang-up for the older call id is refused. */
+ * the station has one ring session, so there is one call; each caller
+ * frame names the unit of that call, the last one counts. */
 static void two_units(void) {
-    char data[4096], first[32] = "", second[32] = "", path[96];
+    char data[4096], id[32], path[96];
     int preview;
     ring_starts(&preview);
     bus("*8*9#1#4*21##");
     wait_event("call.caller_identified", 1, data, sizeof(data));
     assert(strstr(data, "\"unit\":\"21\"") && strstr(data, "\"attribution\":\"caller_frame\""));
-    sscanf(strstr(data, "\"call_id\":\"") + 11, "%31[^\"]", first);
+    sscanf(strstr(data, "\"call_id\":\"") + 11, "%31[^\"]", id);
     bus("*8*1#1#4#21*11##");
     bus("*8*9#1#4*22##");
-    wait_event("doorbell.pressed", 2, data, sizeof(data));
-    assert(strstr(data, "\"unit\":\"22\""));
-    sscanf(strstr(data, "\"call_id\":\"") + 11, "%31[^\"]", second);
-    assert(strcmp(first, second) != 0);
     wait_event("call.caller_identified", 2, data, sizeof(data));
-    assert(count_events("doorbell.pressed") == 2);
+    assert(strstr(data, id) && strstr(data, "\"unit\":\"22\""));
+    assert(count_events("doorbell.pressed") == 1);
     assert(count_events("outdoor_units.changed") == 2);
 
-    snprintf(path, sizeof(path), "/api/v1/calls/%s/actions/hangup", first);
-    assert(calls_api("POST", path, "", data, sizeof(data)) == 409);
-    assert(strstr(data, "\"error\":\"call_not_current\"") && strstr(data, second));
     assert(calls_api("POST", "/api/v1/calls/0badc0de-1/actions/answer", "", data, sizeof(data)) == 409);
-    assert(calls_api("GET", "/api/v1/calls", "", data, sizeof(data)) == 200);
-    assert(strstr(data, first) && strstr(data, second));
+    assert(strstr(data, "\"error\":\"call_not_current\"") && strstr(data, id));
     assert(calls_api("GET", "/api/v1/outdoor-units", "", data, sizeof(data)) == 200);
     assert(strstr(data, "\"id\":\"21\",\"where\":\"21\"") && strstr(data, "\"source\":\"seen\""));
     assert(calls_api("POST", "/api/v1/video/doorbell/actions/activate", "{\"unit\":\"21\"}", data, sizeof(data)) == 409);
     assert(strstr(data, "unit_video_unsupported"));
-    snprintf(path, sizeof(path), "{\"call_id\":\"%s\"}", first);
-    assert(calls_api("POST", "/api/v1/outdoor-units/22/actions/unlock", path, data, sizeof(data)) == 409);
+    snprintf(path, sizeof(path), "{\"call_id\":\"%s\"}", id);
+    assert(calls_api("POST", "/api/v1/outdoor-units/21/actions/unlock", path, data, sizeof(data)) == 409);
 
     bus("*8*19*22##");
     wait_event("door_unlock.started", 1, data, sizeof(data));
-    assert(strstr(data, "\"unit\":\"22\"") && strstr(data, second));
+    assert(strstr(data, "\"unit\":\"22\"") && strstr(data, id));
     bus("*8*100#1#4*21##");
     usleep(100000);
     assert(count_events("call.ended") == 0);
     station_send("CANCEL", 1, NULL);
     wait_ring_code(200, 1);
-    wait_event("call.ended", 2, data, sizeof(data));
-    assert(strstr(data, first) || strstr(data, second));
-    assert(strstr(data, "\"reason\":\"media_closed\""));
+    wait_event("call.ended", 1, data, sizeof(data));
+    assert(strstr(data, id) && strstr(data, "\"reason\":\"media_closed\""));
     close(preview);
     assert(atomic_load(&ondemand_invites) == 0);
 }
@@ -745,6 +740,159 @@ static void lifecycle_ondemand_view(void) {
     assert_current("");
 }
 
+/* A ring with no RTSP client on the ring preview. */
+static void ring_without_preview(char *id, int nth) {
+    char data[4096];
+    bus("*8*1#1#4#21*11##");
+    station_send("INVITE", nth, station_sdp);
+    wait_ring_code(183, nth);
+    wait_event("doorbell.pressed", nth, data, sizeof(data));
+    call_id_of(data, id);
+}
+
+/* The display answers while no preview client holds the ring leg: the
+ * leg's close comes before the answer frame. */
+static void display_answer_without_preview(void) {
+    char data[4096], id[32];
+    ring_without_preview(id, 1);
+    bus("*8*9#1#4*20##");
+    wait_event("call.caller_identified", 1, NULL, 0);
+    station_send("CANCEL", 1, NULL);
+    wait_ring_code(200, 1);
+    wait_event("doorbell.media.closed", 1, data, sizeof(data));
+    assert(!payload_external(data));
+    usleep(300000);
+    bus("*8*2#1#4*11##");
+    wait_event("call.answered", 1, data, sizeof(data));
+    assert(strstr(data, id) && strstr(data, "\"answered_by\":\"station\""));
+    usleep(2000000);
+    assert(count_events("call.ended") == 0);
+    assert_current(id);
+    atomic_store(&clock_offset, 60000);
+    bus("*8*3#1#4*411##");
+    wait_event("call.ended", 1, data, sizeof(data));
+    assert(strstr(data, id) && strstr(data, "\"reason\":\"media_closed\""));
+    assert_current("");
+}
+
+/* c300x-app-device-20260612-182122: the app answers; the station's end
+ * frame of the ring comes before the answer frame. */
+static void app_answer_end_frame_first(void) {
+    char data[4096], id[32];
+    int preview;
+    ring_with_caller(id, &preview);
+    bus("*8*3#1#4*411##");
+    bus("*8*2#1#4*11##");
+    wait_event("call.answered", 1, data, sizeof(data));
+    assert(strstr(data, id) && strstr(data, "\"answered_by\":\"station\""));
+    station_send("CANCEL", 1, NULL);
+    wait_ring_code(200, 1);
+    close(preview);
+    usleep(2000000);
+    assert(count_events("call.ended") == 0);
+    assert_current(id);
+    /* No end frame reaches the agent: the display call's 60 s limit and
+     * the agent's guard end the call. */
+    atomic_store(&clock_offset, 66000);
+    wait_event("call.ended", 1, data, sizeof(data));
+    assert(strstr(data, id) && strstr(data, "\"reason\":\"media_closed\""));
+    assert_current("");
+}
+
+/* The display answers and its end frame is lost: after the agent's 65 s
+ * display guard the call is over and HA can answer the next ring. */
+static void display_answer_end_lost_call(void) {
+    char data[4096], id[32], next[32];
+    int preview;
+    ring_with_caller(id, &preview);
+    bus("*8*84*11##");
+    bus("*8*85*11##");
+    station_send("CANCEL", 1, NULL);
+    wait_ring_code(200, 1);
+    usleep(300000);
+    bus("*8*2#1#4*11##");
+    wait_event("call.answered", 1, data, sizeof(data));
+    assert(strstr(data, "\"answered_by\":\"station\""));
+    wait_event("doorbell.media.closed", 1, data, sizeof(data));
+    assert(payload_external(data));
+    close(preview);
+    usleep(300000);
+    assert(count_events("call.ended") == 0);
+    atomic_store(&clock_offset, 66000);
+    wait_event("call.ended", 1, data, sizeof(data));
+    assert(strstr(data, id) && strstr(data, "\"reason\":\"media_closed\""));
+    assert_current("");
+    ring_without_preview(next, 2);
+    assert(strcmp(next, id) != 0);
+    assert_current(next);
+    call_api_action(next, "answer", 200);
+    wait_event("call.answered", 2, data, sizeof(data));
+    assert(strstr(data, next) && strstr(data, "\"answered_by\":\"ha\""));
+}
+
+/* c300x-ring-answer-20260703-185353: HA answers at +277 ms, the caller
+ * frame comes at +302 ms; c300x-ha-device-20260615-232132: ring copies at
+ * +546 and +553 ms. One call, and it gets the caller's unit. */
+static void answer_before_caller(void) {
+    char data[4096], id[32];
+    int preview;
+    ring_starts(&preview);
+    wait_event("doorbell.pressed", 1, data, sizeof(data));
+    call_id_of(data, id);
+    call_api_action(id, "answer", 200);
+    wait_ring_code(200, 1);
+    wait_event("call.answered", 1, data, sizeof(data));
+    assert(strstr(data, id) && strstr(data, "\"answered_by\":\"ha\""));
+    bus("*8*9#1#4*20##");
+    bus("*8*1#1#4#21*11##");
+    bus("*8*1#1#4#21*11##");
+    bus("*8*9#1#4*20##");
+    wait_event("call.caller_identified", 1, data, sizeof(data));
+    assert(strstr(data, id) && strstr(data, "\"unit\":\"20\"") && strstr(data, "\"attribution\":\"caller_frame\""));
+    usleep(1300000);
+    assert(count_events("doorbell.pressed") == 1);
+    assert(count_events("call.caller_identified") == 1);
+    assert(calls_api("GET", "/api/v1/calls", "", data, sizeof(data)) == 200);
+    assert(strstr(data, "-2\"") == NULL);
+    assert_current(id);
+    close(preview);
+}
+
+/* HA's answer waits for the media worker and its caller leaves before it
+ * runs; the display then answers: that answer is the station's. */
+static void abandoned_answer_then_station(void) {
+    static struct c300x_request_queue queue;
+    static struct request request;
+    char data[4096], id[32];
+    int preview, fds[2];
+    ring_with_caller(id, &preview);
+    assert(c300x_video_control_init(&runtime->video_control, &queue));
+    runtime->video_control.worker.owner_fd = 4242;
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, fds) == 0);
+    memset(&request, 0, sizeof(request));
+    snprintf(request.method, sizeof(request.method), "POST");
+    snprintf(request.path, sizeof(request.path), "/api/v1/calls/%s/actions/answer", id);
+    struct c300x_call_routes routes = {&runtime->calls, &runtime->video_control, runtime->video, NULL};
+    c300x_video_control_begin(&runtime->video_control, fds[0]);
+    assert(c300x_http_calls_route(fds[0], &routes, &request));
+    assert(c300x_video_control_deferred(&runtime->video_control));
+    c300x_video_control_end(&runtime->video_control, 1);
+    c300x_video_control_abandon(&runtime->video_control, fds[0]);
+    close(fds[0]);
+    close(fds[1]);
+    runtime->video_control.worker.owner_fd = C300X_REQUEST_WORKER_FREE;
+    runtime->video_control.worker.armed_fd = -1;
+    bus("*8*84*11##");
+    bus("*8*85*11##");
+    station_send("CANCEL", 1, NULL);
+    wait_ring_code(200, 1);
+    usleep(300000);
+    bus("*8*2#1#4*11##");
+    wait_event("call.answered", 1, data, sizeof(data));
+    assert(strstr(data, id) && strstr(data, "\"answered_by\":\"station\""));
+    close(preview);
+}
+
 /* HA's answer is refused (the agent has no ring leg: only the bus rang);
  * the display then answers: that answer is the station's, not HA's. */
 static void refused_answer_then_station(void) {
@@ -788,6 +936,54 @@ static void boot_id_at_start(void) {
     ring_with_caller(id, &preview);
     assert(strncmp(id, boot, 8) == 0 && id[8] == '-');
     close(preview);
+}
+
+
+/* ---- one ring of a one-unit station, as 3.0.0 reports it ---- */
+static void strip_key(char *data, const char *key) {
+    char pattern[32];
+    snprintf(pattern, sizeof(pattern), "\"%s\":", key);
+    char *at;
+    while ((at = strstr(data, pattern)) != NULL) {
+        char *value = at + strlen(pattern);
+        char *end = value;
+        if (*value == '"') { end = strchr(value + 1, '"'); end = end ? end + 1 : value; }
+        else while (*end && *end != ',' && *end != '}') end++;
+        if (at[-1] == ',') at--;
+        else if (*end == ',') end++;
+        memmove(at, end, strlen(end) + 1);
+    }
+}
+
+static void single_unit_as_3_0_0(void) {
+    int preview;
+    ring_starts(&preview);
+    bus("*8*1#1#4#21*11##");
+    bus("*8*9#1#4*20##");
+    assert(c300x_video_doorbell_call_answer(runtime->video));
+    wait_ring_code(200, 1);
+    wait_event("doorbell.view_requested", 1, NULL, 0);
+    bus("*8*2#1#4*11##");
+    bus("*8*3#1#4*411##");
+    bus("*8*100#1#4*20##");
+    bus("*8*19*20##");
+    bus("*8*20*20##");
+    usleep(300000);
+    station_send("BYE", 2, NULL);
+    wait_event("doorbell.media.closed", 1, NULL, 0);
+    close(preview);
+    usleep(300000);
+    pthread_mutex_lock(&events_mutex);
+    for (int i = 0; i < event_total; i++) {
+        if (strncmp(event_types[i], "call.", 5) == 0 || strncmp(event_types[i], "outdoor_units.", 14) == 0) continue;
+        char data[4096];
+        snprintf(data, sizeof(data), "%s", event_data[i]);
+        strip_key(data, "call_id");
+        strip_key(data, "unit");
+        strip_key(data, "attribution");
+        printf("event %s %s\n", event_types[i], data);
+    }
+    pthread_mutex_unlock(&events_mutex);
 }
 
 /* (d) The station answers 486 Busy with no external marker (here: no bus
@@ -895,6 +1091,7 @@ int main(int argc, char **argv) {
     assert(runtime != NULL);
     runtime->config = &config;
     c300x_call_hub_init(&runtime->calls, &config, dispatch_call_event, runtime);
+    c300x_call_hub_bind(&runtime->calls, &runtime->video, &runtime->video_control);
     /* No request worker: the media operations of API requests run in place. */
     runtime->video_control.worker.armed_fd = -1;
     runtime->video_control.worker.owner_fd = C300X_REQUEST_WORKER_FREE;
@@ -914,6 +1111,7 @@ int main(int argc, char **argv) {
     else if (strcmp(argv[1], "display_answer_end_lost") == 0) display_answer(true);
     else if (strcmp(argv[1], "unanswered") == 0) unanswered();
     else if (strcmp(argv[1], "ha_answer") == 0) ha_answer();
+    else if (strcmp(argv[1], "single_unit_as_3_0_0") == 0) single_unit_as_3_0_0();
     else if (strcmp(argv[1], "two_units") == 0) two_units();
     else if (strcmp(argv[1], "lifecycle_unanswered") == 0) lifecycle_unanswered();
     else if (strcmp(argv[1], "lifecycle_ha_answer_ha_hangup") == 0) lifecycle_ha_answer_ha_hangup();
@@ -921,6 +1119,11 @@ int main(int argc, char **argv) {
     else if (strcmp(argv[1], "lifecycle_ha_answer_station_hangup") == 0) lifecycle_ha_answer_station_hangup();
     else if (strcmp(argv[1], "lifecycle_ondemand_view") == 0) lifecycle_ondemand_view();
     else if (strcmp(argv[1], "refused_answer_then_station") == 0) refused_answer_then_station();
+    else if (strcmp(argv[1], "display_answer_without_preview") == 0) display_answer_without_preview();
+    else if (strcmp(argv[1], "app_answer_end_frame_first") == 0) app_answer_end_frame_first();
+    else if (strcmp(argv[1], "display_answer_end_lost_call") == 0) display_answer_end_lost_call();
+    else if (strcmp(argv[1], "answer_before_caller") == 0) answer_before_caller();
+    else if (strcmp(argv[1], "abandoned_answer_then_station") == 0) abandoned_answer_then_station();
     else if (strcmp(argv[1], "call_id_lengths") == 0) call_id_lengths();
     else if (strcmp(argv[1], "boot_id_at_start") == 0) boot_id_at_start();
     else if (strcmp(argv[1], "station_busy_bus_end") == 0) station_busy_case(true);

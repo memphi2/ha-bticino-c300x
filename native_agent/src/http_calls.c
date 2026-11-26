@@ -12,6 +12,7 @@
 #include "string_util.h"
 #include "time_util.h"
 #include "video_control.h"
+#include "video_rtsp.h"
 
 #define CALLS_PREFIX "/api/v1/calls/"
 /* Well-formed call ids in requests: 1-32 characters (the agent's own are shorter). */
@@ -54,6 +55,13 @@ void c300x_call_hub_init(struct c300x_call_hub *hub, const struct c300x_config *
     seen_path(hub, config);
 }
 
+void c300x_call_hub_bind(struct c300x_call_hub *hub, struct c300x_video *const *video,
+                         const struct c300x_video_control *control)
+{
+    hub->video = video;
+    hub->control = control;
+}
+
 static void load_units(struct c300x_call_hub *hub)
 {
     hub->sink.units = &hub->units;
@@ -69,6 +77,27 @@ static void load_units(struct c300x_call_hub *hub)
     }
 }
 
+/* The agent's media state, as its ring session and display guard see it. */
+static void media_state(const struct c300x_call_hub *hub, struct c300x_call_media *media)
+{
+    struct c300x_video_status status;
+
+    memset(media, 0, sizeof(*media));
+    if (hub->video != NULL && *hub->video != NULL) {
+        c300x_video_status(*hub->video, &status);
+        media->ring_leg = status.ring_call_active;
+        media->ha_answered = status.ring_answered || status.ring_answer_requested;
+        media->external = status.external_media_active;
+        media->agent = status.call_active || status.bridge_media_active || status.media_starting;
+    }
+    media->ha_hangup = hub->stopping;
+    if (hub->control != NULL && hub->control->worker.owner_fd != C300X_REQUEST_WORKER_FREE) {
+        /* On the media worker: until its request is answered or gone. */
+        media->ha_hangup |= hub->control->job.op == C300X_VIDEO_CONTROL_HANGUP
+            || hub->control->job.op == C300X_VIDEO_CONTROL_STOP;
+    }
+}
+
 void c300x_call_hub_frame(struct c300x_call_hub *hub, const char *frame)
 {
     if (hub == NULL || frame == NULL || strncmp(frame, "*8*", 3) != 0) {
@@ -80,22 +109,48 @@ void c300x_call_hub_frame(struct c300x_call_hub *hub, const char *frame)
     c300x_calls_frame(&hub->calls, &hub->sink, frame, c300x_monotonic_ms());
 }
 
-/* data with ,"unit":...,"call_id":... added before its closing brace. */
-static int decorate(const char *data, const char *unit, const char *call_id, char *out, size_t out_len)
+/* data with fields added before its closing brace; 1 when it does not fit. */
+static int append_fields(const char *data, const char *fields, char *out, size_t out_len)
 {
     size_t length = strlen(data);
     size_t used = 0;
 
-    if (length < 2 || data[length - 1] != '}' || strstr(data, "\"unit\"") != NULL) {
+    if (length < 2 || data[length - 1] != '}') {
         return 1;
     }
     out[0] = '\0';
-    if (!c300x_appendf(out, out_len, &used, "%.*s%s\"unit\":\"%s\",\"call_id\":%s%s%s}",
-                       (int)(length - 1), data, length > 2 ? "," : "", unit,
-                       call_id ? "\"" : "null", call_id ? call_id : "", call_id ? "\"" : "")) {
+    if (!c300x_appendf(out, out_len, &used, "%.*s%s%s}", (int)(length - 1), data, length > 2 ? "," : "", fields)) {
         return 1;
     }
     return 2;
+}
+
+/* data with ,"unit":...,"call_id":... added. */
+static int decorate(const char *data, const char *unit, const char *call_id, char *out, size_t out_len)
+{
+    char fields[160];
+
+    if (strstr(data, "\"unit\"") != NULL) {
+        return 1;
+    }
+    snprintf(fields, sizeof(fields), "\"unit\":\"%s\",\"call_id\":%s%s%s", unit,
+             call_id ? "\"" : "null", call_id ? call_id : "", call_id ? "\"" : "");
+    return append_fields(data, fields, out, out_len);
+}
+
+/* The ring's own data with its call's id, unit and attribution. */
+static int ring_fields(const struct c300x_call *call, const char *data, char *out, size_t out_len)
+{
+    char fields[160];
+    char unit[C300X_JSON_QUOTED_LEN(C300X_UNIT_WHERE_LEN)];
+
+    if (strstr(data, "\"call_id\"") != NULL) {
+        return 1;
+    }
+    snprintf(fields, sizeof(fields), "\"call_id\":\"%s\",\"unit\":%s,\"attribution\":\"%s\"", call->id,
+             c300x_json_string_or_null(call->unit[0] != '\0' ? call->unit : NULL, unit, sizeof(unit)),
+             call->attribution);
+    return append_fields(data, fields, out, out_len);
 }
 
 int c300x_call_hub_event(struct c300x_call_hub *hub, const char *type, const char *data,
@@ -103,6 +158,7 @@ int c300x_call_hub_event(struct c300x_call_hub *hub, const char *type, const cha
 {
     long long now = c300x_monotonic_ms();
     char text[C300X_UNIT_WHERE_LEN * 2];
+    struct c300x_call_media media;
 
     if (hub == NULL || type == NULL || data == NULL) {
         return 1;
@@ -111,11 +167,7 @@ int c300x_call_hub_event(struct c300x_call_hub *hub, const char *type, const cha
         load_units(hub);
     }
     if (strcmp(type, "doorbell.pressed") == 0) {
-        if (strstr(data, "\"call_id\"") != NULL) {
-            return 1;
-        }
-        c300x_json_string_field(data, "raw", text, sizeof(text));
-        return c300x_calls_ring(&hub->calls, &hub->sink, text, now, out, out_len) ? 2 : 0;
+        return ring_fields(c300x_calls_ring(&hub->calls, &hub->sink, now), data, out, out_len);
     }
     if (strcmp(type, "door_unlock.started") == 0 || strcmp(type, "door_unlock.ended") == 0) {
         c300x_json_string_field(data, "address", text, sizeof(text));
@@ -128,28 +180,28 @@ int c300x_call_hub_event(struct c300x_call_hub *hub, const char *type, const cha
         return decorate(data, unit, call ? call->id : NULL, out, out_len);
     }
     if (strcmp(type, "doorbell.view_requested") == 0) {
-        /* The ring answered: on the station (*8*2#1#) or by the agent's own
-         * answer (no frame). A view frame (*8*1#5#) opened its view already. */
+        /* The ring answered: on the display or the app (*8*2#1#) or by the
+         * agent's own answer (no frame). A view frame (*8*1#5#) opened its
+         * view already. */
         c300x_json_string_field(data, "raw", text, sizeof(text));
         if (text[0] == '\0' || strncmp(text, "*8*2#1#", 7) == 0) {
-            c300x_calls_answer_seen(&hub->calls, &hub->sink, now);
+            media_state(hub, &media);
+            c300x_calls_answer_seen(&hub->calls, &hub->sink, &media, now);
         }
         const struct c300x_call *call = c300x_calls_current(&hub->calls);
-        for (int index = 0; call == NULL && index < hub->units.count; index++) {
-            const struct c300x_call *view = c300x_calls_live_for_unit(&hub->calls, hub->units.items[index].id);
-            call = view != NULL && view->view ? view : NULL;
-        }
         return call != NULL && call->unit[0] != '\0' ? decorate(data, call->unit, call->id, out, out_len) : 1;
     }
     return 1;
 }
 
-void c300x_call_hub_media_closed(struct c300x_call_hub *hub, int station_holds_media)
+void c300x_call_hub_media_closed(struct c300x_call_hub *hub, int station_holds_media, int from_bus)
 {
-    /* The display answered: the agent's ring leg closed, the call goes on
-     * until the station's own close. */
-    if (hub != NULL && !station_holds_media) {
-        c300x_calls_media_closed(&hub->calls, &hub->sink, c300x_monotonic_ms());
+    struct c300x_call_media media;
+
+    if (hub != NULL) {
+        media_state(hub, &media);
+        c300x_calls_media_closed(&hub->calls, &hub->sink, &media, station_holds_media, from_bus,
+                                 c300x_monotonic_ms());
     }
 }
 
@@ -158,10 +210,18 @@ int c300x_call_hub_timeout_ms(struct c300x_call_hub *hub)
     return c300x_calls_timeout_ms(&hub->calls, c300x_monotonic_ms());
 }
 
+static void tick(struct c300x_call_hub *hub)
+{
+    struct c300x_call_media media;
+
+    media_state(hub, &media);
+    c300x_calls_tick(&hub->calls, &hub->sink, &media, c300x_monotonic_ms());
+}
+
 void c300x_call_hub_tick(struct c300x_call_hub *hub)
 {
     if (c300x_calls_timeout_ms(&hub->calls, c300x_monotonic_ms()) == 0) {
-        c300x_calls_tick(&hub->calls, &hub->sink, c300x_monotonic_ms());
+        tick(hub);
     }
 }
 
@@ -181,29 +241,21 @@ static void call_action(int client_fd, const struct c300x_call_routes *routes, c
     struct c300x_call_hub *hub = routes->hub;
     /* Checked before the operation starts, not when its result is answered. */
     int owns = routes->control != NULL && routes->control->worker.owner_fd == client_fd;
+    int done;
 
-    if (!owns) {
-        if (!c300x_calls_is_current(&hub->calls, call_id)) {
-            send_not_current(client_fd, &hub->calls);
-            return;
-        }
-        if (answer) {
-            c300x_calls_answer_started(&hub->calls, call_id);
-        } else {
-            c300x_calls_hangup_started(&hub->calls, call_id);
-        }
+    if (!owns && !c300x_calls_is_current(&hub->calls, call_id)) {
+        send_not_current(client_fd, &hub->calls);
+        return;
     }
-    int done = answer ? c300x_http_doorbell_call_answer(client_fd, routes->control, routes->video, request)
-                      : c300x_http_doorbell_call_hangup(client_fd, routes->control, routes->video);
-    if (done) {
-        if (answer) {
-            c300x_calls_answered(&hub->calls, &hub->sink, call_id, "ha", c300x_monotonic_ms());
-        } else {
-            c300x_calls_end(&hub->calls, &hub->sink, call_id, "hangup", c300x_monotonic_ms());
-        }
-    } else if (routes->control == NULL || !c300x_video_control_deferred(routes->control)) {
-        c300x_calls_action_refused(&hub->calls, call_id);
+    hub->stopping = !answer;
+    done = answer ? c300x_http_doorbell_call_answer(client_fd, routes->control, routes->video, request)
+                  : c300x_http_doorbell_call_hangup(client_fd, routes->control, routes->video);
+    if (done && answer) {
+        c300x_calls_answered(&hub->calls, &hub->sink, call_id, "ha", c300x_monotonic_ms());
+    } else if (done) {
+        c300x_calls_end(&hub->calls, &hub->sink, call_id, "hangup", c300x_monotonic_ms());
     }
+    hub->stopping = 0;
 }
 
 /* "current": the current call's unit, else the default one. */
@@ -343,7 +395,7 @@ int c300x_http_calls_route(int client_fd, const struct c300x_call_routes *routes
     }
     if (strcmp(request->path, "/api/v1/calls") == 0 && get) {
         if (!hub->units.loaded) load_units(hub);
-        c300x_calls_tick(&hub->calls, &hub->sink, c300x_monotonic_ms());
+        tick(hub);
         if (!c300x_calls_json(&hub->calls, c300x_monotonic_ms(), body, sizeof(body))) {
             c300x_copy_string(body, sizeof(body), "{\"ok\":false,\"error\":\"response_too_large\"}\n");
         }

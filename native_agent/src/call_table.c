@@ -9,7 +9,6 @@
 #include "json_util.h"
 #include "string_util.h"
 
-#define SIP_RING_MERGE_MS 5000
 #define FRAME_LEN 64
 
 static int live(const struct c300x_call *call)
@@ -56,8 +55,13 @@ static const char *unit_json(const struct c300x_call *call, char *out, size_t ou
     return c300x_json_string_or_null(call->unit[0] != '\0' ? call->unit : NULL, out, out_len);
 }
 
-/* A free slot, else the oldest ended call, else the oldest live one. */
-static struct c300x_call *slot(struct c300x_calls *calls)
+static int ring_live(const struct c300x_call *call)
+{
+    return !call->view && (call->state == C300X_CALL_RINGING || call->state == C300X_CALL_ANSWERED);
+}
+
+/* A free slot, else the oldest ended call, else the oldest view. */
+static struct c300x_call *slot(struct c300x_calls *calls, const struct c300x_call_sink *sink, long long now)
 {
     struct c300x_call *oldest = NULL;
 
@@ -68,39 +72,51 @@ static struct c300x_call *slot(struct c300x_calls *calls)
         }
         int ended = call->state == C300X_CALL_ENDED;
         int oldest_ended = oldest != NULL && oldest->state == C300X_CALL_ENDED;
-        if (oldest == NULL || (ended && !oldest_ended)
-            || (ended == oldest_ended && call->updated_ms < oldest->updated_ms)) {
+        if (!ring_live(call) && (oldest == NULL || (ended && !oldest_ended)
+            || (ended == oldest_ended && call->updated_ms < oldest->updated_ms))) {
             oldest = call;
         }
     }
+    if (oldest == NULL) {
+        oldest = &calls->items[0];
+    }
+    c300x_calls_end(calls, sink, oldest->id, "superseded", now);
     return oldest;
 }
 
 static struct c300x_call *open_call(struct c300x_calls *calls, const struct c300x_call_sink *sink,
                                     int view, long long now)
 {
-    struct c300x_call *call;
+    struct c300x_call *call = slot(calls, sink, now);
 
-    call = slot(calls);
-    if (live(call)) {
-        c300x_calls_end(calls, sink, call->id, "evicted", now);
-    }
     memset(call, 0, sizeof(*call));
     snprintf(call->id, sizeof(call->id), "%s-%lu", calls->boot_id, ++calls->seq);
     call->state = view ? C300X_CALL_VIEWING : C300X_CALL_RINGING;
     call->view = view;
     call->attribution = "pending";
-    call->started_ms = call->last_ring_ms = call->updated_ms = now;
+    call->started_ms = call->updated_ms = now;
+    call->probe_ms = view ? now + C300X_CALL_PROBE_MS : 0;
     return call;
 }
 
-static struct c300x_call *newest(struct c300x_calls *calls, enum c300x_call_state state, int need_unbound)
+/* The ring session's call: at most one is live. */
+static struct c300x_call *ring_call(struct c300x_calls *calls)
+{
+    for (int index = 0; index < C300X_MAX_CALLS; index++) {
+        if (ring_live(&calls->items[index])) {
+            return &calls->items[index];
+        }
+    }
+    return NULL;
+}
+
+static struct c300x_call *live_view(struct c300x_calls *calls, const char *unit)
 {
     struct c300x_call *found = NULL;
 
     for (int index = 0; index < C300X_MAX_CALLS; index++) {
         struct c300x_call *call = &calls->items[index];
-        if (call->state == state && !call->view && (!need_unbound || call->unit[0] == '\0')
+        if (call->view && live(call) && (unit == NULL || strcmp(call->unit, unit) == 0)
             && (found == NULL || call->started_ms > found->started_ms)) {
             found = call;
         }
@@ -108,66 +124,37 @@ static struct c300x_call *newest(struct c300x_calls *calls, enum c300x_call_stat
     return found;
 }
 
-static struct c300x_call *live_for_unit(struct c300x_calls *calls, const char *unit, int view)
+const struct c300x_call *c300x_calls_ring(struct c300x_calls *calls, const struct c300x_call_sink *sink,
+                                          long long now)
 {
-    for (int index = 0; index < C300X_MAX_CALLS; index++) {
-        struct c300x_call *call = &calls->items[index];
-        if (live(call) && call->view == view && strcmp(call->unit, unit) == 0) {
-            return call;
-        }
+    struct c300x_call *call = ring_call(calls);
+
+    if (call != NULL && call->closing != NULL) {
+        /* Its ring ended unanswered: this press rings anew. */
+        c300x_calls_end(calls, sink, call->id, call->closing, now);
+        call = NULL;
     }
-    return NULL;
-}
-
-static int ring_data(const struct c300x_call *call, const char *raw, char *data, size_t data_len)
-{
-    char raw_json[C300X_JSON_QUOTED_LEN(FRAME_LEN)];
-    char unit[C300X_JSON_QUOTED_LEN(C300X_UNIT_WHERE_LEN)];
-    size_t used = 0;
-
-    data[0] = '\0';
-    return c300x_appendf(data, data_len, &used,
-        "{\"raw\":%s,\"call_id\":\"%s\",\"unit\":%s,\"attribution\":\"%s\"}",
-        c300x_json_string_or_null(raw, raw_json, sizeof(raw_json)), call->id,
-        unit_json(call, unit, sizeof(unit)), call->attribution);
-}
-
-int c300x_calls_ring(struct c300x_calls *calls, const struct c300x_call_sink *sink,
-                     const char *raw, long long now, char *data, size_t data_len)
-{
-    int from_sip = raw == NULL || raw[0] == '\0';
-    struct c300x_call *call = newest(calls, C300X_CALL_RINGING, 0);
-
-    if (call != NULL && (now - call->last_ring_ms < C300X_RING_REPEAT_MS
-                         || (from_sip && now - call->started_ms < SIP_RING_MERGE_MS))) {
-        if (!from_sip) {
-            call->last_ring_ms = now;
-        }
-        if (call->unit[0] != '\0') {
-            calls->repeat_after_bind_ms = now;
-        }
-        return 0;
+    if (call == NULL) {
+        return open_call(calls, sink, 0, now);
     }
-    call = open_call(calls, sink, 0, now);
-    return ring_data(call, from_sip ? NULL : raw, data, data_len);
+    if (call->state == C300X_CALL_RINGING) {
+        call->updated_ms = now;
+    }
+    return call;
 }
 
-static void bind_unit(struct c300x_calls *calls, const struct c300x_call_sink *sink, struct c300x_call *call,
-                      const struct c300x_outdoor_unit *unit, const char *attribution, const char *raw,
-                      long long now)
+static void name_unit(struct c300x_call *call, const struct c300x_call_sink *sink,
+                      const struct c300x_outdoor_unit *unit, const char *attribution, const char *raw)
 {
     char data[512];
     char raw_json[C300X_JSON_QUOTED_LEN(FRAME_LEN)];
-    struct c300x_call *older = live_for_unit(calls, unit->id, 0);
     size_t used = 0;
 
-    if (older != NULL && older != call && older->state == C300X_CALL_RINGING) {
-        c300x_calls_end(calls, sink, older->id, "superseded", now);
+    if (strcmp(call->unit, unit->id) == 0 && strcmp(call->attribution, attribution) == 0) {
+        return;
     }
     c300x_copy_string(call->unit, sizeof(call->unit), unit->id);
     call->attribution = attribution;
-    call->bound_ms = call->updated_ms = now;
-    calls->repeat_after_bind_ms = 0;
     if (c300x_appendf(data, sizeof(data), &used,
             "{\"call_id\":\"%s\",\"unit\":\"%s\",\"where\":\"%s\",\"action_where\":\"%s\","
             "\"attribution\":\"%s\",\"raw\":%s}",
@@ -199,38 +186,19 @@ static const struct c300x_outdoor_unit *resolve(const struct c300x_call_sink *si
     return index >= 0 ? &sink->units->items[index] : NULL;
 }
 
+/* The caller frame names the unit of the ring session's call, ringing or
+ * answered, also after the default unit stood in for it. */
 static void caller(struct c300x_calls *calls, const struct c300x_call_sink *sink, const char *where,
-                   const char *raw, long long now)
+                   const char *raw)
 {
-    const struct c300x_outdoor_unit *unit = resolve(sink, where);
-    struct c300x_call *call;
-    char data[512];
+    struct c300x_call *call = ring_call(calls);
+    const struct c300x_outdoor_unit *unit = call != NULL ? resolve(sink, where) : NULL;
 
     if (unit == NULL) {
         calls->caller_frames_ignored++;
         return;
     }
-    call = newest(calls, C300X_CALL_RINGING, 1);
-    if (call != NULL && now - call->started_ms <= C300X_CALLER_BIND_WINDOW_MS) {
-        bind_unit(calls, sink, call, unit, "caller_frame", raw, now);
-        return;
-    }
-    if (live_for_unit(calls, unit->id, 0) != NULL) {
-        return;
-    }
-    if (calls->repeat_after_bind_ms > 0 && now - calls->repeat_after_bind_ms <= C300X_RING_REPEAT_MS) {
-        /* A ring copy came after the newest call had its unit: another unit rings. */
-        call = open_call(calls, sink, 0, now);
-        c300x_copy_string(call->unit, sizeof(call->unit), unit->id);
-        call->attribution = "caller_frame";
-        if (ring_data(call, NULL, data, sizeof(data))) {
-            emit(sink, "doorbell.pressed", data);
-        }
-        call->unit[0] = '\0';
-        bind_unit(calls, sink, call, unit, "caller_frame", raw, now);
-        return;
-    }
-    calls->caller_frames_ignored++;
+    name_unit(call, sink, unit, "caller_frame", raw);
 }
 
 static void view_started(struct c300x_calls *calls, const struct c300x_call_sink *sink, const char *where,
@@ -243,15 +211,18 @@ static void view_started(struct c300x_calls *calls, const struct c300x_call_sink
     if (unit == NULL) {
         return;
     }
-    call = live_for_unit(calls, unit->id, 1);
+    call = live_view(calls, unit->id);
     if (call != NULL) {
         call->updated_ms = now;
         return;
     }
+    /* The station shows one view at a time. */
+    while ((call = live_view(calls, NULL)) != NULL) {
+        c300x_calls_end(calls, sink, call->id, "superseded", now);
+    }
     call = open_call(calls, sink, 1, now);
     c300x_copy_string(call->unit, sizeof(call->unit), unit->id);
     call->attribution = "caller_frame";
-    call->bound_ms = now;
     snprintf(data, sizeof(data), "{\"call_id\":\"%s\",\"unit\":\"%s\"}", call->id, unit->id);
     emit(sink, "call.view_started", data);
 }
@@ -286,71 +257,116 @@ void c300x_calls_frame(struct c300x_calls *calls, const struct c300x_call_sink *
         tail_where[frame + length - 2 - star - 1] = '\0';
     }
     /* Only the caller and the view frame name a unit. Start, answer and end
-     * come from the agent's ring and media events: *8*100 follows an answer
-     * or a view start by 100-500 ms and is no end. */
+     * come from the agent's ring and media events. */
     if (what == 9 && kind == 1 && head_where[0] == '\0') {
-        caller(calls, sink, tail_where, frame, now);
+        caller(calls, sink, tail_where, frame);
     } else if (what == 1 && kind == 5 && head_where[0] != '\0') {
         view_started(calls, sink, head_where, now);
     }
 }
 
-void c300x_calls_answer_seen(struct c300x_calls *calls, const struct c300x_call_sink *sink, long long now)
+void c300x_calls_answer_seen(struct c300x_calls *calls, const struct c300x_call_sink *sink,
+                             const struct c300x_call_media *media, long long now)
 {
-    struct c300x_call *call = newest(calls, C300X_CALL_RINGING, 0);
+    struct c300x_call *call = ring_call(calls);
 
     if (call != NULL) {
-        c300x_calls_answered(calls, sink, call->id, call->answer_pending ? "ha" : "station", now);
+        c300x_calls_answered(calls, sink, call->id, media->ha_answered ? "ha" : "station", now);
     }
 }
 
-void c300x_calls_media_closed(struct c300x_calls *calls, const struct c300x_call_sink *sink, long long now)
+void c300x_calls_media_closed(struct c300x_calls *calls, const struct c300x_call_sink *sink,
+                              const struct c300x_call_media *media, int external, int from_bus, long long now)
 {
+    const char *reason = media->ha_hangup ? "hangup" : "media_closed";
+
     for (int index = 0; index < C300X_MAX_CALLS; index++) {
-        if (live(&calls->items[index])) {
-            c300x_calls_end(calls, sink, calls->items[index].id,
-                            calls->items[index].hangup_pending ? "hangup" : "media_closed", now);
+        struct c300x_call *call = &calls->items[index];
+        if (!live(call) || external) {
+            /* The station's media goes on: the display or the app has the call. */
+            if (live(call) && call->state == C300X_CALL_RINGING) {
+                c300x_calls_answered(calls, sink, call->id, "station", now);
+            }
+            continue;
+        }
+        if (call->state == C300X_CALL_RINGING && !media->ha_hangup) {
+            /* Unanswered, or answered on the display or the app with the
+             * answer frame still to come. */
+            if (call->closing == NULL) {
+                call->closing = reason;
+                call->closed_ms = now;
+            }
+        } else if (call->state != C300X_CALL_ANSWERED || from_bus || strcmp(call->answered_by, "ha") == 0) {
+            /* A station call ends with the bus end frame, not with the agent's leg. */
+            c300x_calls_end(calls, sink, call->id, reason, now);
         }
     }
+}
+
+/* The media the call stands for is still there. */
+static int media_live(const struct c300x_call *call, const struct c300x_call_media *media)
+{
+    if (call->view) {
+        return media->agent || media->external;
+    }
+    return media->ring_leg || (strcmp(call->answered_by, "station") == 0 && media->external);
 }
 
 static long long deadline(const struct c300x_call *call)
 {
     if (call->state == C300X_CALL_RINGING) {
-        long long timeout = call->updated_ms + C300X_CALL_RINGING_TIMEOUT_MS;
-        if (call->unit[0] == '\0' && call->bound_ms == 0 && call->started_ms + C300X_CALLER_WAIT_MS < timeout) {
-            return call->started_ms + C300X_CALLER_WAIT_MS;
+        long long due = call->updated_ms + C300X_CALL_RINGING_TIMEOUT_MS;
+        if (call->unit[0] == '\0' && strcmp(call->attribution, "pending") == 0
+            && call->started_ms + C300X_CALLER_WAIT_MS < due) {
+            due = call->started_ms + C300X_CALLER_WAIT_MS;
         }
-        return timeout;
+        if (call->closing != NULL && call->closed_ms + C300X_CALL_SETTLE_MS < due) {
+            due = call->closed_ms + C300X_CALL_SETTLE_MS;
+        }
+        return due;
     }
-    return live(call) ? call->updated_ms + C300X_CALL_ACTIVE_TIMEOUT_MS : -1;
+    if (call->state == C300X_CALL_ENDED) {
+        return call->updated_ms + C300X_CALL_ENDED_KEEP_MS;
+    }
+    return live(call) ? call->probe_ms : -1;
 }
 
-void c300x_calls_tick(struct c300x_calls *calls, const struct c300x_call_sink *sink, long long now)
+static void fall_back(struct c300x_call *call, const struct c300x_call_sink *sink)
+{
+    const struct c300x_outdoor_unit *unit = sink != NULL && sink->units != NULL
+        ? c300x_outdoor_units_default(sink->units) : NULL;
+
+    if (unit != NULL) {
+        name_unit(call, sink, unit, "default_fallback", NULL);
+    } else {
+        call->attribution = "default_fallback";
+    }
+}
+
+void c300x_calls_tick(struct c300x_calls *calls, const struct c300x_call_sink *sink,
+                      const struct c300x_call_media *media, long long now)
 {
     for (int index = 0; index < C300X_MAX_CALLS; index++) {
         struct c300x_call *call = &calls->items[index];
         long long due = deadline(call);
-        if (call->state == C300X_CALL_ENDED && now - call->updated_ms >= C300X_CALL_ENDED_KEEP_MS) {
-            memset(call, 0, sizeof(*call));
-        }
         if (due < 0 || now < due) {
             continue;
         }
-        if (call->state == C300X_CALL_RINGING && call->unit[0] == '\0'
-            && now - call->started_ms < C300X_CALL_RINGING_TIMEOUT_MS) {
-            const struct c300x_outdoor_unit *unit = sink != NULL && sink->units != NULL
-                ? c300x_outdoor_units_default(sink->units) : NULL;
-            if (unit != NULL) {
-                bind_unit(calls, sink, call, unit, "default_fallback", NULL, now);
-                continue;
+        if (call->state == C300X_CALL_ENDED) {
+            memset(call, 0, sizeof(*call));
+        } else if (call->state == C300X_CALL_RINGING) {
+            if (strcmp(call->attribution, "pending") == 0 && now - call->started_ms >= C300X_CALLER_WAIT_MS) {
+                fall_back(call, sink);
             }
-            call->attribution = "default_fallback";
-            call->bound_ms = now;
-        }
-        if (now - call->updated_ms >= (call->state == C300X_CALL_RINGING
-                ? C300X_CALL_RINGING_TIMEOUT_MS : C300X_CALL_ACTIVE_TIMEOUT_MS)) {
-            c300x_calls_end(calls, sink, call->id, "timeout", now);
+            if (call->closing != NULL && now - call->closed_ms >= C300X_CALL_SETTLE_MS) {
+                c300x_calls_end(calls, sink, call->id, call->closing, now);
+            } else if (now - call->updated_ms >= C300X_CALL_RINGING_TIMEOUT_MS) {
+                c300x_calls_end(calls, sink, call->id, "timeout", now);
+            }
+        } else if (!media_live(call, media)) {
+            c300x_calls_end(calls, sink, call->id, "media_closed", now);
+        } else {
+            call->probe_ms = now + C300X_CALL_PROBE_MS;
         }
     }
 }
@@ -360,8 +376,7 @@ int c300x_calls_timeout_ms(const struct c300x_calls *calls, long long now)
     long long next = -1;
 
     for (int index = 0; index < C300X_MAX_CALLS; index++) {
-        const struct c300x_call *call = &calls->items[index];
-        long long due = deadline(call);
+        long long due = deadline(&calls->items[index]);
         if (due >= 0 && (next < 0 || due < next)) {
             next = due;
         }
@@ -385,15 +400,14 @@ const struct c300x_call *c300x_calls_find(const struct c300x_calls *calls, const
 const struct c300x_call *c300x_calls_current(const struct c300x_calls *calls)
 {
     struct c300x_calls *mutable_calls = (struct c300x_calls *)calls;
-    const struct c300x_call *answered = newest(mutable_calls, C300X_CALL_ANSWERED, 0);
-    return answered != NULL ? answered : newest(mutable_calls, C300X_CALL_RINGING, 0);
+    return ring_call(mutable_calls);
 }
 
 const struct c300x_call *c300x_calls_live_for_unit(const struct c300x_calls *calls, const char *unit)
 {
     struct c300x_calls *mutable_calls = (struct c300x_calls *)calls;
-    const struct c300x_call *call = live_for_unit(mutable_calls, unit, 0);
-    return call != NULL ? call : live_for_unit(mutable_calls, unit, 1);
+    const struct c300x_call *call = ring_call(mutable_calls);
+    return call != NULL && strcmp(call->unit, unit) == 0 ? call : live_view(mutable_calls, unit);
 }
 
 int c300x_calls_is_current(const struct c300x_calls *calls, const char *call_id)
@@ -410,30 +424,6 @@ int c300x_calls_unlock_allowed(const struct c300x_calls *calls, const char *call
         && (live(call) || now - call->updated_ms < C300X_CALL_ENDED_KEEP_MS);
 }
 
-void c300x_calls_answer_started(struct c300x_calls *calls, const char *call_id)
-{
-    struct c300x_call *call = (struct c300x_call *)c300x_calls_find(calls, call_id);
-    if (call != NULL) {
-        call->answer_pending = 1;
-    }
-}
-
-void c300x_calls_hangup_started(struct c300x_calls *calls, const char *call_id)
-{
-    struct c300x_call *call = (struct c300x_call *)c300x_calls_find(calls, call_id);
-    if (call != NULL) {
-        call->hangup_pending = 1;
-    }
-}
-
-void c300x_calls_action_refused(struct c300x_calls *calls, const char *call_id)
-{
-    struct c300x_call *call = (struct c300x_call *)c300x_calls_find(calls, call_id);
-    if (call != NULL) {
-        call->answer_pending = call->hangup_pending = 0;
-    }
-}
-
 void c300x_calls_answered(struct c300x_calls *calls, const struct c300x_call_sink *sink,
                           const char *call_id, const char *by, long long now)
 {
@@ -446,7 +436,9 @@ void c300x_calls_answered(struct c300x_calls *calls, const struct c300x_call_sin
     }
     call->state = C300X_CALL_ANSWERED;
     call->answered_by = by;
-    call->answer_pending = 0;
+    call->closing = NULL;
+    call->closed_ms = 0;
+    call->probe_ms = now + C300X_CALL_GUARD_MS;
     call->updated_ms = now;
     snprintf(data, sizeof(data), "{\"call_id\":\"%s\",\"unit\":%s,\"answered_by\":\"%s\"}",
              call->id, unit_json(call, unit, sizeof(unit)), by);
@@ -465,6 +457,7 @@ void c300x_calls_end(struct c300x_calls *calls, const struct c300x_call_sink *si
     }
     call->state = C300X_CALL_ENDED;
     call->end_reason = reason;
+    call->closing = NULL;
     call->updated_ms = now;
     snprintf(data, sizeof(data), "{\"call_id\":\"%s\",\"unit\":%s,\"kind\":\"%s\",\"reason\":\"%s\"}",
              call->id, unit_json(call, unit, sizeof(unit)), call->view ? "view" : "ring", reason);

@@ -24,6 +24,7 @@
 #define C300X_DISPLAY_CALL_GUARD_SECONDS 65
 #define C300X_EXTERNAL_MEDIA_GUARD_MAX_SECONDS 120
 #define C300X_ONDEMAND_START_MEDIA_CLOSED_GRACE_MS 3500
+#define C300X_DOORBELL_PRESSED_DEDUPE_MS 1000
 #define C300X_STATION_BUSY_GUARD_MS (C300X_DISPLAY_CALL_GUARD_SECONDS * 1000LL)
 #define C300X_LAST_RTP_AT_UPDATE_MS 1000
 
@@ -61,6 +62,7 @@ struct c300x_video {
     char last_rtp_at[40];
     char last_media_started_at[40];
     char last_error[128];
+    long long last_doorbell_pressed_ms;
     int event_read_fd;
     int event_write_fd;
     struct c300x_video_event pending_events[C300X_VIDEO_MAX_PENDING_EVENTS];
@@ -692,6 +694,32 @@ void c300x_video_bridge_set_error(struct c300x_video *video, const char *message
     pthread_mutex_lock(&video->mutex);
     snprintf(video->last_error, sizeof(video->last_error), "%s", message != NULL ? message : "error");
     pthread_mutex_unlock(&video->mutex);
+}
+
+int c300x_video_should_dispatch_event(struct c300x_video *video, const char *event_type)
+{
+    long long now;
+    long long previous;
+    int accept = 1;
+
+    if (video == NULL || event_type == NULL || strcmp(event_type, "doorbell.pressed") != 0) {
+        return 1;
+    }
+
+    now = c300x_monotonic_ms();
+    pthread_mutex_lock(&video->mutex);
+    previous = video->last_doorbell_pressed_ms;
+    if (
+        previous > 0
+        && now >= previous
+        && now - previous < C300X_DOORBELL_PRESSED_DEDUPE_MS
+    ) {
+        accept = 0;
+    } else {
+        video->last_doorbell_pressed_ms = now;
+    }
+    pthread_mutex_unlock(&video->mutex);
+    return accept;
 }
 
 void c300x_video_note_event(struct c300x_video *video, const char *event_type, int ttl_seconds)

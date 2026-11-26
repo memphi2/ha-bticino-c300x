@@ -4172,11 +4172,16 @@ static int dispatch_event_internal(
     char call_json[1024];
     int written;
     int delivered = 1;
-    int call_result = c300x_call_hub_event(&runtime->calls, event_type, data_json, call_json, sizeof(call_json));
+    int call_result;
+    int from_bus = data_json != NULL && strstr(data_json, "\"raw\"") != NULL;
 
-    if (call_result == 0) {
+    if (
+        runtime->video != NULL
+        && !c300x_video_should_dispatch_event(runtime->video, event_type)
+    ) {
         return 0;
     }
+    call_result = c300x_call_hub_event(&runtime->calls, event_type, data_json, call_json, sizeof(call_json));
     data_json = call_result == 2 ? call_json : data_json;
     if (update_video_state && runtime->video != NULL) {
         c300x_video_note_event(runtime->video, event_type, ttl_seconds);
@@ -4191,7 +4196,7 @@ static int dispatch_event_internal(
     );
     if (strcmp(event_type, "doorbell.media.closed") == 0) {
         c300x_call_hub_media_closed(&runtime->calls,
-                                    strstr(merged_json, "\"external_media_active\":true") != NULL);
+                                    strstr(merged_json, "\"external_media_active\":true") != NULL, from_bus);
     }
     utc_now(occurred_at, sizeof(occurred_at));
     c300x_json_string(event_type, event_type_json, sizeof(event_type_json));
@@ -9412,6 +9417,7 @@ int c300x_run(struct c300x_config *config)
     }
     runtime->config = config;
     c300x_call_hub_init(&runtime->calls, config, dispatch_call_event, runtime);
+    c300x_call_hub_bind(&runtime->calls, &runtime->video, &runtime->video_control);
     struct http_context http = {.config = config, .runtime = runtime};
     c300x_http_clients_init(&runtime->http_clients);
     c300x_http_file_transfers_init(&runtime->file_transfers);

@@ -104,39 +104,29 @@ A call has `call_id`, `kind` (`ring` or `view`), `state`, `unit`
 
 ### Ring timing
 
-1. A ring frame (or the ring's SIP INVITE, whichever comes first) that is not
-   a repeat opens a call and the ring event `doorbell.pressed` goes out at
-   once, with `call_id` and `unit: null`.
-2. A repeat is a ring frame within 1000 ms of the last ring frame of a call
-   that is still `ringing`. It changes nothing and sends nothing. (This
-   replaces the 2.x global one-second filter, which would also have dropped a
-   second unit.)
-3. A caller frame (`kind` 1) binds its unit to the newest `ringing` call that
-   has no unit yet and whose ring started at most 1500 ms earlier, and sends
-   `call.caller_identified`.
-4. If no caller frame arrives within 1000 ms, the agent binds the default unit
-   with `attribution: "default_fallback"` and sends `call.caller_identified`.
-5. A unit, once bound, is final. A caller frame never moves to another call:
-   - for a unit that already has a live call: a repeat, ignored;
-   - for another unit, when a ring frame was taken as a repeat after the
-     newest call got its unit, and at most 1000 ms ago: a second unit is
-     ringing. A new call opens with that unit already bound; `doorbell.pressed`
-     (with `unit`) and `call.caller_identified` go out;
-   - otherwise it is counted (`caller_frames_ignored` in `GET /api/v1/calls`) and
-     dropped. This covers a late frame after the fallback.
-6. If the bound unit already had a live `ringing` call, that older call ends
-   with `reason: "superseded"`: the same visitor pressed again.
+A call mirrors the agent's ring session of 3.0.0; it adds no state machine of
+its own.
 
-Two units pressed within the caller-frame delay (~0.3 s) of each other are
-reported as one call of the first unit identified; the bus does not separate
-them.
+1. A ring frame or the ring's SIP INVITE that the 3.0.0 duplicate filter lets
+   through (the first ring, then none for 1000 ms) is `doorbell.pressed`, as
+   in 3.0.0. With no live ring call it opens one; while the ring call is live
+   (ringing or answered) it belongs to that call: the event carries its
+   `call_id`, and nothing else changes. Trailing ring copies never open a
+   second call.
+2. The caller frame (`kind` 1) names the unit of the live ring call, ringing
+   or answered, and sends `call.caller_identified`; a frame for another unit
+   names that unit instead. A caller frame with no live ring call is counted
+   (`caller_frames_ignored` in `GET /api/v1/calls`) and dropped.
+3. If the ring call has no unit 1000 ms after it opened, the default unit
+   stands in (`attribution: "default_fallback"`, `call.caller_identified`);
+   a later caller frame still names the real unit.
+
+The station has one ring session at a time: two units pressed in the same
+session are one call, named by the last caller frame.
 
 ### Current call
 
-Only the current call can be answered or hung up: the `answered` call if
-there is one, else the newest `ringing` call. A ring of a second unit during an
-answered call opens its own `ringing` call, but the answered one stays current
-until it ends.
+Only the current call can be answered or hung up: the live ring call.
 
 ### End of a call
 
@@ -146,17 +136,22 @@ as in 3.0.0; the bus frames only name the unit (caller frame) or open a view
 
 | Event | Call |
 | --- | --- |
-| `doorbell.pressed` (ring frame or SIP INVITE) | Opens a `ringing` call (see Ring timing). |
-| `doorbell.view_requested` of the ring (`*8*2#1#…`, or the agent's own answer) | The newest `ringing` call is `answered`: `answered_by: "ha"` while Home Assistant's answer runs, else `"station"`. |
-| View frame `*8*1#5#4#<where>*…##` | Opens a `viewing` call of that unit. |
+| `doorbell.pressed` | Opens the ring call, or belongs to the live one (see Ring timing). |
+| `doorbell.view_requested` of the ring (`*8*2#1#…`, or the agent's own answer) | The ring call is `answered`: `answered_by: "ha"` while the agent's ring leg is answered by Home Assistant, else `"station"` (display or app). In which order the display's frames and the ring leg's close come does not matter. |
+| `doorbell.media.closed` whose payload still reports the station's own media | A ringing call is `answered` by the station. |
+| View frame `*8*1#5#4#<where>*…##` | Opens a `viewing` call of that unit; a view of another unit ends the one before (`reason: "superseded"`). |
 
 | Source | Ends |
 | --- | --- |
-| `doorbell.media.closed` as the agent sends it (after its answer and on-demand start filters) | Every live call (`reason: "media_closed"`), unless its payload still reports the station's own media (`external_media_active`: the display answered and holds the call). |
-| Hang-up through the API | That call (`reason: "hangup"`, also when the hang-up's own media close ends it). |
-| No change for 90 s while `ringing`, 15 min while `answered` or `viewing` | That call (`reason: "timeout"`). |
+| `doorbell.media.closed` while ringing | The ring call, 1.5 s later, unless the display's or the app's answer frame comes in between (the app's end frame of the ring can come before its answer frame). |
+| `doorbell.media.closed` while answered by Home Assistant, or of a view | That call. |
+| The bus end frame of a call answered on the station | That call. The close of the agent's own leg does not end it: the display call goes on. |
+| Hang-up through the API | That call (`reason: "hangup"`, also when the hang-up's own media close comes first). |
+| The agent's media state, checked 66 s after the answer and every 5 s after that (a view: every 5 s) | An answered call whose leg is gone, or whose display call is over (the station's conversation limit is 60 s, the agent's display guard 65 s), ends with `reason: "media_closed"`: a lost end frame keeps no call. |
+| No change for 90 s while `ringing` | That call (`reason: "timeout"`). |
 
-The timer exists only while a call is live; an idle agent has no extra wakeup.
+The timer exists only while a call is live or ended less than 60 s ago; an
+idle agent has no extra wakeup.
 
 ## Agent API
 
@@ -248,8 +243,8 @@ All carry the 2.x envelope (`event_id`, `type`, `occurred_at`, `data`).
 
 | `type` | `data` |
 | --- | --- |
-| `doorbell.pressed` | `call_id`, `unit` (`null` unless a second unit opened the call), `attribution`, `raw` |
-| `call.caller_identified` | `call_id`, `unit`, `where`, `action_where`, `attribution`, `raw` (`null` for the fallback) |
+| `doorbell.pressed` | the 3.0.0 data (`raw` for a ring frame) plus `call_id`, `unit` (`null` until a caller frame or the fallback names it) and `attribution` |
+| `call.caller_identified` | `call_id`, `unit`, `where`, `action_where`, `attribution`, `raw` (`null` for the fallback). Again when a later caller frame names another unit or replaces the fallback. |
 | `call.answered` | `call_id`, `unit`, `answered_by` |
 | `call.view_started` | `call_id`, `unit` (a view frame `*8*1#5#4#<where>*…##` opened a view) |
 | `call.ended` | `call_id`, `unit`, `kind`, `reason` |

@@ -1146,6 +1146,10 @@ def test_native_agent_doorbell_events_include_device_media_state() -> None:
         http.index("static int dispatch_event_internal") :
         http.index("static int dispatch_event(", http.index("static int dispatch_event_internal"))
     ]
+    dedupe_body = video[
+        video.index("int c300x_video_should_dispatch_event") :
+        video.index("void c300x_video_note_event")
+    ]
 
     assert 'strcmp(event_type, "doorbell.pressed") == 0' in event_payload
     assert 'strcmp(event_type, "doorbell.view_requested") == 0' in event_payload
@@ -1178,9 +1182,17 @@ def test_native_agent_doorbell_events_include_device_media_state() -> None:
     assert "c300x_event_payload_needs_doorbell_state" in payload_builder_body
     assert "c300x_event_payload_build_data_json(" in dispatch_body
     assert "runtime != NULL ? runtime->video : NULL" in dispatch_body
-    # Ring copies are dropped per call by the call table, not by one global window.
-    assert "last_doorbell_pressed_ms" not in video
-    assert "c300x_call_hub_event(&runtime->calls, event_type, data_json" in dispatch_body
+    # 3.0.0's ring filter runs first; the call table sees only the rings it lets through.
+    assert "#define C300X_DOORBELL_PRESSED_DEDUPE_MS 1000" in video
+    assert "long long last_doorbell_pressed_ms;" in video
+    assert 'strcmp(event_type, "doorbell.pressed") != 0' in dedupe_body
+    assert "previous = video->last_doorbell_pressed_ms;" in dedupe_body
+    assert "now - previous < C300X_DOORBELL_PRESSED_DEDUPE_MS" in dedupe_body
+    assert "video->last_doorbell_pressed_ms = now;" in dedupe_body
+    assert "c300x_video_should_dispatch_event(runtime->video, event_type)" in dispatch_body
+    assert dispatch_body.index("c300x_video_should_dispatch_event") < dispatch_body.index(
+        "c300x_call_hub_event(&runtime->calls, event_type, data_json"
+    )
     assert dispatch_body.index("c300x_call_hub_event") < dispatch_body.index(
         "c300x_video_note_event(runtime->video, event_type, ttl_seconds)"
     )

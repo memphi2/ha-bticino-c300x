@@ -757,6 +757,7 @@
       "reauth_wrong_device": "The agent has a different identity. The saved entry was not changed.",
       "reauth_successful": "The credentials were updated.",
       "reinstall_entry_updated": "The agent was installed again on a station that is already set up as {name}. That entry now uses the new keys and this address; no second entry was created.",
+      "station_entry_updated": "This station is already set up as {name}. That entry now uses these keys and this address; no second entry was created.",
       "unsupported_display": "This device does not support Home Assistant display pages or display notifications. Saved layouts have not been changed."
     },
     "error": {

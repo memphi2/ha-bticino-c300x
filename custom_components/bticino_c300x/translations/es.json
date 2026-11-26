@@ -757,6 +757,7 @@
       "reauth_wrong_device": "El agente tiene una identidad distinta. La entrada guardada no se ha cambiado.",
       "reauth_successful": "Las credenciales se han actualizado.",
       "reinstall_entry_updated": "El agente se ha vuelto a instalar en una estación que ya está configurada como {name}. Esa entrada usa ahora las nuevas claves y esta dirección; no se ha creado una segunda entrada.",
+      "station_entry_updated": "Esta estación ya está configurada como {name}. Esa entrada usa ahora estas claves y esta dirección; no se ha creado una segunda entrada.",
       "unsupported_display": "Este dispositivo no admite páginas de pantalla de Home Assistant ni notificaciones en pantalla. Los diseños guardados no se han cambiado."
     },
     "error": {

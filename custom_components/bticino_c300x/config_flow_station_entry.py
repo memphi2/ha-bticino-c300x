@@ -39,6 +39,8 @@ from .entry_config import entry_config_value
 
 KEYS = (CONF_AGENT_TOKEN, CONF_MAINTENANCE_TOKEN)
 ENTRY_UPDATED = "reinstall_entry_updated"
+# A setup with keys that work reached the station of an older entry.
+KEYS_ENTRY_UPDATED = "station_entry_updated"
 
 
 async def async_station_entry(
@@ -82,9 +84,13 @@ def hand_keys_to_entry(
     unique_id: str | None,
     display_pending: bool,
 ) -> None:
-    """Save the keys on the station and the address that reached it in the entry."""
+    """Save the keys on the station and the address that reached it in the entry.
 
-    data = {key: connection[key] for key in KEYS}
+    A key the setup did not get (an empty maintenance key typed) leaves the
+    entry's own.
+    """
+
+    data = {key: connection[key] for key in KEYS if connection.get(key)}
     data[CONF_AGENT_HOST] = connection[CONF_AGENT_HOST]
     data[CONF_AGENT_PORT] = int(connection.get(CONF_AGENT_PORT, DEFAULT_AGENT_PORT))
     if display_pending:
@@ -150,23 +156,33 @@ class StationEntrySteps:
             self._setup_keys_entry = entry.entry_id
 
     async def _async_hand_keys_to_station_entry(
-        self: Any, install_result: object,
+        self: Any, install_result: object | None = None,
     ) -> ConfigFlowResult | None:
-        """End the setup at the existing entry of this station, which gets the keys."""
+        """End the setup at the existing entry of this station, which gets the keys.
 
-        if self._setup_unique_id is None:
+        After an install every entry of the station counts. With keys typed
+        in, only an older entry under an address does: the setup creates no
+        second entry for its station. An entry under the station's identity
+        ends such a setup as already configured, unchanged.
+        """
+
+        unique_id = self._setup_unique_id
+        if unique_id is None:
             return None
-        entry = await async_station_entry(
-            self.hass, self._async_current_entries(), self._setup_unique_id, self._setup_connection,
-        )
+        entries = self._async_current_entries()
+        typed = install_result is None
+        if typed and any(discovery_matches_entry(unique_id, getattr(entry, "unique_id", None)) for entry in entries):
+            return None
+        entry = await async_station_entry(self.hass, entries, unique_id, self._setup_connection)
         if entry is None:
             return None
         hand_keys_to_entry(
-            self.hass, entry, self._setup_connection, unique_id=self._setup_unique_id,
+            self.hass, entry, self._setup_connection, unique_id=unique_id,
             display_pending=bool(getattr(install_result, "display_pending", False)),
         )
         return cast(ConfigFlowResult, self.async_abort(
-            reason=ENTRY_UPDATED, description_placeholders={"name": str(getattr(entry, "title", "") or "")},
+            reason=KEYS_ENTRY_UPDATED if typed else ENTRY_UPDATED,
+            description_placeholders={"name": str(getattr(entry, "title", "") or "")},
         ))
 
     @callback

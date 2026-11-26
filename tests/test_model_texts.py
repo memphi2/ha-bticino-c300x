@@ -57,6 +57,7 @@ def text(lang: str, *path: str, model: str) -> str:
 ADDED_SINCE_2_10_0 = frozenset({
     "config/abort/model_mismatch",
     "config/abort/reinstall_entry_updated",
+    "config/abort/station_entry_updated",
     "config/abort/unsupported_display",
     "config/error/c100x_confirmation_required",
     "config/error/device_model_incompatible",

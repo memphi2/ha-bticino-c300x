@@ -204,6 +204,9 @@ class AuthFlowSteps(C100XOptInSteps, ReinstallSteps, StationEntrySteps):
                     if unique_id is not None:
                         self._setup_unique_id = unique_id
                         self._async_abort_duplicate_setup_flows(unique_id)
+                    # An older entry of this station gets the keys; no second entry.
+                    if done := await self._async_hand_keys_to_station_entry():
+                        return cast(ConfigFlowResult, done)
                     if self._setup_pending_features is not None:
                         return cast(ConfigFlowResult, await self._async_create_setup_entry(self._setup_pending_features))
                     return cast(ConfigFlowResult, await self.async_step_user_features())

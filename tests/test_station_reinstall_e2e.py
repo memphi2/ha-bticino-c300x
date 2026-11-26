@@ -343,20 +343,28 @@ def test_reauth_reinstall_gives_the_same_entry_the_new_keys(network, tmp_path, f
 #    (an address-based unique id) still points at the station.
 
 
+@pytest.mark.parametrize("keys_known", [False, True])
 @pytest.mark.parametrize("firmware", FIRMWARES)
-def test_a_legacy_entry_of_the_station_is_proven_and_gets_the_keys(network, tmp_path, firmware):
+def test_a_legacy_entry_of_the_station_is_proven_and_gets_the_keys(network, tmp_path, firmware, keys_known):
     station = _station(network, tmp_path, firmware, "door.local")
+    files = station.files()
     legacy = _saved_entry(f"{DOMAIN}:door.local:{PORT}", "door.local")
     ha = HA([legacy])
     ha.station = station
-    _flow, result = asyncio.run(ha.setup())
-    assert (result["type"], result["reason"]) == ("abort", "reinstall_entry_updated")
+    _flow, result = asyncio.run(ha.setup(keys=KEYS if keys_known else None))
+    reason = "station_entry_updated" if keys_known else "reinstall_entry_updated"
+    assert (result["type"], result["reason"]) == ("abort", reason)
     assert result["description_placeholders"]["name"] == "Door"
     assert ha.entries == [legacy]
     _assert_entry_holds_the_station_keys(legacy, station)
     assert legacy.data["shared_secret"] == "kept"
     assert ha.registry.reloaded == [legacy.entry_id]
-    _assert_reinstalled(station)
+    if keys_known:
+        # The typed keys work: nothing on the station changes.
+        assert station.held_keys() == KEYS and network.ssh_hosts == []
+        _nothing_written(station, files)
+    else:
+        _assert_reinstalled(station)
     # The saved name was resolved to the station's IPv4 address, which proved
     # the identity; no request ever went to the name, none with a key to it.
     proofs = [item for item in network.requests if item.path == "/api/v1/identity/proof"]
@@ -365,9 +373,27 @@ def test_a_legacy_entry_of_the_station_is_proven_and_gets_the_keys(network, tmp_
     _assert_keys_only_to(network, IP)
 
 
+@pytest.mark.parametrize("firmware", FIRMWARES)
+def test_a_legacy_entry_proven_with_the_access_key_alone_keeps_its_maintenance_key(network, tmp_path, firmware):
+    station = _station(network, tmp_path, firmware, "door.local")
+    legacy = _saved_entry(f"{DOMAIN}:door.local:{PORT}", "door.local")
+    kept = legacy.data[CONF_MAINTENANCE_TOKEN]
+    ha = HA([legacy])
+    ha.station = station
+    _flow, result = asyncio.run(ha.setup(keys=(KEYS[0], "")))
+    assert (result["type"], result["reason"]) == ("abort", "station_entry_updated")
+    assert ha.entries == [legacy] and legacy.unique_id == UNIQUE_ID
+    assert (legacy.data[CONF_AGENT_HOST], legacy.data[CONF_AGENT_TOKEN]) == (IP, KEYS[0])
+    assert legacy.data[CONF_MAINTENANCE_TOKEN] == kept
+    assert network.ssh_hosts == [] and station.held_keys() == KEYS
+    _assert_keys_only_to(network, IP)
+
+
+@pytest.mark.parametrize("keys_known", [False, True])
 @pytest.mark.parametrize("other", ["nothing", "another_station", "ipv6", "unknown_name"])
 @pytest.mark.parametrize("firmware", FIRMWARES)
-def test_an_unproven_legacy_entry_is_left_alone_and_a_new_entry_created(network, tmp_path, firmware, other):
+def test_an_unproven_legacy_entry_is_left_alone_and_a_new_entry_created(network, tmp_path, firmware, other,
+                                                                        keys_known):
     station = _station(network, tmp_path, firmware)
     host = {"ipv6": "fd00::5", "unknown_name": "gone.local"}.get(other, "door-old.local")
     network.names["door-old.local"] = "192.0.2.99"
@@ -377,12 +403,15 @@ def test_an_unproven_legacy_entry_is_left_alone_and_a_new_entry_created(network,
     before = (dict(legacy.data), dict(legacy.options), legacy.unique_id)
     ha = HA([legacy])
     ha.station = station
-    _flow, result = asyncio.run(ha.setup())
+    _flow, result = asyncio.run(ha.setup(keys=KEYS if keys_known else None))
     assert result["type"] == "create_entry"
     assert len(ha.entries) == 2 and ha.entries[0] is legacy
     assert (legacy.data, legacy.options, legacy.unique_id) == before
     _assert_entry_holds_the_station_keys(ha.entries[1], station)
-    _assert_reinstalled(station)
+    if keys_known:
+        assert station.held_keys() == KEYS and network.ssh_hosts == []
+    else:
+        _assert_reinstalled(station)
     assert ha.registry.reloaded == []
     # Only the nonce went to the other address.
     _assert_keys_only_to(network, IP)

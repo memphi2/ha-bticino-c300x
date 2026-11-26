@@ -2,6 +2,7 @@
 
 import hashlib
 import importlib.util
+import json
 import os
 import shutil
 import subprocess
@@ -163,3 +164,75 @@ def test_page_layouts_and_hardware_key_focus_in_qt5(tmp_path):
     ], env={**os.environ, "QT_QPA_PLATFORM": "offscreen", "QT_QUICK_BACKEND": "software"},
        capture_output=True, text=True, timeout=90)
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+# Spanish on the C100X. The adapter's own text table (c100x_text.js) takes the
+# language the bridge reads from Qt.locale(); the converted pages use the
+# shared c300x_i18n.js with the same value.
+C100X_STATUS_LABELS = {
+    "en": "Status messages", "de": "Statusmeldungen", "it": "Messaggi di stato",
+    "fr": "Messages d'état", "es": "Mensajes de estado",
+}
+
+
+def test_the_c100x_text_table_speaks_spanish_for_every_spanish_locale_name():
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node evaluates the device script")
+    names = ["es", "es_ES", "es-MX", "ES_es", "de_DE", "it_IT", "fr_FR", "en_US", "C", "", "pt_BR"]
+    script = (
+        "const fs = require('fs');\n"
+        "const source = fs.readFileSync(process.argv[1], 'utf8').replace('.pragma library', '');\n"
+        "const label = new Function(source + '\\nreturn label')();\n"
+        f"const names = {json.dumps(names)};\n"
+        "console.log(JSON.stringify(names.map(name => [label(name, 'status'), label(name, 'unknown_key')])));\n"
+    )
+    result = subprocess.run([node, "-e", script, str(ROOT / "device_qml/c100x/js/c100x_text.js")],
+                            capture_output=True, text=True, check=True, timeout=10)
+    labels = dict(zip(names, (tuple(pair) for pair in json.loads(result.stdout)), strict=True))
+    for name in ("es", "es_ES", "es-MX", "ES_es"):
+        assert labels[name] == (C100X_STATUS_LABELS["es"], "unknown_key"), name
+    for name, code in (("de_DE", "de"), ("it_IT", "it"), ("fr_FR", "fr"), ("en_US", "en")):
+        assert labels[name][0] == C100X_STATUS_LABELS[code], name
+    # The C locale (no LANG) and unknown languages read English.
+    for name in ("C", "", "pt_BR"):
+        assert labels[name][0] == C100X_STATUS_LABELS["en"], name
+
+
+@pytest.mark.parametrize("lang,expected", [
+    ("es_ES.UTF-8", "es"), ("de_DE.UTF-8", "de"), ("it_IT.UTF-8", "it"), ("fr_FR.UTF-8", "fr"),
+    ("en_GB.UTF-8", "en"), (None, "en"),
+])
+def test_the_bridge_takes_the_display_language_from_the_qt_locale(tmp_path, lang, expected):
+    """Qt.locale() follows LANG; the 1.5.8 display starts without one (None: the C locale)."""
+    if importlib.util.find_spec("PyQt5") is None:
+        pytest.skip("Optional host PyQt5 absent")
+    source = tmp_path / "c100x"
+    builder.build(source)
+    (source / "LanguageProbe.qml").write_text(
+        'import QtQuick 2.7\nimport "js/c100x_text.js" as Labels\nimport "js/c300x_i18n.js" as I18n\n'
+        "Item {\n    property alias c100xHost: bridge\n    C100XBridge { id: bridge }\n"
+        '    readonly property string label: Labels.label(bridge.language, "status")\n'
+        "    readonly property string shared: I18n.language(bridge.language)\n}\n")
+    code = '''import json, sys
+from PyQt5.QtCore import QUrl
+from PyQt5.QtGui import QGuiApplication
+from PyQt5.QtQml import QQmlComponent, QQmlEngine
+app = QGuiApplication([])
+engine = QQmlEngine()
+component = QQmlComponent(engine, QUrl.fromLocalFile(sys.argv[1]))
+item = component.create()
+assert item is not None, [error.toString() for error in component.errors()]
+bridge = item.property("c100xHost")
+print(json.dumps([bridge.property("language"), item.property("label"), item.property("shared")]))
+'''
+    env = {key: value for key, value in os.environ.items() if not key.startswith(("LANG", "LC_"))}
+    if lang:
+        env["LANG"] = lang
+    result = subprocess.run([sys.executable, "-c", code, str(source / "LanguageProbe.qml")],
+                            env={**env, "QT_QPA_PLATFORM": "offscreen", "QT_QUICK_BACKEND": "software"},
+                            capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stdout + result.stderr
+    name, label, shared = json.loads(result.stdout.strip().splitlines()[-1])
+    assert name == (lang.split(".")[0] if lang else "C")
+    assert (label, shared) == (C100X_STATUS_LABELS[expected], expected)

@@ -56,7 +56,8 @@ async def async_station_entry(
     based identity (an older release) is it when its own address, resolved
     to IPv4, proves that identity with the keys just written. The proof
     request carries no key: an address that now belongs to another machine
-    never gets one.
+    never gets one. A disabled older entry is left alone: the user switched
+    it off, and the setup creates a working entry of its own.
     """
 
     if unique_id is None:
@@ -69,7 +70,7 @@ async def async_station_entry(
     port = int(connection.get(CONF_AGENT_PORT, DEFAULT_AGENT_PORT))
     for entry in entries:
         host = str(entry_config_value(entry, CONF_AGENT_HOST, "") or "").strip()
-        if not host or not entry_uses_manual_setup_unique_id(entry):
+        if not host or not entry_uses_manual_setup_unique_id(entry) or getattr(entry, "disabled_by", None):
             continue
         for address in await async_ipv4_addresses(host):
             if await async_identity_proven(hass, address, port, unique_id, connection[CONF_AGENT_TOKEN]):

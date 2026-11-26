@@ -471,6 +471,28 @@ def test_an_entry_holding_the_station_identity_keeps_it_and_the_older_entry_stay
     assert ha.registry.removed == [] and ha.registry.reloaded == []
 
 
+@pytest.mark.parametrize("keys_known", [False, True])
+@pytest.mark.parametrize("firmware", FIRMWARES)
+def test_a_disabled_legacy_entry_of_the_station_is_left_alone(network, tmp_path, firmware, keys_known):
+    """The user switched it off: the setup creates a working entry of its own, as before."""
+
+    station = _station(network, tmp_path, firmware, "door.local")
+    legacy = _saved_entry(f"{DOMAIN}:door.local:{PORT}", "door.local")
+    legacy.disabled_by = "user"
+    before = (dict(legacy.data), dict(legacy.options), legacy.unique_id)
+    ha = HA([legacy])
+    ha.station = station
+    _flow, result = asyncio.run(ha.setup(keys=KEYS if keys_known else None))
+    assert result["type"] == "create_entry"
+    assert len(ha.entries) == 2 and ha.entries[0] is legacy
+    assert (legacy.data, legacy.options, legacy.unique_id) == before
+    _assert_entry_holds_the_station_keys(ha.entries[1], station)
+    assert ha.registry.reloaded == []
+    # The switched-off entry was not even asked about.
+    assert [item for item in network.requests if item.path == "/api/v1/identity/proof"] == []
+    _assert_keys_only_to(network, IP)
+
+
 # 5. A failure after the new keys were written: HA keeps them, the agent
 #    runs again, the retry ends on the same entry.
 

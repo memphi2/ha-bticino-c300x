@@ -1007,7 +1007,7 @@ def test_call_events_feed_the_call_registry_and_name_the_unit(monkeypatch: pytes
     assert registry.current_call_id == "0badc0de-1"
     send("door_unlock.started", {"address": "21", "unit": "21", "call_id": "0badc0de-1"})
     assert (fired[-1]["call_id"], fired[-1]["unit_id"]) == ("0badc0de-1", "21")
-    send("call.ended", {"call_id": "0badc0de-1", "unit": "21", "kind": "ring", "reason": "hangup_frame"})
+    send("call.ended", {"call_id": "0badc0de-1", "unit": "21", "kind": "ring", "reason": "hangup"})
     assert registry.unit_state("21") == ("idle", None)
     assert registry.current_call_id == "0badc0de-2"
 

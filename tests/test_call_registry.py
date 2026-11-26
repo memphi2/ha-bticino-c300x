@@ -207,7 +207,7 @@ def _calls(*calls: dict[str, Any], current: str | None) -> Any:
 
 
 def _ring(call_id: str, state: str) -> dict[str, Any]:
-    return {"call_id": call_id, "kind": "ring", "state": state, "unit": "20_2", "attribution": "single_unit"}
+    return {"call_id": call_id, "kind": "ring", "state": state, "unit": "20_2", "attribution": "caller_frame"}
 
 
 def test_a_new_ring_resyncs_a_stale_answered_call(monkeypatch: pytest.MonkeyPatch) -> None:

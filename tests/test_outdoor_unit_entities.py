@@ -265,7 +265,7 @@ def test_call_sensor_follows_the_units_call() -> None:
     registry.apply_event("call_answered", {"call_id": "0badc0de-1", "answered_by": "station"})
     assert sensor.native_value == "answered"
     assert sensor.extra_state_attributes["answered_by"] == "station"
-    registry.apply_event("call_ended", {"call_id": "0badc0de-1", "reason": "hangup_frame"})
+    registry.apply_event("call_ended", {"call_id": "0badc0de-1", "reason": "hangup"})
     assert sensor.native_value == "idle"
     assert sensor.options == ["idle", "ringing", "answered", "viewing"]
 

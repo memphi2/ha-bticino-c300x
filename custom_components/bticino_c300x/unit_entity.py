@@ -113,9 +113,10 @@ def async_track_outdoor_units(
             return
         entities: list[Entity] = []
         for unit in registry.units.values():
+            # A unit the station renamed: its device takes the new name.
+            async_register_unit_device(hass, entry, unit)
             if unit.id not in added:
                 added.add(unit.id)
-                async_register_unit_device(hass, entry, unit)
                 entities.extend(build(unit))
         if entities:
             add_entities(entities)

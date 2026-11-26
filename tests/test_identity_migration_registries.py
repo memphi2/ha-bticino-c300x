@@ -1,4 +1,4 @@
-"""The identity migration against Home Assistant's own registries."""
+"""The identity migration and unit devices against Home Assistant's own registries."""
 
 from __future__ import annotations
 
@@ -109,6 +109,40 @@ def test_a_new_station_id_takes_the_unit_devices_and_entities_along(tmp_path: Pa
             assert len(dr.async_entries_for_config_entry(devices, entry.entry_id)) == 3
             assert len(er.async_entries_for_config_entry(entities, entry.entry_id)) == 3
         assert not identity_migration.identity_migration_needed(entry, NEW)
+        await hass.async_stop(force=True)
+
+    asyncio.run(run())
+
+
+def test_a_unit_the_station_renames_renames_its_device(tmp_path: Path) -> None:
+    from homeassistant.helpers.dispatcher import async_dispatcher_send
+
+    from custom_components.bticino_c300x import unit_entity
+    from custom_components.bticino_c300x.call_registry import (
+        SIGNAL_OUTDOOR_UNITS_CHANGED,
+        C300XCallRegistry,
+    )
+
+    async def run() -> None:
+        hass = await _hass(tmp_path)
+        entry = _entry(hass, {"host": "door", CONF_STATION_ID: OLD}, identity_migration.ENTRY_VERSION)
+        calls = C300XCallRegistry()
+        calls.set_units(UNITS)
+        entry.runtime_data = type("Runtime", (), {"calls": calls})()
+        added: list[str] = []
+        unit_entity.async_track_outdoor_units(hass, entry, added.extend, lambda unit: [unit.id])
+        devices = dr.async_get(hass)
+        gate = devices.async_get_device_by_identifier((DOMAIN, f"{OLD}:unit:20"), entry.entry_id)
+        assert gate is not None and gate.name == "Gate"
+
+        calls.set_units(normalize_outdoor_units({"default_unit": "20", "units": [
+            {"id": "20", "where": "20", "name": "Front gate", "default": True},
+            {"id": "21", "where": "21", "name": "Side door"},
+        ]}))
+        async_dispatcher_send(hass, SIGNAL_OUTDOOR_UNITS_CHANGED, entry.entry_id)
+        await hass.async_block_till_done()
+        assert devices.async_get(gate.id).name == "Front gate"
+        assert added == ["20", "21"]
         await hass.async_stop(force=True)
 
     asyncio.run(run())

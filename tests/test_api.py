@@ -2448,6 +2448,30 @@ def test_answer_without_a_call_id_answers_the_agents_current_call() -> None:
     ]
 
 
+_VIEW = (
+    '{"ok": true, "boot_id": "0badc0de", "current_call_id": "0badc0de-5", "calls": ['
+    '{"call_id": "0badc0de-5", "kind": "view", "state": "viewing", "unit": "20",'
+    ' "attribution": "caller_frame", "answered_by": null, "end_reason": null}]}'
+)
+
+
+def test_a_live_view_is_hung_up_but_never_answered() -> None:
+    # Without a ring the agent's current call is the on-demand view.
+    session = _QueuedSession([(200, _VIEW)])
+    api = C300XAgentApi(session, "http://agent.local:8080", "agent-token")  # type: ignore[arg-type]
+    with pytest.raises(C300XCallNotCurrentError) as raised:
+        asyncio.run(api.async_answer_doorbell_call())
+    assert raised.value.current_call_id == "0badc0de-5"
+    assert len(session.requests) == 1
+
+    session = _QueuedSession([(200, _VIEW), (200, '{"ok": true}')])
+    api = C300XAgentApi(session, "http://agent.local:8080", "agent-token")  # type: ignore[arg-type]
+    assert asyncio.run(api.async_hangup_doorbell_call()) == {"ok": True}
+    assert session.requests[-1]["args"] == (
+        "POST", "http://agent.local:8080/api/v1/calls/0badc0de-5/actions/hangup",
+    )
+
+
 def test_hangup_without_a_current_call_sends_nothing() -> None:
     session = _QueuedSession([(200, '{"ok": true, "boot_id": "0badc0de", "current_call_id": null, "calls": []}')])
     api = C300XAgentApi(session, "http://agent.local:8080", "agent-token")  # type: ignore[arg-type]

@@ -68,14 +68,17 @@ class C300XCallRegistry:
 
     @property
     def current_call(self) -> Call | None:
-        """The answered call, else the newest ringing one (the agent's rule)."""
+        """The answered ring, else the newest ringing one, else the live view (the agent's rule).
 
-        live = [call for call in self.calls.values() if call.kind == "ring" and call.state in _LIVE]
-        answered = [call for call in live if call.state == "answered"]
-        if answered:
-            return answered[-1]
-        ringing = [call for call in live if call.state == "ringing"]
-        return ringing[-1] if ringing else None
+        A view is current only without a live ring: it can be hung up, not answered.
+        """
+
+        live = [call for call in self.calls.values() if call.state in _LIVE]
+        for kind, state in (("ring", "answered"), ("ring", "ringing"), ("view", "viewing")):
+            matches = [call for call in live if (call.kind, call.state) == (kind, state)]
+            if matches:
+                return matches[-1]
+        return None
 
     @property
     def current_call_id(self) -> str | None:

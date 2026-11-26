@@ -128,7 +128,8 @@ class _ApiMediaMixin(_C300XApiCore):
         """Answer a ring call locally; without ``call_id`` the current call.
 
         With ``unit`` and no ``call_id`` only a current call of that unit.
-        Raises C300XCallNotCurrentError when that call is not the current one.
+        Raises C300XCallNotCurrentError when that call is not the current one,
+        or is an on-demand view, which has nothing to answer.
         """
 
         return await self._call_action(call_id, "answer", unit)
@@ -136,7 +137,11 @@ class _ApiMediaMixin(_C300XApiCore):
     async def async_hangup_doorbell_call(
         self, call_id: str | None = None, *, unit: str | None = None,
     ) -> dict[str, Any]:
-        """Hang up a ring call; without ``call_id`` the current call (of ``unit``)."""
+        """Hang up a call; without ``call_id`` the current call (of ``unit``).
+
+        The current call is an on-demand view when no ring is live; its
+        hang-up stops the view.
+        """
 
         return await self._call_action(call_id, "hangup", unit)
 
@@ -146,11 +151,12 @@ class _ApiMediaMixin(_C300XApiCore):
             current = calls["current_call_id"]
             if current is None:
                 raise C300XCallNotCurrentError("no current call", None)
-            if unit is not None and not any(
-                call.call_id == current and call.unit == unit for call in calls["calls"]
-            ):
+            call = next((call for call in calls["calls"] if call.call_id == current), None)
+            if unit is not None and (call is None or call.unit != unit):
                 # Another unit's call, or one the station has not attributed yet.
                 raise C300XCallNotCurrentError("the current call is not this unit's", current)
+            if action == "answer" and call is not None and call.kind == "view":
+                raise C300XCallNotCurrentError("the current call is a view", current)
             call_id = current
         data = await self._request_json(
             "POST", f"/api/v1/calls/{quote(call_id, safe='')}/actions/{action}",

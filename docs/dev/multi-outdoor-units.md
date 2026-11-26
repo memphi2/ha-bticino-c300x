@@ -308,7 +308,10 @@ The media camera's attributes tell the card about the current call:
 The card follows the active call: it shows the calling unit's name next to
 its title while the call rings or is answered, answers and hangs up with the
 call's `call_id` (a `call_not_current` reply to a hang-up counts as done),
-and its door button opens the calling unit (`door_entity_id`). It uses the
+and its door button opens the calling unit (`door_entity_id`). Without a
+live ring, a live on-demand view is the current call (`call_state:
+"viewing"`): it cannot be answered, and the card ends it by its `call_id`
+when the Stop doorbell video button is missing or disabled. It uses the
 media camera as before. Station buttons are found through the camera's
 device: the media camera sits on the default unit's device, whose
 `via_device_id` is the station. It has no unit selector and no per-unit video

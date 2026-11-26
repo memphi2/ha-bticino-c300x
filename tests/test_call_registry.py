@@ -42,8 +42,8 @@ def test_unit_states_follow_ring_view_answer_and_end() -> None:
     assert registry.current_unit() == "20_2"
     registry.apply_event("call_view_started", {"call_id": "0badc0de-1", "unit": "21"})
     assert registry.unit_state("21") == ("viewing", "0badc0de-1")
-    # A view is no call that can be answered.
-    assert registry.current_call_id is None
+    # Without a ring the view is the current call: the card hangs it up.
+    assert registry.current_call_id == "0badc0de-1"
 
     registry.apply_event("doorbell_pressed", {"call_id": "0badc0de-2", "unit": None})
     assert registry.current_call_id == "0badc0de-2"
@@ -58,6 +58,7 @@ def test_unit_states_follow_ring_view_answer_and_end() -> None:
     assert registry.unit_state("21") == ("answered", "0badc0de-2")
     registry.apply_event("call_ended", {"call_id": "0badc0de-2", "reason": "hangup"})
     assert registry.unit_state("21") == ("viewing", "0badc0de-1")
+    assert registry.current_call_id == "0badc0de-1"
     assert registry.call("0badc0de-2").end_reason == "hangup"  # type: ignore[union-attr]
 
     registry.clear_calls()

@@ -45,8 +45,13 @@ function fakeCard(overrides = {}) {
     _serviceData() {
       return { entity_id: "camera.door" };
     },
+    _cameraEntity() {
+      return { state: "streaming", attributes: { call_id: "0badc0de-1", call_state: "answered" } };
+    },
+    // As the card's own _callData: the call id of the camera's current call.
     _callData() {
-      return { ...this._serviceData(), call_id: "0badc0de-1" };
+      const callId = this._cameraEntity()?.attributes?.call_id;
+      return callId ? { ...this._serviceData(), call_id: callId } : this._serviceData();
     },
     _stopVideoData() {
       return { entity_id: "button.stop_video" };
@@ -355,14 +360,16 @@ test("hanging up an answered call does not need the stop video button", async ()
 });
 
 test("ending an on-demand view without the stop video button ends the view call", async () => {
+  // The attributes Home Assistant publishes for a live view; that it really
+  // does is tests/test_card_view_call.py.
   const { calls, card } = fakeCard({
+    _doorstationView: () => ({ action: "hang_up" }),
     _stopVideoData: withoutStopButton(),
-    _isConfiguredCallActive: () => true,
-    _cameraEntity: () => ({ attributes: { call_id: "0badc0de-1", call_state: "viewing" } }),
+    _cameraEntity: () => ({ state: "streaming", attributes: { call_id: "0badc0de-5", call_state: "viewing" } }),
   });
-  await new C300XCardActions(card).hangup();
+  await new C300XCardActions(card).handlePrimaryAction();
   assert.deepEqual(calls, [
-    ["service", "bticino_c300x", "hangup_call", { entity_id: "camera.door", call_id: "0badc0de-1" }],
+    ["service", "bticino_c300x", "hangup_call", { entity_id: "camera.door", call_id: "0badc0de-5" }],
     ["close_peer", true],
   ]);
   assert.equal(card._error, "");

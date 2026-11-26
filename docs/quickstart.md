@@ -271,7 +271,7 @@ remove the display pages completely as described in
 [Display Patch on Firmware 3.0.6](display.md#display-patch-on-firmware-306);
 older releases cannot remove them.
 
-`3.0.0b1` is the beta of the joint package for the Classe 300X and the Classe
+`3.0.0b2` is the beta of the joint package for the Classe 300X and the Classe
 100X. On a Classe 300X it works like stable 2.10.0. The Classe 100X support is
 experimental and checked offline only; no stable release supports a Classe
 100X, see [Classe 100X](c100x-experimental.md).

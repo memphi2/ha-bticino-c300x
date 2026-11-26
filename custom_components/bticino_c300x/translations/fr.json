@@ -784,7 +784,8 @@
       "ssh_login_refused": "Le {model} a refusé la connexion SSH. Saisissez l'utilisateur et le mot de passe SSH de l'appareil.",
       "installer_firewall_hook_unsupported": "Impossible de vérifier le script de pare-feu en toute sécurité. Installation arrêtée avant toute modification. Vérifiez le type et les permissions du fichier, sans créer de script de substitution.",
       "device_model_incompatible": "Ce paquet ne prend pas en charge cette platine, ou le modèle de la platine n'a pas pu être confirmé. Aucun fichier de l'appareil n'a été remplacé.",
-      "c100x_confirmation_required": "Cochez la case pour configurer le Classe 100X, ou fermez cette fenêtre pour laisser la platine inchangée."
+      "c100x_confirmation_required": "Cochez la case pour configurer le Classe 100X, ou fermez cette fenêtre pour laisser la platine inchangée.",
+      "not_a_bticino_station": "L'appareil à cette adresse n'est pas une platine BTicino. Rien n'y a été écrit. Vérifiez l'adresse."
     }
   },
   "options": {
@@ -1719,7 +1720,8 @@
           "update_root_readonly_failed": "La mise à jour n'a pas pu remettre le système de fichiers racine (/) en lecture seule. L'état final de l'appareil est incertain ; le retour à l'état précédent n'est pas confirmé. Conservez les fichiers de récupération et vérifiez l'agent et le système de fichiers avant toute autre mise à jour.",
           "update_apply_failed": "L'agent a signalé un échec générique de mise à jour ; la cause et l'état final de l'appareil sont inconnus. Si vous avez auparavant remonté / manuellement en écriture, un redémarrage normal de l'appareil peut aider. Vérifiez son état avant de réessayer ; cette erreur ne confirme pas le retour à l'état précédent.",
           "update_verify_failed": "La mise à jour a été envoyée, mais l'agent signale encore un bundle plus ancien ou incompatible.",
-          "ssh_login_refused": "Le {model} a refusé la connexion SSH. Saisissez l'utilisateur et le mot de passe SSH de l'appareil."
+          "ssh_login_refused": "Le {model} a refusé la connexion SSH. Saisissez l'utilisateur et le mot de passe SSH de l'appareil.",
+          "not_a_bticino_station": "L'appareil à cette adresse n'est pas une platine BTicino. Rien n'y a été écrit. Vérifiez l'adresse."
         },
         "abort": {
           "entry_not_loaded": "L'entrée BTicino C300X n'est pas chargée."

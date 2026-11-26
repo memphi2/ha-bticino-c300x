@@ -34,6 +34,8 @@ class ReadOnlyClient:
     def run(self, command, input_data=None):
         if "libQt5Core" in command and input_data is None:
             return self.identity
+        if command == "test -d /home/bticino && echo station || echo other" and input_data is None:
+            return "station\n"
         self.writes.append(command)
         pytest.fail(f"Unexpected device mutation: {command}")
 

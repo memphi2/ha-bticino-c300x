@@ -784,7 +784,8 @@
       "ssh_login_refused": "Der {model} hat die SSH-Anmeldung abgelehnt. Gib den SSH-User und das Passwort des Geräts ein.",
       "installer_firewall_hook_unsupported": "Der Firewall-Hook lässt sich nicht sicher prüfen. Vor Änderungen am Gerät wurde abgebrochen. Bitte Dateityp und Berechtigungen prüfen und keinen Platzhalter anlegen.",
       "device_model_incompatible": "Dieses Paket unterstützt diese Station nicht, oder das Modell der Station konnte nicht bestätigt werden. Es wurden keine Gerätedateien ersetzt.",
-      "c100x_confirmation_required": "Setze den Haken, um die Classe 100X einzurichten, oder schließe diesen Dialog, um die Station unverändert zu lassen."
+      "c100x_confirmation_required": "Setze den Haken, um die Classe 100X einzurichten, oder schließe diesen Dialog, um die Station unverändert zu lassen.",
+      "not_a_bticino_station": "Das Gerät unter dieser Adresse ist keine BTicino-Station. Es wurde nichts darauf geschrieben. Prüfe die Adresse."
     }
   },
   "options": {
@@ -1719,7 +1720,8 @@
           "update_root_readonly_failed": "Das Update konnte das Root-Dateisystem (/) nicht wieder schreibgeschützt einhängen. Der endgültige Gerätezustand ist ungewiss; eine erfolgreiche Wiederherstellung ist nicht bestätigt. Bewahre Wiederherstellungsdateien auf und prüfe Agent und Dateisystem vor einem weiteren Update.",
           "update_apply_failed": "Der Agent meldet einen allgemeinen Updatefehler; Ursache und endgültiger Gerätezustand sind unbekannt. Falls du / zuvor manuell beschreibbar eingehängt hast, kann ein normaler Geräteneustart helfen. Prüfe vor einem neuen Versuch den Gerätezustand; der Fehler bestätigt keine erfolgreiche Wiederherstellung.",
           "update_verify_failed": "Das Update wurde gesendet, aber der Agent meldet weiterhin ein altes oder inkompatibles Bundle.",
-          "ssh_login_refused": "Der {model} hat die SSH-Anmeldung abgelehnt. Gib den SSH-User und das Passwort des Geräts ein."
+          "ssh_login_refused": "Der {model} hat die SSH-Anmeldung abgelehnt. Gib den SSH-User und das Passwort des Geräts ein.",
+          "not_a_bticino_station": "Das Gerät unter dieser Adresse ist keine BTicino-Station. Es wurde nichts darauf geschrieben. Prüfe die Adresse."
         },
         "abort": {
           "entry_not_loaded": "Der BTicino-C300X-Eintrag ist nicht geladen."

@@ -784,7 +784,8 @@
       "ssh_login_refused": "Il {model} ha rifiutato l'accesso SSH. Inserisci utente e password SSH del dispositivo.",
       "installer_firewall_hook_unsupported": "Impossibile verificare lo script firewall in sicurezza. Installazione interrotta prima di modificare il dispositivo. Controllare tipo e permessi del file senza creare uno script sostitutivo.",
       "device_model_incompatible": "Questo pacchetto non supporta questa postazione, oppure non è stato possibile confermare il modello della postazione. Nessun file del dispositivo è stato sostituito.",
-      "c100x_confirmation_required": "Spunta la casella per configurare il Classe 100X, oppure chiudi questa finestra per lasciare la postazione invariata."
+      "c100x_confirmation_required": "Spunta la casella per configurare il Classe 100X, oppure chiudi questa finestra per lasciare la postazione invariata.",
+      "not_a_bticino_station": "Il dispositivo a questo indirizzo non è una postazione BTicino. Non è stato scritto nulla. Controlla l'indirizzo."
     }
   },
   "options": {
@@ -1719,7 +1720,8 @@
           "update_root_readonly_failed": "L'aggiornamento non è riuscito a riportare il filesystem radice (/) in sola lettura. Lo stato finale del dispositivo è incerto; il ripristino non è confermato. Conserva i file di recupero e verifica l'agente e il filesystem prima di un altro aggiornamento.",
           "update_apply_failed": "L'agente ha segnalato un errore generico di aggiornamento; la causa e lo stato finale del dispositivo sono sconosciuti. Se in precedenza hai rimontato manualmente / in scrittura, un normale riavvio del dispositivo può aiutare. Verifica lo stato del dispositivo prima di riprovare; questo errore non conferma il ripristino.",
           "update_verify_failed": "L'aggiornamento è stato inviato, ma l'agent segnala ancora un bundle vecchio o incompatibile.",
-          "ssh_login_refused": "Il {model} ha rifiutato l'accesso SSH. Inserisci utente e password SSH del dispositivo."
+          "ssh_login_refused": "Il {model} ha rifiutato l'accesso SSH. Inserisci utente e password SSH del dispositivo.",
+          "not_a_bticino_station": "Il dispositivo a questo indirizzo non è una postazione BTicino. Non è stato scritto nulla. Controlla l'indirizzo."
         },
         "abort": {
           "entry_not_loaded": "La voce BTicino C300X non è caricata."

@@ -58,6 +58,7 @@ def test_ssh_guard_before_first_write_and_successful_retry(tmp_path, monkeypatch
     monkeypatch.setattr(device_installer, "_connect_device_client", lambda _: client)
     monkeypatch.setattr(device_installer, "_read_remote_config_sync", lambda *_: {})
     c100x = DeviceProfile("C100X", "qt5_ondisk", "fixed")
+    monkeypatch.setattr(device_installer, "is_bticino_station", lambda *_: True)
     monkeypatch.setattr(device_installer, "_device_profile", lambda _: c100x)
     monkeypatch.setattr(device_installer, "_device_display_kind", lambda _: "qt5_ondisk")
     request = device_installer.C300XDeviceInstallRequest(

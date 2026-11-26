@@ -116,7 +116,9 @@ and asks for an SSH user and password only when the device refuses it. While
 the model is unknown it tries the C300X login and then, only after the station
 refused it, the C100X login. The C100X factory login was checked against the
 original 1.5.8 firmware, not on a device; a changed password needs your own
-login. SSH
+login. Every SSH install (setup, reinstall, Repair) first checks for the
+folder `/home/bticino` and refuses a host without it as not a BTicino
+station, before anything is written. SSH
 credentials are not stored. Home Assistant installs the AsyncSSH client on
 demand; its host needs no SSH tools or add-on. The device still requires
 legacy SSH algorithms, an accepted risk documented as

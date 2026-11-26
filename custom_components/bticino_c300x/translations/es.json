@@ -784,7 +784,8 @@
       "ssh_login_refused": "El {model} ha rechazado el inicio de sesión SSH. Introduce el usuario y la contraseña SSH del dispositivo.",
       "installer_firewall_hook_unsupported": "El hook de cortafuegos del dispositivo no se puede inspeccionar de forma segura. La instalación se ha detenido antes de cambiar el videoportero. Comprueba el tipo de hook y los permisos; no crees un marcador de posición.",
       "device_model_incompatible": "Este paquete no es compatible con este videoportero, o no se ha podido confirmar el modelo del videoportero. No se ha sustituido ningún archivo del dispositivo.",
-      "c100x_confirmation_required": "Marca la casilla para configurar el Classe 100X o cierra este diálogo para dejar el videoportero sin cambios."
+      "c100x_confirmation_required": "Marca la casilla para configurar el Classe 100X o cierra este diálogo para dejar el videoportero sin cambios.",
+      "not_a_bticino_station": "El dispositivo de esta dirección no es un videoportero BTicino. No se ha escrito nada en él. Comprueba la dirección."
     }
   },
   "options": {
@@ -1719,7 +1720,8 @@
           "update_root_readonly_failed": "La actualización no ha podido devolver el sistema de archivos raíz (/) a solo lectura. El estado final del dispositivo es incierto; no se ha confirmado que la reversión haya tenido éxito. Conserva los archivos de recuperación y comprueba el estado del agente y del sistema de archivos antes de cualquier otra actualización.",
           "update_apply_failed": "El agente ha informado de un fallo de actualización genérico; se desconocen la causa y el estado final del dispositivo. Si antes volviste a montar / como escribible manualmente, un reinicio normal del dispositivo puede ayudar. Comprueba el estado del dispositivo antes de volver a intentarlo; este error no confirma la reversión.",
           "update_verify_failed": "La actualización se ha enviado, pero el agente sigue informando de un paquete anterior o incompatible.",
-          "ssh_login_refused": "El {model} ha rechazado el inicio de sesión SSH. Introduce el usuario y la contraseña SSH del dispositivo."
+          "ssh_login_refused": "El {model} ha rechazado el inicio de sesión SSH. Introduce el usuario y la contraseña SSH del dispositivo.",
+          "not_a_bticino_station": "El dispositivo de esta dirección no es un videoportero BTicino. No se ha escrito nada en él. Comprueba la dirección."
         },
         "abort": {
           "entry_not_loaded": "La entrada BTicino C300X no está cargada."

@@ -111,7 +111,10 @@ to. What happens next depends on what Home Assistant finds:
   password only if the station refuses it. While the model is still unknown it
   tries the C300X factory login first and the C100X one only after the station
   refused the first; a connection failure is not retried. A login you enter
-  always takes priority. It installs the agent, a configuration with generated
+  always takes priority. Before it writes anything it checks for the folder
+  `/home/bticino` that every station has; any other host that accepts the
+  login, such as a NAS or a Raspberry Pi, is refused and left unchanged.
+  It installs the agent, a configuration with generated
   keys, the startup script and the display support files, then keeps the keys
   itself. SSH credentials are used for this step only and are not stored in the
   entry, diagnostics or logs.

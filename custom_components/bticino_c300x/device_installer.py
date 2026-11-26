@@ -33,10 +33,12 @@ from .const import (
 from .device_activations import desired_activation_items
 from .device_profile import (
     C100X_CONFIRMATION_REQUIRED,
+    NOT_A_BTICINO_STATION,
     QT4_ONDISK,
     QT5_ONDISK,
     QT5_RCC,
     DeviceProfile,
+    is_bticino_station,
     station_profile,
 )
 from .display_activation import (
@@ -362,12 +364,15 @@ def _admit_station_sync(
 ) -> str:
     """Decide before any installer write whether this station is served.
 
-    Every Classe 300X is, as before. A Classe 100X needs the user's explicit
-    confirmation and a package bound to its agent binary that names itself
-    compatible. A station whose own model name and display program disagree
-    is left alone.
+    A host without the vendor's folder is no BTicino station: an SSH login
+    alone proves nothing. Every Classe 300X is served, as before. A Classe
+    100X needs the user's explicit confirmation and a package bound to its
+    agent binary that names itself compatible. A station whose own model name
+    and display program disagree is left alone.
     """
 
+    if not is_bticino_station(client.run, _quote):
+        raise C300XDeviceInstallError(NOT_A_BTICINO_STATION)
     profile = _device_profile(client)
     if not profile.model_confirmed:
         raise C300XDeviceInstallError("device_model_incompatible")

@@ -73,6 +73,7 @@ from .device_installer import (
     async_ensure_installer_dependencies,
     async_install_device_agent,
 )
+from .device_profile import NOT_A_BTICINO_STATION
 from .device_user import homeassistant_account_label
 from .display_activation import display_is_qt5, display_unsupported
 from .display_support import setup_is_c100x
@@ -492,7 +493,8 @@ def _ssh_install_error(err: BaseException) -> str:
     """Return the translated error of a failed SSH install."""
 
     reason = err.reason if isinstance(err, C300XDeviceInstallError) else ""
-    return reason if reason in (LOGIN_REFUSED, DISPLAY_WRITE_TIMEOUT) else "ssh_install_failed"
+    shown = (LOGIN_REFUSED, DISPLAY_WRITE_TIMEOUT, NOT_A_BTICINO_STATION)
+    return reason if reason in shown else "ssh_install_failed"
 
 
 def _install_error_log_text(err: BaseException) -> str:

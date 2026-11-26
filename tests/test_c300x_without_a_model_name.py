@@ -104,7 +104,7 @@ class _LocalStation:
         self.commands: list[str] = []
 
     def run(self, command: str, input_data: bytes | None = None) -> str:
-        assert input_data is None and "webserver_type" in command, command
+        assert input_data is None and ("webserver_type" in command or command.startswith("test -d ")), command
         self.commands.append(command)
         return subprocess.run(["sh", "-c", command], check=True, capture_output=True, text=True, timeout=10).stdout
 
@@ -119,6 +119,8 @@ def _station_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, content: str
     monkeypatch.setattr(device_profile, "_QT5_DISPLAY_MARKER", str(qt5_marker))
     monkeypatch.setattr(device_profile, "_C100X_DISPLAY_MARKER", str(tmp_path / "BtClass100"))
     monkeypatch.setattr(device_profile, "_MODEL_FILE", str(_model_file(tmp_path, content)))
+    # The vendor's folder is there: the model file is all that is missing.
+    monkeypatch.setattr(device_profile, "_STATION_HOME", str(tmp_path))
 
 
 @pytest.mark.parametrize("qt5", [False, True], ids=["qt4", "qt5"])
@@ -135,7 +137,7 @@ def test_the_installer_admits_the_station_and_offers_its_display_patch(
     # A C300X needs neither the package's C100X marks nor a confirmation: no package is read.
     kind = installer._admit_station_sync(client, None, "/agent", confirmed)  # type: ignore[arg-type]
     assert kind == ("qt5_rcc" if qt5 else "qt4_ondisk")
-    assert len(client.commands) == 2
+    assert len(client.commands) == 3
 
 
 @pytest.mark.parametrize("qt5", [False, True], ids=["qt4", "qt5"])

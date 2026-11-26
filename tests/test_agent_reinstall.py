@@ -34,7 +34,15 @@ from custom_components.bticino_c300x.device_installer import (
     C300XDeviceInstallError,
     C300XDeviceInstallRequest,
 )
-from tests.test_agent_init_script import _alive, _device_init, _reap_all, _wait_started
+from tests.test_agent_init_script import (
+    FIRMWARES,
+    _alive,
+    _device_init,
+    _device_rootfs,
+    _reap_all,
+    _wait_started,
+    station_script,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 TEXTS = ROOT / "custom_components/bticino_c300x"
@@ -286,10 +294,13 @@ class _Station:
         self.steps: list[str] = []
         self.config: bytes | None = None
         self.fail = fail
+        self.firewall: list[str] = []
+        self.display: list[str] = []
         _Station.last = self
 
     def run(self, command: str, input_data: bytes | None = None) -> str:
         if self.fail == "display" and "qml_patch.sh " in command:
+            self.display.append(command.rsplit(" ", 1)[1])
             raise C300XDeviceInstallError("device_install_verify_failed")
         output = self._run(command, input_data)
         if self.steps and self.steps[-1] == self.fail:
@@ -307,6 +318,9 @@ class _Station:
             assert "killall" not in command and "pkill" not in command and "bt_" not in command
         elif command.endswith(" restart"):
             self.steps.append("restart")
+        elif command.startswith("C300X_IPTABLES="):
+            self.steps.append("firewall")
+            self.firewall.append(command)
         elif command.endswith(" start; fi"):
             self.steps.append("start")
         elif input_data and b'"adminToken"' in input_data:
@@ -316,6 +330,7 @@ class _Station:
             # A configuration write whose answer was lost: the file is there.
             return f"{hashlib.sha256(self.config).hexdigest()}  config.json"
         elif "qml_patch.sh " in command:
+            self.display.append(command.rsplit(" ", 1)[1])
             return json.dumps({"ok": True, "core_patched": True, "gui_running": True, "patched": False})
         return ""
 
@@ -326,11 +341,12 @@ class _Station:
         pass
 
 
-def _install(monkeypatch, tmp_path, existing, api="new-access", maintenance="new-maintenance", fail=""):
+def _install(monkeypatch, tmp_path, existing, api="new-access", maintenance="new-maintenance", fail="",
+             kind="qt4_ondisk", firewall=False, display=None):
     station = _Station(existing, fail)
     init_script = tmp_path / "c300x-native-agent"
     init_script.write_text(f'#!/bin/sh\nDEFAULT_AGENT_DIR="{DEFAULT_REMOTE_DIR}"\n', encoding="utf-8")
-    monkeypatch.setattr(device_installer, "_admit_station_sync", lambda *_: "qt4_ondisk")
+    monkeypatch.setattr(device_installer, "_admit_station_sync", lambda *_: kind)
     monkeypatch.setattr(device_installer, "_connect_device_client", lambda _r: station)
     monkeypatch.setattr(device_installer, "_verify_startup_sync", lambda _c: None)
     config = device_installer._device_config_json(
@@ -338,9 +354,9 @@ def _install(monkeypatch, tmp_path, existing, api="new-access", maintenance="new
     ).encode()
     device_installer._install_device_agent_sync(
         C300XDeviceInstallRequest(
-            host="c300x.local", ssh_username="root", ssh_password="secret", apply_firewall_patch=False,
+            host="c300x.local", ssh_username="root", ssh_password="secret", apply_firewall_patch=firewall,
         ),
-        device_installer._ResolvedBundle((), init_script), config,
+        device_installer._ResolvedBundle((), init_script), config, display,
     )
     return station
 
@@ -396,6 +412,56 @@ def test_a_failed_install_tells_whether_the_station_holds_its_keys(monkeypatch, 
     assert raised.value.keys_written is written
 
 
+# The same on every display kind: 1.7.19/2.0.2 (Qt 4 on disk), 3.0.6 (Qt 5
+# overlay: a failed display step is owed, not an install failure) and the
+# C100X (no display step; its firewall step gets the video settings).
+KINDS = ["qt4_ondisk", "qt5_rcc", "qt5_ondisk"]
+DISPLAY_STEPS = {"qt4_ondisk": ["core-apply"], "qt5_rcc": ["core-apply"], "qt5_ondisk": []}
+
+
+@pytest.mark.parametrize("kind", KINDS)
+@pytest.mark.parametrize("old", [("old-access", "old-maintenance"), ("new-access", "old-maintenance")])
+def test_every_display_kind_stops_the_old_agent_before_its_keys_are_replaced(monkeypatch, tmp_path, kind, old):
+    display = device_installer._DisplaySteps()
+    station = _install(monkeypatch, tmp_path, _installed(*old), kind=kind, firewall=True, display=display)
+    assert station.steps == ["stop", "config", "firewall", "restart"]
+    assert station.display == DISPLAY_STEPS[kind]
+    assert (display.kind, display.pending) == (kind, False)
+    assert json.loads(station.config)["api"]["token"] == "new-access"
+    # Only the C100X firewall step carries the video settings of the new configuration.
+    assert ("C300X_VIDEO_ENABLED=" in station.firewall[0]) is (kind == "qt5_ondisk")
+
+
+@pytest.mark.parametrize("kind", KINDS)
+@pytest.mark.parametrize("failing,written", [("stop", False), ("config", True), ("firewall", True),
+                                             ("restart", True)])
+def test_every_display_kind_starts_the_agent_again_after_a_failure(monkeypatch, tmp_path, kind, failing, written):
+    with pytest.raises(C300XDeviceInstallError) as raised:
+        _install(monkeypatch, tmp_path, _installed("old-access", "old-maintenance"), fail=failing,
+                 kind=kind, firewall=True)
+    station = _Station.last
+    assert station.steps[-1] == "start" and station.steps.count("start") == 1
+    assert raised.value.keys_written is written
+    assert station.display == []
+
+
+@pytest.mark.parametrize("kind", ["qt4_ondisk", "qt5_rcc"])
+def test_a_failed_display_step_is_owed_only_on_the_qt5_display(monkeypatch, tmp_path, kind):
+    display = device_installer._DisplaySteps()
+    existing = _installed("old-access", "old-maintenance")
+    if kind == "qt4_ondisk":
+        with pytest.raises(C300XDeviceInstallError) as raised:
+            _install(monkeypatch, tmp_path, existing, fail="display", kind=kind, display=display)
+        assert raised.value.keys_written is True
+    else:
+        # 3.0.6: the agent runs with its new keys, the core Repair owes the display step.
+        _install(monkeypatch, tmp_path, existing, fail="display", kind=kind, display=display)
+        assert display.pending is True
+    station = _Station.last
+    assert station.steps == ["stop", "config", "restart"]
+    assert station.display == ["core-apply"]
+
+
 class _Shell:
     def __init__(self, env: dict[str, str]) -> None:
         self.env = env
@@ -415,14 +481,15 @@ class _Shell:
 
 
 def _station_shell(tmp_path: Path, log: Path, port: int) -> _Shell:
-    """The station's busybox shell runs the commands, as over SSH."""
+    """The station's own shell and programs run the commands, as over SSH."""
     return _Shell({**os.environ, "PATH": f"{tmp_path / 'commands'}:{os.environ['PATH']}",
                    "C300X_AGENT_DIR": str(tmp_path), "C300X_AGENT_ENV": str(tmp_path / "absent"),
-                   "STUB_LOG": str(log), "STUB_PORT": str(port)})
+                   "STUB_LOG": str(log), "STUB_PORT": str(port), "NOLOCALE": "1"})
 
 
-def test_the_running_agent_is_stopped_by_the_bundled_init_script_on_the_station_busybox(tmp_path):
-    run, log, pidfile, port = _device_init(tmp_path)
+@pytest.mark.parametrize("firmware", FIRMWARES)
+def test_the_running_agent_is_stopped_by_the_bundled_init_script_on_the_station_busybox(tmp_path, firmware):
+    run, log, pidfile, port = _device_init(tmp_path, firmware=firmware)
     config = tmp_path / "config.json"
     leftovers = [tmp_path / "config.json.tmp.Ab12Cd", tmp_path / "config.json.c300x-0011223344556677.new"]
     bystander = subprocess.Popen(["sleep", "300"])
@@ -453,8 +520,9 @@ def test_an_agent_that_cannot_be_stopped_keeps_its_configuration(tmp_path):
     assert leftover.exists()
 
 
-def test_a_station_without_a_running_agent_only_loses_the_unfinished_copies(tmp_path):
-    _run, log, _pidfile, port = _device_init(tmp_path)
+@pytest.mark.parametrize("firmware", FIRMWARES)
+def test_a_station_without_a_running_agent_only_loses_the_unfinished_copies(tmp_path, firmware):
+    _run, log, _pidfile, port = _device_init(tmp_path, firmware=firmware)
     leftover = tmp_path / "config.json.tmp.Ab12Cd"
     leftover.write_text("{}")
     device_installer._retire_old_keys_sync(
@@ -496,28 +564,34 @@ exit 0
 """
 
 
-def test_a_reinstall_over_an_old_init_script_never_signals_a_stale_pid(tmp_path, monkeypatch):
+# The station's display kind decides the rest of the install, not the stop.
+FIRMWARE_KINDS = {"1.7.19": "qt4_ondisk", "2.0.2": "qt4_ondisk", "3.0.6": "qt5_rcc", "c100x-1.5.8": "qt5_ondisk"}
+
+
+@pytest.mark.parametrize("firmware", FIRMWARES)
+def test_a_reinstall_over_an_old_init_script_never_signals_a_stale_pid(tmp_path, monkeypatch, firmware):
     import shutil
 
     from tests.test_agent_init_script import SCRIPT
 
-    run, log, pidfile, port = _device_init(tmp_path, INIT_2_9_0)
+    run, log, pidfile, port = _device_init(tmp_path, INIT_2_9_0, firmware=firmware)
     commands = tmp_path / "commands"
     bundled = tmp_path / "bundled-init"
-    bundled.write_text(SCRIPT.read_text().replace(
-        "[ -f /etc/init.d/functions ] && . /etc/init.d/functions", "").replace(
-        "#!/bin/sh", f"#!{commands}/sh", 1).replace(
-        "PATH=/sbin:/usr/sbin:/bin:/usr/bin", f"PATH={commands}:/bin:/usr/bin"))
+    rootfs = _device_rootfs(firmware)
+    assert rootfs is not None
+    bundled.write_text(station_script(SCRIPT.read_text(), commands, rootfs))
     stubs = tmp_path / "stubs"
     stubs.mkdir()
     (stubs / "mount").write_text("#!/bin/sh\nexit 0\n")
     (stubs / "mount").chmod(0o700)
     (tmp_path / "config.json").write_text(json.dumps(_installed("old-access", "old-maintenance")))
-    env = {**os.environ, "PATH": f"{stubs}:{os.environ['PATH']}", "C300X_AGENT_DIR": str(tmp_path),
-           "C300X_AGENT_ENV": str(tmp_path / "absent"), "STUB_LOG": str(log), "STUB_PORT": str(port)}
+    # The station's shell runs every command, as over SSH.
+    env = {**os.environ, "PATH": f"{stubs}:{commands}:{os.environ['PATH']}", "C300X_AGENT_DIR": str(tmp_path),
+           "C300X_AGENT_ENV": str(tmp_path / "absent"), "STUB_LOG": str(log), "STUB_PORT": str(port),
+           "NOLOCALE": "1"}
     monkeypatch.setattr(device_installer, "REMOTE_INIT_SCRIPT", str(tmp_path / "init"))
     monkeypatch.setattr(device_installer, "REMOTE_INIT_LINK", str(tmp_path / "S40c300x-native-agent"))
-    monkeypatch.setattr(device_installer, "_admit_station_sync", lambda *_: "qt4_ondisk")
+    monkeypatch.setattr(device_installer, "_admit_station_sync", lambda *_: FIRMWARE_KINDS[firmware])
     monkeypatch.setattr(device_installer, "_display_actions", lambda *_: ())
     monkeypatch.setattr(device_installer, "_connect_device_client", lambda _r: _Shell(env))
     # A program with a name of its own: the agent stopped long ago, its PID is

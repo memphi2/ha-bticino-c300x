@@ -91,12 +91,13 @@ is set and its fingerprint, diagnostics only whether it is set. Policy:
   working maintenance key or the noAuth bootstrap configuration, recovery needs
   SSH: tick **I do not have the keys: reinstall the agent** in the
   re-authentication dialog, or in the key dialog of a new setup. Home Assistant
-  logs in with the factory login (it asks for the SSH user and password only if
-  the station refuses it, and does not store them), stops the installed agent,
-  writes the bundled agent with two newly generated keys and starts it again.
-  The entry stores the new keys; the old ones stop working. Display pages, the
-  core media hook and the other settings on the station stay, and the station
-  is not restarted. See [Agent already installed](quickstart.md#install-the-device-agent).
+  logs in with the factory login (if the station refuses it, it asks for an SSH
+  login as described under [SSH](#ssh) and does not store it), stops the
+  installed agent, writes the bundled agent with two newly generated keys and
+  starts it again. The entry of this station stores the new keys, also when
+  the reinstall ran from a new setup; the old ones stop working. Display pages,
+  the core media hook and the other settings on the station stay, and the
+  station is not restarted. See [Agent already installed](quickstart.md#install-the-device-agent).
 
 `noAuth` is a bootstrap state; turn it off once keys are configured. Saving the
 agent's `/setup` page with an access key set, or turning off the
@@ -111,18 +112,29 @@ address.
 
 SSH is used only for the first installation and explicit recovery; normal agent
 updates use the authenticated agent API. The installer first tries the
-built-in factory root login (not secret: the same on every device of a model)
-and asks for an SSH user and password only when the device refuses it. While
-the model is unknown it tries the C300X login and then, only after the station
-refused it, the C100X login. The C100X factory login was checked against the
-original 1.5.8 firmware, not on a device; a changed password needs your own
-login. Every SSH install (setup, reinstall, Repair) first checks for the
-folder `/home/bticino` and refuses a host without it as not a BTicino
-station, before anything is written. SSH
-credentials are not stored. Home Assistant installs the AsyncSSH client on
-demand; its host needs no SSH tools or add-on. The device still requires
-legacy SSH algorithms, an accepted risk documented as
+built-in factory root login (not secret: the same on every device of a model).
+While the model is unknown it tries the C300X login and then, only after the
+station refused it, the C100X login. The C100X factory login was checked
+against the original 1.5.8 firmware, not on a device; a changed password needs
+your own login. Only when the device refuses the factory login does Home
+Assistant ask for an SSH user with root rights (`root` or `root2`, never
+`bticino2`) with a password, an optional private key (OpenSSH or PEM, with an
+optional passphrase), or both. Key types: RSA or ECDSA on `1.7.x`, `2.0.2` and
+the C100X `1.5.8`; `3.0.6` also accepts Ed25519. A station that accepts keys
+only needs the key. Every SSH install (setup, reinstall, Repair) first checks
+for the folder `/home/bticino` and refuses a host without it as not a BTicino
+station, before anything is written. SSH credentials and keys are used for
+this installation only and are not stored. Home Assistant installs the
+AsyncSSH client on demand; its host needs no SSH tools or add-on. The device
+still requires legacy SSH algorithms, an accepted risk documented as
 [LEGACY-SSH-001](../SECURITY.md#legacy-ssh-001-rsasha-1-during-bootstrap).
+
+The **SSH** switch starts and stops the station's SSH service. Where another
+tool keeps SSH running with its own SSH service (davemajor's and daniel-sc's
+tools) or restarts it, the switch shows on, its **SSH state** reads **Run by
+another tool** with the tool under **Run by**, and it cannot be switched: Home
+Assistant and the station's **SSH** control refuse the change. Use that tool
+instead.
 
 ## Callback URL
 

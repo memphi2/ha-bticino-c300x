@@ -103,27 +103,31 @@ The device agent is a small program on the station that Home Assistant talks
 to. What happens next depends on what Home Assistant finds:
 
 - **No agent:** setup offers **Install native agent on the C300X/C100X**; the
-  model is not known yet. Use it only on a rooted or SSH-enabled station. Home Assistant logs in
-  over SSH with the station's factory root login and asks for an SSH user and
-  password only if the station refuses it. While the model is still unknown it
-  tries the C300X factory login first and the C100X one only after the station
-  refused the first; a connection failure is not retried. A login you enter
-  always takes priority. Before it writes anything it checks for the folder
-  `/home/bticino` that every station has; any other host that accepts the
-  login, such as a NAS or a Raspberry Pi, is refused and left unchanged.
-  It installs the agent, a configuration with generated
-  keys, the startup script and the display support files, then keeps the keys
-  itself. SSH credentials are used for this step only and are not stored in the
-  entry, diagnostics or logs.
+  model is not known yet. Use it only on a rooted or SSH-enabled station. Home
+  Assistant logs in over SSH with the station's factory root login first. While
+  the model is still unknown it tries the C300X factory login and the C100X one
+  only after the station refused the first; a connection failure is not
+  retried. If the station refuses the login, setup asks for an SSH user with
+  root rights (`root` or `root2`, never `bticino2`) and its password, an
+  optional private key, or both. The key is pasted as text (OpenSSH or PEM,
+  with its passphrase if it has one): RSA or ECDSA on `1.7.x`, `2.0.2` and the
+  C100X `1.5.8`, Ed25519 as well on `3.0.6`. A login you enter always takes
+  priority. Before it writes anything it checks for the folder `/home/bticino`
+  that every station has; any other host that accepts the login, such as a NAS
+  or a Raspberry Pi, is refused and left unchanged. It installs the agent, a
+  configuration with generated keys, the startup script and the display support
+  files, then keeps the keys itself. SSH credentials and the key are used for
+  this installation only and are not stored in the entry, diagnostics or logs.
 - **Agent already installed:** setup asks for its **Access key** and
   **Maintenance key**. See [Tokens and Access](advanced-maintenance.md#tokens-and-access).
 - **Agent already installed, keys lost** (for example the integration was
   removed and only its entry had the keys): tick **I do not have the keys:
   reinstall the agent** in the same dialog. Setup then runs the SSH install
   step above: it stops the installed agent, writes the bundled agent with newly
-  generated keys and starts it again. The old keys stop working. Display pages,
-  the core media hook and the other settings on the station stay; the station
-  is not restarted.
+  generated keys and starts it again. The old keys stop working. If this
+  station already has an entry in Home Assistant, that entry gets the new keys
+  and no second entry is created. Display pages, the core media hook and the
+  other settings on the station stay; the station is not restarted.
 - **Older agent:** run the **C300X device agent update required** Repair before
   testing camera or calls.
 

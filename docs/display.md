@@ -649,7 +649,7 @@ station, so they also show while Home Assistant cannot be reached.
 | **Status messages** | Shows (default) or hides coloured action confirmations and routine messages on the Home Assistant and Alarm pages, such as "Page loaded", "Connected", "Sending" or "Ready to arm". Text at a control, errors, a required PIN, sensors that block arming, connection warnings and real alarm or entity states always stay visible; while a command runs, the Alarm page still names it in its state box. |
 | **Keep page open in standby** | The integration's Display option of the same name: whether the Home Assistant and Alarm pages stay open when the screen goes to standby. |
 | **Page change: favourites bar / arrows** | The integration's Display option **Page navigation**: on shows the favourites bar, off the arrows. The label names the current choice. |
-| **SSH** | Switches the station's SSH access. |
+| **SSH** | Switches the station's SSH access; not where another tool keeps SSH running ([SSH](advanced-maintenance.md#ssh)). |
 | **Reboot station** | Restarts the station. |
 | **Remove agent** | Removes the device agent; see [Remove Agent](advanced-maintenance.md#remove-agent). |
 

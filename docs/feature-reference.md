@@ -27,7 +27,7 @@ C100X device (issue #51). **No**: not offered on that model.
 
 | Feature | C300X | C100X 1.5.8 |
 | --- | --- | --- |
-| Agent installation over SSH | Yes; factory root login or your SSH login | In test; needs an SSH-enabled station, see [Install the Device Agent](quickstart.md#install-the-device-agent) |
+| Agent installation over SSH | Yes; factory root login, or your SSH login with a password or private key | In test; needs an SSH-enabled station, see [Install the Device Agent](quickstart.md#install-the-device-agent) |
 | Discovery on the network (mDNS) | Yes, `_bticino-c300x-agent._tcp` | In test, `_bticino-c100x-agent._tcp` |
 | Door unlock, stair light, device activations | Yes | In test |
 | Live video, Ring Call, talkback | Yes | In test |
@@ -141,9 +141,9 @@ offer creates no entity.
 | `switch` | Save images | Automatic visitor images; on by default. |
 | `switch` | Touch tone | The display's touch sound. Needs the Display patch, on the C100X the display activation; unavailable without the agent's connection to the display. |
 | `switch` | Home Assistant media user | Creates or repairs the station's media access when used. |
-| `switch` | SSH, Agent noAuth, Agent noAuth maintenance, Agent mDNS discovery | Maintenance controls. |
+| `switch` | SSH, Agent noAuth, Agent noAuth maintenance, Agent mDNS discovery | Maintenance controls. SSH that another tool keeps running shows on and cannot be switched ([SSH](advanced-maintenance.md#ssh)). |
 | `switch` | Display patch, API firewall patch, IPv6 firewall patch | Device patches. No Display patch switch on the C100X. |
-| `switch` | Native MQTT bridge, Legacy MQTT bridge | Local MQTT controls. |
+| `switch` | Native MQTT bridge, Legacy MQTT bridge | Local MQTT controls. Legacy MQTT bridge off keeps fquinto's bridge off even when its watchdog tries to restart it; on restores it. |
 | `button` | Door unlock, Stair light, one per device activation | One-shot device actions. |
 | `button` | Stop doorbell video | Ends an on-demand session the agent owns. |
 | `button` | Reboot, Restart device agent, Reload device display, Remove device agent | Maintenance actions. No Reload device display on the C100X. |

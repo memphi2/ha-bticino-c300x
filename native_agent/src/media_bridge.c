@@ -8,6 +8,7 @@
 #include "media_base64.h"
 #include "media_bridge.h"
 #include "device_media.h"
+#include "media_gop_cache.h"
 #include "media_rtsp_clients.h"
 #include "media_rtsp_auth.h"
 #include "media_rtsp_io.h"
@@ -189,6 +190,7 @@ typedef struct {
     bool stop_in_progress;
     unsigned long media_generation;
     unsigned long picture_session;
+    unsigned long rtsp_video_serial;
     c300x_media_session_guard_t ondemand_guard;
     int listen_fd;
     int client_fd;
@@ -438,6 +440,7 @@ static bool register_rtsp_client_locked(
         slot->video_interleaved_channel = 0;
         slot->audio_interleaved_channel = 0;
         slot->backchannel_interleaved_channel = -1;
+        slot->video_id = ++bridge->rtsp_video_serial;
         snprintf(slot->session_id, sizeof(slot->session_id), "%ld-%zu", (long)time(NULL), index);
         if (slot_index != NULL) {
             *slot_index = (int)index;
@@ -1766,6 +1769,22 @@ static void forward_rtsp_packet(media_bridge_t *bridge, const unsigned char *pac
     c300x_rtsp_send_targets(targets, target_count, packet, (size_t)packet_len);
 }
 
+/* Video goes through the keyframe group cache: each client starts at an IDR. */
+static void forward_rtsp_video_packet(media_bridge_t *bridge, const unsigned char *packet, int packet_len) {
+    rtsp_send_target_t targets[C300X_VIDEO_RING_PREVIEW_MAX_RTSP_CLIENTS];
+
+    if (bridge == NULL || packet == NULL || packet_len <= 0) {
+        return;
+    }
+    pthread_mutex_lock(&bridge->mutex);
+    size_t target_count = rtsp_send_targets_locked(bridge, false, targets, C300X_VIDEO_RING_PREVIEW_MAX_RTSP_CLIENTS);
+    pthread_mutex_unlock(&bridge->mutex);
+    if (target_count > 0) {
+        c300x_video_bridge_rtp_packet(bridge->video);
+    }
+    c300x_media_gop_forward(targets, target_count, packet, (size_t)packet_len);
+}
+
 static bool rtsp_audio_payload_is_speex_8khz(unsigned char payload_type) {
     return payload_type == RING_AUDIO_PAYLOAD_TYPE
         || payload_type == MEDIA_AUDIO_PAYLOAD_TYPE;
@@ -2024,7 +2043,7 @@ static void drain_ring_srtp_socket(
                     | ((uint32_t)packet[10] << 8)
                     | (uint32_t)packet[11];
             }
-            forward_rtsp_packet(bridge, packet, packet_len, audio);
+            forward_rtsp_video_packet(bridge, packet, packet_len);
         }
         from_len = sizeof(from);
     }
@@ -2488,6 +2507,7 @@ static void handle_ring_invite(
         remote_contact_uri,
         &srtp
     );
+    c300x_media_gop_reset();
 
 cleanup:
     pthread_mutex_lock(&bridge->mutex);
@@ -4671,7 +4691,7 @@ static void drain_relay_video_packets(media_bridge_t *bridge, int rtp_fd) {
         if (n <= 0) {
             return;
         }
-        forward_rtsp_packet(bridge, packet, (int)n, false);
+        forward_rtsp_video_packet(bridge, packet, (int)n);
     }
 }
 
@@ -5031,6 +5051,17 @@ static bool start_media_session(media_bridge_t *bridge) {
         goto failed;
     }
     if (media_start_cancelled(bridge, generation)) goto failed;
+    /* The station streams from the first media command on, through the
+     * takeover's waits: read it from then on, so the cache holds the newest
+     * IDR when the client plays and nothing piles up in the socket. */
+    pthread_mutex_lock(&bridge->mutex);
+    bridge->relay_started = pthread_create(&bridge->relay_thread, NULL, rtp_relay_thread, bridge) == 0;
+    bool started = bridge->relay_started;
+    pthread_mutex_unlock(&bridge->mutex);
+    if (!started) {
+        c300x_video_bridge_set_error(bridge->video, "rtp_relay_start_failed");
+        goto failed;
+    }
     if (!c300x_device_media_takeover(bridge->config)) {
         c300x_video_bridge_set_error(bridge->video, "media_takeover_failed");
         goto failed;
@@ -5045,14 +5076,8 @@ static bool start_media_session(media_bridge_t *bridge) {
     bridge->media_active = true;
     bridge->media_starting = false;
     bridge->picture_session++;
-    bridge->relay_started = pthread_create(&bridge->relay_thread, NULL, rtp_relay_thread, bridge) == 0;
-    bool started = bridge->relay_started;
     pthread_mutex_unlock(&bridge->mutex);
 
-    if (!started) {
-        c300x_video_bridge_set_error(bridge->video, "rtp_relay_start_failed");
-        goto failed;
-    }
     c300x_video_bridge_media_started(bridge->video, true);
     c300x_video_dispatch_event(bridge->video, "doorbell.view_requested", "{}", 0);
     pthread_mutex_unlock(&media_lifecycle_mutex);
@@ -5149,7 +5174,9 @@ static void stop_media_session_locked(bool close_client, bool explicit_stop) {
     g_bridge.sip_stop = true;
     g_bridge.ondemand_media_stop = true;
     g_bridge.talkback_stop = true;
-    send_media_stop = g_bridge.media_active || g_bridge.relay_started;
+    /* A start that fails or is cancelled during the takeover stops the
+     * device media itself, or never had it. */
+    send_media_stop = g_bridge.media_active || (g_bridge.relay_started && !g_bridge.media_starting);
     relay_started = g_bridge.relay_started;
     sip_monitor_started = g_bridge.sip_monitor_joinable;
     ondemand_media_started = g_bridge.ondemand_media_joinable;
@@ -5190,6 +5217,7 @@ static void stop_media_session_locked(bool close_client, bool explicit_stop) {
 
     if (relay_started) {
         pthread_join(g_bridge.relay_thread, NULL);
+        c300x_media_gop_reset();
     }
     if (talkback_started) {
         pthread_join(talkback_thread, NULL);

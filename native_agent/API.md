@@ -1020,6 +1020,15 @@ Request fields:
 
 ## Media and Calls
 
+RTSP video (`/doorbell`, `/doorbell-video`, `/doorbell-recorder`) starts at
+a keyframe for every client: a client that starts playing first gets the
+newest keyframe group (SPS, PPS, IDR and the frames since, at most 1.5 s and
+512 KiB), sent at once with timestamps 1 ms apart, then the live frames. Without
+a complete group it gets no video until the next keyframe; audio starts at
+once. Each client has its own continuous RTP sequence numbers and timestamps,
+also when the station's stream restarts. The agent reads the station's stream
+from the first media command of an on-demand start.
+
 ### `GET /api/v1/video/doorbell`
 
 Authentication: normal API token.

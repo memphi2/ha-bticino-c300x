@@ -1,6 +1,6 @@
-import { c300xMediaState } from "./c300x-state-model.js?v=5519efaeb5244c5c";
-import "./c300x-media-controls.js?v=5519efaeb5244c5c";
-import "./c300x-picture-controls.js?v=5519efaeb5244c5c";
+import { c300xMediaState } from "./c300x-state-model.js?v=dd9c7d9149e097a1";
+import "./c300x-media-controls.js?v=dd9c7d9149e097a1";
+import "./c300x-picture-controls.js?v=dd9c7d9149e097a1";
 
 // Archive playback never owns a device session. Only the existing card actions
 // may start/answer/hang up; this adapter gives those sessions visual priority.
@@ -112,7 +112,6 @@ export class C300XCardMedia {
       enabled: !card._isHomeCallMode() && card._config.show_media_history !== false,
       busy: !!busy, live: live && !!card._webrtc.remoteStream.getVideoTracks?.().length,
       hasAudio: !!card._webrtc?.remoteStream?.getAudioTracks?.().length,
-      scaledVolume: !!card._webrtc?.gainEngaged,
       volume: card._playbackVolume ?? 1, muted: card._playbackMuted === true,
       still: this.card._snapshotEl?.hidden === false,
       // While browsing the still is hidden, but it is what the card returns to.

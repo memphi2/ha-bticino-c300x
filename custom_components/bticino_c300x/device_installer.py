@@ -86,6 +86,10 @@ _SSH_HOST_KEY_ALGS = (
     "ecdsa-sha2-nistp256",
     "ecdsa-sha2-nistp384",
     "ecdsa-sha2-nistp521",
+    # An RSA host key signed with SHA-2 (Dropbear 2020.81 of firmware 3.0.6
+    # offers rsa-sha2-256) before the factory Dropbear's SHA-1.
+    "rsa-sha2-512",
+    "rsa-sha2-256",
     "ssh-rsa",
 )
 # A display write over SSH is the script the agent runs as a job, so it gets

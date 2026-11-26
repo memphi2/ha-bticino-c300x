@@ -87,16 +87,20 @@ def ssh_server(monkeypatch, request, host_key_type, station_login):
     async def serve():
         state["loop"] = asyncio.get_running_loop()
         state["stop"] = asyncio.Event()
+        host_algs = station_login.get("host_sig_algs", [host_key_type])
+        host_key = asyncssh.generate_private_key(
+            host_key_type, **({"key_size": 2048} if host_key_type == "ssh-rsa" else {}),
+        )
+        # The algorithms offered for the host key: an RSA key otherwise offers
+        # every hash, a Dropbear only the ones it knows.
+        host_key.sig_algorithms = tuple(alg.encode() for alg in host_algs)
         async with asyncssh.listen(
-            "127.0.0.1", 0, server_factory=Server,
-            server_host_keys=[asyncssh.generate_private_key(
-                host_key_type, **({"key_size": 2048} if host_key_type == "ssh-rsa" else {}),
-            )],
+            "127.0.0.1", 0, server_factory=Server, server_host_keys=[host_key],
             # Only this host key is offered, as by a Dropbear given one key (dropbear -r);
             # user keys sign with the algorithms the station takes besides.
-            signature_algs=[host_key_type, *station_login.get("sig_algs", [])], kex_algs=[request.param],
-            encryption_algs=["aes128-cbc"], process_factory=process_handler,
-            encoding=None,
+            signature_algs=[*host_algs, *station_login.get("sig_algs", [])],
+            kex_algs=[request.param], encryption_algs=["aes128-cbc"],
+            process_factory=process_handler, encoding=None,
         ) as server:
             ready.set_result(server.get_port())
             await state["stop"].wait()
@@ -290,6 +294,27 @@ def test_a_station_without_ssh_is_named_unreachable(monkeypatch, behaviour):
     finally:
         listener.close()
     assert caught.value.reason == "ssh_unreachable"
+
+
+@pytest.fixture
+def rsa_host_signature(station_login, request):
+    station_login["host_sig_algs"] = [request.param]
+    return request.param
+
+
+@pytest.mark.parametrize("host_key_type", ["ssh-rsa"])
+@pytest.mark.parametrize("rsa_host_signature", [
+    # Dropbear 2020.81 (3.0.6) signs its RSA host key with SHA-256.
+    "rsa-sha2-256", "rsa-sha2-512",
+    # Dropbear 2017.75 (1.7.19, 2.0.2, C100X 1.5.8) knows SHA-1 only.
+    "ssh-rsa",
+], indirect=True)
+def test_an_rsa_host_key_is_accepted_with_each_signature_hash(rsa_host_signature, ssh_server, host_key_type):
+    client = installer._connect_device_client(ssh_server)
+    try:
+        assert client.run("printf 'ready'") == "ready"
+    finally:
+        client.close()
 
 
 def test_command_failure_does_not_expose_remote_output(ssh_server):

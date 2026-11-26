@@ -139,7 +139,8 @@ by removing that dependency, not by hiding the scanner result.
   RSA/SHA-1 host signatures and legacy key exchange/cipher fallbacks are enabled
   per connection. No global SSH configuration or library defaults are changed.
   A station whose SSH server offers an ECDSA or Ed25519 host key (as set up by
-  some root tools) is accepted as well; such a key is preferred when offered.
+  some root tools), or signs its RSA host key with SHA-2 (rsa-sha2-512/256),
+  is accepted as well; these are preferred over RSA/SHA-1 when offered.
 - **Reason:** the device's SSH implementation needs legacy interoperability.
   Updating the client does not modernize the device protocol. Paramiko 5 removes
   the required RSA/SHA-1 support; AsyncSSH retains a configurable legacy path.

@@ -108,10 +108,7 @@ class ReinstallSteps:
                 if current_connection_options(entry) != connection:
                     # The entry was pointed elsewhere while the install ran.
                     return cast(ConfigFlowResult, self.async_abort(reason="reauth_wrong_device"))
-                _, checked = await self._async_validate_reinstalled(entry, {**connection, **keys})
-                if checked.get("base") == "wrong_device":
-                    return cast(ConfigFlowResult, self.async_abort(reason="reauth_wrong_device"))
-                # The station holds these keys now, also when it does not answer yet.
+                # The station holds these keys now; the reloaded entry signs in with them.
                 data = dict(keys)
                 if getattr(installed, "display_pending", False):
                     data[CONF_DISPLAY_FOLLOWUP_PENDING] = entry.data.get(

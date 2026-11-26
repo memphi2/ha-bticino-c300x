@@ -165,11 +165,6 @@ class AuthFlowSteps(C100XOptInSteps, ReinstallSteps):
             errors=errors,
         ))
 
-    async def _async_validate_reinstalled(
-        self: Any, entry: Any, connection: dict[str, Any],
-    ) -> tuple[dict[str, Any], dict[str, str]]:
-        return await async_validate_entry_connection(self.hass, entry, connection)
-
     async def async_step_agent_auth(
         self: Any, user_input: dict[str, Any] | None = None,
     ) -> ConfigFlowResult:

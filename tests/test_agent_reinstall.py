@@ -140,10 +140,10 @@ def _reauth_flow(existing):
     return flow
 
 
-def _reinstall(monkeypatch, flow, installer, checked=None, user_input=None, first=True):
+def _reinstall(monkeypatch, flow, installer, user_input=None, first=True):
     monkeypatch.setattr(config_flow_reinstall, "async_ensure_installer_dependencies", AsyncMock())
     monkeypatch.setattr(config_flow_reinstall, "async_install_device_agent", installer)
-    validate = AsyncMock(return_value=checked or ({}, {}))
+    validate = AsyncMock(return_value=({}, {}))
     monkeypatch.setattr(config_flow_auth, "async_validate_connection", validate)
     if first:
         return asyncio.run(flow.async_step_reauth_confirm({CONF_REINSTALL_AGENT: True})), validate
@@ -156,13 +156,11 @@ def test_reauth_offers_the_reinstall():
     assert list(_fields(form)) == [CONF_AGENT_TOKEN, CONF_MAINTENANCE_TOKEN, CONF_REINSTALL_AGENT]
 
 
-@pytest.mark.parametrize("answers", [True, False])
-def test_reauth_reinstall_stores_the_new_keys_in_the_entry(monkeypatch, answers):
+def test_reauth_reinstall_stores_the_new_keys_in_the_entry(monkeypatch):
     existing = _entry()
     flow = _reauth_flow(existing)
     installer = AsyncMock(return_value=SimpleNamespace(display_pending=False))
-    checked = ({}, {}) if answers else ({}, {"base": "cannot_connect"})
-    result, validate = _reinstall(monkeypatch, flow, installer, checked)
+    result, _ = _reinstall(monkeypatch, flow, installer)
     assert result["reason"] == "reauth_successful"
     request, keys = installer.await_args.args[0], installer.await_args.kwargs
     assert request.host == "c300x.local" and request.agent_port == 8091
@@ -170,12 +168,10 @@ def test_reauth_reinstall_stores_the_new_keys_in_the_entry(monkeypatch, answers)
     assert request.device_activation_mode == "manual" and request.apply_gui_patch is False
     assert "lost" not in (keys["api_token"], keys["maintenance_token"])
     saved = flow.async_update_and_abort.call_args.kwargs
-    # The station holds the new keys, also when it does not answer yet.
     assert saved["data_updates"] == {
         CONF_AGENT_TOKEN: keys["api_token"], CONF_MAINTENANCE_TOKEN: keys["maintenance_token"],
     }
     assert saved["options"] == {CONF_DEVICE_ACTIVATION_MODE: "manual"}
-    assert validate.await_args.args[1][CONF_AGENT_TOKEN] == keys["api_token"]
     flow.hass.config_entries.async_schedule_reload.assert_called_once_with("entry")
 
 
@@ -204,14 +200,23 @@ def test_reauth_reinstall_asks_for_the_ssh_login_once_the_factory_login_is_refus
     assert "ssh-secret" not in str(flow.async_update_and_abort.call_args)
 
 
-def test_reauth_reinstall_of_another_station_changes_no_entry(monkeypatch):
-    from custom_components.bticino_c300x.discovery import discovery_unique_id
-
-    existing = _entry()
-    existing.unique_id = discovery_unique_id({"id": "expected"})
-    flow = _reauth_flow(existing)
+def test_reauth_reinstall_asks_the_station_nothing_after_the_install(monkeypatch):
+    flow = _reauth_flow(_entry())
     installer = AsyncMock(return_value=SimpleNamespace(display_pending=False))
-    result, _ = _reinstall(monkeypatch, flow, installer, ({"device_id": "other"}, {}))
+    result, validate = _reinstall(monkeypatch, flow, installer)
+    assert result["reason"] == "reauth_successful"
+    validate.assert_not_called()
+
+
+def test_reauth_reinstall_saves_no_keys_for_an_entry_moved_meanwhile(monkeypatch):
+    existing = _entry()
+    flow = _reauth_flow(existing)
+
+    async def install(*_args, **_kwargs):
+        existing.data = {**existing.data, CONF_AGENT_HOST: "elsewhere.local"}
+        return SimpleNamespace(display_pending=False)
+
+    result, _ = _reinstall(monkeypatch, flow, AsyncMock(side_effect=install))
     assert result["reason"] == "reauth_wrong_device"
     flow.async_update_and_abort.assert_not_called()
 

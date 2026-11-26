@@ -18,20 +18,11 @@ static int live(const struct c300x_call *call)
         || call->state == C300X_CALL_VIEWING;
 }
 
-void c300x_calls_init(struct c300x_calls *calls, const char *boot_id)
-{
-    memset(calls, 0, sizeof(*calls));
-    c300x_copy_string(calls->boot_id, sizeof(calls->boot_id), boot_id);
-}
-
-static void ensure_boot_id(struct c300x_calls *calls)
+static void draw_boot_id(struct c300x_calls *calls)
 {
     unsigned char bytes[4] = {0};
     int fd;
 
-    if (calls->boot_id[0] != '\0') {
-        return;
-    }
     fd = open("/dev/urandom", O_RDONLY | O_CLOEXEC);
     if (fd < 0 || read(fd, bytes, sizeof(bytes)) != (ssize_t)sizeof(bytes)) {
         unsigned long fallback = (unsigned long)time(NULL) ^ (unsigned long)getpid();
@@ -41,6 +32,16 @@ static void ensure_boot_id(struct c300x_calls *calls)
         close(fd);
     }
     snprintf(calls->boot_id, sizeof(calls->boot_id), "%02x%02x%02x%02x", bytes[0], bytes[1], bytes[2], bytes[3]);
+}
+
+void c300x_calls_init(struct c300x_calls *calls, const char *boot_id)
+{
+    memset(calls, 0, sizeof(*calls));
+    if (boot_id != NULL && boot_id[0] != '\0') {
+        c300x_copy_string(calls->boot_id, sizeof(calls->boot_id), boot_id);
+    } else {
+        draw_boot_id(calls);
+    }
 }
 
 static void emit(const struct c300x_call_sink *sink, const char *type, const char *data)
@@ -80,7 +81,6 @@ static struct c300x_call *open_call(struct c300x_calls *calls, const struct c300
 {
     struct c300x_call *call;
 
-    ensure_boot_id(calls);
     call = slot(calls);
     if (live(call)) {
         c300x_calls_end(calls, sink, call->id, "evicted", now);

@@ -57,6 +57,7 @@ struct c300x_call_sink {
     struct c300x_outdoor_units *units;
 };
 
+/* boot_id NULL or empty: a random one, drawn now (at agent start). */
 void c300x_calls_init(struct c300x_calls *calls, const char *boot_id);
 /* A ring (bus frame or the ring's INVITE). Returns 1 with the ring event's
  * call fields in data (an object to send as doorbell.pressed), 0 for a repeat. */

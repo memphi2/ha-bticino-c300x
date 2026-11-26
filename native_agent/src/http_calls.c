@@ -22,6 +22,7 @@ void c300x_call_hub_init(struct c300x_call_hub *hub, const struct c300x_config *
                          c300x_call_emit_fn emit, void *context)
 {
     memset(hub, 0, sizeof(*hub));
+    c300x_calls_init(&hub->calls, NULL);
     hub->config = config;
     hub->sink = (struct c300x_call_sink){emit, context, &hub->units};
 }

@@ -778,6 +778,18 @@ static void call_id_lengths(void) {
     }
 }
 
+/* The boot id exists from the start: before the first call a restart of
+ * the agent already shows as a new boot id. */
+static void boot_id_at_start(void) {
+    char data[4096], boot[16] = "", id[32];
+    int preview;
+    assert(calls_api("GET", "/api/v1/calls", "", data, sizeof(data)) == 200);
+    assert(sscanf(strstr(data, "\"boot_id\":\"") + 11, "%15[0-9a-f]", boot) == 1 && strlen(boot) == 8);
+    ring_with_caller(id, &preview);
+    assert(strncmp(id, boot, 8) == 0 && id[8] == '-');
+    close(preview);
+}
+
 /* (d) The station answers 486 Busy with no external marker (here: no bus
  * frame announced the call). One INVITE, then no SIP until it is free. */
 static void station_busy_case(bool freed_by_bus) {
@@ -910,6 +922,7 @@ int main(int argc, char **argv) {
     else if (strcmp(argv[1], "lifecycle_ondemand_view") == 0) lifecycle_ondemand_view();
     else if (strcmp(argv[1], "refused_answer_then_station") == 0) refused_answer_then_station();
     else if (strcmp(argv[1], "call_id_lengths") == 0) call_id_lengths();
+    else if (strcmp(argv[1], "boot_id_at_start") == 0) boot_id_at_start();
     else if (strcmp(argv[1], "station_busy_bus_end") == 0) station_busy_case(true);
     else if (strcmp(argv[1], "station_busy_timeout") == 0) station_busy_case(false);
     else if (strcmp(argv[1], "station_freed_before_486") == 0) station_freed_during_start(true);

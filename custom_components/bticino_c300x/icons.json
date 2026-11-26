@@ -150,29 +150,11 @@
     "run_action": {
       "service": "mdi:play"
     },
-    "reboot": {
-      "service": "mdi:restart-alert"
-    },
     "play_latest_video_message": {
       "service": "mdi:play-box"
     },
     "play_latest_voice_memo": {
       "service": "mdi:play-circle"
-    },
-    "delete_latest_video_message": {
-      "service": "mdi:video-minus"
-    },
-    "delete_latest_text_memo": {
-      "service": "mdi:trash-can-outline"
-    },
-    "unlock_door": {
-      "service": "mdi:door-open"
-    },
-    "stair_light": {
-      "service": "mdi:stairs"
-    },
-    "delete_latest_voice_memo": {
-      "service": "mdi:trash-can-outline"
     }
   }
 }

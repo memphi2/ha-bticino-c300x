@@ -101,3 +101,10 @@ def test_service_texts_fit_both_station_models() -> None:
     text = (ROOT / "custom_components" / "bticino_c300x" / "services.yaml").read_text(encoding="utf-8")
     shown = [line for line in text.splitlines() if line.strip().startswith(("name:", "description:"))]
     assert [line for line in shown if "C300X" in line or "C100X" in line] == []
+
+
+def test_service_icons_name_only_services_that_exist() -> None:
+    import json
+
+    icons = json.loads((ROOT / "custom_components/bticino_c300x/icons.json").read_text(encoding="utf-8"))
+    assert set(icons.get("services", {})) <= set(_services_yaml_sections())

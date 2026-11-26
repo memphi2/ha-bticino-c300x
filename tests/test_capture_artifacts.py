@@ -6,6 +6,7 @@ import os
 import shutil
 import subprocess
 import wave
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from urllib.parse import urlsplit
@@ -210,3 +211,32 @@ def test_explicit_result_pointer_does_not_overwrite_previous_recording(tmp_path)
     assert json.loads(old.read_text()) == {"capture_id": "old"}
     assert json.loads(alias.read_text()) == {"capture_id": "new"}
     assert not alias.is_symlink()
+
+
+def test_a_ring_capture_records_the_call_and_the_unit_that_rang(monkeypatch, tmp_path):
+    # An unlock after the analysis opens this unit, while the agent keeps
+    # this call: not the unit of a later ring.
+    from custom_components.bticino_c300x._api_calls import normalize_calls
+    from custom_components.bticino_c300x.call_registry import C300XCallRegistry
+
+    async def ffmpeg(url, target, *, work_dir, **kwargs):
+        target.write_bytes(b"mp4")
+        with wave.open(str(work_dir / "latest.raw.wav"), "wb") as wav:
+            wav.setnchannels(1)
+            wav.setsampwidth(2)
+            wav.setframerate(16000)
+            wav.writeframes(b"\0" * 32)
+
+    monkeypatch.setattr(ring_capture, "_async_run_ffmpeg", ffmpeg)
+    monkeypatch.setattr(ring_capture, "_async_wait_rtsp_ready", AsyncMock())
+    monkeypatch.setattr(ring_capture, "_async_keep_talkback_alive_when_ready", AsyncMock())
+    runtime = _FakeRuntimeData(_FakeApi({"available": True}))
+    runtime.calls = C300XCallRegistry()
+    runtime.calls.set_calls(normalize_calls({"current_call_id": "0badc0de-7", "calls": [
+        {"call_id": "0badc0de-7", "kind": "ring", "state": "ringing", "unit": "21"},
+    ]}))
+    entry = _FakeEntry(runtime, {"agent_host": "192.0.2.1"}, entry_id="entry-1")
+    capture = asyncio.run(ring_capture.async_capture_doorbell_ring_call(_FakeHass(tmp_path), entry))
+    stored = json.loads(Path(capture["metadata_path"]).read_text(encoding="utf-8"))
+    for payload in (capture, stored):
+        assert (payload["call_id"], payload["unit_id"]) == ("0badc0de-7", "21")

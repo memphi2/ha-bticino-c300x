@@ -165,3 +165,47 @@ def test_legacy_reservation_is_preserved_and_atomic_write_failure_denies(
     with pytest.raises(HomeAssistantError, match="disk full"):
         ledger.reserve_capture(path, "never-unlock")
     assert path.read_bytes() == before
+
+
+def _rang(root, capture_id, **call):
+    params = analysis(root, capture_id)
+    capture = root / "c300x" / f"{capture_id}.capture.json"
+    capture.write_text(json.dumps({**json.loads(capture.read_text()), **call}))
+    return params
+
+
+@pytest.mark.parametrize(("target", "opened"), [
+    (None, [("21", "0badc0de-7")]),
+    ("21", [("21", "0badc0de-7")]),
+    ("20", []),
+], ids=["station", "the unit that rang", "another unit"])
+def test_unlock_opens_the_unit_that_rang_not_a_later_one(tmp_path, target, opened):
+    # The capture recorded the ring at unit 21. A ring at another unit since
+    # then is the current call: "current" would open that one instead.
+    async def run():
+        hass = SimpleNamespace(
+            config=SimpleNamespace(path=lambda *parts: str(tmp_path.joinpath(*parts))),
+            bus=SimpleNamespace(async_fire=lambda *_args: None),
+        )
+        params = _rang(tmp_path, "rang", entry_id="test", call_id="0badc0de-7", unit_id="21")
+        calls = []
+
+        async def unlock(unit_id, call_id=None):
+            calls.append((unit_id, call_id))
+            return {"ok": True, "unit": unit_id}
+
+        entry = SimpleNamespace(
+            entry_id="test",
+            runtime_data=SimpleNamespace(api=SimpleNamespace(async_unlock_outdoor_unit=unlock)),
+        )
+        evaluate = RingAnalysisUseCase(hass).evaluate(
+            **params, unlock_on_match=True, unlock_target_provider=lambda: (entry, target),
+        )
+        if opened:
+            await evaluate
+        else:
+            with pytest.raises(HomeAssistantError, match="another outdoor unit"):
+                await evaluate
+        assert calls == opened
+
+    asyncio.run(run())

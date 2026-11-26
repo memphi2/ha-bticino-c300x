@@ -34,6 +34,9 @@ class RingAnalysisDecision:
     decision_path: Path
     capture_id: str | None = None
     capture_entry_id: str | None = None
+    # The ring the capture recorded and the unit that rang, when known.
+    capture_call_id: str | None = None
+    capture_unit_id: str | None = None
 
 
 async def async_evaluate_ring_analysis(
@@ -84,6 +87,8 @@ async def async_evaluate_ring_analysis(
         decision_path=decision,
         capture_id=guardrail["capture_id"] or None,
         capture_entry_id=guardrail["capture_entry_id"] or None,
+        capture_call_id=guardrail["capture_call_id"] or None,
+        capture_unit_id=guardrail["capture_unit_id"] or None,
     )
 
 
@@ -216,6 +221,8 @@ def _capture_guardrail_result(
         "capture_id": result_capture_id,
         "capture_path": str(capture_file or result_capture_path),
         "capture_entry_id": str((capture_payload or {}).get("entry_id") or ""),
+        "capture_call_id": str((capture_payload or {}).get("call_id") or ""),
+        "capture_unit_id": str((capture_payload or {}).get("unit_id") or ""),
     }
 
 

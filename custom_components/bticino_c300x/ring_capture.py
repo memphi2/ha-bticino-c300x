@@ -19,6 +19,7 @@ from uuid import uuid4
 
 from homeassistant.exceptions import HomeAssistantError
 
+from .call_sync import entry_call_registry
 from .camera_media.rtsp_policy import (
     RtspConsumer,
     RtspSessionOwner,
@@ -157,6 +158,10 @@ async def _async_capture_to_output(
     # count against the limit of workspaces.
     published = False
     captured_at = datetime.now(UTC).timestamp()
+    # The ring this clip records: an unlock after its analysis opens only
+    # the unit that rang, and only while the agent keeps that call.
+    registry = entry_call_registry(entry)
+    call_id = registry.current_call_id if registry is not None and not on_demand else None
     capture_task = asyncio.create_task(
         _async_run_ffmpeg(
             rtsp_url,
@@ -218,6 +223,10 @@ async def _async_capture_to_output(
         )
         metadata["entry_id"] = entry.entry_id
         metadata["captured_at"] = captured_at
+        # The unit is known by now: the station names the caller within 1 s.
+        call = registry.call(call_id) if registry is not None else None
+        metadata["call_id"] = call_id
+        metadata["unit_id"] = call.unit if call is not None else None
         await async_write_json_file(hass, _capture_metadata_path(work_dir), metadata)
         published = True
         await asyncio.to_thread(publish_capture_aliases, root, work_dir)

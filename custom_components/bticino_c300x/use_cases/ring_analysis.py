@@ -76,9 +76,15 @@ class RingAnalysisUseCase:
         capture_entry_id = getattr(decision, "capture_entry_id", None)
         if capture_entry_id and capture_entry_id != entry.entry_id:
             raise HomeAssistantError("C300X ring capture belongs to another device")
+        # The door of the unit that rang, never of a unit that rings later.
+        call_id = getattr(decision, "capture_call_id", None)
+        rang = getattr(decision, "capture_unit_id", None)
+        if rang and unit_id and rang != unit_id:
+            raise HomeAssistantError("C300X ring capture belongs to another outdoor unit")
         if not await async_mark_ring_capture_used(
             self._hass,
             getattr(decision, "capture_id", None),
         ):
             return
-        await DeviceActionsUseCase(self._hass, entry).unlock(unit_id or "current")
+        # With the call id the agent opens only while that call is the unit's.
+        await DeviceActionsUseCase(self._hass, entry).unlock(rang or unit_id or "current", call_id)

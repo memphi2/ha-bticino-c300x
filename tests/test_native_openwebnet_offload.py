@@ -549,3 +549,18 @@ def test_a_waiting_unit_unlock_does_not_move_the_running_one(lab: Lab, tmp_path:
     assert finish(first)["unit"] == "21"
     assert finish(second)["unit"] == "20"
     assert lab.bus.frames == ["*8*19*21##", "*8*20*21##", PRESS, RELEASE]
+
+
+@pytest.mark.parametrize("lab", [{"events": {"udp": {"enabled": True, "group": "239.255.76.67",
+                                                     "port": free_tcp_ports(1)[0]}}}], indirect=True)
+def test_a_unit_the_station_names_is_kept_next_to_the_configuration(lab: Lab, tmp_path: Path) -> None:
+    from native_agent.test.smoke import send_udp_event
+
+    udp_port = json.loads((tmp_path / "config.json").read_text())["events"]["udp"]["port"]
+    send_udp_event(udp_port, "*8*1#1#4#21*11##")
+    time.sleep(0.1)
+    send_udp_event(udp_port, "*8*9#1#4*23##")
+    time.sleep(0.3)
+    units = api_get(lab.api_port, "/api/v1/outdoor-units")["units"]
+    assert [(unit["id"], unit["source"]) for unit in units] == [("20", "default"), ("23", "seen")]
+    assert (tmp_path / "outdoor-units-seen").read_text() == "23 23\n"

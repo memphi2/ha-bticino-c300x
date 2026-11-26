@@ -69,10 +69,11 @@ Sources, in this order:
    If no archive unit has that `action_where`, a unit with that `where` is
    added (source `default`). The default unit's lock is the agent's
    configured lock address (`lock.address`, default `20`).
-3. Units first named by a caller frame (source `seen`). They live in agent RAM
-   until the next restart; Home Assistant keeps their devices. A `default`
-   unit that is not in the archive adopts the full `where` of the first caller
-   frame with its `action_where` (its `unit_id` stays), instead of creating a
+3. Units first named by a caller or view frame (source `seen`). The agent
+   keeps them in `outdoor-units-seen` next to its configuration, so they
+   survive a restart. A unit known only by its plain address (the `default`
+   unit, a `seen` unit) adopts the full `where` of the first caller frame
+   with its `action_where` (its `unit_id` stays), instead of creating a
    second unit.
 
 A frame names a unit by its full address (`20#2`, caller frames) or by its

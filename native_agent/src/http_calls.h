@@ -25,8 +25,12 @@ struct c300x_call_hub {
     struct c300x_calls calls;
     struct c300x_outdoor_units units;
     struct c300x_call_sink sink;
+    c300x_call_emit_fn emit;
+    void *context;
     const struct c300x_config *config;
     struct c300x_unlock_resolved unlock;
+    char seen_path[C300X_UNIT_PATH_LEN]; /* empty: seen units are not kept */
+    int seen_loaded;
 };
 
 void c300x_call_hub_init(struct c300x_call_hub *hub, const struct c300x_config *config,

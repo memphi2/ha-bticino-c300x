@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <unistd.h>
 
 #include "file_io.h"
 #include "json_util.h"
@@ -12,6 +13,7 @@
 
 #define ARCHIVE_MAX_BYTES (128 * 1024)
 #define CONF_MAX_BYTES (128 * 1024)
+#define SEEN_MAX_BYTES (4 * 1024)
 
 int c300x_unit_where_valid(const char *where)
 {
@@ -357,6 +359,72 @@ int c300x_outdoor_units_note_caller(struct c300x_outdoor_units *units, const cha
     index = add_unit(units, where, "", "seen");
     *changed = index >= 0;
     return index;
+}
+
+/* One line per seen unit: its id and its where. */
+int c300x_outdoor_units_save_seen(const struct c300x_outdoor_units *units, const char *path)
+{
+    char temp[C300X_UNIT_PATH_LEN + 8];
+    FILE *file;
+    int ok;
+
+    if (path == NULL || path[0] == '\0' || snprintf(temp, sizeof(temp), "%s.tmp", path) >= (int)sizeof(temp)) {
+        return 0;
+    }
+    file = fopen(temp, "w");
+    if (file == NULL) {
+        return 0;
+    }
+    ok = 1;
+    for (int index = 0; index < units->count; index++) {
+        if (strcmp(units->items[index].source, "seen") == 0
+            && fprintf(file, "%s %s\n", units->items[index].id, units->items[index].where) < 0) {
+            ok = 0;
+        }
+    }
+    ok = fflush(file) == 0 && fsync(fileno(file)) == 0 && ok;
+    ok = fclose(file) == 0 && ok;
+    if (!ok || rename(temp, path) != 0) {
+        (void)unlink(temp);
+        return 0;
+    }
+    return 1;
+}
+
+void c300x_outdoor_units_load_seen(struct c300x_outdoor_units *units, const char *path)
+{
+    const char *state = "missing";
+    char *text = path != NULL && path[0] != '\0' ? read_file(path, SEEN_MAX_BYTES, &state) : NULL;
+    char *line = text;
+
+    while (line != NULL && *line != '\0') {
+        char *next = strchr(line, '\n');
+        char id[C300X_UNIT_WHERE_LEN], where[C300X_UNIT_WHERE_LEN];
+        char plain[C300X_UNIT_WHERE_LEN], own[C300X_UNIT_WHERE_LEN];
+        if (next != NULL) {
+            *next++ = '\0';
+        }
+        if (sscanf(line, "%23s %23s", id, where) != 2 || !c300x_unit_where_valid(where)) {
+            line = next;
+            continue;
+        }
+        c300x_unit_action_where(where, plain, sizeof(plain));
+        c300x_unit_id_from_where(where, own, sizeof(own));
+        /* Its id is its where's, or its plain address once it learned a
+         * qualifier. A unit the station's files name now is not added again. */
+        int known = (strcmp(id, own) != 0 && strcmp(id, plain) != 0)
+            || c300x_outdoor_units_find_id(units, id) >= 0
+            || (strcmp(where, plain) == 0 && find_action(units, plain, 0) >= 0);
+        for (int index = 0; !known && index < units->count; index++) {
+            known = strcmp(units->items[index].where, where) == 0;
+        }
+        int index = known ? -1 : add_unit(units, where, "", "seen");
+        if (index >= 0) {
+            c300x_copy_string(units->items[index].id, sizeof(units->items[index].id), id);
+        }
+        line = next;
+    }
+    free(text);
 }
 
 const struct c300x_outdoor_unit *c300x_outdoor_units_default(const struct c300x_outdoor_units *units)

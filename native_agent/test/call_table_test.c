@@ -4,6 +4,8 @@
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
+#include <unistd.h>
 
 #include "../src/call_table.h"
 #include "../src/outdoor_units.h"
@@ -314,6 +316,35 @@ static void plain_address_is_the_qualified_unit(void)
     }
 }
 
+/* Seen units are kept in a file: after an agent restart the station's
+ * units are the same. */
+static void seen_units_survive_restart(void)
+{
+    char path[] = "/var/tmp/c300x-seen-units-XXXXXX";
+    int changed;
+    int fd = mkstemp(path);
+    assert(fd >= 0);
+    close(fd);
+    reset(ARCHIVE_THREE);
+    assert(c300x_outdoor_units_note_caller(&units, "23", &changed) == 3 && changed);
+    assert(c300x_outdoor_units_note_caller(&units, "24#1", &changed) == 4 && changed);
+    assert(c300x_outdoor_units_save_seen(&units, path));
+    reset(ARCHIVE_THREE);
+    assert(units.count == 3);
+    c300x_outdoor_units_load_seen(&units, path);
+    assert(units.count == 5);
+    assert(strcmp(units.items[3].id, "23") == 0 && strcmp(units.items[3].source, "seen") == 0);
+    assert(strcmp(units.items[4].id, "24_1") == 0 && strcmp(units.items[4].where, "24#1") == 0);
+    c300x_outdoor_units_load_seen(&units, path);
+    assert(units.count == 5);
+    c300x_outdoor_units_build(&units, ARCHIVE_THREE, "ok", CONF, "20", "20");
+    assert(units.count == 5);
+    unlink(path);
+    reset(ARCHIVE_THREE);
+    c300x_outdoor_units_load_seen(&units, path);
+    assert(units.count == 3);
+}
+
 int main(int argc, char **argv)
 {
     static const struct { const char *name; void (*run)(void); } cases[] = {
@@ -331,6 +362,7 @@ int main(int argc, char **argv)
         {"view_and_media_closed", view_and_media_closed},
         {"timeouts_and_json", timeouts_and_json},
         {"plain_address_is_the_qualified_unit", plain_address_is_the_qualified_unit},
+        {"seen_units_survive_restart", seen_units_survive_restart},
     };
     for (size_t index = 0; index < sizeof(cases) / sizeof(cases[0]); index++) {
         if (argc < 2 || strcmp(argv[1], cases[index].name) == 0) {

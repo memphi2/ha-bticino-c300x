@@ -18,13 +18,40 @@
 #define REQUEST_CALL_ID_LEN ((int)sizeof(((struct c300x_unlock_resolved *)0)->call_id))
 #define UNITS_PREFIX "/api/v1/outdoor-units/"
 
+/* Units the agent saw are written where its configuration is. */
+static void seen_path(struct c300x_call_hub *hub, const struct c300x_config *config)
+{
+    const char *slash = config != NULL ? strrchr(config->config_path, '/') : NULL;
+
+    hub->seen_path[0] = '\0';
+    if (slash != NULL && (size_t)(slash - config->config_path) + sizeof("/outdoor-units-seen") < sizeof(hub->seen_path)) {
+        snprintf(hub->seen_path, sizeof(hub->seen_path), "%.*s/outdoor-units-seen",
+                 (int)(slash - config->config_path), config->config_path);
+    }
+}
+
+static void hub_emit(void *context, const char *type, const char *data)
+{
+    struct c300x_call_hub *hub = context;
+
+    if (strcmp(type, "outdoor_units.changed") == 0 && hub->seen_path[0] != '\0') {
+        (void)c300x_outdoor_units_save_seen(&hub->units, hub->seen_path);
+    }
+    if (hub->emit != NULL) {
+        hub->emit(hub->context, type, data);
+    }
+}
+
 void c300x_call_hub_init(struct c300x_call_hub *hub, const struct c300x_config *config,
                          c300x_call_emit_fn emit, void *context)
 {
     memset(hub, 0, sizeof(*hub));
     c300x_calls_init(&hub->calls, NULL);
     hub->config = config;
-    hub->sink = (struct c300x_call_sink){emit, context, &hub->units};
+    hub->emit = emit;
+    hub->context = context;
+    hub->sink = (struct c300x_call_sink){hub_emit, hub, &hub->units};
+    seen_path(hub, config);
 }
 
 static void load_units(struct c300x_call_hub *hub)
@@ -35,6 +62,10 @@ static void load_units(struct c300x_call_hub *hub)
                                  hub->config->video_sip_devaddr, hub->config->lock_address);
     } else if (!hub->units.loaded) {
         c300x_outdoor_units_build(&hub->units, NULL, "missing", NULL, "20", "20");
+    }
+    if (!hub->seen_loaded) {
+        hub->seen_loaded = 1;
+        c300x_outdoor_units_load_seen(&hub->units, hub->seen_path);
     }
 }
 

@@ -8,6 +8,7 @@
 #define C300X_UNIT_NAME_LEN 64
 #define C300X_ARCHIVE_XML_PATH "/home/bticino/cfg/extra/0/archive.xml"
 #define C300X_CONF_XML_PATH "/var/tmp/conf.xml"
+#define C300X_UNIT_PATH_LEN 256
 
 /* One outdoor unit. where is the caller frame's address (20#2), action_where
  * the plain address its lock and video use (20), id the where with '_' for
@@ -47,6 +48,9 @@ int c300x_outdoor_units_find_lock(const struct c300x_outdoor_units *units, const
  * a new one is added as seen. *changed is set when the units changed.
  * -1 for an invalid where or a full table. */
 int c300x_outdoor_units_note_caller(struct c300x_outdoor_units *units, const char *where, int *changed);
+/* The seen units, kept across agent restarts. */
+int c300x_outdoor_units_save_seen(const struct c300x_outdoor_units *units, const char *path);
+void c300x_outdoor_units_load_seen(struct c300x_outdoor_units *units, const char *path);
 const struct c300x_outdoor_unit *c300x_outdoor_units_default(const struct c300x_outdoor_units *units);
 int c300x_outdoor_units_json(const struct c300x_outdoor_units *units, char *out, size_t out_len);
 

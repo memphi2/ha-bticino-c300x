@@ -298,31 +298,63 @@ int c300x_outdoor_units_find_lock(const struct c300x_outdoor_units *units, const
     return -1;
 }
 
+/* The unit with this plain action address whose own where has no
+ * qualifier (want_plain) or any; the default unit first. */
+static int find_action(const struct c300x_outdoor_units *units, const char *action, int want_plain)
+{
+    int found = -1;
+
+    for (int index = 0; index < units->count; index++) {
+        const struct c300x_outdoor_unit *unit = &units->items[index];
+        if (strcmp(unit->action_where, action) != 0
+            || (want_plain && strcmp(unit->where, unit->action_where) != 0)) {
+            continue;
+        }
+        if (index == units->default_index) {
+            return index;
+        }
+        if (found < 0) {
+            found = index;
+        }
+    }
+    return found;
+}
+
+/* Frames name a unit by its full address (20#2, caller frames) or by its
+ * plain one (20, view frames): both are the same unit, with one id. */
 int c300x_outdoor_units_note_caller(struct c300x_outdoor_units *units, const char *where, int *changed)
 {
     char action[C300X_UNIT_WHERE_LEN];
+    char id[C300X_UNIT_WHERE_LEN];
+    int index;
 
     *changed = 0;
     if (!c300x_unit_where_valid(where)) {
         return -1;
     }
-    for (int index = 0; index < units->count; index++) {
+    for (index = 0; index < units->count; index++) {
         if (strcmp(units->items[index].where, where) == 0) {
             return index;
         }
     }
     c300x_unit_action_where(where, action, sizeof(action));
-    if (units->default_index >= 0) {
-        struct c300x_outdoor_unit *unit = &units->items[units->default_index];
-        /* The default from conf.xml knows no qualifier: it learns the caller's. */
-        if (strcmp(unit->source, "default") == 0 && strcmp(unit->where, unit->action_where) == 0
-            && strcmp(unit->action_where, action) == 0) {
+    index = find_action(units, action, strcmp(action, where) != 0);
+    if (index >= 0) {
+        struct c300x_outdoor_unit *unit = &units->items[index];
+        /* A unit known without its qualifier (conf.xml's default, a plain
+         * frame) learns the caller's; the archive's address stays. */
+        if (strcmp(action, where) != 0 && strcmp(unit->source, "archive") != 0) {
             c300x_copy_string(unit->where, sizeof(unit->where), where);
             *changed = 1;
-            return units->default_index;
         }
+        return index;
     }
-    int index = add_unit(units, where, "", "seen");
+    c300x_unit_id_from_where(where, id, sizeof(id));
+    index = c300x_outdoor_units_find_id(units, id);
+    if (index >= 0) {
+        return index;
+    }
+    index = add_unit(units, where, "", "seen");
     *changed = index >= 0;
     return index;
 }

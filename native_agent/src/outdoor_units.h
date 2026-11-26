@@ -43,7 +43,8 @@ void c300x_outdoor_units_load(struct c300x_outdoor_units *units, const char *arc
                               const char *default_lock);
 int c300x_outdoor_units_find_id(const struct c300x_outdoor_units *units, const char *id);
 int c300x_outdoor_units_find_lock(const struct c300x_outdoor_units *units, const char *address);
-/* The unit a caller frame names; a new one is added as seen (*changed set).
+/* The unit a caller or view frame names, by its full or its plain address;
+ * a new one is added as seen. *changed is set when the units changed.
  * -1 for an invalid where or a full table. */
 int c300x_outdoor_units_note_caller(struct c300x_outdoor_units *units, const char *where, int *changed);
 const struct c300x_outdoor_unit *c300x_outdoor_units_default(const struct c300x_outdoor_units *units);

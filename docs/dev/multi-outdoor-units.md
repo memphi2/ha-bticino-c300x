@@ -75,6 +75,11 @@ Sources, in this order:
    frame with its `action_where` (its `unit_id` stays), instead of creating a
    second unit.
 
+A frame names a unit by its full address (`20#2`, caller frames) or by its
+plain one (`20`, view frames). The plain address is the unit with that
+`action_where`, the default unit first: it never creates a second unit, and
+unit ids stay unique.
+
 The topology is read with the first bus frame or request that needs it and
 again on every `GET /api/v1/outdoor-units`. At most 16 units.
 

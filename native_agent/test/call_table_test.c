@@ -291,6 +291,29 @@ static void timeouts_and_json(void)
     assert(c300x_calls_json(&calls, 300000, json, sizeof(json)));
 }
 
+/* A frame that names the plain address of a unit behind an apartment
+ * interface (20 for 20#2) is that unit: no phantom unit, no second id. */
+static void plain_address_is_the_qualified_unit(void)
+{
+    int changed;
+    reset(ARCHIVE_THREE);
+    int gate = c300x_outdoor_units_find_id(&units, "20_2");
+    assert(gate >= 0);
+    assert(c300x_outdoor_units_note_caller(&units, "20", &changed) == gate && !changed && units.count == 3);
+    frame("*8*1#5#4#20*11##", 0);
+    expect(nth("call.view_started", 1), "\"unit\":\"20_2\"");
+    assert(units.count == 3 && count("outdoor_units.changed") == 0);
+    reset(NULL);
+    assert(c300x_outdoor_units_note_caller(&units, "20#2", &changed) == 0 && changed);
+    assert(c300x_outdoor_units_note_caller(&units, "20", &changed) == 0 && !changed && units.count == 1);
+    assert(c300x_outdoor_units_note_caller(&units, "23", &changed) == 1 && changed);
+    assert(c300x_outdoor_units_note_caller(&units, "23#1", &changed) == 1 && units.count == 2);
+    assert(strcmp(units.items[1].id, "23") == 0 && strcmp(units.items[1].where, "23#1") == 0);
+    for (int a = 0; a < units.count; a++) {
+        for (int b = a + 1; b < units.count; b++) assert(strcmp(units.items[a].id, units.items[b].id) != 0);
+    }
+}
+
 int main(int argc, char **argv)
 {
     static const struct { const char *name; void (*run)(void); } cases[] = {
@@ -307,6 +330,7 @@ int main(int argc, char **argv)
         {"sip_ring_merges", sip_ring_merges},
         {"view_and_media_closed", view_and_media_closed},
         {"timeouts_and_json", timeouts_and_json},
+        {"plain_address_is_the_qualified_unit", plain_address_is_the_qualified_unit},
     };
     for (size_t index = 0; index < sizeof(cases) / sizeof(cases[0]); index++) {
         if (argc < 2 || strcmp(argv[1], cases[index].name) == 0) {

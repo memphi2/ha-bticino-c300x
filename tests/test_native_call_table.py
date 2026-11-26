@@ -25,6 +25,7 @@ CASES = (
     "sip_ring_merges",
     "view_and_media_closed",
     "timeouts_and_json",
+    "plain_address_is_the_qualified_unit",
 )
 
 

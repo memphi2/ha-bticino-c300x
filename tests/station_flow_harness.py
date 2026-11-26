@@ -11,6 +11,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntryState
+from homeassistant.helpers.typing import UNDEFINED
 
 from custom_components.bticino_c300x.const import DOMAIN
 
@@ -59,18 +60,20 @@ class ConfigEntries:
 
     async_get_known_entry = async_get_entry
 
-    def async_update_entry(self, item: Any, *, data: Any = _UNSET, options: Any = _UNSET,
+    def async_update_entry(self, entry: Any, *, data: Any = _UNSET, options: Any = _UNSET,
                            unique_id: Any = _UNSET, title: Any = _UNSET, **_kwargs: Any) -> bool:
-        before = (dict(item.data), dict(item.options), item.unique_id, item.title)
-        if data is not _UNSET:
-            item.data = dict(data)
-        if options is not _UNSET:
-            item.options = dict(options)
-        if unique_id is not _UNSET:
-            item.unique_id = unique_id
-        if title is not _UNSET:
-            item.title = title
-        return before != (dict(item.data), dict(item.options), item.unique_id, item.title)
+        # HA passes UNDEFINED for what a flow's update leaves alone.
+        unset = (_UNSET, UNDEFINED)
+        before = (dict(entry.data), dict(entry.options), entry.unique_id, entry.title)
+        if data not in unset:
+            entry.data = dict(data)
+        if options not in unset:
+            entry.options = dict(options)
+        if unique_id not in unset:
+            entry.unique_id = unique_id
+        if title not in unset:
+            entry.title = title
+        return before != (dict(entry.data), dict(entry.options), entry.unique_id, entry.title)
 
     def async_schedule_reload(self, entry_id: str) -> None:
         self.reloaded.append(entry_id)

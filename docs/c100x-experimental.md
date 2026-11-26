@@ -17,8 +17,8 @@ C100X; everything else is in the main documentation:
 
 - **SSH access.** The first installation needs an SSH-enabled C100X with a
   known, working privileged login. This project does not enable SSH on stock
-  firmware and gives no rooting steps; third-party tools are listed in
-  [Root and SSH Access](root-access.md). The C100X factory login is checked
+  firmware and gives no rooting steps; see
+  [Requirements](quickstart.md#requirements). The C100X factory login is checked
   against the root password of the original 1.5.8 image only, not on a device;
   a login you enter always takes priority. Home Assistant stores no SSH
   credentials; an installed agent uses its access and maintenance keys.

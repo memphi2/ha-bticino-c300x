@@ -97,46 +97,45 @@ def test_setup_docs_link_policy_and_removal_guides(document):
     assert "## Remove Home Assistant Integration" in (DOCS / REMOVAL_LINK.split("#")[0]).read_text()
 
 
-def test_quickstart_sends_rooting_to_the_third_party_tool_page():
-    requirements = " ".join(section("quickstart.md", "Requirements").split())
-    assert "This project provides no firmware images" in requirements
-    assert "rooting instructions" in requirements
-    # The tools live on their own page; the requirements keep the link, the risk
-    # and the missing warranty. The C100X line links this project's own issue.
-    assert "[Root and SSH Access](root-access.md)" in requirements
-    assert [link for link in re.findall(r"\]\((https?://[^)]+)\)", requirements)
-            if "/ha-bticino-c300x/" not in link] == []
-    for phrase in ("not part of this project", "can brick it", "at your own risk",
-                   "without warranty"):
+# The repository of each project, by its owner: scripts/check_repo.py keeps
+# the full name of fquinto's project out of code.
+SSH_PROJECTS = {
+    "fquinto": "(C300X `1.7.x`)",
+    "davemajor/c300x-root": "(C300X `2.0.2` and `3.0.6`)",
+    "daniel-sc/bticino-c100x-firmware-tools": "(C100X `1.5.8`)",
+}
+
+
+def test_quickstart_requirements_name_the_three_ssh_projects_and_a_clean_firmware():
+    requirements = " ".join(section("quickstart.md", "Requirements").split("\n### ", 1)[0].split())
+    for phrase in ("The integration cannot root a stock station.",
+                   "This project provides no firmware images", "rooting instructions",
+                   "at your own risk and without warranty", "flashing can brick the station",
+                   "The integration assumes a clean firmware: enable only SSH, no camera, MQTT "
+                   "or other extras."):
         assert phrase in requirements, phrase
-    readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    readme_requirements = readme.split("## Requirements\n", 1)[1].split("\n## ", 1)[0]
-    assert "](docs/root-access.md)" in readme_requirements
+    # Exactly these three projects, each a repository front page with its
+    # station and firmware; the C100X line links this project's own test issue.
+    links = [link for link in re.findall(r"\]\((https?://[^)]+)\)", requirements)
+             if "/ha-bticino-c300x/" not in link]
+    assert len(links) == len(SSH_PROJECTS)
+    for link, (project, scope) in zip(links, SSH_PROJECTS.items(), strict=True):
+        assert re.fullmatch(r"https://github\.com/[\w.-]+/[\w.-]+", link), link
+        assert link.startswith(f"https://github.com/{project}"), link
+        assert f"]({link}) {scope}" in requirements, scope
 
 
-def test_root_access_page_only_links_third_party_projects_and_states_the_risk():
-    text = (DOCS / "root-access.md").read_text(encoding="utf-8")
-    intro = " ".join(text.split("\n## ", 1)[0].split())
-    for phrase in ("provides no firmware images", "rooting instructions", "not affiliated",
-                   "third-party project", "at your own risk", "without warranty",
-                   "can brick it", "original firmware"):
-        assert phrase in intro, phrase
-    # Each tool once, as a repository front page: no release downloads, firmware
-    # files or other sites.
-    links = re.findall(r"\]\((https?://[^)]+)\)", text)
-    assert len(links) == len(set(links)) == 4
-    assert all(re.fullmatch(r"https://github\.com/[\w.-]+/[\w.-]+", link) for link in links)
-    rows = re.findall(r"^\| [^|]+ \| \[[^]]+\]\(([^)]+)\) \| [^|]+ \| ([^|]+) \|$",
-                      section("root-access.md", "Tools"), re.M)
-    assert [link for link, _note in rows] == links
-    notes = dict(rows)
-    assert "it can destroy the station" in notes["https://github.com/davemajor/c300x-root"]
-    # Setup logs in with a password only (preferred_auth in device_installer.py)
-    # and takes RSA, ECDSA and ed25519 host keys.
-    hints = " ".join(section("root-access.md", "Hints").split())
-    assert "SSH keys are not supported" in hints
-    assert "RSA, ECDSA or ed25519 host key" in hints
-    assert "never updates to `3.0.x`" in hints
+def test_no_separate_rooting_page_and_no_link_to_one():
+    assert not (DOCS / "root-access.md").exists()
+    texts = [path for path in ROOT.rglob("*.md")
+             if not {".git", ".venv", "node_modules"} & set(path.relative_to(ROOT).parts)]
+    assert [path for path in texts if "root-access.md" in path.read_text(encoding="utf-8")] == []
+    # Only the quick start requirements name the projects; README and the C100X
+    # notes send the reader there.
+    for document in (ROOT / "README.md", DOCS / "c100x-experimental.md"):
+        text = document.read_text(encoding="utf-8")
+        assert "quickstart.md#requirements)" in text
+        assert not any(f"github.com/{project}" in text for project in SSH_PROJECTS), document.name
 
 
 def test_removal_docs_distinguish_entry_package_device_and_retained_data():

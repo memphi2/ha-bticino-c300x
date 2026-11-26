@@ -83,14 +83,13 @@ notes: [Classe 100X](docs/c100x-experimental.md).
 - A supported station from the table above
   ([what differs on firmware 3.0.6](docs/quickstart.md#firmware-306)).
 - Root or SSH access on the station for the first agent installation
-  ([third-party tools](docs/root-access.md)).
+  ([how to enable SSH](docs/quickstart.md#requirements)).
 - A trusted local network between Home Assistant and the station.
 
 This project does not root a stock station and ships no firmware, APKs,
 exploits, rooting instructions or vendor files
-([firmware notes](docs/quickstart.md#requirements)); the third-party tools for
-SSH access are listed in [Root and SSH Access](docs/root-access.md). Use it at
-your own risk and without warranty.
+([firmware notes](docs/quickstart.md#requirements)). Use it at your own risk
+and without warranty.
 
 ## Installation
 
@@ -170,15 +169,13 @@ enabled options.
 ## Documentation
 
 1. [Quick Start](docs/quickstart.md): install, first tests, updates.
-2. [Root and SSH Access](docs/root-access.md): third-party tools for the first
-   SSH login.
-3. [Using the Integration](docs/user-guide.md): daily use and automations.
-4. [Station Display Pages](docs/display.md): pages and tiles on the station.
-5. [Reference](docs/feature-reference.md): options, entities, services, events.
-6. [Troubleshooting](docs/media-troubleshooting.md): when something fails.
-7. [Maintenance and Removal](docs/advanced-maintenance.md): agent, tokens,
+2. [Using the Integration](docs/user-guide.md): daily use and automations.
+3. [Station Display Pages](docs/display.md): pages and tiles on the station.
+4. [Reference](docs/feature-reference.md): options, entities, services, events.
+5. [Troubleshooting](docs/media-troubleshooting.md): when something fails.
+6. [Maintenance and Removal](docs/advanced-maintenance.md): agent, tokens,
    recovery, removal.
-8. [Classe 100X](docs/c100x-experimental.md): model notes; the
+7. [Classe 100X](docs/c100x-experimental.md): model notes; the
    [tester notes](docs/c100x-experimental.md#testing-a-classe-100x) for issue #51.
 
 Also: [Security](SECURITY.md), [Privacy](PRIVACY.md), [Support](SUPPORT.md),

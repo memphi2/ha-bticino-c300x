@@ -22,6 +22,7 @@ from .config_flow_identity import (
 )
 from .config_flow_input import _agent_auth_input, _agent_auth_schema, _key_or_saved
 from .config_flow_reinstall import ReinstallSteps
+from .config_flow_station_entry import StationEntrySteps
 from .config_schemas import reconfigure_connection_schema
 from .const import (
     CONF_AGENT_HOST,
@@ -96,7 +97,7 @@ async def async_validate_entry_connection(
     return setup, errors
 
 
-class AuthFlowSteps(C100XOptInSteps, ReinstallSteps):
+class AuthFlowSteps(C100XOptInSteps, ReinstallSteps, StationEntrySteps):
     """Share setup validation and reauth without expanding the main wizard."""
 
     _setup_unique_id: str | None

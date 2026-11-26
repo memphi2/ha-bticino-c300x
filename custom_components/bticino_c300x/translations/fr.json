@@ -746,6 +746,7 @@
       "unique_id_mismatch": "Ce n'est pas l'appareil configure. Reconfigurez l'entree correspondante ou ajoutez l'appareil comme nouvelle entree.",
       "reauth_wrong_device": "L'agent a une identité différente. L'entrée enregistrée n'a pas été modifiée.",
       "reauth_successful": "Les identifiants ont été mis à jour.",
+      "reinstall_entry_updated": "L'agent a été réinstallé sur une station déjà configurée sous le nom {name}. Cette entrée utilise désormais les nouvelles clés et cette adresse ; aucune deuxième entrée n'a été créée.",
       "unsupported_display": "Cet appareil ne prend pas en charge les pages Home Assistant ni les notifications sur son ecran. Les dispositions enregistrees sont conservees."
     },
     "error": {

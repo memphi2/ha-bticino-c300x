@@ -418,6 +418,8 @@ class BticinoC300XConfigFlow(ModelTextConfigFlow, config_flow_auth.AuthFlowSteps
                     errors["base"] = "device_install_verify_failed"
                 else:
                     await self._async_adopt_agent_unique_id(api_token=api_token)
+                    if done := await self._async_hand_keys_to_station_entry(install_result):
+                        return done
                     self._note_installed_station(install_result)
                     try:
                         # Legacy MQTT is migrated on a C300X only.
@@ -466,19 +468,6 @@ class BticinoC300XConfigFlow(ModelTextConfigFlow, config_flow_auth.AuthFlowSteps
             return
         self._setup_unique_id = unique_id
         self._async_abort_duplicate_setup_flows(unique_id)
-
-    @callback
-    def _async_abort_duplicate_setup_flows(self, unique_id: str) -> None:
-        """Abort parallel discovery flows that target the same just-installed agent."""
-
-        flow_manager = getattr(getattr(self.hass, "config_entries", None), "flow", None)
-        if flow_manager is None:
-            return
-        for progress in self._async_in_progress(
-            include_uninitialized=True,
-            match_context={"unique_id": unique_id},
-        ):
-            flow_manager.async_abort(progress["flow_id"])
 
     async def async_step_zeroconf(
         self, discovery_info: Any

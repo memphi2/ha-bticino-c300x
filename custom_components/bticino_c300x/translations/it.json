@@ -746,6 +746,7 @@
       "unique_id_mismatch": "Questo è un dispositivo diverso da quello configurato. Riconfigura la voce corrispondente oppure aggiungi il dispositivo come nuova voce.",
       "reauth_wrong_device": "L'agente ha un'identità diversa. La voce salvata non è stata modificata.",
       "reauth_successful": "Le credenziali sono state aggiornate.",
+      "reinstall_entry_updated": "L'agente è stato reinstallato su una stazione già configurata come {name}. Questa voce ora usa le nuove chiavi e questo indirizzo; non è stata creata una seconda voce.",
       "unsupported_display": "Questo dispositivo non supporta le pagine Home Assistant o le notifiche sul display. I layout salvati non sono stati modificati."
     },
     "error": {

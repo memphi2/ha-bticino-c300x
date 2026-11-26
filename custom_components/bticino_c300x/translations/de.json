@@ -746,6 +746,7 @@
       "unique_id_mismatch": "Das ist ein anderes Geraet als das eingerichtete. Konfiguriere den passenden Eintrag neu oder fuege das Geraet als neuen Eintrag hinzu.",
       "reauth_wrong_device": "Der Agent hat eine andere Identität. Der gespeicherte Eintrag wurde nicht geändert.",
       "reauth_successful": "Die Zugangsdaten wurden aktualisiert.",
+      "reinstall_entry_updated": "Der Agent wurde auf einer Station neu installiert, die bereits als {name} eingerichtet ist. Dieser Eintrag verwendet jetzt die neuen Schlüssel und diese Adresse; es wurde kein zweiter Eintrag angelegt.",
       "unsupported_display": "Dieses Geraet unterstuetzt keine Home-Assistant-Displayseiten oder Display-Benachrichtigungen. Gespeicherte Layouts bleiben unveraendert."
     },
     "error": {

@@ -97,24 +97,44 @@ def test_setup_docs_link_policy_and_removal_guides(document):
     assert "## Remove Home Assistant Integration" in (DOCS / REMOVAL_LINK.split("#")[0]).read_text()
 
 
-def test_quickstart_names_where_rooting_is_described_as_a_third_party_project():
+def test_quickstart_sends_rooting_to_the_third_party_tool_page():
     requirements = " ".join(section("quickstart.md", "Requirements").split())
     assert "This project provides no firmware images" in requirements
     assert "rooting instructions" in requirements
-    # The links out of the requirements go to rooting guides of others, each
-    # marked as a third-party project used at the reader's own risk; the C100X
-    # line links this project's own test issue.
-    links = [link for link in re.findall(r"\]\((https?://[^)]+)\)", requirements)
-             if "/ha-bticino-c300x/" not in link]
-    assert len(links) == 2 and links[1] == "https://github.com/davemajor/c300x-root"
-    assert all(link.startswith("https://github.com/") and "ha-bticino-c300x" not in link for link in links)
-    sentences = [next(part for part in requirements.split(". ") if link in part) for link in links]
-    assert sentences[0].startswith("Rooting is described by the community project [")
-    for phrase in ("third-party project", "not part of this project", "at your own risk",
-                   "flashing a station can brick it"):
-        assert phrase in sentences[0], phrase
-    for phrase in ("third-party project", "at your own risk", "can destroy the station"):
-        assert phrase in sentences[1], phrase
+    # The tools live on their own page; the requirements keep the link, the risk
+    # and the missing warranty. The C100X line links this project's own issue.
+    assert "[Root and SSH Access](root-access.md)" in requirements
+    assert [link for link in re.findall(r"\]\((https?://[^)]+)\)", requirements)
+            if "/ha-bticino-c300x/" not in link] == []
+    for phrase in ("not part of this project", "can brick it", "at your own risk",
+                   "without warranty"):
+        assert phrase in requirements, phrase
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    readme_requirements = readme.split("## Requirements\n", 1)[1].split("\n## ", 1)[0]
+    assert "](docs/root-access.md)" in readme_requirements
+
+
+def test_root_access_page_only_links_third_party_projects_and_states_the_risk():
+    text = (DOCS / "root-access.md").read_text(encoding="utf-8")
+    intro = " ".join(text.split("\n## ", 1)[0].split())
+    for phrase in ("provides no firmware images", "rooting instructions", "not affiliated",
+                   "third-party project", "at your own risk", "without warranty",
+                   "can brick it", "original firmware"):
+        assert phrase in intro, phrase
+    # Each tool once, as a repository front page: no release downloads, firmware
+    # files or other sites.
+    links = re.findall(r"\]\((https?://[^)]+)\)", text)
+    assert len(links) == len(set(links)) == 4
+    assert all(re.fullmatch(r"https://github\.com/[\w.-]+/[\w.-]+", link) for link in links)
+    rows = re.findall(r"^\| [^|]+ \| \[[^]]+\]\(([^)]+)\) \| [^|]+ \| ([^|]+) \|$",
+                      section("root-access.md", "Tools"), re.M)
+    assert [link for link, _note in rows] == links
+    notes = dict(rows)
+    assert "it can destroy the station" in notes["https://github.com/davemajor/c300x-root"]
+    # Setup logs in with a password only (preferred_auth in device_installer.py).
+    hints = " ".join(section("root-access.md", "Hints").split())
+    assert "SSH keys are not supported" in hints
+    assert "never updates to `3.0.x`" in hints
 
 
 def test_removal_docs_distinguish_entry_package_device_and_retained_data():

@@ -19,22 +19,16 @@ Install integration -> add the station -> install the device agent -> choose opt
   [issue #51](https://github.com/memphi2/ha-bticino-c300x/issues/51): stock
   firmware with only the changes needed for root or SSH access, set up in the
   BTicino Door Entry app, not running alongside BTicino Companion.
-- Root or SSH access on the station for the first agent installation.
+- Root or SSH access on the station for the first agent installation
+  ([Root and SSH Access](root-access.md)).
 - A trusted local network between Home Assistant and the station.
 
 The integration cannot root a stock station. This project provides no firmware
 images, firmware extraction output, APKs, exploits, rooting instructions or
-vendor files. Rooting is described by the community project
-[fquinto/bticinoClasse300x](https://github.com/fquinto/bticinoClasse300x), a
-third-party project that is not part of this project and is used at your own
-risk; flashing a station can brick it. If a separate rooting or SSH-enablement
-workflow asks for a firmware target, use `1.7.19`. A station on `2.0.2` or
-`3.0.6` needs a workflow made for that firmware. Dave describes one in
-[davemajor/c300x-root](https://github.com/davemajor/c300x-root), also a
-third-party project used at your own risk; it works on the circuit board over
-a serial console and USB recovery and can destroy the station. A C100X needs a
-working privileged SSH login before the first installation. Everything is used
-at your own risk and without warranty.
+vendor files. Third-party tools that enable SSH, and the station and firmware
+each one is made for, are listed in [Root and SSH Access](root-access.md).
+They are not part of this project; modifying a station can brick it.
+Everything is used at your own risk and without warranty.
 
 ### Firmware 3.0.6
 

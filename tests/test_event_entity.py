@@ -280,7 +280,7 @@ def test_doorbell_event_entity_triggers_standard_ring_event() -> None:
     assert entity.extra_state_attributes["video_available"] is True
 
 
-@pytest.mark.parametrize("language", ["en", "de", "fr", "it"])
+@pytest.mark.parametrize("language", ["en", "de", "fr", "it", "es"])
 @pytest.mark.parametrize("cls,key,expected", [
     (C300XDoorbellEventEntity, "doorbell_pressed", "ring"),
     (C300XDeviceAgentEventEntity, "door_unlock_started", "door_unlock_started"),
@@ -302,12 +302,17 @@ def test_real_ha_event_processing_preserves_type_in_every_language(
         "event_key": key,
         "event_type": "Display label must not replace the technical type",
         "event_at": "2026-11-15T00:00:00Z",
+        "event_label_es": "Etiqueta en español",
     }))
 
     assert entity.state_attributes["event_type"] == expected
     assert expected in entity.event_types
     assert entity.state_attributes["event_key"] == key
     assert entity.state_attributes["event"] != expected
+    if cls is C300XDeviceAgentEventEntity:
+        assert entity.extra_state_attributes["last_event_label_es"] == "Etiqueta en español"
+    if language == "es":
+        assert entity.state_attributes["event"] == "Etiqueta en español"
 
 
 @pytest.mark.parametrize("supported", [False, True])

@@ -139,6 +139,7 @@ class C300XDeviceAgentEventEntity(C300XEntity, EventEntity):
             "last_event_label_de": data.get("event_label_de"),
             "last_event_label_it": data.get("event_label_it"),
             "last_event_label_fr": data.get("event_label_fr"),
+            "last_event_label_es": data.get("event_label_es"),
             "last_event_at": data.get("event_at"),
             "camera_entity_id": data.get("camera_entity_id"),
             "video_available": data.get("video_available"),

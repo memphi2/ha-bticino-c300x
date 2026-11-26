@@ -251,8 +251,11 @@ them.
 
 - `bticino_c300x_agent_event_received`: every station event. Data:
   `entry_id`, `event_key`, `event_at`, `event` (label in the HA language),
-  `data` (the agent's raw event data), `source_event_id` when the agent sends
-  one, and the extra data from the table above.
+  `event_label_de`, `event_label_en`, `event_label_es`, `event_label_fr` and
+  `event_label_it` (the label in each language), `data` (the agent's raw
+  event data), `source_event_id` when the agent sends one, and the extra data
+  from the table above. The Device event entity keeps the labels of the last
+  event as the attributes `last_event_label_<language>`.
 - `bticino_c300x_action_received`: Home Assistant itself ran an action. Data:
   `entry_id`, `action_id`; for `unlock_door` the `action_id` is `door_unlock`
   with `lock_id`. Fired by `run_action`, `unlock_door` and display tile

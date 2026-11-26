@@ -806,6 +806,12 @@ def test_ringer_event_updates_state_and_public_event_data() -> None:
     assert event_state.ringer_muted is True
     assert event_state.last_event_data["muted"] is True
     assert hass.bus.events[-1][1]["event_key"] == "ringer_muted"
+    labels = {key: value for key, value in hass.bus.events[-1][1].items() if key.startswith("event_label_")}
+    assert labels == {
+        "event_label_en": "Ringer muted", "event_label_de": "Klingelton stummgeschaltet",
+        "event_label_it": "Suoneria disattivata", "event_label_fr": "Sonnerie coupee",
+        "event_label_es": "Timbre silenciado",
+    }
 
 
 def test_ringer_volume_event_updates_state_and_public_event_data() -> None:

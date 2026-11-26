@@ -86,6 +86,27 @@ def test_agent_event_display_data_uses_localized_italian_label() -> None:
     assert data["event_type_key"] == "door_unlock_started"
 
 
+def test_agent_event_display_data_uses_localized_spanish_label() -> None:
+    data = agent_event_display_data(
+        {
+            "event_key": "door_unlock_started",
+            "event_label_es": "Evento personalizado",
+            "event_label_en": "Custom event",
+        },
+        "es-ES",
+    )
+
+    assert data["event"] == "Evento personalizado"
+    assert data["event_type_key"] == "door_unlock_started"
+
+
+def test_every_event_has_a_spanish_label() -> None:
+    from custom_components.bticino_c300x.capabilities import EVENT_LABELS
+
+    assert set(EVENT_LABELS) == {"en", "de", "it", "fr", "es"}
+    assert set(EVENT_LABELS["es"]) == set(EVENT_LABELS["en"])
+
+
 def test_agent_event_key_converts_dot_notation() -> None:
     data = {
         "event_type": "door_unlock.started",

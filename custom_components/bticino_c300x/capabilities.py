@@ -132,6 +132,31 @@ EVENT_LABELS: dict[str, dict[str, str]] = {
         "agent_diagnostics_changed": "Diagnostics ecritures agent mis a jour",
         "agent_restarted": "Device-Agent redemarre",
     },
+    "es": {
+        "doorbell_pressed": "Timbre pulsado",
+        "doorbell_view_requested": "Vista del timbre solicitada",
+        "doorbell_media_closed": "Transmisión de la cámara del timbre finalizada",
+        "door_unlock_started": "Apertura de puerta iniciada",
+        "door_unlock_ended": "Apertura de puerta finalizada",
+        "stair_light_activated": "Luz de escalera activada",
+        "stair_light_released": "Luz de escalera liberada",
+        "activation_executed": "Activación del dispositivo ejecutada",
+        "call_started": "Llamada iniciada",
+        "call_ended": "Llamada finalizada",
+        "home_call_started": "Home Call iniciada",
+        "home_call_answered": "Home Call respondida",
+        "home_call_ended": "Home Call finalizada",
+        "ringer_muted": "Timbre silenciado",
+        "display_touch_tone_changed": "Tono de teclas cambiado",
+        "ringer_unmuted": "Sonido del timbre activado",
+        "ringer_volume_changed": "Volumen del timbre cambiado",
+        "smartphone_forwarding_changed": "Desvío al smartphone cambiado",
+        "answering_machine_messages_changed": "Mensajes de vídeo cambiados",
+        "memos_changed": "Notas cambiadas",
+        "system_metrics_changed": "Métricas del sistema actualizadas",
+        "agent_diagnostics_changed": "Diagnóstico de escrituras del agente actualizado",
+        "agent_restarted": "Agente reiniciado",
+    },
 }
 _CAPABILITY_EVENT_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("doorbell_events", DOORBELL_EVENTS),
@@ -166,6 +191,8 @@ def _event_label_language(language: str | None) -> str:
         return "it"
     if language_code.startswith("fr"):
         return "fr"
+    if language_code.startswith("es"):
+        return "es"
     return "en"
 
 

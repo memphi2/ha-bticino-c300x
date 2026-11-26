@@ -356,6 +356,95 @@ var FR = {
     "weather": "Météo"
 }
 
+var ES = {
+    "maintenance_reboot": "Reiniciar videoportero",
+    "maintenance_remove": "Eliminar el agente",
+    "maintenance_confirm_reboot": "¿Reiniciar el videoportero ahora?\nNo estará accesible durante un minuto aproximadamente.",
+    "maintenance_confirm_remove": "¿Eliminar el agente?\nEl agente y las páginas de Home Assistant se eliminan del videoportero y se restaura la pantalla original.",
+    "maintenance_timeout": "Tiempo agotado",
+    "maintenance_accepted": "Solicitud aceptada",
+    "alert_info": "Información",
+    "alert_warning": "Aviso",
+    "alert_error": "Error",
+    "alert_ack_retry": "No confirmado - reinténtalo",
+    "ha_feedback_colors": "Mensajes de estado",
+    "bridge_unreachable": "Home Assistant no responde. Comprueba la dirección de Home Assistant para el C300X: http, o https con un certificado válido.",
+    "bridge_not_registered": "Home Assistant no se ha registrado desde que se inició el agente.",
+    "bridge_disabled": "Las páginas de pantalla están desactivadas en Home Assistant.",
+    "status_ok": "accesible",
+    "status_down": "no accesible",
+    "status_checking": "comprobando",
+    "status_address": "Dirección",
+    "status_contact": "Último contacto",
+    "contact_never": "nunca desde el inicio",
+    "contact_now": "ahora mismo",
+    "contact_min": "hace %1 min",
+    "contact_hours": "hace %1 h",
+    "contact_days": "hace %1 días",
+    "section_display": "Pantalla",
+    "section_station": "Videoportero",
+    "setting_standby": "Página abierta en reposo",
+    "setting_nav": "Cambio de página",
+    "setting_nav_tabs": "Cambio de página: favoritos",
+    "setting_nav_pager": "Cambio de página: flechas",
+    "display_settings_error": "Ajuste no disponible",
+    "notifications": "Notificaciones",
+    "dismiss_notification": "Leído",
+    "action": "Acción",
+    "action_error": "Acción fallida",
+    "action_sent": "Acción enviada",
+    "alarm": "Alarma",
+    "alarm_command_error": "Comando de alarma fallido",
+    "alarm_not_configured": "Alarma no configurada",
+    "active": "activa",
+    "armed_away": "Ausente",
+    "armed_custom_bypass": "Bypass",
+    "armed_home": "En casa",
+    "armed_night": "Noche",
+    "armed_vacation": "Vacaciones",
+    "arming": "Armando",
+    "board_loaded": "Panel cargado",
+    "bypass_open_sensors": "Ignorar abiertos",
+    "checking": "Comprobando",
+    "dashboard_empty": "Ningún elemento en el panel",
+    "disarmed": "Desarmada",
+    "execute": "Ejecutar",
+    "ha_connected": "HA conectado",
+    "home_assistant": "Home Assistant",
+    "humidity": "Humedad",
+    "invalid_action": "Acción no válida",
+    "invalid_code": "PIN incorrecto",
+    "more": "Más",
+    "start_page": "Inicio",
+    "no_dashboard_pages": "Ninguna página en el panel",
+    "no_mode_available": "Ningún modo disponible",
+    "not_configured": "No configurado",
+    "not_ready_to_arm": "No lista",
+    "off": "Apagado",
+    "offline": "Sin conexión",
+    "on": "Encendido",
+    "page": "Página",
+    "pending": "Pendiente",
+    "pin_label": "PIN",
+    "pin_required": "PIN necesario",
+    "ready_to_arm": "Lista",
+    "rise": "Salida",
+    "sensor_ok": "Sensor OK",
+    "sensor_open": "Sensor abierto",
+    "sending": "Enviando",
+    "set": "Puesta",
+    "seconds_short": "s",
+    "since": "Desde",
+    "stair_light": "Luz de escalera",
+    "status_error": "Error de estado",
+    "status_loaded": "cargada",
+    "triggered": "Alarma",
+    "unknown": "Desconocido",
+    "updated": "Actualizado",
+    "wind": "Viento",
+    "weather": "Tiempo"
+}
+
 var WEATHER_DE = {
     "clear-night": "Klar",
     "cloudy": "Bewölkt",
@@ -436,6 +525,26 @@ var WEATHER_FR = {
     "unknown": "Inconnu"
 }
 
+var WEATHER_ES = {
+    "clear-night": "Despejado",
+    "cloudy": "Nublado",
+    "exceptional": "Excepcional",
+    "fog": "Niebla",
+    "hail": "Granizo",
+    "lightning": "Tormenta",
+    "lightning-rainy": "Tormenta",
+    "partlycloudy": "Parcialmente nublado",
+    "pouring": "Lluvia intensa",
+    "rainy": "Lluvia",
+    "snowy": "Nieve",
+    "snowy-rainy": "Aguanieve",
+    "sunny": "Soleado",
+    "windy": "Ventoso",
+    "windy-variant": "Ventoso",
+    "unavailable": "Sin conexión",
+    "unknown": "Desconocido"
+}
+
 function language(languageCode) {
     var raw = String(languageCode || "en").toLowerCase()
     if (raw.indexOf("de") === 0) {
@@ -446,6 +555,9 @@ function language(languageCode) {
     }
     if (raw.indexOf("fr") === 0) {
         return "fr"
+    }
+    if (raw.indexOf("es") === 0) {
+        return "es"
     }
     return "en"
 }
@@ -461,6 +573,9 @@ function catalog(languageCode) {
     if (lang === "fr") {
         return FR
     }
+    if (lang === "es") {
+        return ES
+    }
     return EN
 }
 
@@ -475,6 +590,9 @@ function weatherCatalog(languageCode) {
     if (lang === "fr") {
         return WEATHER_FR
     }
+    if (lang === "es") {
+        return WEATHER_ES
+    }
     return WEATHER_EN
 }
 
@@ -482,7 +600,8 @@ var CONTROL_LABELS = {
     en: {toggle: "On / Off", brightness: "Brightness", color_temp_kelvin: "Color temperature", hue: "Hue", saturation: "Saturation", position: "Position", tilt_position: "Tilt", temperature: "Target", target_temp_low: "Minimum target", target_temp_high: "Maximum target", hvac_mode: "Mode", preset_mode: "Preset", value: "Value", option: "Option"},
     de: {toggle: "Ein / Aus", brightness: "Helligkeit", color_temp_kelvin: "Farbtemperatur", hue: "Farbton", saturation: "Sättigung", position: "Position", tilt_position: "Neigung", temperature: "Soll", target_temp_low: "Unterer Sollwert", target_temp_high: "Oberer Sollwert", hvac_mode: "Betriebsart", preset_mode: "Voreinstellung", value: "Wert", option: "Auswahl"},
     fr: {toggle: "Marche / Arrêt", brightness: "Luminosité", color_temp_kelvin: "Température de couleur", hue: "Teinte", saturation: "Saturation", position: "Position", tilt_position: "Inclinaison", temperature: "Consigne", target_temp_low: "Consigne basse", target_temp_high: "Consigne haute", hvac_mode: "Mode", preset_mode: "Préréglage", value: "Valeur", option: "Option"},
-    it: {toggle: "On / Off", brightness: "Luminosità", color_temp_kelvin: "Temperatura colore", hue: "Tonalità", saturation: "Saturazione", position: "Posizione", tilt_position: "Inclinazione", temperature: "Obiettivo", target_temp_low: "Obiettivo minimo", target_temp_high: "Obiettivo massimo", hvac_mode: "Modalità", preset_mode: "Profilo", value: "Valore", option: "Opzione"}
+    it: {toggle: "On / Off", brightness: "Luminosità", color_temp_kelvin: "Temperatura colore", hue: "Tonalità", saturation: "Saturazione", position: "Posizione", tilt_position: "Inclinazione", temperature: "Obiettivo", target_temp_low: "Obiettivo minimo", target_temp_high: "Obiettivo massimo", hvac_mode: "Modalità", preset_mode: "Profilo", value: "Valore", option: "Opzione"},
+    es: {toggle: "Encender / Apagar", brightness: "Brillo", color_temp_kelvin: "Temperatura de color", hue: "Tono", saturation: "Saturación", position: "Posición", tilt_position: "Inclinación", temperature: "Consigna", target_temp_low: "Consigna mínima", target_temp_high: "Consigna máxima", hvac_mode: "Modo", preset_mode: "Preajuste", value: "Valor", option: "Opción"}
 }
 
 var DETAIL_LABELS = {
@@ -541,6 +660,20 @@ var DETAIL_LABELS = {
         activity_opening: "Apertura", activity_closing: "Chiusura", activity_open: "Aperto", activity_closed: "Chiuso",
         mode_all: "Tutto", mode_one: "Brano", mode_off: "Spento", mode_on: "Acceso", mode_auto: "Automatico", mode_heat: "Riscaldare", mode_cool: "Raffreddare", mode_heat_cool: "Caldo / Freddo", mode_dry: "Deumidificare", mode_fan_only: "Solo ventola",
         mode_low: "Bassa", mode_medium: "Media", mode_high: "Alta", mode_quiet: "Silenzioso", mode_silent: "Muto", mode_vertical: "Verticale", mode_horizontal: "Orizzontale", mode_both: "Entrambi", mode_forward: "Avanti", mode_reverse: "Indietro"
+    },
+    es: {
+        stale_state: "Sin conexión - último estado conocido", state_confirmed: "Estado confirmado por HA", state_unconfirmed: "No confirmado - comprueba el estado",
+        white_mode: "Blanco", color_mode: "Color", main_controls: "Controles", more_controls: "Ajustes",
+        current_state: "Estado actual", current_temperature: "Temperatura ambiente", battery_level: "Batería", illuminance: "Iluminancia",
+        color: "Color", warm_white: "Blanco cálido", neutral_white: "Blanco neutro", cool_white: "Blanco frío",
+        percentage: "Velocidad", oscillating: "Oscilación", fan_mode: "Ventilador", swing_mode: "Oscilación", swing_horizontal_mode: "Oscilación horizontal", direction: "Dirección",
+        volume_level: "Volumen", volume_mute: "Silencio", source: "Fuente", sound_mode: "Modo de sonido",
+        shuffle: "Aleatorio", repeat: "Repetir", effect: "Efecto", lock: "Bloquear", unlock: "Desbloquear", open: "Abrir", confirm: "¿Seguro?", mode: "Modo", target_humidity: "Humedad objetivo", operation_mode: "Funcionamiento", start: "Iniciar", pause: "Pausa", stop: "Detener", return_to_base: "Base", locate: "Localizar", fan_speed: "Aspiración", open_valve: "Abrir", stop_valve: "Detener", close_valve: "Cerrar",
+        color_red: "Rojo", color_yellow: "Amarillo", color_green: "Verde", color_cyan: "Cian", color_blue: "Azul", color_violet: "Violeta", color_pink: "Rosa", color_white: "Blanco",
+        activity_off: "Apagado", activity_idle: "En espera", activity_heating: "Calentando", activity_cooling: "Enfriando", activity_drying: "Deshumidificando", activity_fan: "Ventilando", activity_defrosting: "Descongelando", activity_preheating: "Precalentando", activity_unknown: "Actividad desconocida",
+        activity_opening: "Abriendo", activity_closing: "Cerrando", activity_open: "Abierto", activity_closed: "Cerrado",
+        mode_all: "Todo", mode_one: "Pista", mode_off: "Apagado", mode_on: "Encendido", mode_auto: "Automático", mode_heat: "Calor", mode_cool: "Frío", mode_heat_cool: "Calor / Frío", mode_dry: "Deshumidificar", mode_fan_only: "Solo ventilador",
+        mode_low: "Baja", mode_medium: "Media", mode_high: "Alta", mode_quiet: "Silencioso", mode_silent: "Mudo", mode_vertical: "Vertical", mode_horizontal: "Horizontal", mode_both: "Ambos", mode_forward: "Adelante", mode_reverse: "Atrás"
     }
 }
 

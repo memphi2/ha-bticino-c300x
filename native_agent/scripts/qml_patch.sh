@@ -1522,7 +1522,7 @@ render_settings() {
             print "        style: CheckableButtonStyle {"
             print "            defaultImage: \"images/settings/settings-menu_btn.svg\""
             print "            checkedImage: \"images/settings/settings-menu_btn_p.svg\""
-            print "            description: (trsl.language === \"it\" ? \"Integrazione\" : \"Integration\") + trsl.empty"
+            print "            description: (trsl.language === \"it\" ? \"Integrazione\" : (trsl.language === \"es\" ? \"Integración\" : \"Integration\")) + trsl.empty"
             print "        }"
             print "    }"
             print "    PageLoader {"
@@ -1744,7 +1744,7 @@ patch_home_page() {
                 print "                width: buttonPrototype.width * 2 + foobar.spacing"
                 print "                height: buttonPrototype.height"
             }
-            print_home_assistant_button("alarmButton", "alarmButtonVisible", "keylock_icon-small", "sourceSize.width: 46", "trsl.language === \"de\" ? \"Alarmanlage\" : (trsl.language === \"it\" ? \"Allarme\" : (trsl.language === \"fr\" ? \"Alarme\" : \"Alarm\"))", "alarmPage")
+            print_home_assistant_button("alarmButton", "alarmButtonVisible", "keylock_icon-small", "sourceSize.width: 46", "trsl.language === \"de\" ? \"Alarmanlage\" : (trsl.language === \"it\" ? \"Allarme\" : (trsl.language === \"fr\" ? \"Alarme\" : (trsl.language === \"es\" ? \"Alarma\" : \"Alarm\")))", "alarmPage")
             print ""
             print_home_assistant_button("haButton", "haButtonVisible", "call/icon_call-home", "sourceSize.height: 41", "\"Home Assistant\"", "haPage")
             if (layout != "stock") {
@@ -1996,13 +1996,13 @@ patch_call_block_popup() {
     require_clean_call_block_popup "$source_popup"
     awk '
         /message: qsTr\("Calls forwarded to the smartphones in the home"\)/ {
-            sub(/message: qsTr\("Calls forwarded to the smartphones in the home"\) \+ trsl.empty/, "message: (trsl.language === \"de\" ? \"Anrufe an Home Assistant weitergeleitet\" : (trsl.language === \"it\" ? \"Chiamate inoltrate a Home Assistant\" : (trsl.language === \"fr\" ? \"Appels renvoyés vers Home Assistant\" : \"Calls forwarded to Home Assistant\"))) + trsl.empty")
+            sub(/message: qsTr\("Calls forwarded to the smartphones in the home"\) \+ trsl.empty/, "message: (trsl.language === \"de\" ? \"Anrufe an Home Assistant weitergeleitet\" : (trsl.language === \"it\" ? \"Chiamate inoltrate a Home Assistant\" : (trsl.language === \"fr\" ? \"Appels renvoyés vers Home Assistant\" : (trsl.language === \"es\" ? \"Llamadas enviadas a Home Assistant\" : \"Calls forwarded to Home Assistant\")))) + trsl.empty")
             print
             message_patched=1
             next
         }
         /\/\/\{text: qsTr\("Forward calls to the smartphones in the home"\).*AnsweringMachine\.InHouseOnly/ {
-            print "                    {text: (trsl.language === \"de\" ? \"Anrufe an Home Assistant\" : (trsl.language === \"it\" ? \"Inoltra chiamate a Home Assistant\" : (trsl.language === \"fr\" ? \"Renvoyer les appels vers Home Assistant\" : \"Forward calls to Home Assistant\"))) + trsl.empty, action: AnsweringMachine.InHouseOnly},"
+            print "                    {text: (trsl.language === \"de\" ? \"Anrufe an Home Assistant\" : (trsl.language === \"it\" ? \"Inoltra chiamate a Home Assistant\" : (trsl.language === \"fr\" ? \"Renvoyer les appels vers Home Assistant\" : (trsl.language === \"es\" ? \"Envía llamadas a Home Assistant\" : \"Forward calls to Home Assistant\")))) + trsl.empty, action: AnsweringMachine.InHouseOnly},"
             button_patched=1
             next
         }

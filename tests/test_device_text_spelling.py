@@ -16,7 +16,9 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 DEVICE = ROOT / "device_qml"
 # Letters the firmware font was checked to draw (Qt 4.8.7 probe, Ubuntu Light).
-LETTERS = set("äöüÄÖÜßàèéìòùâêîôûçœÀÈÉ")
+# The Spanish ones have a glyph in the cmap of Ubuntu-L.ttf on 1.7.19, 2.0.2,
+# 3.0.6 and the C100X 1.5.8, and the vendor's own Spanish texts use them.
+LETTERS = set("äöüÄÖÜßàèéìòùâêîôûçœÀÈÉáíóúñÁÍÓÚÑ¿¡")
 
 DUMP = r"""
 const fs = require('node:fs');
@@ -25,7 +27,7 @@ const context = vm.createContext({});
 vm.runInContext(fs.readFileSync(process.argv[1], 'utf8').replace(/^\.pragma library\s*/, '')
     + ';this.out = {CONTROL_LABELS: CONTROL_LABELS, DETAIL_LABELS: DETAIL_LABELS}', context);
 const result = {};
-for (const language of ['de', 'en', 'it', 'fr']) {
+for (const language of ['de', 'en', 'it', 'fr', 'es']) {
     result[language] = Object.assign({}, context.catalog(language));
     for (const [key, value] of Object.entries(context.weatherCatalog(language))) result[language]['weather.' + key] = value;
     for (const table of ['CONTROL_LABELS', 'DETAIL_LABELS']) {
@@ -69,6 +71,15 @@ def test_texts_use_umlauts_and_accents(texts):
             "status_loaded": "chargée", "contact_now": "à l'instant", "CONTROL_LABELS.brightness": "Luminosité",
             "DETAIL_LABELS.current_state": "État actuel", "DETAIL_LABELS.activity_closed": "Fermé",
             "DETAIL_LABELS.confirm": "Sûr ?", "DETAIL_LABELS.start": "Démarrer",
+        },
+        "es": {
+            "maintenance_confirm_reboot": "¿Reiniciar el videoportero ahora?\nNo estará accesible durante un minuto aproximadamente.",
+            "status_contact": "Último contacto", "status_address": "Dirección", "contact_days": "hace %1 días",
+            "setting_nav": "Cambio de página", "action": "Acción", "humidity": "Humedad", "more": "Más",
+            "offline": "Sin conexión", "weather.partlycloudy": "Parcialmente nublado",
+            "CONTROL_LABELS.saturation": "Saturación", "CONTROL_LABELS.target_temp_low": "Consigna mínima",
+            "DETAIL_LABELS.battery_level": "Batería", "DETAIL_LABELS.confirm": "¿Seguro?",
+            "DETAIL_LABELS.mode_auto": "Automático", "DETAIL_LABELS.mode_reverse": "Atrás",
         },
     }
     for language, pairs in expected.items():
@@ -128,7 +139,7 @@ def _label_tables():
     for name in ("dashboard_labels", "dashboard_optional_labels", "dashboard_situations"):
         path = ROOT / "custom_components/bticino_c300x" / f"{name}.py"
         source = path.read_text(encoding="utf-8")
-        for match in re.finditer(r"^(_?[A-Z][A-Z0-9_]*_(DE|FR|IT))\b[^\n]*= [{(]\n(.*?)^[})]", source, re.M | re.S):
+        for match in re.finditer(r"^(_?[A-Z][A-Z0-9_]*_(DE|FR|IT|ES))\b[^\n]*= [{(]\n(.*?)^[})]", source, re.M | re.S):
             body = match.group(3).encode("utf-8").decode("unicode_escape").encode("latin-1").decode("utf-8") \
                 if "\\u" in match.group(3) and match.group(3).isascii() else match.group(3)
             values = [value for value in re.findall(r'"((?:[^"\\]|\\.)*)"', body)
@@ -140,11 +151,12 @@ def _label_tables():
 def test_home_assistant_side_labels_use_umlauts_and_accents():
     tables = _label_tables()
     languages = {language for language, _values in tables.values()}
-    assert languages == {"DE", "FR", "IT"} and len(tables) >= 9
+    assert languages == {"DE", "FR", "IT", "ES"} and len(tables) >= 12
     source = (ROOT / "custom_components/bticino_c300x/dashboard_labels.py").read_text(encoding="utf-8")
     for proper in ("Öffnet", "Schließt", "Fährt zurück", "Lädt", "Heiß", "Läuft", "Geräusch", "Bewölkt",
                    "Verrouillé", "Déverrouillé", "Bloqué", "Fermé", "Arrêté", "Présent", "Problème",
-                   "Fumée détectée", "Prêt", "Sûr", "Mise à jour"):
+                   "Fumée détectée", "Prêt", "Sûr", "Mise à jour",
+                   "Húmedo", "Frío", "Sin conexión", "Manipulación", "Actualización", "Sin vibración"):
         assert f'"{proper}"' in source, proper
     for name, (language, values) in tables.items():
         for value in values:

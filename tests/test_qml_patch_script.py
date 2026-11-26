@@ -326,11 +326,11 @@ Page {
 """
 PATCH_OUTPUT_SHA256 = {
     "MainApp.qml": "3860c9addd37ba6be61fb6eea7fa1a08d93a782ffc94c1e989341cf8ef4d53ce",
-    "Settings.qml": "403b650e32e2353ba542b4960ea7d0d211d62897dbca9e953c7253e491156447",
+    "Settings.qml": "e77e9c1bc1c9f06cf3b506ca1cea1e999b7967e927f8740770d1a1640e175687",
     "Components/Settings/GeneralsChoice.qml": "fe4241e1c5d99abb9175f36ec6a9e35ef48033af0c07ab0c46b25309f615e240",
     "C300XSettings.qml": "e1bb26e8aea64ba95debd42ff2a5933fef19f09082c6606c8a9e45da997399bb",
     "js/c300x_maintenance.js": "f06a7b3ba394203ae833fadc7b13b660ee652b85b6f3b27fd96d0e353f6dc1d2",
-    "HomePage.qml": "998dbd1074ab0689303d213cff46663e8b72403eb944c28a9391e35512333193",
+    "HomePage.qml": "f19edfd72ae580b38a436baa00ede2dcc13c4fcff69cbb8a7d7be131774cc69e",
     "MemoPage.qml": "f7fe6279108429389bc607e6c92df065d75dbbce2d9cdfc6ec1280f30f893e0f",
     "EventManager.qml": "cf68c96d9b702ce9501e70f8a511658483e1bcd5f2c9fcdff2ae214af79e3a6a",
     "Alarm.qml": "65977bf521bcdca872d3c107148ddabf7b623c4af7e6707462f62ff565ab53d0",
@@ -353,11 +353,11 @@ PATCH_OUTPUT_SHA256 = {
     "js/c300x_energy_consumers.js": "f4128432b1990bebb79eae88daafe54481e953ad621fcf758e685ad57f0b4377",
     "js/c300x_ringer.js": "268fed06c44704de8fbf04ec458cac7425b9fbc78f9a68514112ca751603cb71",
     "js/c300x_ha.js": "40c83a7d5baffae75819a134657ca89ffe1e81194f5bb26a7533e13a401df0f5",
-    "js/c300x_i18n.js": "2f1149d6ed2917d9819a742294b3e373894b1f7f97181641fbaac31aad685d14",
+    "js/c300x_i18n.js": "27d38a2602f131b451de62dea48ece41245cbf61b6ce133146662f620affeee3",
     "js/c300x_memos.js": "2e922d5617dfafda1c231581ef1eff46f83f4897a11a7350926641135c46040d",
 }
 
-SIDE_BY_SIDE_HOME_PAGE_SHA256 = "5dc87a9ad493adcc11e4515f139a4545f1f103cbdd9f0526ceecb3c3b4a9cdb3"
+SIDE_BY_SIDE_HOME_PAGE_SHA256 = "d71e63b30ca4333989545ee1ee6fc4c7079782b97efd7c4128e411b7a80d7d58"
 
 
 def test_qml_patch_keeps_original_backup_across_reapply(tmp_path: Path) -> None:
@@ -2060,6 +2060,7 @@ def _assert_complete_gui_patch(
     assert 'trsl.language === "de" ? "Alarmanlage"' in home_page
     assert 'trsl.language === "it" ? "Allarme"' in home_page
     assert 'trsl.language === "fr" ? "Alarme"' in home_page
+    assert 'trsl.language === "es" ? "Alarma"' in home_page
     assert "buttonHolder.buttonCount() === 5" in home_page
     assert "console.log(" not in home_page
 
@@ -2115,10 +2116,12 @@ def _assert_media_user_label_gui_patch(gui_dir: Path) -> None:
     assert "Anrufe an Home Assistant weitergeleitet" in call_block_popup
     assert "Chiamate inoltrate a Home Assistant" in call_block_popup
     assert "Appels renvoyés vers Home Assistant" in call_block_popup
+    assert "Llamadas enviadas a Home Assistant" in call_block_popup
     assert "Calls forwarded to Home Assistant" in call_block_popup
     assert "Anrufe an Home Assistant" in call_block_popup
     assert "Inoltra chiamate a Home Assistant" in call_block_popup
     assert "Renvoyer les appels vers Home Assistant" in call_block_popup
+    assert "Envía llamadas a Home Assistant" in call_block_popup
     assert "Forward calls to Home Assistant" in call_block_popup
     assert "action: AnsweringMachine.InHouseOnly" in call_block_popup
     assert 'qsTr("Forward calls to the smartphones in the home")' not in call_block_popup

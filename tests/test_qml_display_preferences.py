@@ -669,8 +669,8 @@ def test_station_settings_tab_is_named_integration(tmp_path):
     """The tab holds integration upkeep, not Home Assistant content.
 
     Only the settings tab is renamed; the home page button that opens the
-    Home Assistant page keeps its name. The display texts carry no accents,
-    so one word serves German, English and French.
+    Home Assistant page keeps its name. One word serves German, English and
+    French; Italian and Spanish have their own.
     """
 
     gui, backup = tmp_path / "gui", tmp_path / "backup"
@@ -679,7 +679,8 @@ def test_station_settings_tab_is_named_integration(tmp_path):
     _run_qml_patch(tmp_path, gui, backup, "apply")
     settings = (gui / SETTINGS).read_text()
     assert (
-        '            description: (trsl.language === "it" ? "Integrazione" : "Integration") + trsl.empty\n'
+        '            description: (trsl.language === "it" ? "Integrazione" : (trsl.language === "es" ? "Integración" : '
+        '"Integration")) + trsl.empty\n'
         in settings
     )
     assert "Home Assistant" not in settings

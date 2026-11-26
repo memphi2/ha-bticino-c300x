@@ -130,7 +130,7 @@ def test_colors_follow_entity_identity_not_power_rank_or_preferences_order():
     (999999999999999900000, "W", 999999999999999900000.0, "999999999999999868928 W"),
     (1e21, "W", 1e21, "1e+21 W"),
 ])
-@pytest.mark.parametrize("language", ["de", "en", "fr", "it", "unknown"])
+@pytest.mark.parametrize("language", ["de", "en", "es", "fr", "it", "unknown"])
 def test_value_text_is_whole_watts_without_changing_measurement(value, unit, watts, display, language):
     item = consumers_payload((EnergyConsumer("sensor.power"),),
                              {"sensor.power": state(value, unit)}, language)["items"][0]
@@ -147,7 +147,7 @@ def test_display_rounding_does_not_change_top10_ranking():
     assert all(item["value"] == "1 W" for item in items)
 
 
-@pytest.mark.parametrize("language", ["de", "en", "fr", "it", "unknown"])
+@pytest.mark.parametrize("language", ["de", "en", "es", "fr", "it", "unknown"])
 def test_names_units_localization_and_extremes_stay_bounded(language):
     devices = (EnergyConsumer("sensor.first", "My custom name"), EnergyConsumer("sensor.second"),
                EnergyConsumer("sensor.third"), EnergyConsumer("sensor.tiny"), EnergyConsumer("sensor.huge"))

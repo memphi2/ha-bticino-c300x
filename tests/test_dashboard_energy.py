@@ -377,7 +377,7 @@ def test_every_energy_text_exists_in_every_display_language() -> None:
     )
 
     labels = ENERGY_LABELS_BY_LANGUAGE
-    assert set(labels) == {"de", "en", "fr", "it"}
+    assert set(labels) == {"de", "en", "es", "fr", "it"}
     for language, texts in labels.items():
         assert set(texts) == set(labels["en"]), language
         assert all(text.strip() for text in texts.values()), language

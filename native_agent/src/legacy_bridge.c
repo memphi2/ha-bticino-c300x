@@ -102,12 +102,11 @@ static mode_t recorded_mode(mode_t blocked)
 int c300x_legacy_bridge_unblock(int *changed)
 {
     mode_t mode = 0;
-    int absent, ok, fd;
+    int absent, ok;
+    /* Also without a record: removing the agent drops it, and "on" must still
+     * be able to start a bridge left without execute bits. */
+    int fd = open_bridge(&mode, &absent);
 
-    if (access(C300X_LEGACY_MQTT_BRIDGE_MODE, F_OK) != 0) {
-        return errno == ENOENT;
-    }
-    fd = open_bridge(&mode, &absent);
     ok = fd >= 0 ? (mode & 0111) != 0 || set_mode(fd, recorded_mode(mode), changed) : absent;
     if (fd >= 0) {
         close(fd);

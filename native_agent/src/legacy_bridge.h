@@ -14,7 +14,9 @@
 #define C300X_LEGACY_MQTT_BRIDGE_MODE C300X_LEGACY_MQTT_BRIDGE_MODE_DIR "/bridge-mode"
 
 /* Both answer 1 on success, also when there is no regular bridge file, and
- * set *changed when they changed its mode. Call them with / writable. */
+ * set *changed when they changed its mode. Call them with / writable. Unblock
+ * gives a bridge without execute bits the recorded mode, or without a record
+ * (the agent was removed meanwhile) its read bits as execute bits. */
 int c300x_legacy_bridge_block(int *changed);
 int c300x_legacy_bridge_unblock(int *changed);
 /* The bridge file is there and not executable since our block. */

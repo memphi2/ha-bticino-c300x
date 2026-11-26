@@ -118,3 +118,19 @@ def test_a_bridge_made_executable_again_keeps_its_new_mode(stub_tools, lab):
     bridge.symlink_to(target)
     assert response(lab.request(LEGACY, {"enabled": False}))["bridge_blocked"] is False
     assert target.stat().st_mode & 0o7777 == 0o755
+
+
+def test_on_without_a_record_makes_a_bridge_without_execute_bits_runnable(stub_tools, lab):
+    """Removing the agent drops the record; an agent installed again must still turn it on."""
+    bridge = legacy_install(lab.root)
+    record = lab.root / "foreign/home/bticino/cfg/extra/c300x-device-file-backups/legacy-mqtt/bridge-mode"
+    (lab.root / "foreign/etc/rc5.d/S99TcpDump2Mqtt").unlink()
+    bridge.chmod(0o640)
+    assert response(lab.request(LEGACY))["bridge_blocked"] is False
+
+    on = response(lab.request(LEGACY, {"enabled": True}))
+
+    assert (on["enabled"], on["bridge_blocked"]) == (True, False)
+    assert bridge.stat().st_mode & 0o7777 == 0o750
+    assert not record.exists()
+    assert os.readlink(lab.root / "foreign/etc/rc5.d/S99TcpDump2Mqtt") == "../tcpdump2mqtt/TcpDump2Mqtt.sh"

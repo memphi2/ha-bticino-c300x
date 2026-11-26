@@ -38,6 +38,8 @@ IPTABLES="${C300X_IPTABLES:-/etc/network/if-pre-up.d/iptables}"
 IPTABLES6="${C300X_IPTABLES6:-/etc/network/if-pre-up.d/iptables6}"
 SSH_INIT="${C300X_SSH_INIT:-/etc/init.d/dropbear}"
 REBOOT="${C300X_REBOOT:-/sbin/reboot}"
+LEGACY_BRIDGE="${C300X_LEGACY_MQTT_BRIDGE:-/etc/tcpdump2mqtt/TcpDump2Mqtt}"
+LEGACY_BRIDGE_MODE="$BACKUP_ROOT/legacy-mqtt/bridge-mode"
 IPTABLES_BACKUP="$BACKUP_ROOT/original/etc/network/if-pre-up.d/iptables"
 IPTABLES6_BACKUP="$BACKUP_ROOT/original/etc/network/if-pre-up.d/iptables6"
 
@@ -450,6 +452,33 @@ restore_display_library() {
     return 1
 }
 
+# Legacy MQTT off took the execute bits of fquinto's bridge, and his watchdog
+# can start it only with them. Like the agent's "on": the recorded mode when
+# it belongs to the file, else its read bits as execute bits; only a regular
+# file, never through a link, and nothing to do without the record.
+restore_legacy_bridge() {
+    [ -f "$LEGACY_BRIDGE_MODE" ] && [ -f "$LEGACY_BRIDGE" ] && [ ! -L "$LEGACY_BRIDGE" ] || return 0
+    bridge_mode="$(stat -c %a "$LEGACY_BRIDGE")" || return 1
+    case "$bridge_mode" in ''|*[!0-7]*) return 1 ;; esac
+    bridge_mode=$((0$bridge_mode))
+    [ $((bridge_mode & 0111)) = 0 ] || return 0
+    bridge_record=""
+    read -r bridge_record < "$LEGACY_BRIDGE_MODE" || [ -n "$bridge_record" ] || bridge_record=""
+    case "$bridge_record" in
+        [0-7][0-7][0-7]|[0-7][0-7][0-7][0-7]) bridge_record=$((0$bridge_record)) ;;
+        *) bridge_record=0 ;;
+    esac
+    if [ $((bridge_record & 0111)) = 0 ] || [ $((bridge_record & ~0111)) != "$bridge_mode" ]; then
+        bridge_record=$((bridge_mode | ((bridge_mode & 0444) >> 2)))
+    fi
+    remount_root_rw || return 1
+    bridge_rc=0
+    [ -f "$LEGACY_BRIDGE" ] && [ ! -L "$LEGACY_BRIDGE" ] \
+        && chmod "$(printf '%04o' "$bridge_record")" "$LEGACY_BRIDGE" || bridge_rc=1
+    remount_root_ro || bridge_rc=1
+    return "$bridge_rc"
+}
+
 schedule_reboot() {
     "$REBOOT" >/dev/null 2>&1 &
 }
@@ -473,6 +502,10 @@ if ! restore_display_library; then
     exit 1
 fi
 restore_media_patches
+if ! restore_legacy_bridge; then
+    printf 'Failed to give the legacy MQTT bridge its execute bits back; keeping agent files and backups in place\n' >&2
+    exit 1
+fi
 if ! agent_tree_manifest > "$REMOVE_WORK/agent-before-delete"; then
     printf 'Cannot record agent recovery identity; keeping startup, agent files and backups in place\n' >&2
     exit 1

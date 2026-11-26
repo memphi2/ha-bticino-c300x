@@ -1792,8 +1792,11 @@ dropbear running and is left untouched) cannot run it, also after a reboot.
 The previous mode is kept in
 `/home/bticino/cfg/extra/c300x-device-file-backups/legacy-mqtt/bridge-mode`;
 on puts exactly that mode back unless the bridge was made executable again in
-the meantime, which then wins. A bridge that is a symbolic link is not
-changed. The migration to the native bridge (`migrate-legacy`) disables it the
+the meantime, which then wins. Without that record (an agent installed again
+after a removal) on makes the read bits of a bridge without execute bits its
+execute bits. Removing the agent gives the bridge its recorded mode back the
+same way before the record is deleted with the backups. A bridge that is a
+symbolic link is not changed. The migration to the native bridge (`migrate-legacy`) disables it the
 same way.
 
 Status fields added for this: `bridge_blocked` (the bridge is there and not

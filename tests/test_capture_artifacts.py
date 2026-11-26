@@ -240,3 +240,12 @@ def test_a_ring_capture_records_the_call_and_the_unit_that_rang(monkeypatch, tmp
     stored = json.loads(Path(capture["metadata_path"]).read_text(encoding="utf-8"))
     for payload in (capture, stored):
         assert (payload["call_id"], payload["unit_id"]) == ("0badc0de-7", "21")
+
+    # Without a live ring the current call is an on-demand view: it is no
+    # ring, so the capture names no call and an unlock opens no unit by it.
+    runtime.calls.set_calls(normalize_calls({"current_call_id": "0badc0de-8", "calls": [
+        {"call_id": "0badc0de-8", "kind": "view", "state": "viewing", "unit": "20"},
+        {"call_id": "0badc0de-7", "kind": "ring", "state": "ended", "unit": "21"},
+    ]}))
+    capture = asyncio.run(ring_capture.async_capture_doorbell_ring_call(_FakeHass(tmp_path), entry))
+    assert (capture["call_id"], capture["unit_id"]) == (None, None)

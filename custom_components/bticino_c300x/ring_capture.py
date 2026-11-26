@@ -161,7 +161,9 @@ async def _async_capture_to_output(
     # The ring this clip records: an unlock after its analysis opens only
     # the unit that rang, and only while the agent keeps that call.
     registry = entry_call_registry(entry)
-    call_id = registry.current_call_id if registry is not None and not on_demand else None
+    current = registry.current_call if registry is not None and not on_demand else None
+    # An on-demand view can be the current call; it is no ring.
+    call_id = current.call_id if current is not None and current.kind == "ring" else None
     capture_task = asyncio.create_task(
         _async_run_ffmpeg(
             rtsp_url,

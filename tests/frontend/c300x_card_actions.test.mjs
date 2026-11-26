@@ -331,3 +331,50 @@ test("hanging up a call that already ended is not an error", async () => {
   ]);
   assert.equal(card._error, "");
 });
+
+function withoutStopButton() {
+  return () => { throw new Error("device_unresolved"); };
+}
+
+test("hanging up an answered call does not need the stop video button", async () => {
+  // A disabled Stop doorbell video button has no state; the call still ends.
+  const { calls, card } = fakeCard({
+    _doorstationView: () => ({ action: "hang_up" }),
+    _stopVideoData: withoutStopButton(),
+    _lifecycle: {
+      activeHomeCallSession: false, answeringDoorbell: false, doorbellAnswered: true,
+      hangupInProgress: false, ringPreviewActive: false, startingCall: false,
+    },
+  });
+  await new C300XCardActions(card).handlePrimaryAction();
+  assert.deepEqual(calls, [
+    ["service", "bticino_c300x", "hangup_call", { entity_id: "camera.door", call_id: "0badc0de-1" }],
+    ["close_peer", true],
+  ]);
+  assert.equal(card._error, "");
+});
+
+test("ending an on-demand view without the stop video button ends the view call", async () => {
+  const { calls, card } = fakeCard({
+    _stopVideoData: withoutStopButton(),
+    _isConfiguredCallActive: () => true,
+    _cameraEntity: () => ({ attributes: { call_id: "0badc0de-1", call_state: "viewing" } }),
+  });
+  await new C300XCardActions(card).hangup();
+  assert.deepEqual(calls, [
+    ["service", "bticino_c300x", "hangup_call", { entity_id: "camera.door", call_id: "0badc0de-1" }],
+    ["close_peer", true],
+  ]);
+  assert.equal(card._error, "");
+});
+
+test("closing a ring preview without the stop video button leaves the ring alone", async () => {
+  const { calls, card } = fakeCard({
+    _doorstationView: () => ({ action: "hang_up" }),
+    _stopVideoData: withoutStopButton(),
+    _cameraEntity: () => ({ attributes: { call_id: "0badc0de-1", call_state: "ringing" } }),
+  });
+  await new C300XCardActions(card).handlePrimaryAction();
+  assert.deepEqual(calls, [["close_peer", true]]);
+  assert.equal(card._error, "");
+});

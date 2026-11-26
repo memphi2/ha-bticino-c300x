@@ -199,7 +199,7 @@ export class C300XCardActions {
         // Finish this hangup on its original device even if the editor replaces
         // the card configuration while the ring-call service is pending.
         const target = card._hass
-          ? { hass: card._hass, data: card._callData(), stop: card._stopVideoData() } : null;
+          ? { hass: card._hass, data: card._callData(), stop: this._stopTarget() } : null;
         if (hadDoorbellRingCallSession) {
           try {
             ok = await this.hangupDoorbellCall({ closePeer: false, target }) && ok;
@@ -258,13 +258,37 @@ export class C300XCardActions {
     });
   }
 
+  // The Stop doorbell video button, or null when it is disabled or missing.
+  _stopTarget() {
+    try {
+      return this._card._stopVideoData();
+    } catch (_error) {
+      return null;
+    }
+  }
+
   async stopDoorbellVideo(target) {
     const card = this._card;
     const hass = target === undefined ? card._hass : target?.hass;
     if (!hass) {
       return;
     }
-    await hass.callService("button", "press", target?.stop || card._stopVideoData());
+    const stop = target === undefined ? this._stopTarget() : target?.stop;
+    if (stop) {
+      await hass.callService("button", "press", stop);
+      return;
+    }
+    // Without the button an on-demand view, a call of its own, ends by its call.
+    // A ring is never hung up here: closing its preview leaves it ringing.
+    const data = target === undefined ? card._callData() : target?.data;
+    if (!data?.call_id || card._cameraEntity?.()?.attributes?.call_state !== "viewing") {
+      return;
+    }
+    try {
+      await hass.callService("bticino_c300x", "hangup_call", data);
+    } catch (err) {
+      if (err?.translation_key !== "call_not_current") throw err;
+    }
   }
 
   async answerDoorbellCall() {

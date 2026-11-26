@@ -77,7 +77,9 @@ def test_display_and_tts_accept_a_tone_but_the_speech_replaces_it(tmp_path, monk
 
 @pytest.mark.parametrize("data,switches,led", [
     (None, {"display": True}, True),
-], ids=["no switches"])
+    # Accepted and ignored before the switches; still nothing is spoken.
+    ({"tts_engine": "tts.piper", "language": "de"}, {"display": True}, True),
+], ids=["no switches", "no switches with speech settings"])
 def test_no_switches_mean_the_display(tmp_path, monkeypatch, data, switches, led):
     async def run():
         async with speech_context(tmp_path, monkeypatch) as (hass, entry, spoken):

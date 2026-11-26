@@ -108,10 +108,12 @@ def alert_options(data: dict[str, Any] | None, model: str = C300X) -> dict[str, 
         channels = _switch_channels(data, options, model)
         led = "led" in channels
     else:
-        # Without switches: the display, and the notice lights the LED where
-        # the agent supports it, without requiring that support.
-        channels = _switch_channels({**data, "display": True}, {**options, "display": True}, model)
-        led = True
+        # Without switches the message is shown as before: the display, the
+        # notice lights the LED where the agent supports it without requiring
+        # that support, and tts_engine and language are ignored.
+        for field in ("tts_engine", "language"):
+            options.pop(field, None)
+        channels, led = {"display"}, True
     options.update(
         display="display" in channels, tts="tts" in channels, led=led,
         led_required="led" in channels,

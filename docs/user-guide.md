@@ -539,7 +539,7 @@ data:
 
 **Without switches** the call shows the notice with popup, wake and tone, and
 the notice also lights the LED where the agent supports it, without requiring
-that support.
+that support. `tts_engine` and `language` are ignored then; nothing is spoken.
 
 The `mode` field of earlier releases is gone; a call that still sends it is
 refused and names the switches. Replace it like this:

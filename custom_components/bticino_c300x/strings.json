@@ -1555,7 +1555,20 @@
         "name": "Ringer mute"
       },
       "maintenance_ssh": {
-        "name": "SSH"
+        "name": "SSH",
+        "state_attributes": {
+          "ssh_state": {
+            "name": "SSH state",
+            "state": {
+              "running": "Running",
+              "stopped": "Stopped",
+              "managed_externally": "Run by another tool"
+            }
+          },
+          "managed_by": {
+            "name": "Run by"
+          }
+        }
       },
       "maintenance_no_auth": {
         "name": "Agent noAuth"
@@ -1612,6 +1625,9 @@
     },
     "station_busy": {
       "message": "The station is busy with a call. Try again after it ends."
+    },
+    "ssh_managed_externally": {
+      "message": "SSH on the station is run by another tool ({manager}). Switch it on or off with that tool."
     },
     "gui_function_patch_required": {
       "message": "This action requires the {model} Display patch. Enable and apply the Display patch in the integration options first."

@@ -1555,7 +1555,20 @@
         "name": "Sonnerie muette"
       },
       "maintenance_ssh": {
-        "name": "SSH"
+        "name": "SSH",
+        "state_attributes": {
+          "ssh_state": {
+            "name": "État du SSH",
+            "state": {
+              "running": "En marche",
+              "stopped": "Arrêté",
+              "managed_externally": "Géré par un autre outil"
+            }
+          },
+          "managed_by": {
+            "name": "Géré par"
+          }
+        }
       },
       "maintenance_no_auth": {
         "name": "Agent noAuth"
@@ -1612,6 +1625,9 @@
     },
     "station_busy": {
       "message": "La station est occupée par un appel. Réessayez une fois l'appel terminé."
+    },
+    "ssh_managed_externally": {
+      "message": "Le SSH de la station est géré par un autre outil ({manager}). Activez-le ou désactivez-le avec cet outil."
     },
     "gui_function_patch_required": {
       "message": "Cette action nécessite le patch display {model}. Activez et appliquez d'abord le patch display dans les options de l'intégration."

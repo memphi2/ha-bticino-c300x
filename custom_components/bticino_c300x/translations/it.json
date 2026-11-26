@@ -1555,7 +1555,20 @@
         "name": "Silenzia suoneria"
       },
       "maintenance_ssh": {
-        "name": "SSH"
+        "name": "SSH",
+        "state_attributes": {
+          "ssh_state": {
+            "name": "Stato SSH",
+            "state": {
+              "running": "In esecuzione",
+              "stopped": "Arrestato",
+              "managed_externally": "Gestito da un altro strumento"
+            }
+          },
+          "managed_by": {
+            "name": "Gestito da"
+          }
+        }
       },
       "maintenance_no_auth": {
         "name": "Agent noAuth"
@@ -1612,6 +1625,9 @@
     },
     "station_busy": {
       "message": "La stazione è occupata da una chiamata. Riprova quando è terminata."
+    },
+    "ssh_managed_externally": {
+      "message": "L'SSH della stazione è gestito da un altro strumento ({manager}). Attivalo o disattivalo con quello strumento."
     },
     "gui_function_patch_required": {
       "message": "Questa azione richiede la patch display {model}. Abilita e applica prima il patch display nelle opzioni dell'integrazione."

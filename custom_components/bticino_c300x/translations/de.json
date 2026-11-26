@@ -1555,7 +1555,20 @@
         "name": "Klingel stummschalten"
       },
       "maintenance_ssh": {
-        "name": "SSH"
+        "name": "SSH",
+        "state_attributes": {
+          "ssh_state": {
+            "name": "SSH-Zustand",
+            "state": {
+              "running": "Läuft",
+              "stopped": "Gestoppt",
+              "managed_externally": "Von anderem Werkzeug betrieben"
+            }
+          },
+          "managed_by": {
+            "name": "Betrieben von"
+          }
+        }
       },
       "maintenance_no_auth": {
         "name": "Agent noAuth"
@@ -1612,6 +1625,9 @@
     },
     "station_busy": {
       "message": "Die Station ist gerade mit einem Anruf beschäftigt. Versuche es erneut, wenn er beendet ist."
+    },
+    "ssh_managed_externally": {
+      "message": "SSH auf der Station wird von einem anderen Werkzeug betrieben ({manager}). Schalte es mit diesem Werkzeug ein oder aus."
     },
     "gui_function_patch_required": {
       "message": "Diese Aktion benötigt den {model}-Display-Patch. Aktiviere und wende den Display-Patch zuerst in den Integrationsoptionen an."

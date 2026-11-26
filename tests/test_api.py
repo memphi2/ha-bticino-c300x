@@ -2546,16 +2546,32 @@ def test_normalize_ssh_status_accepts_running_flag() -> None:
     assert normalize_ssh_status({"running": "true"})["running"] is True
     assert normalize_ssh_status({"enabled": False})["running"] is False
     assert normalize_ssh_status({"running": "disabled"})["running"] is False
+    facts = {"state": None, "manager": None, "listening": None, "factory_running": None}
     assert normalize_ssh_status({"running": "maybe"}) == {
         "running": None,
         "enabled": None,
+        **facts,
         "raw": {"running": "maybe"},
     }
     assert normalize_ssh_status({"raw": "missing"}) == {
         "running": None,
         "enabled": None,
+        **facts,
         "raw": {"raw": "missing"},
     }
+
+
+def test_normalize_ssh_status_names_who_keeps_ssh_running() -> None:
+    data = {"ok": True, "enabled": True, "running": True, "state": "managed_externally",
+            "listening": True, "factory_running": False, "manager": "bt_service_watchdog"}
+    status = normalize_ssh_status(data)
+    assert {key: status[key] for key in ("running", "state", "manager", "listening",
+                                         "factory_running")} == {
+        "running": True, "state": "managed_externally", "manager": "bt_service_watchdog",
+        "listening": True, "factory_running": False}
+    # Only known states and short names reach entity attributes.
+    odd = normalize_ssh_status({**data, "state": "<b>", "manager": "../etc/passwd"})
+    assert odd["state"] is None and odd["manager"] is None
 
 
 def test_normalize_qml_patch_status_derives_state() -> None:

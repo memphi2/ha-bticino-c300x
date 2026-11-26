@@ -1555,7 +1555,20 @@
         "name": "Silenciar timbre"
       },
       "maintenance_ssh": {
-        "name": "SSH"
+        "name": "SSH",
+        "state_attributes": {
+          "ssh_state": {
+            "name": "Estado de SSH",
+            "state": {
+              "running": "En ejecución",
+              "stopped": "Detenido",
+              "managed_externally": "Gestionado por otra herramienta"
+            }
+          },
+          "managed_by": {
+            "name": "Gestionado por"
+          }
+        }
       },
       "maintenance_no_auth": {
         "name": "noAuth del agente"
@@ -1612,6 +1625,9 @@
     },
     "station_busy": {
       "message": "El videoportero está ocupado con una llamada. Inténtalo de nuevo cuando termine."
+    },
+    "ssh_managed_externally": {
+      "message": "El SSH del videoportero lo gestiona otra herramienta ({manager}). Actívalo o desactívalo con esa herramienta."
     },
     "gui_function_patch_required": {
       "message": "Esta acción requiere el parche de pantalla del {model}. Activa y aplica primero el parche de pantalla en las opciones de la integración."

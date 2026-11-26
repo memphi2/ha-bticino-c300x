@@ -336,6 +336,8 @@ class BticinoC300XRuntimeData:
     qml_status_watch: QmlStatusWatch = field(default_factory=QmlStatusWatch)
     device_user_status: dict[str, Any] = field(default_factory=dict)
     device_user_status_updated_at: datetime | None = None
+    # Last SSH state the SSH switch read: who keeps SSH running, if not the station.
+    ssh_status: dict[str, Any] = field(default_factory=dict)
     self_test_status: Mapping[str, Any] = field(default_factory=dict)
     self_test_status_updated_at: datetime | None = None
     display_image_base_url: str = ""

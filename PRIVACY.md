@@ -43,8 +43,8 @@ copies and backups remain subject to your own access and backup policy.
 
 Diagnostics redact secrets and avoid exposing callback URLs or token values.
 
-When a notice lights the station's message LED (the `led` switch, legacy
-`mode: display`, `both` or `led`, or a call without switches), the LED receives
+When a notice lights the station's message LED (the `led` switch, or a call
+without switches), the LED receives
 only the unread state, never the notification text; see
 [Notifications](docs/user-guide.md#notifications).
 

@@ -108,3 +108,17 @@ def test_service_icons_name_only_services_that_exist() -> None:
 
     icons = json.loads((ROOT / "custom_components/bticino_c300x/icons.json").read_text(encoding="utf-8"))
     assert set(icons.get("services", {})) <= set(_services_yaml_sections())
+
+
+def test_user_docs_name_no_removed_service() -> None:
+    # The CHANGELOG, release notes and developer notes name them on purpose.
+    removed = (
+        "stop_doorbell_video", "run_device_activation", "unlock_door", "reload_gui",
+        "bticino_c300x.stair_light", "bticino_c300x.reboot", "delete_latest_video_message",
+        "delete_latest_text_memo", "delete_latest_voice_memo", "answer_doorbell_call",
+        "hangup_doorbell_call",
+    )
+    pages = [ROOT / "README.md", ROOT / "SECURITY.md", ROOT / "PRIVACY.md", *sorted((ROOT / "docs").glob("*.md"))]
+    for page in pages:
+        text = page.read_text(encoding="utf-8")
+        assert [name for name in removed if name in text] == [], page.name

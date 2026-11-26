@@ -31,13 +31,15 @@ Maintenance steps for keys, noAuth and SSH are in
 ## Home Assistant Service Permissions
 
 Calls with a Home Assistant user context are checked before sending device
-commands. Door, configured stair-light and activation services require control
-permission for the corresponding enabled entity; media services use the camera
-entity. Alarm commands require permission for the configured alarm entity.
-Configured HA actions retain the original user context and the target service's
-permission checks.
+commands. Doors, the stair light, activations, maintenance and deleting stored
+messages are buttons: Home Assistant checks control permission for the button
+entity on `button.press`. Media and call services (picture, doorbell video,
+answer, hang up, Home Call) require control permission for the station's
+camera entity. Alarm commands require permission for the configured alarm
+entity. Configured HA actions retain the original user context and the target
+service's permission checks.
 
-Maintenance, arbitrary stair-light addresses, capture/analysis, display
+Capture and analysis (including the unlock after a ring analysis), display
 notification management and stored-message services require an administrator.
 Context-free HA automations remain trusted. The physical display uses its
 separate authenticated bridge and configured action allowlist, not HA user

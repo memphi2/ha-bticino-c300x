@@ -39,11 +39,12 @@ stored files stay as they are:
 | Show picture controls for supported live video (`show_picture_controls`) | On | [Picture controls](#picture-controls). |
 | Home Call ringback tone and volume (`ringback_tone`, `ringback_volume`) | On, 12 % | Local tone on the card that started a Home Call. Not in Doorbell / On-demand mode. |
 
-The door and light buttons press the default door-unlock and staircase-light
-entities of the same C300X without starting or stopping video; a missing or
-unavailable entity disables its button. All entities come from the camera's
-device. If that camera is removed, the card does not switch to another C300X
-but reports the unresolved assignment.
+The door button presses the **Door unlock** button of the outdoor unit that
+is calling, else of the default outdoor unit; the light button presses the
+station's staircase-light entity. Neither starts or stops video; a missing or
+unavailable entity disables its button. Both come from the camera's station.
+If that camera is removed, the card does not switch to another C300X but
+reports the unresolved assignment.
 
 Click the picture to open a large window with the same controls and full
 screen; close it with the close button, Escape or a click beside it, and a
@@ -58,8 +59,8 @@ needs at least six rows, the Home Call card two.
 | Ring Call | Someone rings; **Answer** in the card | **Forwarding** set to **Home Assistant**. |
 | Home Call | **Call Home** in the card, or `bticino_c300x.start_home_call` | Audio only, rings the station display. |
 
-Stop with the card, the **Stop doorbell video** button,
-`bticino_c300x.stop_doorbell_video` or `bticino_c300x.stop_home_call`. Media
+Stop with the card, the **Stop doorbell video** button (`button.press`) or
+`bticino_c300x.stop_home_call`. Media
 runs locally through Home Assistant's WebRTC provider (go2rtc).
 
 ### Ring Calls and Forwarding
@@ -338,9 +339,10 @@ usually through the **BTicino Ring capture** blueprint.
 1. Check Media Readiness and set **Forwarding** to **Home Assistant**.
 2. Open **Settings > Automations & scenes > Blueprints**, choose **BTicino Ring
    capture** (`bticino_c300x/ring_capture.yaml`) and create an automation.
-3. Select the door station. The blueprint finds its readiness sensor, matches
-   ring events to that device and runs only while readiness is `ready` or
-   `warning`.
+3. Select the **Doorbell ring event** of the outdoor unit to record, or the
+   station's **Station ring** event to record every ring at once. The
+   blueprint finds the station's readiness sensor and runs only while
+   readiness is `ready` or `warning`.
 4. Choose the duration (**5 seconds** by default, **1-15** allowed) and whether
    to include audio. **Include audio is on by default and answers the Ring Call
    before recording.** Turn it off for video only without answering.
@@ -649,10 +651,12 @@ path must not be shared between automations or devices.
 Run it after transcription, for example from an `input_button`. It calls
 `bticino_c300x.evaluate_ring_analysis`, which unlocks only if the result
 belongs to a fresh capture not yet used for an unlock, the phrase matches
-exactly and `unlock_on_match` is on (off by default). Set the entry ID for
-unlock when more than one C300X is configured; a capture from another entry is
-rejected. Each capture is reserved before the unlock is sent, also across HA
-restarts within the freshness window, so it is never used twice. After a
+exactly and `unlock_on_match` is on (off by default). Select the door station
+or the door's outdoor unit as the device. The unlock opens the door of the
+outdoor unit that rang; a capture from another station, or a device of another
+outdoor unit, is rejected. Each capture is reserved before the unlock is sent,
+also across HA restarts within the freshness window, so it is never used
+twice. After a
 failed or cancelled unlock, make a new capture. An unreadable reservation file
 blocks unlocking; do not delete it to retry a still-fresh capture.
 
@@ -667,8 +671,7 @@ ahead (see the
 ## Device Activations
 
 Extra door locks and lights of the door system, for example a second door,
-become activations: button entities that also run with
-`bticino_c300x.run_device_activation`. Configure them in setup, options or
+become activations: button entities (`button.press`). Configure them in setup, options or
 reconfigure under **Activations: locks, lights, stair light**. Changes are
 collected and saved with **Finish and save**; the device is written only when
 its activation list differs, never on a plain HA start.

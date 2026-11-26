@@ -123,7 +123,7 @@ Check:
 5. The card has the C300X camera entity selected.
 
 If an old browser session left the stream running, press **Hang Up** in the card
-or call `bticino_c300x.stop_doorbell_video`, then retry. Directly after an
+or the **Stop doorbell video** button, then retry. Directly after an
 agent update or a change of the display pages, reload the integration once and
 check readiness again.
 

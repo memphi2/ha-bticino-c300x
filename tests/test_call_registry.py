@@ -49,8 +49,8 @@ def test_unit_states_follow_ring_view_answer_and_end() -> None:
     assert registry.current_call_id == "0badc0de-2"
     assert registry.current_unit() == "20_2"
     registry.apply_event("call_caller_identified", {"call_id": "0badc0de-2", "unit": "21"})
-    # A bound unit is final; a second identification does not move the call.
-    assert registry.apply_event("call_caller_identified", {"call_id": "0badc0de-2", "unit": "20_2"}) is None
+    # The same identification again changes nothing.
+    assert registry.apply_event("call_caller_identified", {"call_id": "0badc0de-2", "unit": "21"}) is None
     assert registry.unit_state("21") == ("ringing", "0badc0de-2")
     assert registry.current_unit() == "21"
 
@@ -62,6 +62,27 @@ def test_unit_states_follow_ring_view_answer_and_end() -> None:
 
     registry.clear_calls()
     assert registry.unit_state("21") == ("idle", None)
+
+
+def test_a_later_caller_frame_moves_the_call_to_its_unit() -> None:
+    registry = C300XCallRegistry()
+    registry.set_units(normalize_outdoor_units(UNITS))
+    registry.apply_event("doorbell_pressed", {"call_id": "0badc0de-1", "unit": None, "attribution": "pending"})
+    registry.apply_event("call_caller_identified", {
+        "call_id": "0badc0de-1", "unit": "20_2", "attribution": "default_fallback"})
+    registry.apply_event("call_answered", {"call_id": "0badc0de-1", "answered_by": "station"})
+    assert registry.unit_state("20_2") == ("answered", "0badc0de-1")
+
+    # The caller frame came late, after the answer: the call is unit 21's now.
+    moved = registry.apply_event("call_caller_identified", {
+        "call_id": "0badc0de-1", "unit": "21", "attribution": "caller_frame"})
+    assert moved is not None and (moved.unit, moved.attribution, moved.state) == ("21", "caller_frame", "answered")
+    assert registry.unit_state("20_2") == ("idle", None)
+    assert registry.unit_state("21") == ("answered", "0badc0de-1")
+    assert registry.current_unit() == "21"
+    # An identification without a unit moves nothing.
+    assert registry.apply_event("call_caller_identified", {"call_id": "0badc0de-1", "unit": None}) is None
+    assert registry.call("0badc0de-1").unit == "21"  # type: ignore[union-attr]
 
 
 def test_events_without_a_valid_call_id_change_nothing() -> None:

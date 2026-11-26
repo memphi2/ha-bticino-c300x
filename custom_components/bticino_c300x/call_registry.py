@@ -126,10 +126,11 @@ class C300XCallRegistry:
         elif known is None:
             return None
         elif event_type == "call_caller_identified":
-            if known.unit is not None:
+            # A caller frame after the default fallback moves the call to its unit.
+            attribution = str(data.get("attribution") or known.attribution)
+            if unit is None or (unit, attribution) == (known.unit, known.attribution):
                 return None
-            call = replace(known, unit=unit,
-                           attribution=str(data.get("attribution") or known.attribution))
+            call = replace(known, unit=unit, attribution=attribution)
         elif event_type == "call_answered":
             call = replace(known, state="answered",
                            answered_by=str(data.get("answered_by") or "") or None)

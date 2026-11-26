@@ -475,3 +475,21 @@ def test_a_clip_stays_with_its_visit_when_the_visitor_rings_again_during_it(tmp_
         assert journal.records[second]["clip"] is None
 
     asyncio.run(run())
+
+
+def test_a_later_caller_frame_moves_the_visit_to_its_unit(tmp_path, monkeypatch):
+    _, journal = fixture(tmp_path, monkeypatch)
+
+    def call_event(kind, sequence, unit):
+        item = event(kind, sequence)
+        item.data.update({"call_id": "0badc0de-1", "unit_id": unit})
+        return item
+
+    journal.event(call_event("doorbell_pressed", 1, None))
+    journal.event(call_event("call_caller_identified", 2, "20"))
+    assert [item["unit"] for item in journal.items()] == ["20"]
+    # No caller frame within 1 s took the default unit; the late frame names the caller.
+    journal.event(call_event("call_caller_identified", 3, "21"))
+    assert [item["unit"] for item in journal.items()] == ["21"]
+    journal.event(call_event("call_caller_identified", 4, None))
+    assert [item["unit"] for item in journal.items()] == ["21"]

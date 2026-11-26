@@ -65,3 +65,38 @@ def test_the_display_apply_sets_no_label_the_user_did_not_ask_for(tmp_path: Path
         status = patch._run_qml_patch(tmp_path, gui, backups, action)
         assert status["media_user_label_state"] == "original"
     assert (gui / POPUP).read_text() == patch.ORIGINAL_CALL_BLOCK_POPUP
+
+
+# The real skins: 1.7.19 and 2.0.2 from C300X_FIRMWARE_WORK, 3.0.6 from the
+# files inside its BtClass (C300X_QT5_SKIN, scripts/extract_btclass_resources.py),
+# imported as the agent does. Private firmware files; the tests skip without them.
+@pytest.mark.parametrize("firmware", ["1.7.19", "2.0.2", "3.0.6"])
+def test_the_label_on_the_real_skin_is_set_renewed_and_removed(tmp_path: Path, firmware: str) -> None:
+    import shutil
+
+    from test_c300x_same_as_2_10_0 import _skin
+
+    from tests.test_qml_patch_qt5_overlay import LABELS, forwarding_texts
+
+    skin = _skin(firmware)
+    if skin is None or not skin.is_dir():
+        pytest.skip(f"firmware {firmware} skin not available (C300X_FIRMWARE_WORK, C300X_QT5_SKIN)")
+    gui, backups = tmp_path / "gui", tmp_path / "backups"
+    if firmware == "3.0.6":
+        gui.mkdir()
+        patch._run_qml_patch(tmp_path, gui, backups, "qt5-import", extra_args=[str(skin)])
+    else:
+        shutil.copytree(skin, gui)
+    stock = (gui / POPUP).read_bytes()
+    status = patch._run_qml_patch(tmp_path, gui, backups, "media-user-label-apply")
+    assert (status["media_user_label_state"], status["media_user_label_patched"]) == ("patched", True)
+    current = (gui / POPUP).read_bytes()
+    assert forwarding_texts(current.decode()) == LABELS
+    for action in ("core-apply", "apply"):
+        _make_label_of_2_10_0(gui)
+        assert patch._run_qml_patch(tmp_path, gui, backups, "status")["media_user_label_state"] == "partial"
+        assert patch._run_qml_patch(tmp_path, gui, backups, action)["media_user_label_state"] == "patched"
+        assert (gui / POPUP).read_bytes() == current
+    status = patch._run_qml_patch(tmp_path, gui, backups, "media-user-label-restore")
+    assert status["media_user_label_state"] == "original"
+    assert (gui / POPUP).read_bytes() == stock

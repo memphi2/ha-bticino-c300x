@@ -194,6 +194,75 @@ def test_the_media_user_label_joins_the_packed_files(device: Device) -> None:
     assert device.packed("MainApp.qml") is not None
 
 
+LABELS = {
+    # language: (choice in the forwarding list, message after the choice)
+    "de": ("Anrufe an Home Assistant", "Anrufe an Home Assistant weitergeleitet"),
+    "en": ("Forward calls to Home Assistant", "Calls forwarded to Home Assistant"),
+    "fr": ("Renvoyer les appels vers Home Assistant", "Appels renvoyés vers Home Assistant"),
+    "it": ("Inoltra chiamate a Home Assistant", "Chiamate inoltrate a Home Assistant"),
+    "es": ("Envía llamadas a Home Assistant", "Llamadas enviadas a Home Assistant"),
+}
+
+
+def forwarding_texts(popup: str) -> dict[str, tuple[str, str]]:
+    """The forwarding choice and message the popup shows for each display language.
+
+    Both bindings are taken from the file as written and evaluated, as the
+    display does, with trsl.language set to the language.
+    """
+
+    import re
+
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node evaluates the label bindings")
+    choice = re.search(r"\{text: (\(trsl\.language .*\) \+ trsl\.empty), action: AnsweringMachine\.InHouseOnly\}", popup)
+    message = re.search(r"message: (\(trsl\.language .*\) \+ trsl\.empty)\}", popup)
+    assert choice and message, popup
+    script = (
+        f"const choice = {json.dumps(choice.group(1))}, message = {json.dumps(message.group(1))};\n"
+        f"const out = {{}};\n"
+        f"for (const language of {json.dumps(sorted(LABELS))}) {{\n"
+        "  const trsl = {language, empty: ''};\n"
+        "  out[language] = [eval(choice), eval(message)];\n"
+        "}\n"
+        "console.log(JSON.stringify(out));\n"
+    )
+    result = subprocess.run([node, "-e", script], capture_output=True, text=True, check=True, timeout=30)
+    return {language: tuple(texts) for language, texts in json.loads(result.stdout).items()}
+
+
+def test_the_packed_media_user_label_speaks_every_display_language(device: Device) -> None:
+    device.ok("apply")
+    assert device.ok("media-user-label-apply")["media_user_label_state"] == "patched"
+    packed = (device.packed("Components/Settings/CallBlockPopup.qml") or b"").decode()
+    assert packed.startswith("import QtQuick 2.7\n")
+    assert forwarding_texts(packed) == LABELS
+    assert forwarding_texts(packed)["es"] == ("Envía llamadas a Home Assistant", "Llamadas enviadas a Home Assistant")
+
+
+@pytest.mark.parametrize("action", ["core-apply", "apply"])
+def test_the_overlay_renews_a_label_of_an_older_release(device: Device, action: str) -> None:
+    """A label 2.10.0 wrote (no Spanish) is renewed by the core or full apply and packed again."""
+
+    from tests.test_c300x_same_as_2_10_0 import without_spanish
+
+    popup = device.gui / "Components/Settings/CallBlockPopup.qml"
+    device.ok("apply")
+    device.ok("media-user-label-apply")
+    current = popup.read_bytes()
+    popup.write_bytes(without_spanish(current))
+    assert popup.read_bytes() != current
+    status = device.ok("status")
+    assert (status["media_user_label_state"], status["media_user_label_patched"]) == ("partial", None)
+    status = device.ok(action)
+    assert (status["media_user_label_state"], status["qt5_overlay"]) == ("patched", "active")
+    assert popup.read_bytes() == current
+    packed = device.packed("Components/Settings/CallBlockPopup.qml") or b""
+    assert packed == current.replace(b"import QtQuick 1.1\n", b"import QtQuick 2.7\n")
+    assert forwarding_texts(packed.decode())["es"] == LABELS["es"]
+
+
 def test_restore_all_gives_the_display_back_as_shipped(device: Device) -> None:
     device.ok("apply")
     device.ok("media-user-label-apply")

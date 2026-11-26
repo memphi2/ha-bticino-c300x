@@ -14,7 +14,7 @@ pytestmark = pytest.mark.usefixtures("entity_ha_boundary")
 
 from homeassistant.components.event import EventEntity
 
-from custom_components.bticino_c300x import identity_migration, unit_entity
+from custom_components.bticino_c300x import call_sync, identity_migration, unit_entity
 from custom_components.bticino_c300x._api_calls import normalize_outdoor_units
 from custom_components.bticino_c300x.call_registry import C300XCallRegistry
 from custom_components.bticino_c300x.const import (
@@ -51,6 +51,7 @@ def quiet_entities(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(EventEntity, "_trigger_event", lambda self, kind, attrs: self.fired.append((kind, attrs)), raising=False)
     monkeypatch.setattr(unit_entity, "async_dispatcher_connect", lambda *_: lambda: None)
     monkeypatch.setattr(unit_entity, "async_register_unit_device", lambda *_: None)
+    monkeypatch.setattr(call_sync, "async_dispatcher_send", lambda *_: None)
 
 
 @dataclass
@@ -82,25 +83,36 @@ def _entry(units: dict[str, Any]) -> _Entry:
     return entry
 
 
+def _added(entity: Any) -> Any:
+    """The entity as Home Assistant adds it, listening on a stand-in bus."""
+
+    entity.fired = []
+    entity.hass = SimpleNamespace(bus=SimpleNamespace(async_listen=lambda *_: lambda: None))
+    asyncio.run(entity.async_added_to_hass())
+    entity.hass = None
+    return entity
+
+
 def _setup(entry: _Entry) -> list[Any]:
     added: list[Any] = []
     asyncio.run(event_setup(SimpleNamespace(), entry, added.extend))  # type: ignore[arg-type]
-    for entity in added:
-        entity.fired = []
-        entity.hass = None
-    return added
+    return [_added(entity) for entity in added]
 
 
-def _send(entities: list[Any], entry: _Entry, key: str, **data: Any) -> None:
-    registry = entry.runtime_data.calls
-    registry.apply_event(key, {"call_id": data.get("call_id"), "unit": data.get("unit_id"),
-                               "attribution": data.get("attribution")})
-    call = registry.call(data.get("call_id"))
-    event = SimpleNamespace(data={
-        "entry_id": entry.entry_id, "event_key": key, "event_at": "now",
-        "call_id": data.get("call_id"),
-        "unit_id": call.unit if call is not None else data.get("unit_id"),
+def _send(entities: list[Any], entry: _Entry, key: str, scheduled: list[str] | None = None, **data: Any) -> None:
+    """The agent event as the webhook puts it on the bus, with the call fields of call_sync."""
+
+    def schedule(work: Any, name: str) -> None:
+        work.close()
+        if scheduled is not None:
+            scheduled.append(name)
+
+    hass = SimpleNamespace(async_create_background_task=schedule)
+    fields = call_sync.async_apply_call_event(hass, entry, key, {  # type: ignore[arg-type]
+        "call_id": data.get("call_id"), "unit": data.get("unit_id"), "attribution": data.get("attribution"),
     })
+    event = SimpleNamespace(data={"entry_id": entry.entry_id, "event_key": key, "event_at": "now",
+                                  "call_id": data.get("call_id"), **fields})
     for entity in entities:
         entity._agent_event(event)
 
@@ -126,19 +138,55 @@ def test_identity_is_the_station_not_the_entry() -> None:
     assert media_camera_unique_id(legacy) == "c300x-0123456789ab_unit_20_camera"
 
 
-def test_one_unit_rings_at_once_on_station_and_unit() -> None:
+def test_one_unit_rings_on_the_station_at_once_and_on_the_unit_when_it_is_named() -> None:
     entry = _entry(ONE)
     entities = _setup(entry)
     assert [type(entity) for entity in entities] == [C300XStationRingEventEntity, C300XUnitDoorbellEventEntity]
 
-    _send(entities, entry, "doorbell_pressed", call_id="0badc0de-1")
+    _send(entities, entry, "doorbell_pressed", call_id="0badc0de-1", attribution="pending")
     assert _fired(entities) == {
         "c300x-0123456789ab_ring": ["0badc0de-1"],
-        "c300x-0123456789ab_unit_20_doorbell": ["0badc0de-1"],
+        "c300x-0123456789ab_unit_20_doorbell": [],
     }
-    # The caller frame that follows does not ring the unit a second time.
-    _send(entities, entry, "call_caller_identified", call_id="0badc0de-1", unit_id="20")
+    _send(entities, entry, "call_caller_identified", call_id="0badc0de-1", unit_id="20",
+          attribution="caller_frame")
     assert _fired(entities)["c300x-0123456789ab_unit_20_doorbell"] == ["0badc0de-1"]
+    # The same identification again does not ring the unit a second time.
+    _send(entities, entry, "call_caller_identified", call_id="0badc0de-1", unit_id="20",
+          attribution="default_fallback")
+    assert _fired(entities)["c300x-0123456789ab_unit_20_doorbell"] == ["0badc0de-1"]
+
+
+def test_a_ring_at_a_unit_the_station_had_not_listed_rings_that_unit() -> None:
+    # The station listed one unit; a visitor rings at another one.
+    entry = _entry(ONE)
+    entities = _setup(entry)
+    station, gate = entities
+    registry = entry.runtime_data.calls
+
+    _send(entities, entry, "doorbell_pressed", call_id="0badc0de-1", attribution="pending")
+    scheduled: list[str] = []
+    _send(entities, entry, "call_caller_identified", scheduled, call_id="0badc0de-1", unit_id="21",
+          attribution="caller_frame")
+    # Not the default unit: its visitor is at unit 21.
+    assert _fired(entities) == {station.unique_id: ["0badc0de-1"], gate.unique_id: []}
+    # The units are read again, also when outdoor_units.changed was lost.
+    assert any("units" in name for name in scheduled), scheduled
+
+    # The read adds unit 21; its event fires for the call when its entity is added.
+    registry.set_units(normalize_outdoor_units({"default_unit": "20", "units": [
+        *ONE["units"], {"id": "21", "where": "21", "name": "Garden"}]}))
+    garden = _added(C300XUnitDoorbellEventEntity(entry, registry.units["21"]))  # type: ignore[arg-type]
+    assert garden.fired == [("ring", {
+        "call_id": "0badc0de-1", "unit": "21", "unit_name": "Garden", "attribution": "caller_frame",
+    })]
+    # Once only, and the next ring of unit 21 fires at once.
+    garden._claim_rings()
+    assert len(garden.fired) == 1
+    _send([station, gate, garden], entry, "doorbell_pressed", call_id="0badc0de-2", unit_id="21",
+          attribution="caller_frame")
+    assert [attrs["call_id"] for _kind, attrs in garden.fired] == ["0badc0de-1", "0badc0de-2"]
+    assert registry.waiting_rings == {}
 
 
 def test_with_several_units_the_unit_rings_when_the_caller_is_known() -> None:
@@ -146,7 +194,7 @@ def test_with_several_units_the_unit_rings_when_the_caller_is_known() -> None:
     entities = _setup(entry)
     station, gate, garden, garage = entities
 
-    _send(entities, entry, "doorbell_pressed", call_id="0badc0de-1")
+    _send(entities, entry, "doorbell_pressed", call_id="0badc0de-1", attribution="pending")
     assert _fired(entities) == {
         station.unique_id: ["0badc0de-1"], gate.unique_id: [], garden.unique_id: [], garage.unique_id: [],
     }
@@ -156,7 +204,7 @@ def test_with_several_units_the_unit_rings_when_the_caller_is_known() -> None:
         "call_id": "0badc0de-1", "unit": "22_1", "unit_name": "Garage", "attribution": "caller_frame",
     }
     # A second unit within a second: the agent opens its call with the unit bound.
-    _send(entities, entry, "doorbell_pressed", call_id="0badc0de-2", unit_id="21")
+    _send(entities, entry, "doorbell_pressed", call_id="0badc0de-2", unit_id="21", attribution="caller_frame")
     assert _fired(entities) == {
         station.unique_id: ["0badc0de-1", "0badc0de-2"], gate.unique_id: [],
         garden.unique_id: ["0badc0de-2"], garage.unique_id: ["0badc0de-1"],

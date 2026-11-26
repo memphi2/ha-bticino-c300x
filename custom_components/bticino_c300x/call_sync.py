@@ -30,6 +30,7 @@ CALL_EVENT_TYPES = frozenset({
     "call_view_started",
     "call_ended",
 })
+_UNIT_BINDING_EVENTS = frozenset({"doorbell_pressed", "call_caller_identified", "call_view_started"})
 
 
 def calls_supported(capabilities: Any) -> bool:
@@ -144,12 +145,17 @@ def async_apply_call_event(
         _schedule(hass, entry, async_refresh_units(hass, entry), "units")
         return {}
     call = registry.apply_event(event_type, data) if event_type in CALL_EVENT_TYPES else None
+    ring_unit = None
     if call is not None:
         async_dispatcher_send(hass, SIGNAL_CALLS_CHANGED, entry.entry_id)
         if event_type == "doorbell_pressed" and registry.has_other_live_call(call.call_id):
             # The agent does not resend a lost callback: a call it ended may
             # still look live here and would shadow this ring. Ask the agent.
             _schedule(hass, entry, async_refresh_calls(hass, entry), "calls")
+        ring_unit = registry.unit_ring(event_type, call)
+        if event_type in _UNIT_BINDING_EVENTS and call.unit is not None and call.unit not in registry.units:
+            # A unit the station had not listed; outdoor_units.changed may be lost.
+            _schedule(hass, entry, async_refresh_units(hass, entry), "units")
     call_id = call.call_id if call is not None else data.get("call_id")
     if not isinstance(call_id, str):
         return {}
@@ -158,6 +164,9 @@ def async_apply_call_event(
     fields: dict[str, Any] = {"call_id": call_id, "unit_id": unit if isinstance(unit, str) else None}
     if fields["unit_id"] is not None:
         fields["unit_name"] = registry.unit_name(fields["unit_id"])
+    if ring_unit is not None:
+        # The unit whose doorbell event entity fires for this event.
+        fields["ring_unit_id"] = ring_unit
     return fields
 
 

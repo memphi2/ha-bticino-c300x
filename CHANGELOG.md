@@ -15,8 +15,9 @@ devices, entities and services; a Repair lists what to redo after the update.
   their displayed names now start with the unit's name instead of the
   station's.
 - A unit's **Doorbell ring event** fires once the station has named the
-  calling unit (about 0.3 s after the ring, at most 1 s), at once when the
-  station has only one unit. The new **Station ring** event on the station
+  calling unit (about 0.3 s after the ring, at most 1 s), also when the
+  station has only one unit. A unit that rings for the first time gets its
+  ring event with that ring. The new **Station ring** event on the station
   fires at once with every ring, without the unit; use it for the fastest
   notification. Both carry the same `call_id`. The ring event no longer has the
   `video_available` attribute.

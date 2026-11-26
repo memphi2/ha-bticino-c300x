@@ -208,6 +208,7 @@ def test_a_new_ring_resyncs_a_stale_answered_call(monkeypatch: pytest.MonkeyPatc
     )
     entry = _entry(Api())
     registry = entry.runtime_data.calls
+    registry.set_units(normalize_outdoor_units(UNITS))
     registry.set_calls(_calls(_ring("aaaaaaaa-1", "answered"), current="aaaaaaaa-1"))
 
     call_sync.async_apply_call_event(hass, entry, "doorbell_pressed", {"call_id": "bbbbbbbb-1", "unit": "20_2"})  # type: ignore[arg-type]
@@ -227,6 +228,7 @@ def test_a_ring_with_no_other_live_call_asks_nothing(monkeypatch: pytest.MonkeyP
     tasks: list[Any] = []
     hass = SimpleNamespace(async_create_background_task=lambda work, _name: tasks.append(work))
     entry = _entry(SimpleNamespace())
+    entry.runtime_data.calls.set_units(normalize_outdoor_units(UNITS))
     call_sync.async_apply_call_event(hass, entry, "doorbell_pressed", {"call_id": "bbbbbbbb-1", "unit": "20_2"})  # type: ignore[arg-type]
     assert tasks == []
     assert entry.runtime_data.calls.current_call_id == "bbbbbbbb-1"

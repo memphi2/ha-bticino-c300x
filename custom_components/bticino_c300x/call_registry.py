@@ -31,6 +31,12 @@ class C300XCallRegistry:
     # Newest last.
     calls: dict[str, Call] = field(default_factory=dict)
     loaded: bool = False
+    # Units whose doorbell event entity listens; a ring of another unit waits
+    # in waiting_rings until its entity is added.
+    ring_listeners: set[str] = field(default_factory=set)
+    waiting_rings: dict[str, list[str]] = field(default_factory=dict)
+    # Units whose doorbell event fired, per call.
+    rung: dict[str, set[str]] = field(default_factory=dict)
 
     # --- units ---------------------------------------------------------------
 
@@ -144,10 +150,43 @@ class C300XCallRegistry:
             self.calls.pop(next(iter(self.calls)))
         return call
 
+    def unit_ring(self, event_type: str, call: Call) -> str | None:
+        """The unit whose doorbell event this call event fires, once per unit and call.
+
+        Only a unit the agent named rings: never while it still waits for the
+        caller frame, so the default unit does not ring for another unit's
+        visitor. A unit without a listening event entity keeps the ring
+        until take_waiting_rings.
+        """
+
+        if event_type not in {"doorbell_pressed", "call_caller_identified"}:
+            return None
+        if call.kind != "ring" or call.unit is None or call.attribution == "pending":
+            return None
+        rung = self.rung.setdefault(call.call_id, set())
+        if call.unit in rung:
+            return None
+        rung.add(call.unit)
+        for call_id in [call_id for call_id in self.rung if call_id not in self.calls]:
+            del self.rung[call_id]
+        if call.unit not in self.ring_listeners:
+            waiting = self.waiting_rings.setdefault(call.unit, [])
+            waiting[:] = [*waiting[-(_MAX_CALLS - 1):], call.call_id]
+        return call.unit
+
+    def take_waiting_rings(self, unit_id: str) -> list[Call]:
+        """The live calls that rang this unit before its event entity listened."""
+
+        waiting = self.waiting_rings.pop(unit_id, [])
+        calls = [self.calls.get(call_id) for call_id in waiting]
+        return [call for call in calls if call is not None and call.unit == unit_id and call.state in _LIVE]
+
     def clear_calls(self) -> None:
         """The agent restarted: its calls are gone."""
 
         self.calls.clear()
+        self.rung.clear()
+        self.waiting_rings.clear()
 
 
 def units_from_stored(raw: Any) -> OutdoorUnitsPayload | None:

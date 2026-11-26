@@ -275,9 +275,13 @@ Every outdoor unit, also the only one:
 | `sensor` | `call` | `idle`, `ringing`, `answered`, `viewing`; attribute `call_id`. |
 | `image` | `last_visitor` | The latest retained image of a call of this unit. |
 
-The unit event fires when the call's unit is known, with the same `call_id`
-as the station ring: at once when the station has exactly one unit, else on
-`call.caller_identified` (~0.3 s, at most 1 s). Everything that does not
+The unit event fires when the agent has named the call's unit, with the same
+`call_id` as the station ring: on `call.caller_identified` (~0.3 s, at most
+1 s), also with one unit, or at once for a `doorbell.pressed` that carries its
+unit. It fires once per unit and call; a later identification that moves the
+call to another unit fires that unit's event. A unit the station had not
+listed fires when its entities are added after the units are read again
+(`call_sync`, `ring_unit_id` in the bus event). Everything that does not
 depend on the unit (station ring event, card ring view, ring preview, image
 capture) starts with `doorbell.pressed`. Blueprints default to the unit
 event; the station ring is the trigger for the fastest notification, without

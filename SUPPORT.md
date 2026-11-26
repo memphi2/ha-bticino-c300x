@@ -12,7 +12,7 @@
 
 ## Supported Release Line
 
-- `3.0.x`: beta 3.0.0b2, one package for the Classe 300X and the Classe 100X (Classe 100X experimental, checked offline only); includes 2.10.0
+- `3.0.x`: beta 3.0.0b3, one package for the Classe 300X and the Classe 100X (Classe 100X experimental, checked offline only); includes 2.10.0
 - `2.10.x`: current stable (2.10.0); adds firmware 3.0.6 (display pages checked on a station at start, the other pages offline only)
 - `2.9.x`: previous stable; upgrade to 2.10.x for maintenance fixes
 - `2.8.x`: no longer maintained; upgrade to 2.10.x

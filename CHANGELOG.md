@@ -1,5 +1,25 @@
 # Changelog
 
+## v3.0.0b3 - 2026-11-27
+
+Beta. Includes everything of 3.0.0b2. The agent update and the live view ran
+on a Classe 300X with firmware 1.7.19; firmware 2.0.2, 3.0.6 and the Classe
+100X 1.5.8 are checked offline.
+
+- **Clean picture from the first frame.** Live video starts with a complete
+  picture in the live view, the ring preview and an answered call, instead of
+  a grey or broken image until the next full frame.
+- **Door station sound: two settings instead of two gains.** **Door level**
+  (Stock, +3, +6, +9, +12 dB; default +6) raises the voice at the source: on a
+  Classe 300X in the station's audio chip, before the sound is compressed; on
+  the Classe 100X in the agent. **Fine adjustment** (-10 to +10 dB) adds to
+  it. Both work the same with Speex and PCMU, in the live view, during a call
+  and in ring recordings, which now have the same level as the live sound.
+  They replace "Live audio level" and "Volume of ring recordings"; the old
+  values are not taken over. The card plays the sound as it comes and no
+  longer adds its own gain.
+- The native agent is rebuilt as **3.0.0b3**; an agent update is required.
+
 ## v3.0.0b2 - 2026-11-26
 
 Beta. Includes everything of 3.0.0b1. Checked offline only, against the

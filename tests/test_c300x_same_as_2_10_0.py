@@ -117,6 +117,23 @@ def test_the_changed_display_files_differ_from_2_10_0_only_by_spanish(tmp_path: 
         assert hashlib.sha256(without_spanish(data)).hexdigest() == expected, name
 
 
+# The forwarding label of the media user (media-user-label-apply), on the
+# same original display files.
+CALL_BLOCK_POPUP_2_10_0 = "0f18ec26daf96244a4a2cc91f7c10c8d65ba539153d2196bb93f8fb16d4c6711"
+
+
+def test_the_forwarding_label_differs_from_2_10_0_only_by_spanish(tmp_path: Path) -> None:
+    gui = tmp_path / "gui"
+    gui.mkdir()
+    patch._write_original_gui(gui)
+    status = patch._run_qml_patch(tmp_path, gui, tmp_path / "backups", "media-user-label-apply")
+    assert status["media_user_label_state"] == "patched"
+    data = (gui / "Components/Settings/CallBlockPopup.qml").read_bytes()
+    assert without_spanish(data) != data, "the label has a Spanish text"
+    # The German, French, Italian and English texts and all the rest: as 2.10.0 wrote them.
+    assert hashlib.sha256(without_spanish(data)).hexdigest() == CALL_BLOCK_POPUP_2_10_0
+
+
 def test_the_shared_display_sources_do_not_name_a_model() -> None:
     """The Classe 100X pages live in their own directory; nothing shared was touched for them."""
 

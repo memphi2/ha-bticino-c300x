@@ -19,6 +19,12 @@ The pages, tiles and settings below are the same on both models. Sections that
 name the Display patch apply to the Classe 300X; the Classe 100X differences
 are listed in [its own section](#classe-100x-activation-by-reboot).
 
+The pages speak German, English, French, Italian and Spanish; any other
+language shows English. What Home Assistant sends (tile states, the energy,
+agenda, leave home and situations texts) follows Home Assistant's language;
+the pages' own texts (Alarm page, settings tab, buttons) follow the
+station's language.
+
 Page and tile settings are stored in Home Assistant, and the display asks for
 them, so changing them writes nothing to the station. Entity changes reach the
 display through the existing event connection, without polling. Only entities
@@ -405,8 +411,8 @@ More tile behaviour:
   Text cut to fit ends in three dots.
 - Sliders send one command when released, not while moving.
 - Numbers and select options follow Home Assistant's language: a decimal
-  comma in German, French and Italian, a point in English and all other
-  languages.
+  comma in German, French, Italian and Spanish, a point in English and all
+  other languages.
 - A lock's second-tap question moves to another button when that is tapped
   and stays until the page is left or the screen goes off. Locking needs no
   second tap.
@@ -491,8 +497,8 @@ between them; all views off hides the page and keeps its settings.
 - Home Assistant computes the charts from its recorder statistics and changes
   none of them. Now and Consumers update at most every ten seconds; switched-off
   views request nothing. No charts are stored on the station.
-- The page's texts follow Home Assistant's language in German, English, French
-  and Italian; other languages show English.
+- The page's texts follow Home Assistant's language in German, English, French,
+  Italian and Spanish; other languages show English.
 
 ## Agenda
 

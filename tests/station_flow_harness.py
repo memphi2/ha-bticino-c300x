@@ -10,7 +10,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any
 
-from homeassistant.config_entries import ConfigEntryState
+from homeassistant.config_entries import SOURCE_IGNORE, ConfigEntryState
 from homeassistant.helpers.typing import UNDEFINED
 
 from custom_components.bticino_c300x.const import DOMAIN
@@ -19,11 +19,12 @@ _UNSET: Any = object()
 
 
 def entry(entry_id: str, unique_id: str, data: dict[str, Any], *, title: str = "Door",
-          options: dict[str, Any] | None = None, runtime_data: Any = None) -> SimpleNamespace:
+          options: dict[str, Any] | None = None, runtime_data: Any = None, source: str = "user",
+          disabled_by: str | None = None) -> SimpleNamespace:
     return SimpleNamespace(
         entry_id=entry_id, title=title, unique_id=unique_id, data=dict(data), options=dict(options or {}),
-        update_listeners=[], source="user", state=ConfigEntryState.LOADED, domain=DOMAIN,
-        runtime_data=runtime_data,
+        update_listeners=[], source=source, state=ConfigEntryState.LOADED, domain=DOMAIN,
+        runtime_data=runtime_data, disabled_by=disabled_by,
     )
 
 
@@ -47,10 +48,21 @@ class ConfigEntries:
         self.entries = list(entries or [])
         self.flow = FlowManager()
         self.reloaded: list[str] = []
+        self.removed: list[str] = []
 
     def async_entries(self, domain: str | None = None, include_ignore: bool = True,
                       include_disabled: bool = True) -> list[Any]:
-        return list(self.entries)
+        # As HA: a user flow does not see ignored entries.
+        return [
+            item for item in self.entries
+            if (include_ignore or getattr(item, "source", None) != SOURCE_IGNORE)
+            and (include_disabled or not getattr(item, "disabled_by", None))
+        ]
+
+    async def async_remove(self, entry_id: str) -> dict[str, Any]:
+        self.entries = [item for item in self.entries if item.entry_id != entry_id]
+        self.removed.append(entry_id)
+        return {"require_restart": False}
 
     def async_entry_for_domain_unique_id(self, domain: str, unique_id: str) -> Any:
         return next((item for item in self.entries if item.unique_id == unique_id), None)
@@ -70,6 +82,8 @@ class ConfigEntries:
         if options not in unset:
             entry.options = dict(options)
         if unique_id not in unset:
+            # HA reports a unique id another entry holds already; later versions refuse it.
+            assert all(item is entry or item.unique_id != unique_id for item in self.entries), unique_id
             entry.unique_id = unique_id
         if title not in unset:
             entry.title = title

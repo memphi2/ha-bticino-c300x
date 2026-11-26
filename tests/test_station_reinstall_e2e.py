@@ -18,11 +18,15 @@ from typing import Any
 import pytest
 import station_e2e
 import station_flow_harness
+from homeassistant.config_entries import SOURCE_IGNORE
 from homeassistant.data_entry_flow import AbortFlow
 from station_e2e import FIRMWARES, PAGES, PATCHED_PAGES, Account, Network, Station
 
 from custom_components.bticino_c300x.config_flow import BticinoC300XConfigFlow
 from custom_components.bticino_c300x.config_flow_c100x import CONF_C100X_EXPERIMENTAL
+from custom_components.bticino_c300x.config_flow_station_entry import (
+    async_hand_keys_to_entry,
+)
 from custom_components.bticino_c300x.const import (
     CONF_AGENT_HOST,
     CONF_AGENT_PORT,
@@ -101,8 +105,12 @@ class HA:
 
     def _create(self, flow: Any, result: dict[str, Any]) -> None:
         unique_id = flow.context.get("unique_id")
-        # HA keeps one entry per unique id; the flow must have aborted before.
-        assert self.registry.async_entry_for_domain_unique_id(DOMAIN, unique_id) is None
+        holder = self.registry.async_entry_for_domain_unique_id(DOMAIN, unique_id)
+        # HA keeps one entry per unique id: an ignored one is replaced, for any
+        # other the flow must have aborted before.
+        assert holder is None or holder.source == SOURCE_IGNORE
+        if holder is not None:
+            self.entries.remove(holder)
         self.entries.append(station_flow_harness.entry(
             f"entry-{len(self.entries) + 1}", unique_id, result["data"],
             title=result["title"], options=result["options"],
@@ -417,6 +425,50 @@ def test_an_unproven_legacy_entry_is_left_alone_and_a_new_entry_created(network,
     _assert_keys_only_to(network, IP)
     proofs = [(item.host, item.port) for item in network.requests if item.path == "/api/v1/identity/proof"]
     assert proofs == ([("192.0.2.99", PORT)] if host == "door-old.local" else [])
+
+
+@pytest.mark.parametrize("how", ["keys_known", "reinstall", "reinstall_restart_fails"])
+@pytest.mark.parametrize("firmware", FIRMWARES)
+def test_an_ignored_discovery_of_the_station_gives_way_to_its_legacy_entry(network, tmp_path, firmware, how):
+    """The dismissed announcement holds the station's identity; the proven entry takes it over."""
+
+    station = _station(network, tmp_path, firmware, "door.local")
+    legacy = _saved_entry(f"{DOMAIN}:door.local:{PORT}", "door.local")
+    ignored = station_flow_harness.entry("entry-ignored", UNIQUE_ID, {}, title="Ignored", source=SOURCE_IGNORE)
+    ha = HA([legacy, ignored])
+    ha.station = station
+    if how == "reinstall_restart_fails":
+        station.fail_next("restart")
+
+    async def run() -> dict[str, Any]:
+        flow, result = await ha.setup(keys=KEYS if how == "keys_known" else None)
+        if how == "reinstall_restart_fails":
+            assert result["errors"] == {"base": "device_install_failed"}
+            # The entry got the keys the station holds at once, and the identity.
+            assert ha.entries == [legacy] and legacy.unique_id == UNIQUE_ID
+            result = await ha.wizard(flow, await ha.step(flow, "bootstrap_install", {}))
+        return result
+
+    result = asyncio.run(run())
+    reason = "station_entry_updated" if how == "keys_known" else "reinstall_entry_updated"
+    assert (result["type"], result["reason"]) == ("abort", reason)
+    assert ha.entries == [legacy] and ha.registry.removed == ["entry-ignored"]
+    _assert_entry_holds_the_station_keys(legacy, station)
+    _assert_keys_only_to(network, IP)
+
+
+def test_an_entry_holding_the_station_identity_keeps_it_and_the_older_entry_stays():
+    legacy = _saved_entry(f"{DOMAIN}:door.local:{PORT}", "door.local")
+    holder = _saved_entry(UNIQUE_ID, "192.0.2.77", title="Holder")
+    ha = HA([legacy, holder])
+    before = [(dict(item.data), dict(item.options), item.unique_id) for item in ha.entries]
+    connection = {CONF_AGENT_HOST: IP, CONF_AGENT_PORT: PORT, CONF_AGENT_TOKEN: KEYS[0], CONF_MAINTENANCE_TOKEN: KEYS[1]}
+    handed = asyncio.run(async_hand_keys_to_entry(
+        ha.hass, legacy, connection, unique_id=UNIQUE_ID, display_pending=False,
+    ))
+    assert handed is False
+    assert [(dict(item.data), dict(item.options), item.unique_id) for item in ha.entries] == before
+    assert ha.registry.removed == [] and ha.registry.reloaded == []
 
 
 # 5. A failure after the new keys were written: HA keeps them, the agent

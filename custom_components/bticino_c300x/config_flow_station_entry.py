@@ -15,7 +15,7 @@ import secrets
 from collections.abc import Iterable
 from typing import Any, cast
 
-from homeassistant.config_entries import ConfigFlowResult
+from homeassistant.config_entries import SOURCE_IGNORE, ConfigFlowResult
 from homeassistant.core import callback
 
 from . import config_flow_agent
@@ -32,6 +32,7 @@ from .const import (
     CONF_DISPLAY_FOLLOWUP_PENDING,
     CONF_MAINTENANCE_TOKEN,
     DEFAULT_AGENT_PORT,
+    DOMAIN,
 )
 from .discovery import discovery_matches_entry
 from .discovery_move import async_identity_proven, async_ipv4_addresses
@@ -76,20 +77,41 @@ async def async_station_entry(
     return None
 
 
-def hand_keys_to_entry(
+async def _async_identity_free_for(hass: Any, entry: Any, unique_id: str) -> bool:
+    """Whether ``entry`` can take the station's identity.
+
+    An ignored entry holding it (a dismissed announcement of the station) is
+    removed, as HA removes it when a flow creates the entry it ignored. Any
+    other entry holding it keeps it.
+    """
+
+    holder = hass.config_entries.async_entry_for_domain_unique_id(DOMAIN, unique_id)
+    if holder is None or holder is entry:
+        return True
+    if getattr(holder, "source", None) != SOURCE_IGNORE:
+        return False
+    await hass.config_entries.async_remove(holder.entry_id)
+    return True
+
+
+async def async_hand_keys_to_entry(
     hass: Any,
     entry: Any,
     connection: dict[str, Any],
     *,
     unique_id: str | None,
     display_pending: bool,
-) -> None:
+) -> bool:
     """Save the keys on the station and the address that reached it in the entry.
 
     A key the setup did not get (an empty maintenance key typed) leaves the
-    entry's own.
+    entry's own. An older entry takes the station's identity; when another
+    entry that is not ignored holds it, nothing changes (False).
     """
 
+    takes_identity = unique_id is not None and entry_uses_manual_setup_unique_id(entry)
+    if takes_identity and not await _async_identity_free_for(hass, entry, cast(str, unique_id)):
+        return False
     data = {key: connection[key] for key in KEYS if connection.get(key)}
     data[CONF_AGENT_HOST] = connection[CONF_AGENT_HOST]
     data[CONF_AGENT_PORT] = int(connection.get(CONF_AGENT_PORT, DEFAULT_AGENT_PORT))
@@ -101,11 +123,12 @@ def hand_keys_to_entry(
         # An option of the same name would hide the new value.
         "options": {key: value for key, value in entry.options.items() if key not in data},
     }
-    if unique_id is not None and entry_uses_manual_setup_unique_id(entry):
+    if takes_identity:
         updates["unique_id"] = unique_id
     had_listeners = bool(entry.update_listeners)
     changed = hass.config_entries.async_update_entry(entry, **updates)
     async_ensure_entry_reload(hass, entry, changed=bool(changed), had_listeners=had_listeners, force=True)
+    return True
 
 
 class StationEntrySteps:
@@ -151,8 +174,9 @@ class StationEntrySteps:
         if unique_id is None:
             return
         entry = await async_station_entry(self.hass, self._async_current_entries(), unique_id, connection)
-        if entry is not None:
-            hand_keys_to_entry(self.hass, entry, connection, unique_id=unique_id, display_pending=False)
+        if entry is not None and await async_hand_keys_to_entry(
+            self.hass, entry, connection, unique_id=unique_id, display_pending=False,
+        ):
             self._setup_keys_entry = entry.entry_id
 
     async def _async_hand_keys_to_station_entry(
@@ -174,12 +198,11 @@ class StationEntrySteps:
         if typed and any(discovery_matches_entry(unique_id, getattr(entry, "unique_id", None)) for entry in entries):
             return None
         entry = await async_station_entry(self.hass, entries, unique_id, self._setup_connection)
-        if entry is None:
-            return None
-        hand_keys_to_entry(
+        if entry is None or not await async_hand_keys_to_entry(
             self.hass, entry, self._setup_connection, unique_id=unique_id,
             display_pending=bool(getattr(install_result, "display_pending", False)),
-        )
+        ):
+            return None
         return cast(ConfigFlowResult, self.async_abort(
             reason=KEYS_ENTRY_UPDATED if typed else ENTRY_UPDATED,
             description_placeholders={"name": str(getattr(entry, "title", "") or "")},

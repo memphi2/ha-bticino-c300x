@@ -49,6 +49,10 @@ FIELDS = {CONF_BOOTSTRAP_SSH_USERNAME, CONF_BOOTSTRAP_SSH_PASSWORD, CONF_BOOTSTR
     # The typed password is the key's fallback.
     ({CONF_BOOTSTRAP_SSH_USERNAME: "root", CONF_BOOTSTRAP_SSH_PASSWORD: "typed", CONF_BOOTSTRAP_SSH_KEY: KEY},
      ("root", "typed", KEY, "", False)),
+    # A key and a password without a user: root, as with a key alone.
+    ({CONF_BOOTSTRAP_SSH_PASSWORD: "typed", CONF_BOOTSTRAP_SSH_KEY: KEY}, ("root", "typed", KEY, "", False)),
+    ({CONF_BOOTSTRAP_SSH_USERNAME: "  ", CONF_BOOTSTRAP_SSH_PASSWORD: "typed", CONF_BOOTSTRAP_SSH_KEY: KEY},
+     ("root", "typed", KEY, "", False)),
     # A passphrase without a key means nothing.
     ({CONF_BOOTSTRAP_SSH_USERNAME: "u", CONF_BOOTSTRAP_SSH_PASSWORD: "p", CONF_BOOTSTRAP_SSH_KEY_PASSPHRASE: "x"},
      ("u", "p", "", "", False)),
@@ -68,6 +72,18 @@ def test_a_key_without_a_password_is_a_valid_request_and_is_never_shown():
     assert "key-material" not in repr(request) and "phrase" not in repr(request)
     with pytest.raises(C300XDeviceInstallError, match="invalid_ssh_password"):
         _validate_request(C300XDeviceInstallRequest(host="station.local", ssh_username="root", ssh_password=""))
+
+
+@pytest.mark.parametrize("model", ["C300X", "C100X", ""])
+@pytest.mark.parametrize("password", ["", "typed"])
+def test_a_key_without_a_user_is_a_valid_root_request_with_or_without_a_password(model, password):
+    """The key field's text: with a key and no user, root is used; a password
+    entered as well is tried when the key is refused."""
+    login = install_login({CONF_BOOTSTRAP_SSH_USERNAME: "", CONF_BOOTSTRAP_SSH_PASSWORD: password,
+                           CONF_BOOTSTRAP_SSH_KEY: KEY}, model)
+    request = C300XDeviceInstallRequest(host="station.local", **login)
+    _validate_request(request)
+    assert (request.ssh_username, request.ssh_password, request.factory_login) == ("root", password, False)
 
 
 def test_every_ssh_credential_form_offers_the_key_and_its_passphrase():

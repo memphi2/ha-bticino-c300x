@@ -77,8 +77,8 @@ def install_login(user_input: dict[str, Any] | None, model: str = "") -> dict[st
     """The SSH login fields of an install request from a credential form.
 
     Nothing typed: the factory login. A private key logs in as the typed
-    user, else as the factory user, with the typed password as its fallback
-    and never with the factory password.
+    user, else as the factory user (also when a password is typed), with the
+    typed password as its fallback and never with the factory password.
     """
 
     values = user_input or {}
@@ -86,6 +86,8 @@ def install_login(user_input: dict[str, Any] | None, model: str = "") -> dict[st
     key = str(values.get(CONF_BOOTSTRAP_SSH_KEY, "") or "").strip()
     factory = uses_factory_login(values, *keys)
     username, password = ssh_login(values, *keys, model)
+    if key and not username:
+        username = factory_ssh_login(model)[0]
     return {
         "ssh_username": username,
         "ssh_password": "" if key and factory else password,

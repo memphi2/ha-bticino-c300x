@@ -218,7 +218,7 @@ def test_validation_cancellation_is_not_a_form_error(monkeypatch):
         asyncio.run(config_flow_auth.async_validate_connection(object(), CONNECTION))
 
 
-@pytest.mark.parametrize("language", ["en", "de", "fr", "it"])
+@pytest.mark.parametrize("language", ["en", "de", "fr", "it", "es"])
 def test_auth_forms_and_errors_are_translated(language):
     root = Path(__file__).resolve().parents[1] / "custom_components/bticino_c300x"
     translation = json.loads((root / f"translations/{language}.json").read_text())

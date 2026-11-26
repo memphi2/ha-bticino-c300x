@@ -227,7 +227,7 @@ def test_reauth_with_keys_is_as_before(monkeypatch):
     installer.assert_not_called()
 
 
-@pytest.mark.parametrize("language", ["en", "de", "fr", "it"])
+@pytest.mark.parametrize("language", ["en", "de", "fr", "it", "es"])
 def test_the_reinstall_texts_exist(language):
     steps = json.loads((TEXTS / f"translations/{language}.json").read_text())["config"]["step"]
     for step in ("agent_auth", "reauth_confirm"):

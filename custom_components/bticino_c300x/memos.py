@@ -81,6 +81,7 @@ def memo_kind_label(kind: str, language: str | None = None) -> str:
             de="Sprach-Memo",
             it="Memo vocale",
             fr="Memo vocal",
+            es="Nota de voz",
             en="Voice memo",
         )
     return localized_choice(
@@ -88,6 +89,7 @@ def memo_kind_label(kind: str, language: str | None = None) -> str:
         de="Text-Memo",
         it="Memo testuale",
         fr="Memo texte",
+        es="Nota de texto",
         en="Text memo",
     )
 

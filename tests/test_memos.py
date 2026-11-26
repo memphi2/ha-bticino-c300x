@@ -79,6 +79,16 @@ def test_memo_labels_are_localized() -> None:
     assert memo_kind_label("voice", "fr") == "Memo vocal"
     assert memo_kind_label("voice", "en") == "Voice memo"
     assert memo_kind_label("text", "de") == "Text-Memo"
+    assert memo_kind_label("voice", "es") == "Nota de voz"
+    assert memo_kind_label("text", "es-ES") == "Nota de texto"
+
+
+def test_video_message_title_is_localized() -> None:
+    from custom_components.bticino_c300x.video_messages import video_message_title
+
+    message = {"id": "m1", "iso_time": "2026-11-26T10:00:00"}
+    assert video_message_title(message, language="es") == "Mensaje de vídeo 2026-11-26T10:00:00"
+    assert video_message_title(message, language="de") == "Video-Nachricht 2026-11-26T10:00:00"
 
 
 def test_latest_memo_attributes_include_text_and_voice_metadata() -> None:

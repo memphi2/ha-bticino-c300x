@@ -225,12 +225,22 @@ def test_a_hook_that_is_no_regular_file_still_fails_closed(tmp_path: Path) -> No
 
 
 # The station's own shell and tools: BusyBox of each firmware under qemu-arm.
+# "host" runs the same cases with the host /bin/sh and tools, so CI, which has
+# no extracted firmware, still guards the backup decisions.
 FIRMWARE_WORK = Path(os.environ.get("C300X_FIRMWARE_WORK", Path(__file__).resolve().parents[2] / "c300x-fwpatch/work"))
 STATION_TOOLS = ("awk", "cat", "chmod", "cmp", "cp", "date", "dirname", "grep", "mkdir", "mktemp", "mv", "rm", "tail")
 FIRMWARES = ("1.7.19", "2.0.2", "3.0.6", "c100x-1.5.8")
+SHELLS = ("host", *FIRMWARES)
+IPV6_BLOCK = (
+    "# c300x-native-agent ipv6 firewall begin\n"
+    "ip6tables -A INPUT -p tcp --dport 8089 -j ACCEPT\n"
+    "# c300x-native-agent ipv6 firewall end\n"
+)
 
 
 def _station_shell(firmware: str) -> tuple[list[str], str]:
+    if firmware == "host":
+        return ["/bin/sh"], ""
     root = FIRMWARE_WORK / f"rootfs-{firmware}"
     busybox = root / "bin/busybox"
     qemu = shutil.which("qemu-arm")
@@ -242,8 +252,8 @@ def _station_shell(firmware: str) -> tuple[list[str], str]:
     return [qemu, "-L", str(root), str(busybox), "sh"], tools
 
 
-@pytest.mark.parametrize("firmware", FIRMWARES)
-def test_a_stale_backup_of_a_reflashed_station_is_archived_on_the_station_busybox(tmp_path, firmware):
+@pytest.mark.parametrize("firmware", SHELLS)
+def test_a_stale_backup_of_a_reflashed_station_is_archived(tmp_path, firmware):
     """A root tool flashed the station again (other options): the hook has no
     block of ours and other rules than the backup. The backup is kept beside
     a new one of the hook as it is now, and the install goes on."""
@@ -260,6 +270,7 @@ def test_a_stale_backup_of_a_reflashed_station_is_archived_on_the_station_busybo
     assert result.stdout == "changed_files=3\n"
     assert "archived stale firewall backup" in result.stderr
     assert backup.read_text() == reflashed
+    assert stat.S_IMODE(backup.stat().st_mode) == 0o600
     stale, = tmp_path.glob("backup.stale-*")
     assert stale.read_text() == ORIGINAL
     assert live.read_text().startswith(reflashed) and "--dport 8089" in live.read_text()
@@ -267,18 +278,26 @@ def test_a_stale_backup_of_a_reflashed_station_is_archived_on_the_station_busybo
     assert _run(tmp_path, tools, shell=shell).stdout == "changed_files=0\n"
 
 
-@pytest.mark.parametrize("firmware", FIRMWARES)
-def test_a_changed_patched_hook_stops_on_the_station_busybox(tmp_path, firmware):
+@pytest.mark.parametrize("block", ["ipv4", "ipv6"])
+@pytest.mark.parametrize("firmware", SHELLS)
+def test_a_changed_patched_hook_stops_with_its_own_status(tmp_path, firmware, block):
+    """A block of ours (the agent's, or only the IPv6 one) is in the hook and
+    its other rules changed: nothing is archived or written, the status is 3."""
     shell, tools = _station_shell(firmware)
     live = _live(tmp_path)
-    assert _run(tmp_path, tools, shell=shell).returncode == 0
-    (tmp_path / "mount.log").unlink()
+    if block == "ipv4":
+        assert _run(tmp_path, tools, shell=shell).returncode == 0
+        (tmp_path / "mount.log").unlink()
+    else:
+        (tmp_path / "backup").write_text(ORIGINAL, encoding="utf-8")
+        live.write_text(ORIGINAL + IPV6_BLOCK, encoding="utf-8")
     live.write_text("# rules of another tool\n" + live.read_text(), encoding="utf-8")
     before = live.read_bytes()
 
     result = _run(tmp_path, tools, shell=shell)
 
     assert result.returncode == 3, result.stderr
+    assert "firewall hook changed" in result.stderr
     assert live.read_bytes() == before
     assert (tmp_path / "backup").read_text() == ORIGINAL
     assert not list(tmp_path.glob("backup.stale-*"))

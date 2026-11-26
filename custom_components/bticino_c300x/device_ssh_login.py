@@ -77,10 +77,12 @@ async def password_login_offered(asyncssh: Any, connect_kwargs: dict[str, Any]) 
         return None
     rest = {key: value for key, value in connect_kwargs.items() if key != "host"}
     try:
-        # The probe applies its own algorithm arguments over the options.
+        # The probe applies its own algorithm arguments over the options, and
+        # its own config argument: left out, it loads the user's ~/.ssh/config
+        # (ProxyCommand, ProxyJump) over the options' config=None.
         methods = await probe(
             connect_kwargs["host"], options=options(**rest), kex_algs=rest.get("kex_algs", ()),
-            server_host_key_algs=rest.get("server_host_key_algs", ()),
+            server_host_key_algs=rest.get("server_host_key_algs", ()), config=None,
         )
     except Exception:  # noqa: BLE001 - an unanswered probe tells nothing
         return None

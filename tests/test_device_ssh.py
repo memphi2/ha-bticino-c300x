@@ -335,6 +335,31 @@ def test_wrong_password_fails_cleanly(ssh_server):
         installer._connect_device_client(replace(ssh_server, ssh_password="wrong"))
 
 
+def test_no_ssh_config_of_the_ha_user_is_read_by_any_login_step(ssh_server, monkeypatch, tmp_path: Path):
+    """A refused password asks the station for its login methods: that probe,
+    like the login, never reads the user's ~/.ssh/config (SECURITY.md)."""
+    from dataclasses import replace
+
+    marker = tmp_path / "proxy-command-ran"
+    ssh_dir = tmp_path / "home" / ".ssh"
+    ssh_dir.mkdir(parents=True)
+    (ssh_dir / "config").write_text(f"Host *\n    ProxyCommand /usr/bin/touch {marker}\n", encoding="utf-8")
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    probed = []
+    original_probe = installer.password_login_offered
+
+    async def recorded_probe(asyncssh_module, options):
+        probed.append(await original_probe(asyncssh_module, options))
+        return probed[-1]
+
+    monkeypatch.setattr(installer, "password_login_offered", recorded_probe)
+    with pytest.raises(installer.C300XDeviceInstallError, match="ssh_login_refused"):
+        installer._connect_device_client(replace(ssh_server, ssh_password="wrong"))
+    assert not marker.exists()
+    # The probe reached the station itself and was told it takes passwords.
+    assert probed == [True]
+
+
 def test_command_timeout_closes_channel(ssh_server, monkeypatch):
     client = installer._connect_device_client(ssh_server)
     monkeypatch.setattr(installer, "_SSH_COMMAND_TIMEOUT", 0.1)

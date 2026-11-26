@@ -23,6 +23,7 @@ CASES = {
     "lifecycle_unanswered": 0, "lifecycle_ha_answer_ha_hangup": 0,
     "lifecycle_station_answer_station_hangup": 0, "lifecycle_ha_answer_station_hangup": 0,
     "lifecycle_ondemand_view": 1, "refused_answer_then_station": 0,
+    "call_id_lengths": 0,
     "station_busy_bus_end": 2, "station_busy_timeout": 2,
     "station_freed_before_486": 2, "station_freed_after_486": 2,
 }

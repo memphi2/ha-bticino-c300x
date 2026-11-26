@@ -760,6 +760,24 @@ static void refused_answer_then_station(void) {
     assert(strstr(data, id) && strstr(data, "\"answered_by\":\"station\""));
 }
 
+/* Call ids up to 32 characters are well formed: an unknown one is not
+ * current (409); only an empty or longer one is a bad request (400). */
+static void call_id_lengths(void) {
+    char data[4096], id[40], path[128], body[96];
+    for (size_t length = 23; length <= 33; length++) {
+        memset(id, 'a', length);
+        id[length] = '\0';
+        int expected = length <= 32 ? 409 : 400;
+        snprintf(path, sizeof(path), "/api/v1/calls/%s/actions/hangup", id);
+        assert(calls_api("POST", path, "", data, sizeof(data)) == expected);
+        snprintf(path, sizeof(path), "/api/v1/calls/%s/actions/answer", id);
+        assert(calls_api("POST", path, "", data, sizeof(data)) == expected);
+        snprintf(body, sizeof(body), "{\"call_id\":\"%s\"}", id);
+        assert(calls_api("POST", "/api/v1/outdoor-units/20/actions/unlock", body, data, sizeof(data)) == expected);
+        assert(strstr(data, expected == 409 ? "call_not_current" : "invalid_call_id"));
+    }
+}
+
 /* (d) The station answers 486 Busy with no external marker (here: no bus
  * frame announced the call). One INVITE, then no SIP until it is free. */
 static void station_busy_case(bool freed_by_bus) {
@@ -891,6 +909,7 @@ int main(int argc, char **argv) {
     else if (strcmp(argv[1], "lifecycle_ha_answer_station_hangup") == 0) lifecycle_ha_answer_station_hangup();
     else if (strcmp(argv[1], "lifecycle_ondemand_view") == 0) lifecycle_ondemand_view();
     else if (strcmp(argv[1], "refused_answer_then_station") == 0) refused_answer_then_station();
+    else if (strcmp(argv[1], "call_id_lengths") == 0) call_id_lengths();
     else if (strcmp(argv[1], "station_busy_bus_end") == 0) station_busy_case(true);
     else if (strcmp(argv[1], "station_busy_timeout") == 0) station_busy_case(false);
     else if (strcmp(argv[1], "station_freed_before_486") == 0) station_freed_during_start(true);

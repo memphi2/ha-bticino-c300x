@@ -13,6 +13,8 @@
 #include "video_control.h"
 
 #define CALLS_PREFIX "/api/v1/calls/"
+/* Well-formed call ids in requests: 1-32 characters (the agent's own are shorter). */
+#define REQUEST_CALL_ID_LEN 33
 #define UNITS_PREFIX "/api/v1/outdoor-units/"
 
 void c300x_call_hub_init(struct c300x_call_hub *hub, const struct c300x_config *config,
@@ -186,7 +188,7 @@ static void unlock(int client_fd, const struct c300x_call_routes *routes, const 
                    const char *unit_id)
 {
     struct c300x_call_hub *hub = routes->hub;
-    char call_id[C300X_CALL_ID_LEN] = "";
+    char call_id[REQUEST_CALL_ID_LEN] = "";
     char press[48], release[48], error[C300X_MAX_ERROR_LEN], body[256];
     char error_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ERROR_LEN)];
     int index = unit_index(hub, unit_id);
@@ -268,7 +270,7 @@ static void video_activate(int client_fd, const struct c300x_call_routes *routes
 int c300x_http_calls_route(int client_fd, const struct c300x_call_routes *routes, const struct request *request)
 {
     struct c300x_call_hub *hub = routes->hub;
-    char segment[C300X_CALL_ID_LEN + 8];
+    char segment[REQUEST_CALL_ID_LEN];
     char body[4096];
     int get = strcmp(request->method, "GET") == 0;
     int post = strcmp(request->method, "POST") == 0;
@@ -298,7 +300,7 @@ int c300x_http_calls_route(int client_fd, const struct c300x_call_routes *routes
     int answer = post && path_segment(request->path, CALLS_PREFIX, "/actions/answer", segment, sizeof(segment));
     int hangup = !answer && post && path_segment(request->path, CALLS_PREFIX, "/actions/hangup", segment, sizeof(segment));
     if (answer || hangup) {
-        if (segment[0] == '\0' || strlen(segment) >= C300X_CALL_ID_LEN) {
+        if (segment[0] == '\0') {
             c300x_http_send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_call_id\"}\n");
         } else {
             call_action(client_fd, routes, request, segment, answer);

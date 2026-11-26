@@ -1,15 +1,14 @@
 """Ring events: the station ringing, and the outdoor unit a visitor rang at.
 
-The station's ``ring`` fires at once with every new call. The unit's
+The station's ``ring`` fires at once with every press. The unit's
 ``doorbell`` fires when the agent has named the call's unit, with the same
-call id: on ``call.caller_identified``, or at once for a ring that opens with
-its unit. A unit the station had not listed fires when its entity is added
+call id: on ``call.caller_identified``, or at once for a press whose unit is
+known. A press during a live call is the same call and rings both again. A unit the station had not listed fires when its entity is added
 (docs/dev/multi-outdoor-units.md).
 """
 
 from __future__ import annotations
 
-from collections import deque
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
@@ -34,8 +33,6 @@ if TYPE_CHECKING:
     from homeassistant.core import Event
 
 PARALLEL_UPDATES = 0
-# A call fires once; the agent keeps at most eight calls.
-_FIRED_CALLS = 8
 
 
 async def async_setup_entry(
@@ -56,7 +53,7 @@ async def async_setup_entry(
 
 
 class _RingEvent(EventEntity):
-    """One ring per call id, from the agent events on the bus."""
+    """Rings with their call id, from the agent events on the bus."""
 
     _attr_device_class = EventDeviceClass.DOORBELL
     _attr_event_types = [DoorbellEventType.RING]
@@ -64,7 +61,6 @@ class _RingEvent(EventEntity):
     _entry: BticinoC300XConfigEntry
 
     def _init_ring(self) -> None:
-        self._fired: deque[str] = deque(maxlen=_FIRED_CALLS)
         self._last_ring_at: str | None = None
         self._last_call_id: str | None = None
 
@@ -78,14 +74,13 @@ class _RingEvent(EventEntity):
         if data.get("entry_id") != self._entry.entry_id:
             return
         call_id = data.get("call_id")
-        if not isinstance(call_id, str) or call_id in self._fired:
+        if not isinstance(call_id, str):
             return
         attributes = self._ring_attributes(agent_event_key(data), data)
         if attributes is not None:
             self._ring(call_id, attributes, data.get("event_at"))
 
     def _ring(self, call_id: str, attributes: dict[str, Any], ring_at: Any) -> None:
-        self._fired.append(call_id)
         self._last_call_id = call_id
         self._last_ring_at = ring_at
         self._trigger_event(DoorbellEventType.RING, {"call_id": call_id, **attributes})
@@ -143,11 +138,10 @@ class C300XUnitDoorbellEventEntity(_RingEvent, C300XUnitEntity):
         registry.ring_listeners.add(unit_id)
         self.async_on_remove(lambda: registry.ring_listeners.discard(unit_id))
         for call in registry.take_waiting_rings(unit_id):
-            if call.call_id not in self._fired:
-                self._ring(call.call_id, self._call_attributes(call), dt_util.utcnow().isoformat())
+            self._ring(call.call_id, self._call_attributes(call), dt_util.utcnow().isoformat())
 
     def _ring_attributes(self, key: str | None, data: Mapping[str, Any]) -> dict[str, Any] | None:
-        # call_sync names the unit that rings, once per unit and call.
+        # call_sync names the unit that rings, once per unit and press.
         if data.get("ring_unit_id") != self.unit_id:
             return None
         registry = self._calls

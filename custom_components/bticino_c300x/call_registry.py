@@ -35,7 +35,7 @@ class C300XCallRegistry:
     # in waiting_rings until its entity is added.
     ring_listeners: set[str] = field(default_factory=set)
     waiting_rings: dict[str, list[str]] = field(default_factory=dict)
-    # Units whose doorbell event fired, per call.
+    # Units whose doorbell event fired for the latest press of each call.
     rung: dict[str, set[str]] = field(default_factory=dict)
 
     # --- units ---------------------------------------------------------------
@@ -121,11 +121,15 @@ class C300XCallRegistry:
         unit = valid_unit_id(data.get("unit"))
         known = self.calls.get(call_id)
         if event_type == "doorbell_pressed":
+            attribution = str(data.get("attribution") or "pending")
             if known is not None:
-                return None
-            call = Call(call_id=call_id, kind="ring", state="ringing", unit=unit,
-                        attribution=str(data.get("attribution") or "pending"),
-                        answered_by=None, end_reason=None)
+                # Pressed again during the same ring session: the same call, in
+                # its state (an answered call stays answered); it rings again.
+                call = known if unit is None or attribution == "pending" else replace(
+                    known, unit=unit, attribution=attribution)
+            else:
+                call = Call(call_id=call_id, kind="ring", state="ringing", unit=unit,
+                            attribution=attribution, answered_by=None, end_reason=None)
         elif event_type == "call_view_started":
             call = known or Call(call_id=call_id, kind="view", state="viewing", unit=unit,
                                  attribution="caller_frame", answered_by=None, end_reason=None)
@@ -151,7 +155,7 @@ class C300XCallRegistry:
         return call
 
     def unit_ring(self, event_type: str, call: Call) -> str | None:
-        """The unit whose doorbell event this call event fires, once per unit and call.
+        """The unit whose doorbell event this call event fires, once per unit and press.
 
         Only a unit the agent named rings: never while it still waits for the
         caller frame, so the default unit does not ring for another unit's
@@ -159,7 +163,10 @@ class C300XCallRegistry:
         until take_waiting_rings.
         """
 
-        if event_type not in {"doorbell_pressed", "call_caller_identified"}:
+        if event_type == "doorbell_pressed":
+            # Every press of a ring session rings again, as in 3.0.0.
+            self.rung.pop(call.call_id, None)
+        elif event_type != "call_caller_identified":
             return None
         if call.kind != "ring" or call.unit is None or call.attribution == "pending":
             return None
@@ -170,8 +177,8 @@ class C300XCallRegistry:
         for call_id in [call_id for call_id in self.rung if call_id not in self.calls]:
             del self.rung[call_id]
         if call.unit not in self.ring_listeners:
-            waiting = self.waiting_rings.setdefault(call.unit, [])
-            waiting[:] = [*waiting[-(_MAX_CALLS - 1):], call.call_id]
+            waiting = [call_id for call_id in self.waiting_rings.get(call.unit, []) if call_id != call.call_id]
+            self.waiting_rings[call.unit] = [*waiting[-(_MAX_CALLS - 1):], call.call_id]
         return call.unit
 
     def take_waiting_rings(self, unit_id: str) -> list[Call]:

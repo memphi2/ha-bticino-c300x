@@ -217,6 +217,44 @@ def test_with_several_units_the_unit_rings_when_the_caller_is_known() -> None:
     assert len(station.fired) == 2
 
 
+def test_a_later_press_of_the_same_ring_rings_again() -> None:
+    entry = _entry(THREE)
+    entities = _setup(entry)
+    station, gate, garden, garage = entities
+    _send(entities, entry, "doorbell_pressed", call_id="0badc0de-1", attribution="pending")
+    _send(entities, entry, "call_caller_identified", call_id="0badc0de-1", unit_id="21",
+          attribution="caller_frame")
+    _send(entities, entry, "call_answered", call_id="0badc0de-1")
+
+    # The visitor presses again during the answered call: the agent keeps the call id.
+    _send(entities, entry, "doorbell_pressed", call_id="0badc0de-1", unit_id="21", attribution="caller_frame")
+    _send(entities, entry, "call_caller_identified", call_id="0badc0de-1", unit_id="21",
+          attribution="caller_frame")
+    assert _fired(entities) == {
+        station.unique_id: ["0badc0de-1", "0badc0de-1"], gate.unique_id: [],
+        garden.unique_id: ["0badc0de-1", "0badc0de-1"], garage.unique_id: [],
+    }
+    assert entry.runtime_data.calls.unit_state("21") == ("answered", "0badc0de-1")
+
+
+def test_a_late_caller_frame_rings_the_real_unit_after_the_default() -> None:
+    entry = _entry(THREE)
+    entities = _setup(entry)
+    station, gate, garden, garage = entities
+    _send(entities, entry, "doorbell_pressed", call_id="0badc0de-1", attribution="pending")
+    _send(entities, entry, "call_caller_identified", call_id="0badc0de-1", unit_id="20",
+          attribution="default_fallback")
+    _send(entities, entry, "call_caller_identified", call_id="0badc0de-1", unit_id="22_1",
+          attribution="caller_frame")
+    assert _fired(entities) == {
+        station.unique_id: ["0badc0de-1"], gate.unique_id: ["0badc0de-1"],
+        garden.unique_id: [], garage.unique_id: ["0badc0de-1"],
+    }
+    assert garage.fired[0][1]["attribution"] == "caller_frame"
+    assert entry.runtime_data.calls.unit_state("20") == ("idle", None)
+    assert entry.runtime_data.calls.unit_state("22_1") == ("ringing", "0badc0de-1")
+
+
 def test_call_sensor_follows_the_units_call() -> None:
     entry = _entry(THREE)
     sensor = C300XUnitCallSensor(entry, entry.runtime_data.calls.units["21"])  # type: ignore[arg-type]

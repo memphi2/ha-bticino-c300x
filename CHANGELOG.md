@@ -19,7 +19,8 @@ devices, entities and services; a Repair lists what to redo after the update.
   station has only one unit. A unit that rings for the first time gets its
   ring event with that ring. The new **Station ring** event on the station
   fires at once with every ring, without the unit; use it for the fastest
-  notification. Both carry the same `call_id`. The ring event no longer has the
+  notification. Both carry the same `call_id`, also when the visitor presses
+  again during the call; both fire again then. The ring event no longer has the
   `video_available` attribute.
 - The card follows the current call: it shows the calling unit's name, and its
   door button opens the unit that rang.

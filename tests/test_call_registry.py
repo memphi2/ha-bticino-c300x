@@ -85,6 +85,23 @@ def test_a_later_caller_frame_moves_the_call_to_its_unit() -> None:
     assert registry.call("0badc0de-1").unit == "21"  # type: ignore[union-attr]
 
 
+def test_a_later_press_of_the_same_ring_keeps_the_call() -> None:
+    registry = C300XCallRegistry()
+    registry.set_units(normalize_outdoor_units(UNITS))
+    registry.apply_event("doorbell_pressed", {"call_id": "0badc0de-1", "unit": None, "attribution": "pending"})
+    registry.apply_event("call_caller_identified", {"call_id": "0badc0de-1", "unit": "21", "attribution": "caller_frame"})
+    registry.apply_event("call_answered", {"call_id": "0badc0de-1", "answered_by": "ha"})
+
+    # The visitor presses again while the call is answered: same call id.
+    again = registry.apply_event("doorbell_pressed", {"call_id": "0badc0de-1", "unit": "21", "attribution": "caller_frame"})
+    assert again is not None
+    assert (again.state, again.unit, again.answered_by) == ("answered", "21", "ha")
+    assert list(registry.calls) == ["0badc0de-1"]
+    # A press that does not name the unit keeps the known one.
+    again = registry.apply_event("doorbell_pressed", {"call_id": "0badc0de-1", "unit": None, "attribution": "pending"})
+    assert again is not None and (again.state, again.unit, again.attribution) == ("answered", "21", "caller_frame")
+
+
 def test_events_without_a_valid_call_id_change_nothing() -> None:
     registry = C300XCallRegistry()
     for call_id in (None, "", "../x", "0badc0de", 7):

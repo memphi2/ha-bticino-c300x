@@ -638,6 +638,8 @@ def normalize_legacy_mqtt_status(data: Any) -> dict[str, Any]:
         "flexisip_reference_state": _optional_string(
             data.get("flexisip_reference_state")
         ),
+        "bridge_blocked": _optional_bool(data.get("bridge_blocked")),
+        "watchdog": _optional_bool(data.get("watchdog")),
         "raw": data,
     }
 

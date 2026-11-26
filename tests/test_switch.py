@@ -479,6 +479,8 @@ class _FakeApi:
             "native_enabled": self.mqtt_enabled,
             "exclusive": True,
             "script_path": "/etc/tcpdump2mqtt/TcpDump2Mqtt.sh",
+            "bridge_blocked": not self.legacy_mqtt_enabled,
+            "watchdog": True,
             "init_link": "/etc/rc5.d/S99TcpDump2Mqtt",
             "flexisip_backup_available": True,
             "flexisip_restart_marker": True,
@@ -1389,6 +1391,8 @@ def test_legacy_mqtt_bridge_switch_disables_and_enables_autostart() -> None:
     assert entity.extra_state_attributes["flexisip_reference_state"] == (
         "legacy_mqtt_patch"
     )
+    assert entity.extra_state_attributes["bridge_blocked"] is False
+    assert entity.extra_state_attributes["watchdog"] is True
 
 
 def test_legacy_mqtt_bridge_switch_is_off_when_native_bridge_is_exclusive() -> None:

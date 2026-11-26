@@ -1784,7 +1784,21 @@ Reads legacy MQTT script state.
 {"enabled": false}
 ```
 
-Enables or disables the legacy script path on the device.
+Enables or disables the legacy script path on the device. Off removes the
+`S99TcpDump2Mqtt` start link, stops the bridge and clears the execute bits of
+`/etc/tcpdump2mqtt/TcpDump2Mqtt`, so a watchdog that starts it again (such as
+`/etc/init.d/bt_service_watchdog` of fquinto's MQTT extras, which also keeps
+dropbear running and is left untouched) cannot run it, also after a reboot.
+The previous mode is kept in
+`/home/bticino/cfg/extra/c300x-device-file-backups/legacy-mqtt/bridge-mode`;
+on puts exactly that mode back unless the bridge was made executable again in
+the meantime, which then wins. A bridge that is a symbolic link is not
+changed. The migration to the native bridge (`migrate-legacy`) disables it the
+same way.
+
+Status fields added for this: `bridge_blocked` (the bridge is there and not
+executable since that block) and `watchdog` (an installed
+`/etc/init.d/bt_service_watchdog` runs the bridge).
 
 ### Firewall
 

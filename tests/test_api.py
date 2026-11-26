@@ -1051,7 +1051,8 @@ def test_legacy_mqtt_status_uses_separate_maintenance_endpoint() -> None:
         '"init_link": "/etc/rc5.d/S99TcpDump2Mqtt", '
         '"flexisip_backup_available": true, '
         '"flexisip_restart_marker": true, '
-        '"flexisip_reference_state": "legacy_mqtt_patch"}'
+        '"flexisip_reference_state": "legacy_mqtt_patch", '
+        '"bridge_blocked": true, "watchdog": true}'
     )
     api = C300XAgentApi(
         session,  # type: ignore[arg-type]
@@ -1070,6 +1071,7 @@ def test_legacy_mqtt_status_uses_separate_maintenance_endpoint() -> None:
     assert status["flexisip_backup_available"] is True
     assert status["flexisip_restart_marker"] is True
     assert status["flexisip_reference_state"] == "legacy_mqtt_patch"
+    assert (status["bridge_blocked"], status["watchdog"]) == (True, True)
     assert session.requests[0]["args"] == (
         "GET",
         "http://agent.local:8080/api/v1/maintenance/legacy-mqtt",
@@ -1109,6 +1111,8 @@ def test_normalize_legacy_mqtt_status_accepts_minimal_payload() -> None:
         "flexisip_backup_available": None,
         "flexisip_restart_marker": None,
         "flexisip_reference_state": None,
+        "bridge_blocked": None,
+        "watchdog": None,
         "raw": {"enabled": False},
     }
 

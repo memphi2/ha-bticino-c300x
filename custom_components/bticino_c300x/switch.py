@@ -1075,6 +1075,8 @@ class C300XLegacyMqttBridgeSwitch(C300XEntity, SwitchEntity):
             "flexisip_reference_state": self._status.get(
                 "flexisip_reference_state"
             ),
+            "bridge_blocked": self._status.get("bridge_blocked"),
+            "watchdog": self._status.get("watchdog"),
         }
 
     @property

@@ -37,6 +37,7 @@
 #include "json_util.h"
 #include "local_action_events.h"
 #include "audio_codec.h"
+#include "legacy_bridge.h"
 #include "answering_scope.h"
 #include "memo_store.h"
 #include "memo_led.h"
@@ -111,10 +112,10 @@
 #define C300X_FIREWALL_BUFFER_SIZE 49152
 #define C300X_NETWORK_ONLINE_RECHECK_SECONDS 5
 #define C300X_NETWORK_OFFLINE_RECHECK_SECONDS 30
-#define C300X_LEGACY_MQTT_DIR "/etc/tcpdump2mqtt"
-#define C300X_LEGACY_MQTT_CONFIG "/etc/tcpdump2mqtt/TcpDump2Mqtt.conf"
-#define C300X_LEGACY_MQTT_SCRIPT "/etc/tcpdump2mqtt/TcpDump2Mqtt.sh"
-#define C300X_LEGACY_MQTT_INIT_LINK "/etc/rc5.d/S99TcpDump2Mqtt"
+#define C300X_LEGACY_MQTT_DIR C300X_FOREIGN_ROOT "/etc/tcpdump2mqtt"
+#define C300X_LEGACY_MQTT_CONFIG C300X_LEGACY_MQTT_DIR "/TcpDump2Mqtt.conf"
+#define C300X_LEGACY_MQTT_SCRIPT C300X_LEGACY_MQTT_DIR "/TcpDump2Mqtt.sh"
+#define C300X_LEGACY_MQTT_INIT_LINK C300X_FOREIGN_ROOT "/etc/rc5.d/S99TcpDump2Mqtt"
 #define C300X_LEGACY_MQTT_INIT_TARGET "../tcpdump2mqtt/TcpDump2Mqtt.sh"
 #define C300X_LEGACY_MQTT_BACKUP_DIR "/home/bticino/cfg/extra/c300x-device-file-backups/legacy-mqtt"
 #define C300X_LEGACY_MQTT_BACKUP_MARKER "/home/bticino/cfg/extra/c300x-device-file-backups/legacy-mqtt/.complete"
@@ -3736,7 +3737,8 @@ static int legacy_mqtt_enable_patch(int *changed)
             return 0;
         }
     }
-    return ensure_symlink_target(C300X_LEGACY_MQTT_INIT_LINK, C300X_LEGACY_MQTT_INIT_TARGET, changed);
+    return c300x_legacy_bridge_unblock(changed)
+        && ensure_symlink_target(C300X_LEGACY_MQTT_INIT_LINK, C300X_LEGACY_MQTT_INIT_TARGET, changed);
 }
 
 static int legacy_mqtt_disable_patch(int *changed)
@@ -3744,10 +3746,7 @@ static int legacy_mqtt_disable_patch(int *changed)
     if (changed != NULL) {
         *changed = 0;
     }
-    if (!unlink_if_exists(C300X_LEGACY_MQTT_INIT_LINK, changed)) {
-        return 0;
-    }
-    return 1;
+    return unlink_if_exists(C300X_LEGACY_MQTT_INIT_LINK, changed) && c300x_legacy_bridge_block(changed);
 }
 
 static void handle_legacy_mqtt_status(
@@ -3762,7 +3761,7 @@ static void handle_legacy_mqtt_status(
     snprintf(
         body,
         sizeof(body),
-        "{\"ok\":true,\"available\":true,\"installed\":%s,\"enabled\":%s,\"running\":%s,\"backup_available\":%s,\"native_enabled\":%s,\"exclusive\":true,\"script_path\":\"%s\",\"init_link\":\"%s\",\"flexisip_backup_available\":%s,\"flexisip_restart_marker\":%s,\"flexisip_reference_state\":\"%s\"}\n",
+        "{\"ok\":true,\"available\":true,\"installed\":%s,\"enabled\":%s,\"running\":%s,\"backup_available\":%s,\"native_enabled\":%s,\"exclusive\":true,\"script_path\":\"%s\",\"init_link\":\"%s\",\"flexisip_backup_available\":%s,\"flexisip_restart_marker\":%s,\"flexisip_reference_state\":\"%s\",\"bridge_blocked\":%s,\"watchdog\":%s}\n",
         legacy_mqtt_installed() ? "true" : "false",
         legacy_mqtt_startup_enabled() ? "true" : "false",
         legacy_mqtt_running() ? "true" : "false",
@@ -3772,7 +3771,9 @@ static void handle_legacy_mqtt_status(
         C300X_LEGACY_MQTT_INIT_LINK,
         flexisip_backup_available ? "true" : "false",
         flexisip_restart_marker ? "true" : "false",
-        flexisip_reference_state()
+        flexisip_reference_state(),
+        c300x_legacy_bridge_blocked() ? "true" : "false",
+        c300x_legacy_bridge_watchdog() ? "true" : "false"
     );
     send_json(client_fd, 200, "OK", body);
 }

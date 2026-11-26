@@ -315,29 +315,39 @@ def _install_device_agent_sync(
             if client.put_file(payload.source, payload.remote_path, payload.mode):
                 changed_files.append(payload.remote_path)
 
-        if _replaces_keys(existing, merged_config):
-            _retire_old_keys_sync(
-                client, request.remote_dir,
-                _render_startup_script(bundle.init_script, request.remote_dir),
-            )
-        if _write_remote_file_sync(
-            client,
-            config_path,
-            merged_config,
-            mode="600",
-        ):
-            changed_files.append(f"{request.remote_dir}/{REMOTE_CONFIG_NAME}")
-        if manage_firewall:
-            if c100x:
-                _apply_firewall_patch_sync(
-                    client, request.remote_dir, request.agent_port, config_bytes=merged_config,
+        # From the stop of the old agent to the start of the new one, a
+        # failure must not leave the station without a running agent.
+        stopped = False
+        try:
+            if _replaces_keys(existing, merged_config):
+                stopped = True
+                _retire_old_keys_sync(
+                    client, request.remote_dir,
+                    _render_startup_script(bundle.init_script, request.remote_dir),
                 )
-            else:
-                _apply_firewall_patch_sync(client, request.remote_dir, request.agent_port)
-        changed_files.extend(
-            _install_startup_script_sync(client, bundle.init_script, request.remote_dir)
-        )
-        client.run(f"{_quote(REMOTE_INIT_SCRIPT)} restart")
+            if _write_remote_file_sync(
+                client,
+                config_path,
+                merged_config,
+                mode="600",
+            ):
+                changed_files.append(f"{request.remote_dir}/{REMOTE_CONFIG_NAME}")
+            if manage_firewall:
+                if c100x:
+                    _apply_firewall_patch_sync(
+                        client, request.remote_dir, request.agent_port, config_bytes=merged_config,
+                    )
+                else:
+                    _apply_firewall_patch_sync(client, request.remote_dir, request.agent_port)
+            changed_files.extend(
+                _install_startup_script_sync(client, bundle.init_script, request.remote_dir)
+            )
+            stopped = True
+            client.run(f"{_quote(REMOTE_INIT_SCRIPT)} restart")
+        except C300XDeviceInstallError:
+            if stopped:
+                _start_agent_after_failure_sync(client)
+            raise
         _verify_startup_sync(client)
 
         display_is_qt5 = kind == QT5_RCC
@@ -706,6 +716,22 @@ def _retire_old_keys_sync(client: _DeviceSshClient, remote_dir: str, init_script
         f"sh -s stop || exit 1; rm -f {config}.tmp.* {config}.c300x-*.new",
         init_script,
     )
+
+
+def _start_agent_after_failure_sync(client: _DeviceSshClient) -> None:
+    """Start the agent again with what is on the station; best effort.
+
+    An install that fails after it stopped the agent would otherwise leave
+    the station without one until its next boot. The init script on the
+    station starts the agent binary with the configuration there, whichever
+    of old and new they are; a running agent is left alone.
+    """
+
+    init = _quote(REMOTE_INIT_SCRIPT)
+    try:
+        client.run(f"if [ -x {init} ]; then {init} start; fi")
+    except C300XDeviceInstallError:
+        _LOGGER.warning("C300X: the agent could not be started again after the failed install")
 
 
 def _device_activation_config(

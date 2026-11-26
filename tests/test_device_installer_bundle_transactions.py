@@ -82,6 +82,9 @@ def transaction(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
                 self.files.pop(obsolete_path, None)
             elif command.endswith(" restart"):
                 self.stage("restart")
+            elif command.endswith(" start; fi"):
+                # A failed restart starts the agent again with what is there.
+                self.stage("start-again")
             elif "qml_patch.sh " in command:
                 action = command.rsplit(" ", 1)[1]
                 self.stage(action)
@@ -155,6 +158,7 @@ def test_failed_install_preserves_manifest_and_retry_is_idempotent(
     assert transaction.update_required()
     if failure != "manifest":
         assert "manifest" not in client.operations
+    assert ("start-again" in client.operations) is (failure == "restart")
 
     client.failure = None
     client.operations.clear()

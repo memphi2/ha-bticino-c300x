@@ -248,12 +248,23 @@ def test_the_reinstall_texts_exist(language):
 class _Station:
     """The station as the installer sees it; records the order of its steps."""
 
-    def __init__(self, existing: dict | None) -> None:
+    last: _Station
+
+    def __init__(self, existing: dict | None, fail: str = "") -> None:
         self.existing = existing
         self.steps: list[str] = []
         self.config: bytes | None = None
+        self.fail = fail
+        _Station.last = self
 
     def run(self, command: str, input_data: bytes | None = None) -> str:
+        output = self._run(command, input_data)
+        if self.steps and self.steps[-1] == self.fail:
+            self.fail = ""
+            raise C300XDeviceInstallError("device_install_failed")
+        return output
+
+    def _run(self, command: str, input_data: bytes | None) -> str:
         if command.startswith("if [ -e "):
             return "M" if self.existing is None else "F" + json.dumps(self.existing)
         if command.startswith("sh -s stop"):
@@ -263,6 +274,8 @@ class _Station:
             assert "killall" not in command and "pkill" not in command and "bt_" not in command
         elif command.endswith(" restart"):
             self.steps.append("restart")
+        elif command.endswith(" start; fi"):
+            self.steps.append("start")
         elif input_data and b'"adminToken"' in input_data:
             self.steps.append("config")
             self.config = input_data
@@ -277,8 +290,8 @@ class _Station:
         pass
 
 
-def _install(monkeypatch, tmp_path, existing, api="new-access", maintenance="new-maintenance"):
-    station = _Station(existing)
+def _install(monkeypatch, tmp_path, existing, api="new-access", maintenance="new-maintenance", fail=""):
+    station = _Station(existing, fail)
     init_script = tmp_path / "c300x-native-agent"
     init_script.write_text(f'#!/bin/sh\nDEFAULT_AGENT_DIR="{DEFAULT_REMOTE_DIR}"\n', encoding="utf-8")
     monkeypatch.setattr(device_installer, "_admit_station_sync", lambda *_: "qt4_ondisk")
@@ -321,6 +334,21 @@ def test_an_agent_with_other_keys_is_stopped_before_its_keys_are_replaced(monkey
 def test_an_install_that_replaces_no_keys_runs_as_before(monkeypatch, tmp_path, existing):
     station = _install(monkeypatch, tmp_path, existing)
     assert station.steps == ["config", "restart"]
+
+
+@pytest.mark.parametrize("failing", ["stop", "config", "restart"])
+def test_an_install_that_fails_after_the_stop_starts_the_agent_again(monkeypatch, tmp_path, failing):
+    with pytest.raises(C300XDeviceInstallError):
+        _install(monkeypatch, tmp_path, _installed("old-access", "old-maintenance"), fail=failing)
+    station = _Station.last
+    # Whatever configuration the station holds now, an agent runs with it.
+    assert station.steps[-1] == "start" and station.steps.count("start") == 1
+
+
+def test_an_install_that_fails_before_any_stop_starts_nothing(monkeypatch, tmp_path):
+    with pytest.raises(C300XDeviceInstallError):
+        _install(monkeypatch, tmp_path, _installed("new-access", "new-maintenance"), fail="config")
+    assert _Station.last.steps == ["config"]
 
 
 class _Shell:

@@ -215,7 +215,7 @@ Run `npm ci --prefix tests/browser --ignore-scripts` and
 `node tests/browser/smoke.mjs`. Chrome must be installed; `CHROME_BIN` overrides
 its executable path. CI runs this separately from Python tests.
 
-The actual card is rendered at 240, 320, 390 and 1024 pixels in four languages.
+The actual card is rendered at 240, 320, 390 and 1024 pixels in five languages.
 Tests check action bounds/labels, unavailable and pending buttons, door/light
 routing, repeated WebRTC start/stop, microphone muting and detach cleanup.
 A synthetic canvas feeds a real browser-to-browser WebRTC connection; pixel
@@ -234,7 +234,7 @@ offscreen in an existing PySide6 environment:
   --fixture-python /path/to/ha-python --check --output .artifacts/energy
 ```
 
-It checks four languages, all subpages, normal and reduced heights, tab switching
+It checks five languages, all subpages, normal and reduced heights, tab switching
 and long labels/large values. Screenshots, text bounds and diagnostics stay in
 the ignored artifacts directory. `--revision COMMIT` renders an older QML file
 without changing the checkout. `--stock-skin DIRECTORY` can read local skin

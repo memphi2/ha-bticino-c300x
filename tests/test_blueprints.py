@@ -674,3 +674,79 @@ def test_blueprint_texts_fit_both_station_models() -> None:
                     texts.append(str(field.get("default", "")))
             shown = " ".join(texts).replace("BTicino C300X", "")
             assert "C300X" not in shown and "C100X" not in shown, path.name
+
+
+@pytest.mark.parametrize("filename", DOORBELL_BLUEPRINTS)
+def test_doorbell_blueprint_runs_for_a_ring_not_for_a_reload(tmp_path: Path, filename: str) -> None:
+    """The blueprint's trigger, call id and condition run by Home Assistant itself.
+
+    A reload of the event entity, with or without a previous state, and a
+    restart are no ring; only a new event time is.
+    """
+
+    import asyncio
+
+    from homeassistant import bootstrap, config_entries, core, loader
+    from homeassistant.helpers.condition import async_template
+    from homeassistant.helpers.template import Template
+    from homeassistant.helpers.trigger import (
+        async_initialize_triggers,
+        async_validate_trigger_config,
+    )
+
+    entity_id = "event.gate_doorbell_ring_event"
+    ring_1, ring_2 = "2026-11-26T10:00:00.000+00:00", "2026-11-26T10:05:00.000+00:00"
+    blueprint = _blueprint(filename)
+
+    async def run() -> None:
+        hass = core.HomeAssistant(str(tmp_path))
+        hass.config.skip_pip = True
+        loader.async_setup(hass)
+        hass.config_entries = config_entries.ConfigEntries(hass, {})
+        await bootstrap.async_load_base_functionality(hass)
+        trigger = [
+            {key: entity_id if value == "doorbell_event" else value for key, value in item.items()}
+            for item in blueprint["trigger"]
+        ]
+        triggered: list[dict[str, Any]] = []
+
+        async def action(run_variables: dict[str, Any], context: Any = None) -> None:
+            triggered.append(run_variables["trigger"])
+
+        hass.states.async_set(entity_id, ring_1, {"call_id": "0badc0de-1"})
+        remove = await async_initialize_triggers(
+            hass, await async_validate_trigger_config(hass, trigger), action,
+            "automation", "doorbell", lambda *args, **kwargs: None,
+        )
+
+        async def states(*values: str) -> None:
+            for value in values:
+                hass.states.async_set(entity_id, value, {"call_id": "0badc0de-2"})
+                await hass.async_block_till_done()
+
+        def runs() -> list[str]:
+            # The automation runs when its condition passes with the call id the
+            # blueprint takes from the trigger (the entry id is known here).
+            condition = Template(blueprint["condition"][0]["value_template"], hass)
+            started = []
+            for item in triggered:
+                call_id = Template(blueprint["variables"]["call_id"], hass).async_render({"trigger": item})
+                variables = {"entry_id": "01JENTRY", "call_id": call_id}
+                if async_template(hass, condition, variables, trace_result=False):
+                    started.append(item["to_state"].state)
+            return started
+
+        # A reload or restart: unavailable, then without a previous state or
+        # with the restored one.
+        await states("unavailable", "unknown")
+        await states("unavailable", ring_1)
+        await states("unavailable", "unknown", "unavailable", ring_1)
+        assert runs() == [], filename
+        # A ring is a new event time.
+        await states(ring_2)
+        assert runs() == [ring_2], filename
+        assert remove is not None
+        remove()
+        await hass.async_stop(force=True)
+
+    asyncio.run(run())

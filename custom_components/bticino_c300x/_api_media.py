@@ -127,7 +127,7 @@ class _ApiMediaMixin(_C300XApiCore):
     ) -> dict[str, Any]:
         """Answer a ring call locally; without ``call_id`` the current call.
 
-        With ``unit`` and no ``call_id`` only a current call of that unit.
+        With ``unit`` only a call of that unit, also with ``call_id``.
         Raises C300XCallNotCurrentError when that call is not the current one,
         or is an on-demand view, which has nothing to answer.
         """
@@ -146,18 +146,19 @@ class _ApiMediaMixin(_C300XApiCore):
         return await self._call_action(call_id, "hangup", unit)
 
     async def _call_action(self, call_id: str | None, action: str, unit: str | None) -> dict[str, Any]:
-        if call_id is None:
+        if call_id is None or unit is not None:
             calls = await self.async_calls()
             current = calls["current_call_id"]
-            if current is None:
+            wanted = call_id if call_id is not None else current
+            if wanted is None:
                 raise C300XCallNotCurrentError("no current call", None)
-            call = next((call for call in calls["calls"] if call.call_id == current), None)
+            call = next((call for call in calls["calls"] if call.call_id == wanted), None)
             if unit is not None and (call is None or call.unit != unit):
                 # Another unit's call, or one the station has not attributed yet.
-                raise C300XCallNotCurrentError("the current call is not this unit's", current)
-            if action == "answer" and call is not None and call.kind == "view":
+                raise C300XCallNotCurrentError("the call is not this unit's", current)
+            if call_id is None and action == "answer" and call is not None and call.kind == "view":
                 raise C300XCallNotCurrentError("the current call is a view", current)
-            call_id = current
+            call_id = wanted
         data = await self._request_json(
             "POST", f"/api/v1/calls/{quote(call_id, safe='')}/actions/{action}",
         )

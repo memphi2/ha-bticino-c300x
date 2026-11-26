@@ -324,7 +324,8 @@ Services take a Home Assistant target (device or entity) instead of
 call's unit, else the default unit.
 
 - `answer_call`, `hangup_call`: optional `call_id`; without it the target's
-  current call. `409 call_not_current` becomes a translated error.
+  current call. With a unit target the call must be that unit's, also with
+  `call_id`. `409 call_not_current` becomes a translated error.
 - `activate_doorbell_video` with a unit target; `capture_doorbell_call` and
   `evaluate_ring_analysis` act on the call's unit (`lock_id` is gone; the
   unlock opens the target unit, with a station target the calling unit).

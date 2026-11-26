@@ -4209,6 +4209,29 @@ def test_reboot_and_removal_wait_for_the_ssh_start_before_them() -> None:
     assert [request["kwargs"]["timeout"] for request in session.requests] == [75.0, 75.0]
 
 
+def test_a_call_id_of_another_unit_is_refused_for_a_unit_target() -> None:
+    # 0badc0de-2 is unit 21's call; 0badc0de-1 has no unit yet.
+    for call_id, unit in (("0badc0de-2", "20"), ("0badc0de-1", "21"), ("0badc0de-9", "21")):
+        session = _QueuedSession([(200, _CALLS)])
+        api = C300XAgentApi(session, "http://agent.local:8080", "agent-token")  # type: ignore[arg-type]
+        with pytest.raises(C300XCallNotCurrentError) as raised:
+            asyncio.run(api.async_hangup_doorbell_call(call_id, unit=unit))
+        assert raised.value.current_call_id == "0badc0de-2"
+        assert len(session.requests) == 1, (call_id, unit)
+
+    session = _QueuedSession([(200, _CALLS), (200, '{"ok": true}')])
+    api = C300XAgentApi(session, "http://agent.local:8080", "agent-token")  # type: ignore[arg-type]
+    assert asyncio.run(api.async_answer_doorbell_call("0badc0de-2", unit="21")) == {"ok": True}
+    assert session.requests[-1]["args"] == (
+        "POST", "http://agent.local:8080/api/v1/calls/0badc0de-2/actions/answer",
+    )
+    # Without a unit the agent alone checks the call id: one request.
+    session = _QueuedSession([(200, '{"ok": true}')])
+    api = C300XAgentApi(session, "http://agent.local:8080", "agent-token")  # type: ignore[arg-type]
+    assert asyncio.run(api.async_hangup_doorbell_call("0badc0de-1")) == {"ok": True}
+    assert len(session.requests) == 1
+
+
 def test_a_unit_answers_only_its_own_current_call() -> None:
     # A unit target without call_id: the current call must be that unit's.
     session = _QueuedSession([(200, _CALLS), (200, '{"ok": true, "answer_requested": true}')])

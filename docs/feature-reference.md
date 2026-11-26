@@ -184,7 +184,7 @@ unit of the current call, else the default unit. Areas, floors, labels and
 | Action `bticino_c300x.` | Purpose | Main fields |
 | --- | --- | --- |
 | `activate_doorbell_video` | Starts or renews on-demand video. | `audio` (default on) |
-| `answer_call`, `hangup_call` | Answers or hangs up the current Ring Call. Without a ring, `hangup_call` ends a running on-demand view. With `call_id` only that call: for a call that is over or no longer current the action fails ("That call is over or is not the current call.") and nothing is sent. | `call_id` |
+| `answer_call`, `hangup_call` | Answers or hangs up the current Ring Call. Without a ring, `hangup_call` ends a running on-demand view. With `call_id` only that call: for a call that is over or no longer current, or with an outdoor unit as target a call of another unit, the action fails ("That call is over or is not the current call.") and nothing is sent. | `call_id` |
 | `start_home_call`, `stop_home_call` | Audio-only Home Call to the station display. | `duration_seconds` |
 | `camera_picture` | Reads brightness, contrast and saturation of the active live video, or changes one. Returns all three. | `control`, `value` (0-100 in steps of 10) |
 | `alarm_command` | Sends a command to the configured Alarmo panel. | `command`, `code`, `force` |

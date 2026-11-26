@@ -8,6 +8,8 @@ import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
+import pytest
+
 from custom_components.bticino_c300x import config_flow, config_flow_agent
 from custom_components.bticino_c300x.api_errors import C300XAgentApiAuthError
 from custom_components.bticino_c300x.config_flow import BticinoC300XConfigFlow
@@ -19,6 +21,7 @@ from custom_components.bticino_c300x.const import (
     CONF_AGENT_PORT,
     CONF_AGENT_TOKEN,
     CONF_DEVICE_ACTIVATION_MODE,
+    CONF_DISPLAY_FOLLOWUP_PENDING,
     CONF_MAINTENANCE_TOKEN,
     CONF_REINSTALL_AGENT,
 )
@@ -154,3 +157,30 @@ def test_keys_of_a_failed_install_that_wrote_none_are_not_reused(monkeypatch):
     read_setup.assert_not_called()
     asyncio.run(flow.async_step_bootstrap_install({}))
     assert installer.await_args.kwargs["api_token"] != first["api_token"]
+
+
+# 3.0.6: the install ran its display step and the Qt 5 display failed it. The
+# agent runs with the new keys; the entry records the owed step for the core
+# Repair, as a reauth reinstall does, and keeps a full patch already owed.
+@pytest.mark.parametrize("owed,expected", [(None, False), (False, False), (True, True)])
+def test_a_reinstall_on_3_0_6_with_a_failed_display_step_records_it_in_the_entry(monkeypatch, owed, expected):
+    existing = _entry(STATION, "door-old.local")
+    if owed is not None:
+        existing.data[CONF_DISPLAY_FOLLOWUP_PENDING] = owed
+    installed = SimpleNamespace(display_pending=True, display_kind="qt5_rcc")
+    flow, result, keys, _ = _setup(monkeypatch, [existing], AsyncMock(), AsyncMock(return_value=installed))
+    assert result["reason"] == "reinstall_entry_updated"
+    assert existing.data.pop(CONF_DISPLAY_FOLLOWUP_PENDING) is expected
+    _assert_entry_has_the_new_keys(flow, existing, keys)
+
+
+@pytest.mark.parametrize("kind", ["qt4_ondisk", "qt5_rcc", "qt5_ondisk"])
+def test_a_reinstall_without_an_owed_display_step_leaves_the_record_alone(monkeypatch, kind):
+    existing = _entry(STATION, "door-old.local")
+    existing.data[CONF_DISPLAY_FOLLOWUP_PENDING] = True
+    installed = SimpleNamespace(display_pending=False, display_kind=kind)
+    flow, result, keys, _ = _setup(monkeypatch, [existing], AsyncMock(), AsyncMock(return_value=installed))
+    assert result["reason"] == "reinstall_entry_updated"
+    # A step owed from before stays owed; this install did not run it.
+    assert existing.data.pop(CONF_DISPLAY_FOLLOWUP_PENDING) is True
+    _assert_entry_has_the_new_keys(flow, existing, keys)

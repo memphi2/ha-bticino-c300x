@@ -12,7 +12,7 @@ created and no keys are lost.
 from __future__ import annotations
 
 import secrets
-from collections.abc import Awaitable, Callable, Iterable
+from collections.abc import Iterable
 from typing import Any, cast
 
 from homeassistant.config_entries import ConfigFlowResult
@@ -34,6 +34,7 @@ from .const import (
     DEFAULT_AGENT_PORT,
 )
 from .discovery import discovery_matches_entry
+from .discovery_move import async_identity_proven, async_ipv4_addresses
 from .entry_config import entry_config_value
 
 KEYS = (CONF_AGENT_TOKEN, CONF_MAINTENANCE_TOKEN)
@@ -45,13 +46,14 @@ async def async_station_entry(
     entries: Iterable[Any],
     unique_id: str | None,
     connection: dict[str, Any],
-    read_setup: Callable[..., Awaitable[dict[str, Any]]],
 ) -> Any | None:
     """Return the existing entry of the station that holds the keys of ``connection``.
 
     An entry under the station's identity is it. An entry under an address
-    based identity is it when its own address reaches an agent that accepts
-    the keys just written and reports the same identity.
+    based identity (an older release) is it when its own address, resolved
+    to IPv4, proves that identity with the keys just written. The proof
+    request carries no key: an address that now belongs to another machine
+    never gets one.
     """
 
     if unique_id is None:
@@ -60,18 +62,15 @@ async def async_station_entry(
     for entry in entries:
         if discovery_matches_entry(unique_id, getattr(entry, "unique_id", None)):
             return entry
+    # The new agent listens on the port of this setup.
+    port = int(connection.get(CONF_AGENT_PORT, DEFAULT_AGENT_PORT))
     for entry in entries:
         host = str(entry_config_value(entry, CONF_AGENT_HOST, "") or "").strip()
         if not host or not entry_uses_manual_setup_unique_id(entry):
             continue
-        # The new agent listens on the port of this setup.
-        probe = {CONF_AGENT_HOST: host, CONF_AGENT_PORT: connection.get(CONF_AGENT_PORT, DEFAULT_AGENT_PORT)}
-        try:
-            setup = await read_setup(hass, probe, api_token=connection[CONF_AGENT_TOKEN])
-        except C300XAgentApiError:
-            continue
-        if discovery_matches_entry(stable_unique_id_from_setup_data(setup), unique_id):
-            return entry
+        for address in await async_ipv4_addresses(host):
+            if await async_identity_proven(hass, address, port, unique_id, connection[CONF_AGENT_TOKEN]):
+                return entry
     return None
 
 
@@ -142,10 +141,7 @@ class StationEntrySteps:
         unique_id = stable_unique_id_from_setup_data(setup)
         if unique_id is None:
             return
-        entry = await async_station_entry(
-            self.hass, self._async_current_entries(), unique_id, connection,
-            config_flow_agent.async_agent_setup_data,
-        )
+        entry = await async_station_entry(self.hass, self._async_current_entries(), unique_id, connection)
         if entry is not None:
             hand_keys_to_entry(self.hass, entry, connection, unique_id=unique_id, display_pending=False)
 
@@ -157,8 +153,7 @@ class StationEntrySteps:
         if self._setup_unique_id is None:
             return None
         entry = await async_station_entry(
-            self.hass, self._async_current_entries(), self._setup_unique_id,
-            self._setup_connection, config_flow_agent.async_agent_setup_data,
+            self.hass, self._async_current_entries(), self._setup_unique_id, self._setup_connection,
         )
         if entry is None:
             return None

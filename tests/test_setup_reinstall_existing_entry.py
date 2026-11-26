@@ -5,12 +5,17 @@ station of an existing entry, that entry gets the new keys; nothing is lost.
 """
 
 import asyncio
+import socket
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from custom_components.bticino_c300x import config_flow, config_flow_agent
+from custom_components.bticino_c300x import (
+    config_flow,
+    config_flow_agent,
+    discovery_move,
+)
 from custom_components.bticino_c300x.api_errors import C300XAgentApiAuthError
 from custom_components.bticino_c300x.config_flow import BticinoC300XConfigFlow
 from custom_components.bticino_c300x.config_flow_identity import (
@@ -26,6 +31,7 @@ from custom_components.bticino_c300x.const import (
     CONF_REINSTALL_AGENT,
 )
 from custom_components.bticino_c300x.device_installer import C300XDeviceInstallError
+from custom_components.bticino_c300x.discovery_move import identity_proof
 
 DEVICE = "c300x-0003504a1b2c"
 STATION = stable_unique_id_from_setup_data({"device_id": DEVICE})
@@ -95,25 +101,89 @@ def test_a_reinstall_of_a_station_with_an_entry_gives_that_entry_the_new_keys(mo
     migrate.assert_not_called()
 
 
-def test_an_entry_under_its_address_counts_when_that_address_reaches_the_station(monkeypatch):
-    existing = _entry("bticino_c300x:door.local:8080", "door.local")
-    asked = []
+class _Network:
+    """Names, addresses and the agents answering identity proofs on them.
 
-    async def read_setup(_hass, connection, *, api_token=""):
-        asked.append((connection[CONF_AGENT_HOST], connection[CONF_AGENT_PORT], api_token))
-        return {"device_id": DEVICE}
+    A proof request carries a nonce only; the station answers with the HMAC
+    keyed by the keys it holds, over the address it was reached on.
+    """
 
-    flow, result, keys, _ = _setup(monkeypatch, [existing], read_setup)
+    def __init__(self, monkeypatch, names, agents):
+        self.names, self.agents, self.proofs = names, agents, []
+
+        def getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
+            if host not in self.names:
+                raise socket.gaierror(socket.EAI_NONAME, "unknown")
+            return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (self.names[host], 0))]
+
+        async def request_proof(_hass, host, port, nonce):
+            self.proofs.append((host, port))
+            agent = self.agents.get((host, port))
+            if agent is None:
+                return 0, None
+            device, token = agent()
+            return 200, {"ok": True, "id": device, "proof": identity_proof(token, device, host, port, nonce)}
+
+        monkeypatch.setattr(socket, "getaddrinfo", getaddrinfo)
+        monkeypatch.setattr(discovery_move, "_async_request_proof", request_proof)
+
+
+def _station_holding(keys):
+    """The station after the install: it holds the access key it was given."""
+    return lambda: (DEVICE, keys["api_token"])
+
+
+@pytest.mark.parametrize("host", ["door.local", "192.0.2.10"])
+def test_an_entry_under_its_address_counts_when_that_address_proves_the_station(monkeypatch, host):
+    existing = _entry(f"bticino_c300x:{host}:8080", host)
+    keys: dict = {}
+    network = _Network(monkeypatch, {"door.local": "192.0.2.10"},
+                       {("192.0.2.10", 8091): lambda: _station_holding(keys)()})
+    read_setup = AsyncMock(return_value={"device_id": DEVICE})
+
+    def install(*_args, **kwargs):
+        keys.update(kwargs)
+        return _INSTALLED
+
+    flow, result, written, _ = _setup(monkeypatch, [existing], read_setup, AsyncMock(side_effect=install))
     assert result["reason"] == "reinstall_entry_updated"
-    # Its own address, the port the agent now listens on, and the keys just written.
-    assert asked == [("door.local", 8091, keys["api_token"])]
-    _assert_entry_has_the_new_keys(flow, existing, keys)
+    # The name resolved to the IPv4 the agent sees, the port it now listens on.
+    assert network.proofs == [("192.0.2.10", 8091)]
+    # No key went to the saved address: the only keyed request was the setup's own.
+    assert {call.args[1][CONF_AGENT_HOST] for call in read_setup.await_args_list} <= {"station.example"}
+    _assert_entry_has_the_new_keys(flow, existing, written)
     assert existing.unique_id == STATION
+
+
+@pytest.mark.parametrize(("host", "agent"), [
+    # Another machine at the saved address: no proof, or a wrong one.
+    ("door.local", None),
+    ("door.local", lambda: (DEVICE, "x" * 43)),
+    ("door.local", lambda: ("c300x-0003504affff", "y" * 43)),
+    # An IPv6 address or a name without IPv4 cannot be proven: a new entry, no key sent.
+    ("fd00::5", None),
+    ("gone.local", None),
+])
+def test_an_unproven_address_gets_no_key_and_keeps_its_entry(monkeypatch, host, agent):
+    other = _entry(f"bticino_c300x:{host}:8080", host, title="Other")
+    before = (dict(other.data), dict(other.options), other.unique_id)
+    agents = {("192.0.2.10", 8091): agent} if agent else {}
+    network = _Network(monkeypatch, {"door.local": "192.0.2.10"}, agents)
+    read_setup = AsyncMock(return_value={"device_id": DEVICE})
+    flow, result, keys, migrate = _setup(monkeypatch, [other], read_setup)
+    assert result["step_id"] == "user_features"
+    assert (other.data, other.options, other.unique_id) == before
+    flow.hass.config_entries.async_update_entry.assert_not_called()
+    assert network.proofs == ([("192.0.2.10", 8091)] if host == "door.local" else [])
+    assert {call.args[1][CONF_AGENT_HOST] for call in read_setup.await_args_list} <= {"station.example"}
+    assert flow._setup_connection[CONF_AGENT_TOKEN] == keys["api_token"]
+    migrate.assert_awaited_once()
 
 
 def test_the_entry_of_another_station_is_left_alone(monkeypatch):
     other = _entry("bticino_c300x:other.local:8080", "other.local", title="Other")
     before = (dict(other.data), dict(other.options), other.unique_id)
+    _Network(monkeypatch, {"other.local": "192.0.2.20"}, {})
     flow, result, keys, migrate = _setup(
         monkeypatch, [other], AsyncMock(side_effect=C300XAgentApiAuthError()),
     )

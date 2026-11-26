@@ -83,7 +83,7 @@ int c300x_calls_unlock_allowed(const struct c300x_calls *calls, const char *call
                                const char *unit, long long now);
 void c300x_calls_answer_started(struct c300x_calls *calls, const char *call_id);
 void c300x_calls_hangup_started(struct c300x_calls *calls, const char *call_id);
-/* HA's hang-up was refused: a later close is not HA's. */
+/* HA's answer or hang-up was refused: a later answer or close is not HA's. */
 void c300x_calls_action_refused(struct c300x_calls *calls, const char *call_id);
 void c300x_calls_answered(struct c300x_calls *calls, const struct c300x_call_sink *sink,
                           const char *call_id, const char *by, long long now);

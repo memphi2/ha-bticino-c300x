@@ -745,6 +745,21 @@ static void lifecycle_ondemand_view(void) {
     assert_current("");
 }
 
+/* HA's answer is refused (the agent has no ring leg: only the bus rang);
+ * the display then answers: that answer is the station's, not HA's. */
+static void refused_answer_then_station(void) {
+    char data[4096], id[32];
+    bus("*8*1#1#4#21*11##");
+    wait_event("doorbell.pressed", 1, NULL, 0);
+    bus("*8*9#1#4*20##");
+    wait_event("call.caller_identified", 1, data, sizeof(data));
+    call_id_of(data, id);
+    call_api_action(id, "answer", 409);
+    bus("*8*2#1#4*11##");
+    wait_event("call.answered", 1, data, sizeof(data));
+    assert(strstr(data, id) && strstr(data, "\"answered_by\":\"station\""));
+}
+
 /* (d) The station answers 486 Busy with no external marker (here: no bus
  * frame announced the call). One INVITE, then no SIP until it is free. */
 static void station_busy_case(bool freed_by_bus) {
@@ -875,6 +890,7 @@ int main(int argc, char **argv) {
     else if (strcmp(argv[1], "lifecycle_station_answer_station_hangup") == 0) lifecycle_station_answer_station_hangup();
     else if (strcmp(argv[1], "lifecycle_ha_answer_station_hangup") == 0) lifecycle_ha_answer_station_hangup();
     else if (strcmp(argv[1], "lifecycle_ondemand_view") == 0) lifecycle_ondemand_view();
+    else if (strcmp(argv[1], "refused_answer_then_station") == 0) refused_answer_then_station();
     else if (strcmp(argv[1], "station_busy_bus_end") == 0) station_busy_case(true);
     else if (strcmp(argv[1], "station_busy_timeout") == 0) station_busy_case(false);
     else if (strcmp(argv[1], "station_freed_before_486") == 0) station_freed_during_start(true);

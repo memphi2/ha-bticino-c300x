@@ -430,7 +430,7 @@ void c300x_calls_action_refused(struct c300x_calls *calls, const char *call_id)
 {
     struct c300x_call *call = (struct c300x_call *)c300x_calls_find(calls, call_id);
     if (call != NULL) {
-        call->hangup_pending = 0;
+        call->answer_pending = call->hangup_pending = 0;
     }
 }
 

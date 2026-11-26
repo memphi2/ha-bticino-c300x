@@ -77,6 +77,10 @@ REMOTE_FIREWALL_BACKUP = (
     "/home/bticino/cfg/extra/c300x-device-file-backups/original"
     "/etc/network/if-pre-up.d/iptables"
 )
+# bootstrap_firewall.sh: the hook holds our rules and its other rules changed
+# since, so the backup of the original no longer matches.
+FIREWALL_HOOK_CHANGED = "firewall_hook_changed"
+_FIREWALL_HOOK_CHANGED_STATUS = 3
 _SSH_CONNECT_TIMEOUT = 12.0
 # Probes, uploads of at most the agent binary, the init script and its
 # restart (5 s stop wait, 2 s after SIGKILL, 20 status checks of 100 ms).
@@ -1429,15 +1433,21 @@ def _apply_firewall_patch_sync(
             if type(port) is not int or not 1 <= port <= 65535:
                 raise C300XDeviceInstallError("device_install_failed")
             media_env += f"C300X_RTSP_PORT={port} "
-    client.run(
+    # The script's own status for a hook changed after it was patched becomes
+    # a word on the output: a failed command's output does not come back.
+    output = client.run(
         (
             f"C300X_IPTABLES={_quote(REMOTE_FIREWALL_PATH)} "
             f"C300X_IPTABLES_BACKUP={_quote(REMOTE_FIREWALL_BACKUP)} "
             f"{media_env}"
             f"{_quote(f'{remote_dir}/{REMOTE_BOOTSTRAP_FIREWALL_NAME}')} "
-            f"{api_port}"
+            f"{api_port}; rc=$?; "
+            f"if [ $rc -eq {_FIREWALL_HOOK_CHANGED_STATUS} ]; then printf '\\n%s\\n' {FIREWALL_HOOK_CHANGED}; exit 0; fi; "
+            "exit $rc"
         ),
     )
+    if FIREWALL_HOOK_CHANGED in str(output).split():
+        raise C300XDeviceInstallError(FIREWALL_HOOK_CHANGED)
 
 
 def _ssh_host(host: str) -> str:

@@ -798,6 +798,7 @@
       "ssh_unreachable": "Il {model} non risponde via SSH (porta 22). SSH è disattivato o bloccato sulla stazione; controlla l'indirizzo e che lo strumento di root abbia attivato SSH.",
       "ssh_password_login_disabled": "Il {model} non accetta l'accesso con password, solo chiavi SSH. Incolla la chiave privata configurata dallo strumento di root, oppure crea l'immagine con l'accesso tramite password.",
       "installer_firewall_hook_unsupported": "Impossibile verificare lo script firewall in sicurezza. Installazione interrotta prima di modificare il dispositivo. Controllare tipo e permessi del file senza creare uno script sostitutivo.",
+      "firewall_hook_changed": "Lo script di avvio del firewall del {model} (/etc/network/if-pre-up.d/iptables) è stato modificato da altro dopo che l'agent ha aggiunto le sue porte; l'originale salvato non corrisponde più. Lo script è rimasto invariato. Ripristinalo, o rimuovi da esso il blocco dell'agent, poi riprova.",
       "device_model_incompatible": "Questo pacchetto non supporta questa postazione, oppure non è stato possibile confermare il modello della postazione. Nessun file del dispositivo è stato sostituito.",
       "c100x_confirmation_required": "Spunta la casella per configurare il Classe 100X, oppure chiudi questa finestra per lasciare la postazione invariata.",
       "not_a_bticino_station": "Il dispositivo a questo indirizzo non è una postazione BTicino. Non è stato scritto nulla. Controlla l'indirizzo."
@@ -1742,6 +1743,7 @@
           "ssh_user_not_root": "Questo utente SSH non ha i diritti di root. Accedi come root o root2, non come bticino2.",
           "ssh_unreachable": "Il {model} non risponde via SSH (porta 22). SSH è disattivato o bloccato sulla stazione; controlla l'indirizzo e che lo strumento di root abbia attivato SSH.",
           "ssh_password_login_disabled": "Il {model} non accetta l'accesso con password, solo chiavi SSH. Incolla la chiave privata configurata dallo strumento di root, oppure crea l'immagine con l'accesso tramite password.",
+          "firewall_hook_changed": "Lo script di avvio del firewall del {model} (/etc/network/if-pre-up.d/iptables) è stato modificato da altro dopo che l'agent ha aggiunto le sue porte; l'originale salvato non corrisponde più. Lo script è rimasto invariato. Ripristinalo, o rimuovi da esso il blocco dell'agent, poi riprova.",
           "not_a_bticino_station": "Il dispositivo a questo indirizzo non è una postazione BTicino. Non è stato scritto nulla. Controlla l'indirizzo."
         },
         "abort": {

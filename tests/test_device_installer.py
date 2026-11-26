@@ -427,7 +427,7 @@ def test_bootstrap_install_uses_python_ssh_client(
             "C300X_IPTABLES=/etc/network/if-pre-up.d/iptables "
             "C300X_IPTABLES_BACKUP=/home/bticino/cfg/extra/c300x-device-file-backups/original"
             "/etc/network/if-pre-up.d/iptables "
-            f"{remote_dir}/bootstrap_firewall.sh 8091"
+            f"{remote_dir}/bootstrap_firewall.sh 8091{FIREWALL_STATUS_TAIL}"
         )
         for command in fake_client.commands
     )
@@ -1114,8 +1114,32 @@ def test_firewall_patch_bootstrap_invokes_project_script() -> None:
         f"C300X_IPTABLES={device_installer.REMOTE_FIREWALL_PATH} "
         f"C300X_IPTABLES_BACKUP={device_installer.REMOTE_FIREWALL_BACKUP} "
         "/home/bticino/cfg/extra/c300x-native-agent/bootstrap_firewall.sh "
-        "8091"
+        f"8091{FIREWALL_STATUS_TAIL}"
     ]
+
+
+@pytest.mark.parametrize(("status", "reason"), [
+    (0, None), (3, "firewall_hook_changed"), (1, "device_install_failed"),
+])
+def test_a_firewall_hook_changed_after_patching_is_named(tmp_path: Path, status: int, reason: str | None) -> None:
+    """The script's status 3 reaches HA as its own error, not a general failure."""
+    script = tmp_path / "bootstrap_firewall.sh"
+    script.write_text(f"#!/bin/sh\nprintf 'changed_files=0\\n'\nexit {status}\n")
+    script.chmod(0o700)
+
+    class ShellClient:
+        def run(self, command: str, input_data: bytes | None = None) -> str:
+            result = subprocess.run(["/bin/sh", "-c", command], capture_output=True, text=True, check=False)
+            if result.returncode:
+                raise C300XDeviceInstallError("device_install_failed")
+            return result.stdout
+
+    if reason is None:
+        device_installer._apply_firewall_patch_sync(ShellClient(), str(tmp_path), 8091)
+        return
+    with pytest.raises(C300XDeviceInstallError) as caught:
+        device_installer._apply_firewall_patch_sync(ShellClient(), str(tmp_path), 8091)
+    assert caught.value.reason == reason
 
 
 def test_asyncssh_connect_kwargs_force_legacy_ssh_rsa() -> None:
@@ -1334,6 +1358,11 @@ def test_manifest_does_not_require_aiortc() -> None:
     assert not any(
         requirement.startswith("aiortc") for requirement in manifest["requirements"]
     )
+
+
+FIREWALL_STATUS_TAIL = (
+    "; rc=$?; if [ $rc -eq 3 ]; then printf '\\n%s\\n' firewall_hook_changed; exit 0; fi; exit $rc"
+)
 
 
 def test_bootstrap_firewall_logic_lives_in_project_script() -> None:

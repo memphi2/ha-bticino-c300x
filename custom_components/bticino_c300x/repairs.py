@@ -69,6 +69,7 @@ from .const import (
 )
 from .device_installer import (
     DISPLAY_WRITE_TIMEOUT,
+    FIREWALL_HOOK_CHANGED,
     C300XDeviceInstallError,
     C300XDeviceInstallRequest,
     async_ensure_installer_dependencies,
@@ -502,7 +503,7 @@ def _ssh_install_error(err: BaseException) -> str:
     reason = err.reason if isinstance(err, C300XDeviceInstallError) else ""
     shown = (
         LOGIN_REFUSED, DISPLAY_WRITE_TIMEOUT, NOT_A_BTICINO_STATION, INVALID_SSH_KEY, SSH_USER_NOT_ROOT,
-        SSH_UNREACHABLE, SSH_PASSWORD_LOGIN_DISABLED,
+        SSH_UNREACHABLE, SSH_PASSWORD_LOGIN_DISABLED, FIREWALL_HOOK_CHANGED,
     )
     return reason if reason in shown else "ssh_install_failed"
 

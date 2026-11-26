@@ -917,3 +917,16 @@ def test_the_busy_station_message_is_plain_in_every_language() -> None:
     for language, message in messages.items():
         # No agent, error code or HTTP wording reaches the user.
         assert not re.search(r"agent|409|station_busy|HTTP", message, re.IGNORECASE), language
+
+
+def test_the_outdoor_units_repair_names_what_replaces_the_removed_parts() -> None:
+    # The removed agent event entity: its bus event. The two blueprints that
+    # take a device now: by the names Home Assistant shows for them.
+    for path in [INTEGRATION / "strings.json", *sorted((INTEGRATION / "translations").glob("*.json"))]:
+        text = _load_json(path)["issues"]["outdoor_units_breaking_change"]["description"]
+        for name in (
+            "bticino_c300x_agent_event_received",
+            '"BTicino Calendar display reminder"',
+            '"BTicino strict phrase decision"',
+        ):
+            assert name in text, (path.name, name)

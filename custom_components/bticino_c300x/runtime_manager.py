@@ -374,7 +374,7 @@ class C300XRuntimeManager:
         load_stored_units(self.entry, registry)
         if not (self.connection_state.available and calls_supported(self.capabilities)):
             return
-        await async_refresh_units(self.hass, self.entry)
+        await async_refresh_units(self.hass, self.entry, during_setup=True)
         await async_refresh_calls(self.hass, self.entry)
         agent_station_id = self.setup_data.get("device_id")
         if registry.default_unit is not None and identity_migration_needed(

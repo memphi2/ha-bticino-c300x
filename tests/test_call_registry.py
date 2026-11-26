@@ -223,3 +223,33 @@ def test_an_agent_restart_reads_the_calls_again(monkeypatch: pytest.MonkeyPatch)
     entry = _entry(SimpleNamespace())
     call_sync.async_apply_call_event(hass, entry, "agent_restarted", {})  # type: ignore[arg-type]
     assert any("calls" in name for name in names), names
+
+
+@pytest.mark.parametrize("during_setup", [False, True])
+def test_units_read_after_a_failed_setup_read_reload_for_the_migration(
+    monkeypatch: pytest.MonkeyPatch, during_setup: bool,
+) -> None:
+    # The setup read of the units failed: the 2.x entry kept its old ids. The
+    # next successful read reloads the entry, whose setup then migrates.
+    monkeypatch.setattr(call_sync, "async_dispatcher_send", lambda *args: None)
+
+    class Api:
+        async def async_outdoor_units(self) -> Any:
+            return normalize_outdoor_units(UNITS)
+
+    reloads: list[str] = []
+    entries = _Entries()
+    entries.async_schedule_reload = reloads.append  # type: ignore[attr-defined]
+    hass = SimpleNamespace(config_entries=entries)
+    entry = _entry(Api())
+    entry.version = 1
+    entry.runtime_data.agent_info = {"device_id": "c300x-0123456789ab"}
+    assert asyncio.run(call_sync.async_refresh_units(hass, entry, during_setup=during_setup))  # type: ignore[arg-type]
+    assert reloads == ([] if during_setup else ["entry-1"])
+
+    # Migrated: a later read reloads nothing.
+    entry.version = 2
+    entry.data = {**entry.data, "station_id": "c300x-0123456789ab"}
+    reloads.clear()
+    assert asyncio.run(call_sync.async_refresh_units(hass, entry))  # type: ignore[arg-type]
+    assert reloads == []

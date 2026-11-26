@@ -51,8 +51,14 @@ def load_stored_units(entry: BticinoC300XConfigEntry, registry: C300XCallRegistr
         registry.set_units(payload)
 
 
-async def async_refresh_units(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> bool:
-    """Read the station's units; keep them in the entry and tell the platforms."""
+async def async_refresh_units(
+    hass: HomeAssistant, entry: BticinoC300XConfigEntry, *, during_setup: bool = False,
+) -> bool:
+    """Read the station's units; keep them in the entry and tell the platforms.
+
+    Outside setup, units that make the identity migration possible (the read
+    at setup failed) reload the entry: the migration runs before the platforms.
+    """
 
     runtime = getattr(entry, "runtime_data", None)
     registry = entry_call_registry(entry)
@@ -65,7 +71,11 @@ async def async_refresh_units(hass: HomeAssistant, entry: BticinoC300XConfigEntr
         return False
     if getattr(entry, "runtime_data", None) is not runtime:
         return False
-    if not registry.set_units(payload):
+    changed = registry.set_units(payload)
+    if not during_setup and _identity_migration_pending(entry, runtime, registry):
+        _LOGGER.info("C300X entry %s reloads to take the station's identity", entry.entry_id)
+        hass.config_entries.async_schedule_reload(entry.entry_id)
+    if not changed:
         return True
     stored = units_to_stored(payload)
     if entry.data.get(CONF_OUTDOOR_UNITS) != stored:
@@ -74,6 +84,15 @@ async def async_refresh_units(hass: HomeAssistant, entry: BticinoC300XConfigEntr
         )
     async_dispatcher_send(hass, SIGNAL_OUTDOOR_UNITS_CHANGED, entry.entry_id)
     return True
+
+
+def _identity_migration_pending(entry: BticinoC300XConfigEntry, runtime: Any, registry: C300XCallRegistry) -> bool:
+    from .identity_migration import identity_migration_needed
+
+    station = getattr(runtime, "agent_info", {}).get("device_id")
+    return registry.default_unit is not None and identity_migration_needed(
+        entry, station if isinstance(station, str) else None,
+    )
 
 
 async def async_refresh_calls(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> None:

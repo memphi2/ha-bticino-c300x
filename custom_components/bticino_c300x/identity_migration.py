@@ -15,7 +15,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 
 from .agent_contracts import OutdoorUnit
-from .const import CONF_STATION_ID
+from .const import CONF_STATION_ID, DOMAIN
 from .entry_types import BticinoC300XConfigEntry
 from .identity import (
     station_device_identifier,
@@ -27,6 +27,7 @@ from .identity import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+_UNIT_MARK = ":unit:"
 
 ENTRY_VERSION = 2
 # 2.x key -> key on the default outdoor unit.
@@ -44,6 +45,20 @@ def identity_migration_needed(entry: BticinoC300XConfigEntry, agent_station_id: 
 
     new = valid_station_id(agent_station_id)
     return new is not None and (new != station_id(entry) or entry.version < ENTRY_VERSION)
+
+
+def _move_unit_devices(devices: Any, entry: BticinoC300XConfigEntry, old: str, new: str) -> None:
+    """The unit devices of the old station id take the new one."""
+
+    old_mark = f"{old}{_UNIT_MARK}"
+    for device in list(dr.async_entries_for_config_entry(devices, entry.entry_id)):
+        identifiers = {
+            (domain, f"{new}{_UNIT_MARK}{value[len(old_mark):]}")
+            if domain == DOMAIN and value.startswith(old_mark) else (domain, value)
+            for domain, value in device.identifiers
+        }
+        if identifiers != device.identifiers:
+            devices.async_update_device(device.id, new_identifiers=identifiers)
 
 
 def async_migrate_identity(
@@ -69,14 +84,22 @@ def async_migrate_identity(
     hass.config_entries.async_update_entry(
         entry, data={**entry.data, CONF_STATION_ID: new}, version=ENTRY_VERSION,
     )
-    station = devices.async_get_device(identifiers={old_identifier})
+    station = devices.async_get_device_by_identifier(old_identifier, entry.entry_id)
     if station is not None and old != new:
         devices.async_update_device(station.id, new_identifiers={station_device_identifier(entry)})
+    if old != new:
+        _move_unit_devices(devices, entry, old, new)
     unit_device: Any = None
 
     for entity in list(er.async_entries_for_config_entry(entities, entry.entry_id)):
         unique_id = str(entity.unique_id)
-        if not unique_id.startswith(f"{old}_") or unique_id.startswith(f"{old}_unit_"):
+        if not unique_id.startswith(f"{old}_"):
+            continue
+        if unique_id.startswith(f"{old}_unit_"):
+            # A unit entity of the old station id: same unit, new station id.
+            target = f"{new}_unit_{unique_id[len(old) + 6:]}"
+            if old != new and entities.async_get_entity_id(entity.domain, entity.platform, target) is None:
+                entities.async_update_entity(entity.entity_id, new_unique_id=target)
             continue
         key = unique_id[len(old) + 1:]
         if key in REMOVED_KEYS:
@@ -88,8 +111,8 @@ def async_migrate_identity(
                 from .unit_entity import async_register_unit_device
 
                 async_register_unit_device(hass, entry, default_unit)
-                unit_device = devices.async_get_device(
-                    identifiers={unit_device_identifier(entry, default_unit.id)},
+                unit_device = devices.async_get_device_by_identifier(
+                    unit_device_identifier(entry, default_unit.id), entry.entry_id,
                 )
             target = unit_unique_id(entry, default_unit.id, UNIT_KEYS[key])
             if entities.async_get_entity_id(entity.domain, entity.platform, target) is not None:

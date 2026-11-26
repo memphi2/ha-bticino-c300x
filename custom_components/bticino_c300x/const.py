@@ -16,6 +16,7 @@ CONF_DISPLAY_SETTING_PENDING = "display_setting_pending"
 # Display steps the agent update or install owes on the Qt 5 display: True
 # with the full Display patch, False with the core hook only.
 CONF_DISPLAY_FOLLOWUP_PENDING = "display_followup_pending"
+CONF_REINSTALL_AGENT = "reinstall_agent"
 CONF_ALARM_ENTITY_ID = "alarm_entity_id"
 CONF_ALARM_PAGE_ENTITY_ID = "alarm_page_entity_id"
 CONF_AGENT_HOST = "agent_host"
@@ -23,6 +24,9 @@ CONF_AGENT_PORT = "agent_port"
 CONF_BOOTSTRAP_INSTALL_AGENT = "bootstrap_install_agent"
 CONF_BOOTSTRAP_SSH_PASSWORD = "bootstrap_ssh_password"
 CONF_BOOTSTRAP_SSH_USERNAME = "bootstrap_ssh_username"
+# A private key for this one install; like the password, never stored.
+CONF_BOOTSTRAP_SSH_KEY = "bootstrap_ssh_key"
+CONF_BOOTSTRAP_SSH_KEY_PASSPHRASE = "bootstrap_ssh_key_passphrase"
 CONF_CALLBACK_BASE_URL = "callback_base_url"
 CONF_CREATE_HOMEASSISTANT_USER = "create_homeassistant_user"
 CONF_HOMEASSISTANT_MEDIA_USER_BOOTSTRAPPED = "homeassistant_media_user_bootstrapped"

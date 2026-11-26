@@ -427,7 +427,7 @@ def test_bootstrap_install_uses_python_ssh_client(
             "C300X_IPTABLES=/etc/network/if-pre-up.d/iptables "
             "C300X_IPTABLES_BACKUP=/home/bticino/cfg/extra/c300x-device-file-backups/original"
             "/etc/network/if-pre-up.d/iptables "
-            f"{remote_dir}/bootstrap_firewall.sh 8091"
+            f"{remote_dir}/bootstrap_firewall.sh 8091{FIREWALL_STATUS_TAIL}"
         )
         for command in fake_client.commands
     )
@@ -1114,8 +1114,32 @@ def test_firewall_patch_bootstrap_invokes_project_script() -> None:
         f"C300X_IPTABLES={device_installer.REMOTE_FIREWALL_PATH} "
         f"C300X_IPTABLES_BACKUP={device_installer.REMOTE_FIREWALL_BACKUP} "
         "/home/bticino/cfg/extra/c300x-native-agent/bootstrap_firewall.sh "
-        "8091"
+        f"8091{FIREWALL_STATUS_TAIL}"
     ]
+
+
+@pytest.mark.parametrize(("status", "reason"), [
+    (0, None), (3, "firewall_hook_changed"), (1, "device_install_failed"),
+])
+def test_a_firewall_hook_changed_after_patching_is_named(tmp_path: Path, status: int, reason: str | None) -> None:
+    """The script's status 3 reaches HA as its own error, not a general failure."""
+    script = tmp_path / "bootstrap_firewall.sh"
+    script.write_text(f"#!/bin/sh\nprintf 'changed_files=0\\n'\nexit {status}\n")
+    script.chmod(0o700)
+
+    class ShellClient:
+        def run(self, command: str, input_data: bytes | None = None) -> str:
+            result = subprocess.run(["/bin/sh", "-c", command], capture_output=True, text=True, check=False)
+            if result.returncode:
+                raise C300XDeviceInstallError("device_install_failed")
+            return result.stdout
+
+    if reason is None:
+        device_installer._apply_firewall_patch_sync(ShellClient(), str(tmp_path), 8091)
+        return
+    with pytest.raises(C300XDeviceInstallError) as caught:
+        device_installer._apply_firewall_patch_sync(ShellClient(), str(tmp_path), 8091)
+    assert caught.value.reason == reason
 
 
 def test_asyncssh_connect_kwargs_force_legacy_ssh_rsa() -> None:
@@ -1134,7 +1158,11 @@ def test_asyncssh_connect_kwargs_force_legacy_ssh_rsa() -> None:
     assert kwargs["config"] is None
     assert kwargs["known_hosts"] is None
     assert kwargs["preferred_auth"] == ["password"]
-    assert kwargs["server_host_key_algs"] == ["ssh-rsa"]
+    # Modern host keys first, the factory station's RSA/SHA-1 last.
+    assert kwargs["server_host_key_algs"] == [
+        "ssh-ed25519", "ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521",
+        "rsa-sha2-512", "rsa-sha2-256", "ssh-rsa",
+    ]
     assert kwargs["kex_algs"] == "+diffie-hellman-group1-sha1"
     assert kwargs["encryption_algs"] == "+aes128-cbc,3des-cbc"
 
@@ -1332,6 +1360,11 @@ def test_manifest_does_not_require_aiortc() -> None:
     )
 
 
+FIREWALL_STATUS_TAIL = (
+    "; rc=$?; if [ $rc -eq 3 ]; then printf '\\n%s\\n' firewall_hook_changed; exit 0; fi; exit $rc"
+)
+
+
 def test_bootstrap_firewall_logic_lives_in_project_script() -> None:
     installer = (
         ROOT / "custom_components" / "bticino_c300x" / "device_installer.py"
@@ -1386,7 +1419,7 @@ def test_bootstrap_firewall_uses_final_device_video_config(monkeypatch, kind, ex
     from types import SimpleNamespace
 
     commands, configs = [], []
-    client = SimpleNamespace(run=commands.append, close=lambda: None)
+    client = SimpleNamespace(run=lambda command, *_: commands.append(command), close=lambda: None)
     monkeypatch.setattr(device_installer, "_connect_device_client", lambda _: client)
     monkeypatch.setattr(device_installer, "_admit_station_sync", lambda *_: kind)
     monkeypatch.setattr(device_installer, "_read_remote_config_sync", lambda *_: existing)
@@ -1394,6 +1427,7 @@ def test_bootstrap_firewall_uses_final_device_video_config(monkeypatch, kind, ex
     monkeypatch.setattr(device_installer, "_write_remote_file_sync",
                         lambda _c, _p, data, **_: configs.append(json.loads(data)))
     monkeypatch.setattr(device_installer, "_install_startup_script_sync", lambda *_: [])
+    monkeypatch.setattr(device_installer, "_render_startup_script", lambda *_: b"")
     monkeypatch.setattr(device_installer, "_verify_startup_sync", lambda *_: None)
     monkeypatch.setattr(device_installer, "_apply_qml_patch_sync", lambda *_: None)
     monkeypatch.setattr(device_installer, "_remove_obsolete_display_source_sync", lambda *_: None)

@@ -533,6 +533,7 @@ def _event_data(context: _AgentEventContext, event_at: str) -> dict[str, Any]:
     label_de = event_label(context.event_type, "de")
     label_it = event_label(context.event_type, "it")
     label_fr = event_label(context.event_type, "fr")
+    label_es = event_label(context.event_type, "es")
     event_name = label or label_en or context.event_type
     event_data: dict[str, Any] = {
         "entry_id": context.entry.entry_id,
@@ -546,6 +547,7 @@ def _event_data(context: _AgentEventContext, event_at: str) -> dict[str, Any]:
         "event_label_de": label_de,
         "event_label_it": label_it,
         "event_label_fr": label_fr,
+        "event_label_es": label_es,
         "event_at": event_at,
         "data": context.data,
     }

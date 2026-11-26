@@ -54,6 +54,48 @@ devices, entities and services; a Repair lists what to redo after the update.
   Without switches a notification is shown as before.
 - The native agent changed; an agent update is required.
 
+## v3.0.0b2 - 2026-11-26
+
+Beta. Includes everything of 3.0.0b1. Checked offline only, against the
+original files of firmware 1.7.19, 2.0.2, 3.0.6 and Classe 100X 1.5.8.
+
+- **Reinstall when the keys are lost.** When Home Assistant no longer has the
+  agent's keys, for example after Home Assistant or the integration was
+  installed again without a backup, the key dialog in setup and in the
+  re-authentication offers **Reinstall the agent**. Home Assistant installs
+  the agent again over SSH with new keys and keeps them; the display pages
+  stay. An existing entry of the station gets the new keys, no second entry is
+  created. Once the keys are on the station, Home Assistant keeps them even
+  when a later step fails, and a retry finishes cleanly.
+- Adding a station again with its keys while an entry from an older release
+  still points at it updates that entry instead of creating a second one.
+- **Spanish.** Home Assistant texts, the card, event labels, memo and video
+  message names and the station display pages are available in Spanish. The
+  station pages follow the station's language on the Classe 300X; the Classe
+  100X shows English, because its firmware reports no language. The forwarding
+  text on the station is renewed by the agent update Repair.
+- **Installation over SSH:**
+  - Setup can log in with an SSH key (OpenSSH or PEM, optional passphrase)
+    instead of or next to a password; it is used for the installation only and
+    not stored. RSA and ECDSA keys work on every firmware, Ed25519 keys only on
+    3.0.6.
+  - A login without root rights (for example `bticino2`) gets a clear message.
+  - Own messages when SSH on the station cannot be reached and when the station
+    accepts key logins only.
+  - Setup installs nothing on a device that is not a BTicino station.
+  - Stations whose SSH offers an ECDSA, Ed25519 or SHA-2 RSA host key are
+    accepted.
+  - After the station was flashed again, an outdated firewall backup no longer
+    stops the installation.
+  - The quick start names the third-party projects for SSH access per firmware
+    and assumes a clean firmware with only SSH enabled.
+- **SSH switch:** where another tool runs its own SSH service, the switch shows
+  SSH as on, names that tool and cannot be switched.
+- **Legacy MQTT bridge:** when switched off, the old bridge stays off even when
+  a watchdog of the rooting tool tries to start it again; switching it on, or
+  removing the agent, gives it back.
+- The native agent is rebuilt as **3.0.0b2**; an agent update is required.
+
 ## v3.0.0b1 - 2026-11-25
 
 Beta. One package now serves the Classe 300X and, as an experiment, the Classe

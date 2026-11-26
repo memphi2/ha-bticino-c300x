@@ -115,6 +115,8 @@ class _FakeApi:
         self.ssh_reads = 0
         self.ssh_sets: list[bool] = []
         self.ssh_status_error = False
+        self.ssh_status: dict[str, Any] = {"running": True}
+        self.ssh_set_error: Exception | None = None
         self.qml_patch_status_reads = 0
         self.qml_patch_actions: list[str] = []
         self.qml_patch_status_error = False
@@ -174,10 +176,12 @@ class _FakeApi:
         self.ssh_reads += 1
         if self.ssh_status_error:
             raise C300XAgentApiConnectionError("offline")
-        return {"running": True}
+        return dict(self.ssh_status)
 
     async def async_set_ssh_enabled(self, enabled: bool) -> dict[str, Any]:
         self.ssh_sets.append(enabled)
+        if self.ssh_set_error is not None:
+            raise self.ssh_set_error
         return {"running": enabled}
 
     async def async_qml_patch_status(self) -> dict[str, Any]:
@@ -475,6 +479,8 @@ class _FakeApi:
             "native_enabled": self.mqtt_enabled,
             "exclusive": True,
             "script_path": "/etc/tcpdump2mqtt/TcpDump2Mqtt.sh",
+            "bridge_blocked": not self.legacy_mqtt_enabled,
+            "watchdog": True,
             "init_link": "/etc/rc5.d/S99TcpDump2Mqtt",
             "flexisip_backup_available": True,
             "flexisip_restart_marker": True,
@@ -502,6 +508,7 @@ class _FakeRuntimeData:
     qml_patch_status: dict[str, Any] = field(default_factory=dict)
     qml_patch_status_updated_at: Any = None
     device_user_status: dict[str, Any] = field(default_factory=dict)
+    ssh_status: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -686,6 +693,74 @@ def test_maintenance_ssh_switch_starts_ssh() -> None:
     asyncio.run(entity.async_turn_on())
 
     assert entry.runtime_data.api.ssh_sets == [True]
+    assert entity.is_on is True
+
+
+MANAGED_SSH = {"running": True, "enabled": True, "state": "managed_externally",
+               "manager": "c300x-ssh", "listening": True, "factory_running": False}
+
+
+def _ssh_entry(status: dict[str, Any]) -> _FakeEntry:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            capabilities={"maintenance": {"supported": True, "ssh_start": True}},
+        )
+    )
+    entry.runtime_data.api.ssh_status = status
+    return entry
+
+
+@pytest.mark.parametrize("turn", ["async_turn_on", "async_turn_off"])
+def test_maintenance_ssh_switch_shows_ssh_kept_by_another_tool_and_refuses_changes(
+    turn: str,
+) -> None:
+    entry = _ssh_entry(dict(MANAGED_SSH))
+    entity = C300XMaintenanceSshSwitch(entry)  # type: ignore[arg-type]
+
+    asyncio.run(entity.async_update())
+
+    assert entity.is_on is True
+    assert entity.available is True
+    assert entity.extra_state_attributes == {
+        "ssh_state": "managed_externally", "managed_by": "c300x-ssh",
+    }
+    assert entry.runtime_data.ssh_status["state"] == "managed_externally"
+    with pytest.raises(HomeAssistantError) as raised:
+        asyncio.run(getattr(entity, turn)())
+    assert raised.value.translation_key == "ssh_managed_externally"
+    assert raised.value.translation_placeholders["manager"] == "c300x-ssh"
+    # Read again before refusing, never sent to the station.
+    assert entry.runtime_data.api.ssh_reads == 2
+    assert entry.runtime_data.api.ssh_sets == []
+    assert entity.is_on is True
+
+
+def test_maintenance_ssh_switch_toggles_again_once_the_other_tool_is_gone() -> None:
+    entry = _ssh_entry(dict(MANAGED_SSH))
+    entity = C300XMaintenanceSshSwitch(entry)  # type: ignore[arg-type]
+    asyncio.run(entity.async_update())
+    entry.runtime_data.api.ssh_status = {"running": True, "state": "running", "manager": None}
+
+    asyncio.run(entity.async_turn_off())
+
+    assert entry.runtime_data.api.ssh_sets == [False]
+    assert entity.is_on is False
+
+
+def test_maintenance_ssh_switch_reports_the_agents_refusal() -> None:
+    entry = _ssh_entry({"running": False, "state": "stopped", "manager": None})
+    entity = C300XMaintenanceSshSwitch(entry)  # type: ignore[arg-type]
+    asyncio.run(entity.async_update())
+    # Another tool started its dropbear since the last read.
+    entry.runtime_data.api.ssh_status = {**MANAGED_SSH, "manager": "c100x-ssh"}
+    entry.runtime_data.api.ssh_set_error = C300XAgentApiConnectionError(
+        "409", http_status=409, agent_state="ssh_managed_externally")
+
+    with pytest.raises(HomeAssistantError) as raised:
+        asyncio.run(entity.async_turn_on())
+
+    assert raised.value.translation_key == "ssh_managed_externally"
+    assert raised.value.translation_placeholders["manager"] == "c100x-ssh"
     assert entity.is_on is True
 
 
@@ -1316,6 +1391,8 @@ def test_legacy_mqtt_bridge_switch_disables_and_enables_autostart() -> None:
     assert entity.extra_state_attributes["flexisip_reference_state"] == (
         "legacy_mqtt_patch"
     )
+    assert entity.extra_state_attributes["bridge_blocked"] is False
+    assert entity.extra_state_attributes["watchdog"] is True
 
 
 def test_legacy_mqtt_bridge_switch_is_off_when_native_bridge_is_exclusive() -> None:

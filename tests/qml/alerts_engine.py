@@ -151,7 +151,8 @@ def run(mode, fault="none"):
                 assert severity_label is not None
                 for language, severity, acknowledgement in (
                     ("de", "!  Warnung", "Gelesen"), ("it", "!  Avviso", "Letto"),
-                    ("fr", "!  Avertissement", "Lu"), ("en", "!  Warning", "Mark read"),
+                    ("fr", "!  Avertissement", "Lu"), ("es", "!  Aviso", "Leído"),
+                    ("en", "!  Warning", "Mark read"),
                 ):
                     js('probe.trsl.language = "' + language + '"')
                     app.processEvents()

@@ -12,7 +12,7 @@ proxy if a site needs TLS.
 ## Versioning
 
 - HTTP base path: `/api/v1`
-- Current agent version: `3.0.0b1`
+- Current agent version: `3.0.0b2`
 - Self-test contract version: `api_version: "1.1"`
 - Normal payloads are JSON unless an endpoint explicitly returns binary media.
 
@@ -1516,7 +1516,7 @@ deadline and a 4096-byte bounded-prefix capture; script failure retains HTTP 200
 with unavailable/unknown label status. SSH start and stop have a 60-second
 deadline and SSH status a 15-second one; at the deadline the process group is
 killed with `SIGKILL`; an action then fails like a failed command and a
-status reads as not running, so a hanging script no longer holds maintenance. They discard output.
+status reads the factory dropbear as unknown (`factory_running: null`), so a hanging script no longer holds maintenance. They discard output.
 
 Device-user native routing/user mutations are **synchronous**: they run inside
 the request. Label apply/restore is not: it is a QML write job with an
@@ -1548,7 +1548,29 @@ do not perform device writes.
 
 `GET /api/v1/maintenance/ssh`
 
-Returns SSH service status.
+Returns SSH service status:
+
+```json
+{"ok": true, "enabled": true, "running": true, "state": "running",
+ "listening": true, "factory_running": true, "manager": null}
+```
+
+- `factory_running`: the factory dropbear runs (pidfile `/var/run/dropbear.pid`,
+  executable `/usr/sbin/dropbear`, as the stock init script starts it on
+  1.7.19, 2.0.2, 3.0.6 and the C100X 1.5.8); `null` when the probe failed or
+  timed out.
+- `listening`: a TCP or TCP6 socket listens on port 22 (`/proc/net/tcp`,
+  `/proc/net/tcp6`).
+- `manager`: a third-party service that keeps SSH running on its own, found by
+  its init script: `c300x-ssh` (own dropbear and pidfile), `c100x-ssh` (own
+  dropbear; the factory init script is disabled with `NO_START=1`) or
+  `bt_service_watchdog` (restarts the factory dropbear every 60 s). `unknown`
+  when port 22 listens without the factory dropbear and without a known tool;
+  `null` otherwise.
+- `state`: `managed_externally` when port 22 listens and either a manager is
+  installed or the factory dropbear is not the listener; `running` when port 22
+  listens or the factory dropbear runs; `stopped` otherwise. `running` and
+  `enabled` are true unless the state is `stopped`.
 
 `POST /api/v1/maintenance/ssh`
 
@@ -1569,6 +1591,12 @@ Starts or stops SSH through a boolean request:
 ```json
 {"confirm": "stop_ssh"}
 ```
+
+While port 22 listens and a known manager is installed, the three SSH writes
+start and stop nothing and answer `409`
+`{"ok":false,"error":"ssh_managed_externally","manager":"c300x-ssh"}`. The
+factory init script only ever stops the dropbear of the factory pidfile, so a
+foreign dropbear is never stopped.
 
 ### Reboot, Agent, GUI
 
@@ -1776,7 +1804,27 @@ Reads legacy MQTT script state.
 {"enabled": false}
 ```
 
-Enables or disables the legacy script path on the device.
+Enables or disables the legacy script path on the device. Off removes the
+`S99TcpDump2Mqtt` start link, stops the bridge and clears the execute bits of
+`/etc/tcpdump2mqtt/TcpDump2Mqtt`, so a watchdog that starts it again (such as
+`/etc/init.d/bt_service_watchdog` of fquinto's MQTT extras, which also keeps
+dropbear running and is left untouched) cannot run it, also after a reboot.
+The previous mode is kept in
+`/home/bticino/cfg/extra/c300x-device-file-backups/legacy-mqtt/bridge-mode`;
+on puts exactly that mode back unless the bridge was made executable again in
+the meantime, which then wins. Without that record (an agent installed again
+after a removal) on makes the read bits of a bridge without execute bits its
+execute bits. Removing the agent gives the bridge its recorded mode back the
+same way before the record is deleted with the backups. A bridge that is a
+symbolic link is not changed. Off changes the bridge before it removes the
+start link and on changes it before it creates the link; when the link step
+fails the bridge gets its previous mode back, and the request is answered
+`500` with `legacy_mqtt_disable_failed` or `legacy_mqtt_enable_failed`. The
+migration to the native bridge (`migrate-legacy`) disables it the same way.
+
+Status fields added for this: `bridge_blocked` (the bridge is there and not
+executable since that block) and `watchdog` (an installed
+`/etc/init.d/bt_service_watchdog` runs the bridge).
 
 ### Firewall
 
@@ -2132,7 +2180,7 @@ requests to Home Assistant require an active display bridge.
 | `GET`, `POST` | `/ui/preferences` | Local display feedback preference, independent of HA registration. |
 | `GET` | `/ui/status` | Local facts for the station's Integration tab: agent and firmware version, whether Home Assistant is registered or has switched the display bridge off, its address as scheme, host and port, and the age of the last contact. |
 | `GET` | `/ui/maintenance` | Availability of SSH, reboot and removal on this station. |
-| `GET`, `POST` | `/ui/maintenance/ssh` | Read SSH status or request `{"enabled":true}` or `{"enabled":false}`. A write checks the resulting process state. |
+| `GET`, `POST` | `/ui/maintenance/ssh` | Read SSH status or request `{"enabled":true}` or `{"enabled":false}`. A write checks the resulting state and fails with `502` when SSH does not end up as requested; SSH kept by another tool answers `409` `ssh_managed_externally`. |
 | `POST` | `/ui/maintenance/reboot` | Schedule a reboot with `{"confirm":"reboot"}`; leaves SSH unchanged. |
 | `POST` | `/ui/maintenance/remove` | Schedule the existing agent removal and restoration script with `{"confirm":"remove_agent"}`. |
 | `GET` | `/ui/touch-tone/next` | One sleeping GUI command connection; initial `enabled=0/1`, then matching `completed` ID and actual state acknowledge a command. |
@@ -2253,7 +2301,7 @@ request has a monotonic five-second deadline. Diagnostics expose
 
 ## Compatibility
 
-Agent `3.0.0b1` retains self-test contract `api_version: "1.1"` for firmware families
+Agent `3.0.0b2` retains self-test contract `api_version: "1.1"` for firmware families
 `1.7.x`, `2.0.x` and `3.0.x`; a C100X firmware reads `1.5.x`. `firmware_family` is derived from `device.firmware` of
 the agent config, or from the station's firmware info when that is empty, which
 is what the installer writes; it is `unknown` only when neither is readable. Of

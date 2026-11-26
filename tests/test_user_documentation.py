@@ -97,24 +97,45 @@ def test_setup_docs_link_policy_and_removal_guides(document):
     assert "## Remove Home Assistant Integration" in (DOCS / REMOVAL_LINK.split("#")[0]).read_text()
 
 
-def test_quickstart_names_where_rooting_is_described_as_a_third_party_project():
-    requirements = " ".join(section("quickstart.md", "Requirements").split())
-    assert "This project provides no firmware images" in requirements
-    assert "rooting instructions" in requirements
-    # The links out of the requirements go to rooting guides of others, each
-    # marked as a third-party project used at the reader's own risk; the C100X
-    # line links this project's own test issue.
+# The repository of each project, by its owner: scripts/check_repo.py keeps
+# the full name of fquinto's project out of code.
+SSH_PROJECTS = {
+    "fquinto": "(C300X `1.7.x`)",
+    "davemajor/c300x-root": "(C300X `2.0.2` and `3.0.6`)",
+    "daniel-sc/bticino-c100x-firmware-tools": "(C100X `1.5.8`)",
+}
+
+
+def test_quickstart_requirements_name_the_three_ssh_projects_and_a_clean_firmware():
+    requirements = " ".join(section("quickstart.md", "Requirements").split("\n### ", 1)[0].split())
+    for phrase in ("The integration cannot root a stock station.",
+                   "This project provides no firmware images", "rooting instructions",
+                   "at your own risk and without warranty", "flashing can brick the station",
+                   "The integration assumes a clean firmware: enable only SSH, no camera, MQTT "
+                   "or other extras."):
+        assert phrase in requirements, phrase
+    # Exactly these three projects, each a repository front page with its
+    # station and firmware; the C100X line links this project's own test issue.
     links = [link for link in re.findall(r"\]\((https?://[^)]+)\)", requirements)
              if "/ha-bticino-c300x/" not in link]
-    assert len(links) == 2 and links[1] == "https://github.com/davemajor/c300x-root"
-    assert all(link.startswith("https://github.com/") and "ha-bticino-c300x" not in link for link in links)
-    sentences = [next(part for part in requirements.split(". ") if link in part) for link in links]
-    assert sentences[0].startswith("Rooting is described by the community project [")
-    for phrase in ("third-party project", "not part of this project", "at your own risk",
-                   "flashing a station can brick it"):
-        assert phrase in sentences[0], phrase
-    for phrase in ("third-party project", "at your own risk", "can destroy the station"):
-        assert phrase in sentences[1], phrase
+    assert len(links) == len(SSH_PROJECTS)
+    for link, (project, scope) in zip(links, SSH_PROJECTS.items(), strict=True):
+        assert re.fullmatch(r"https://github\.com/[\w.-]+/[\w.-]+", link), link
+        assert link.startswith(f"https://github.com/{project}"), link
+        assert f"]({link}) {scope}" in requirements, scope
+
+
+def test_no_separate_rooting_page_and_no_link_to_one():
+    assert not (DOCS / "root-access.md").exists()
+    texts = [path for path in ROOT.rglob("*.md")
+             if not {".git", ".venv", "node_modules"} & set(path.relative_to(ROOT).parts)]
+    assert [path for path in texts if "root-access.md" in path.read_text(encoding="utf-8")] == []
+    # Only the quick start requirements name the projects; README and the C100X
+    # notes send the reader there.
+    for document in (ROOT / "README.md", DOCS / "c100x-experimental.md"):
+        text = document.read_text(encoding="utf-8")
+        assert "quickstart.md#requirements)" in text
+        assert not any(f"github.com/{project}" in text for project in SSH_PROJECTS), document.name
 
 
 def test_removal_docs_distinguish_entry_package_device_and_retained_data():
@@ -151,6 +172,8 @@ def test_agent_removal_docs_disclose_writes_backup_removal_and_reboot():
         "scheduling a device reboot", "starts SSH for recovery",
         "retains agent files/backups", "not a promise that every earlier step was rolled back",
         "not a factory reset", "does not erase HA media or HA backups",
+        "gives fquinto's old MQTT bridge (`/etc/tcpdump2mqtt/TcpDump2Mqtt`) its start rights back",
+        "its start link stays as the legacy MQTT switch left it",
     ):
         assert phrase in text
     script = (ROOT / "native_agent/scripts/remove_agent.sh").read_text()

@@ -136,7 +136,8 @@ class Denied(SshError):
 
 
 @pytest.mark.parametrize(("raised", "reason", "logged"), [
-    (TimeoutError("timed out talking to 192.0.2.60"), "device_install_failed", "TimeoutError"),
+    (TimeoutError("timed out talking to 192.0.2.60"), "ssh_unreachable", "TimeoutError"),
+    (ConnectionRefusedError(111, "refused by 192.0.2.60"), "ssh_unreachable", "ConnectionRefusedError"),
     (OSError("No route to host 192.0.2.60"), "device_install_failed", "OSError"),
     (SshError("Connection lost to 192.0.2.60"), "device_install_failed", "SshError"),
     (Denied("Permission denied for root"), "ssh_login_refused", "Denied"),

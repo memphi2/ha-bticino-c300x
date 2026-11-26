@@ -25,10 +25,15 @@
       },
       "bootstrap_install": {
         "title": "Install native {model} agent",
-        "description": "Home Assistant logs in with the factory login of the {model} first. Enter the SSH user and password only if the device refused it; left empty, the factory login is tried again. This writes the native agent, a configuration with generated keys, the startup script, and display support files to the {model} through SSH. SSH credentials are used only for this install step and are not stored.",
+        "description": "Home Assistant logs in with the factory login of the {model} first. Enter the SSH user and password, or a private key, only if the device refused it; left empty, the factory login is tried again. This writes the native agent, a configuration with generated keys, the startup script, and display support files to the {model} through SSH. SSH credentials and keys are used only for this install step and are not stored.",
         "data": {
           "bootstrap_ssh_username": "{model} SSH user",
-          "bootstrap_ssh_password": "{model} SSH password"
+          "bootstrap_ssh_password": "{model} SSH password",
+          "bootstrap_ssh_key": "{model} SSH private key (optional)",
+          "bootstrap_ssh_key_passphrase": "Key passphrase (optional)"
+        },
+        "data_description": {
+          "bootstrap_ssh_key": "Paste the whole private key (OpenSSH or PEM). Key type: RSA or ECDSA on 1.7.x, 2.0.2 and C100X 1.5.8; ed25519 only on 3.0.6. With a key and no user, root is used; a password entered as well is tried when the key is refused."
         }
       },
       "c100x_experimental": {
@@ -43,11 +48,13 @@
         "description": "Enter the keys of the reachable native agent. Leave the access key empty only while the agent is still in noAuth bootstrap mode.",
         "data": {
           "agent_token": "Access key",
-          "maintenance_token": "Maintenance key"
+          "maintenance_token": "Maintenance key",
+          "reinstall_agent": "I do not have the keys: reinstall the agent"
         },
         "data_description": {
           "agent_token": "Key Home Assistant signs in to the {model} with. It was created during installation.",
-          "maintenance_token": "Separate key for maintenance: updates, display changes and restarts."
+          "maintenance_token": "Separate key for maintenance: updates, display changes and restarts.",
+          "reinstall_agent": "Installs the bundled agent again through SSH with newly generated keys. The keys used so far stop working; everything else on the {model} stays as it is."
         }
       },
       "user_features": {
@@ -720,7 +727,24 @@
         "description": "Enter the current keys for {name}. Leave a key empty to keep its saved value.",
         "data": {
           "agent_token": "Access key",
-          "maintenance_token": "Maintenance key"
+          "maintenance_token": "Maintenance key",
+          "reinstall_agent": "I do not have the keys: reinstall the agent"
+        },
+        "data_description": {
+          "reinstall_agent": "Installs the bundled agent again through SSH with newly generated keys and saves them in this entry. The keys used so far stop working; everything else on the {model} stays as it is."
+        }
+      },
+      "reauth_reinstall": {
+        "title": "Reinstall the {model} agent",
+        "description": "Home Assistant logs in with the factory login of the {model} first. Enter the SSH user and password, or a private key, only if the device refused it; left empty, the factory login is tried again. This stops the installed agent, writes the bundled agent and a configuration with newly generated keys to the {model} through SSH, and starts it again. The new keys are saved for {name}; the old ones stop working. Display pages and the other settings on the {model} stay, and the device is not restarted. SSH credentials and keys are used only for this step and are not stored.",
+        "data": {
+          "bootstrap_ssh_username": "{model} SSH user",
+          "bootstrap_ssh_password": "{model} SSH password",
+          "bootstrap_ssh_key": "{model} SSH private key (optional)",
+          "bootstrap_ssh_key_passphrase": "Key passphrase (optional)"
+        },
+        "data_description": {
+          "bootstrap_ssh_key": "Paste the whole private key (OpenSSH or PEM). Key type: RSA or ECDSA on 1.7.x, 2.0.2 and C100X 1.5.8; ed25519 only on 3.0.6. With a key and no user, root is used; a password entered as well is tried when the key is refused."
         }
       }
     },
@@ -732,6 +756,8 @@
       "unique_id_mismatch": "This is a different device than the one set up. Reconfigure the entry that belongs to it, or add the device as a new entry.",
       "reauth_wrong_device": "The agent has a different identity. The saved entry was not changed.",
       "reauth_successful": "The credentials were updated.",
+      "reinstall_entry_updated": "The agent was installed again on a station that is already set up as {name}. That entry now uses the new keys and this address; no second entry was created.",
+      "station_entry_updated": "This station is already set up as {name}. That entry now uses these keys and this address; no second entry was created.",
       "unsupported_display": "This device does not support Home Assistant display pages or display notifications. Saved layouts have not been changed."
     },
     "error": {
@@ -768,9 +794,15 @@
       "invalid_maintenance_auth": "The {model} rejected the maintenance key. Enter the current maintenance key.",
       "cannot_connect": "The {model} could not be validated. Check its address and connection, then try again.",
       "ssh_login_refused": "The {model} refused the SSH login. Enter the SSH user and password of the device.",
+      "invalid_ssh_key": "The private key could not be read. Paste the whole key including its BEGIN and END lines, and its passphrase if it has one.",
+      "ssh_user_not_root": "This SSH user has no root rights. Log in as root or root2, not as bticino2.",
+      "ssh_unreachable": "The {model} does not answer on SSH (port 22). SSH on the station is off or blocked; check the address and that the root tool turned SSH on.",
+      "ssh_password_login_disabled": "The {model} accepts no password login, only SSH keys. Paste the private key the root tool set up, or build the image with a password login.",
       "installer_firewall_hook_unsupported": "The device firewall hook cannot be inspected safely. Installation stopped before changing the station. Check the hook type and permissions; do not create a placeholder.",
+      "firewall_hook_changed": "The firewall start script of the {model} (/etc/network/if-pre-up.d/iptables) was changed by something else after the agent added its ports, so the saved original no longer matches it. The script was left as it is. Restore it, or remove the agent's block from it, then retry.",
       "device_model_incompatible": "This package does not support this station, or the station's model could not be confirmed. No device files were replaced.",
-      "c100x_confirmation_required": "Tick the box to set up the Classe 100X, or close this dialog to leave the station unchanged."
+      "c100x_confirmation_required": "Tick the box to set up the Classe 100X, or close this dialog to leave the station unchanged.",
+      "not_a_bticino_station": "The device at this address is not a BTicino station. Nothing was written to it. Check the address."
     }
   },
   "options": {
@@ -1506,7 +1538,20 @@
         "name": "Ringer mute"
       },
       "maintenance_ssh": {
-        "name": "SSH"
+        "name": "SSH",
+        "state_attributes": {
+          "ssh_state": {
+            "name": "SSH state",
+            "state": {
+              "running": "Running",
+              "stopped": "Stopped",
+              "managed_externally": "Run by another tool"
+            }
+          },
+          "managed_by": {
+            "name": "Run by"
+          }
+        }
       },
       "maintenance_no_auth": {
         "name": "Agent noAuth"
@@ -1568,6 +1613,9 @@
     },
     "station_busy": {
       "message": "The station is busy with a call. Try again after it ends."
+    },
+    "ssh_managed_externally": {
+      "message": "SSH on the station is run by another tool ({manager}). Switch it on or off with that tool."
     },
     "gui_function_patch_required": {
       "message": "This action requires the {model} Display patch. Enable and apply the Display patch in the integration options first."
@@ -1689,10 +1737,12 @@
           },
           "ssh_install": {
             "title": "Reinstall {model} device agent over SSH",
-            "description": "This installed agent cannot update itself yet. Home Assistant will log in with the factory login of the {model}, or with the SSH credentials entered here once the device refused it, to install the packaged agent, then refresh only active display and firewall patches when the packaged patch source changed. The SSH credentials are not stored. If you use local Ring Call handling, also verify the Home Assistant media-user setup in the integration options after the update.\n\nInstalled: {installed_version} (API {installed_api_version}, bundle {installed_bundle_hash})\nPackaged: {available_version} (API {available_api_version}, bundle {available_bundle_hash})\nUpdate path: {update_path}\nDisplay patch status: {qml_patch_status}\nReason: {reason}",
+            "description": "This installed agent cannot update itself yet. Home Assistant will log in with the factory login of the {model}, or with the SSH credentials or private key entered here once the device refused it, to install the packaged agent, then refresh only active display and firewall patches when the packaged patch source changed. The SSH credentials and the key are not stored. If you use local Ring Call handling, also verify the Home Assistant media-user setup in the integration options after the update.\n\nInstalled: {installed_version} (API {installed_api_version}, bundle {installed_bundle_hash})\nPackaged: {available_version} (API {available_api_version}, bundle {available_bundle_hash})\nUpdate path: {update_path}\nDisplay patch status: {qml_patch_status}\nReason: {reason}",
             "data": {
               "bootstrap_ssh_username": "SSH username",
-              "bootstrap_ssh_password": "SSH password"
+              "bootstrap_ssh_password": "SSH password",
+              "bootstrap_ssh_key": "SSH private key (optional)",
+              "bootstrap_ssh_key_passphrase": "Key passphrase (optional)"
             }
           }
         },
@@ -1704,7 +1754,13 @@
           "update_root_readonly_failed": "The update could not return the root filesystem (/) to read-only. The final device state is uncertain; successful rollback is not confirmed. Keep recovery files and check the agent and filesystem state before any further update.",
           "update_apply_failed": "The agent reported a generic update failure; the cause and final device state are unknown. If you previously remounted / writable manually, a normal device restart may help. Check the device state before retrying; this error does not confirm rollback.",
           "update_verify_failed": "The update was sent, but the agent still reports an older or incompatible bundle.",
-          "ssh_login_refused": "The {model} refused the SSH login. Enter the SSH user and password of the device."
+          "ssh_login_refused": "The {model} refused the SSH login. Enter the SSH user and password of the device.",
+          "invalid_ssh_key": "The private key could not be read. Paste the whole key including its BEGIN and END lines, and its passphrase if it has one.",
+          "ssh_user_not_root": "This SSH user has no root rights. Log in as root or root2, not as bticino2.",
+          "ssh_unreachable": "The {model} does not answer on SSH (port 22). SSH on the station is off or blocked; check the address and that the root tool turned SSH on.",
+          "ssh_password_login_disabled": "The {model} accepts no password login, only SSH keys. Paste the private key the root tool set up, or build the image with a password login.",
+          "firewall_hook_changed": "The firewall start script of the {model} (/etc/network/if-pre-up.d/iptables) was changed by something else after the agent added its ports, so the saved original no longer matches it. The script was left as it is. Restore it, or remove the agent's block from it, then retry.",
+          "not_a_bticino_station": "The device at this address is not a BTicino station. Nothing was written to it. Check the address."
         },
         "abort": {
           "entry_not_loaded": "The BTicino C300X entry is not loaded."

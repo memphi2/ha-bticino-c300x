@@ -52,19 +52,59 @@ def test_init_propagates_failures(tmp_path, action, start_rc, stop_rc, expected,
         assert pid.read_text() == "123\n"
 
 
-# The station's busybox 1.24 start-stop-daemon ignores --retry: --stop sends one
-# TERM and returns at once. The script itself must wait for the old agent to
+# The station's busybox start-stop-daemon (1.24 on 1.7.19) ignores --retry: --stop
+# sends one TERM and returns at once. The script itself must wait for the old agent to
 # exit, and only ever signal a PID that is still the agent binary.
 
 
-def _device_rootfs() -> Path | None:
-    """The 1.7.19 system image of the local Qt 4 setup (scripts/setup_qt4_runtime.py)."""
-    if os.environ.get("C300X_QT4_ROOTFS"):
-        return Path(os.environ["C300X_QT4_ROOTFS"])
+# Each firmware's own system image. On all of them /bin/sh is bash (run as sh,
+# in POSIX mode), start-stop-daemon and usleep are busybox applets and cat, rm
+# and readlink are coreutils; /etc/init.d/functions is the firmware's own, a
+# bash file of Red Hat's initscripts on 1.7.19, 2.0.2 and the C100X, a short
+# one defining status() and killproc() on 3.0.6. The tests run the init script
+# with exactly these programs under qemu-arm.
+FIRMWARES = {
+    # firmware: (folder below C300X_FIRMWARE_WORK, variable naming the folder, busybox, bash)
+    "1.7.19": ("rootfs-1.7.19", "C300X_QT4_ROOTFS", "1.24.1", "4.4.12"),
+    "2.0.2": ("rootfs-2.0.2", "", "1.24.1", "4.4.12"),
+    "3.0.6": ("rootfs-3.0.6", "C300X_QT5_FIRMWARE", "1.35.0", "5.1.16"),
+    "c100x-1.5.8": ("rootfs-c100x-1.5.8", "C100X_QT5_FIRMWARE", "1.27.2", "4.4.12"),
+}
+
+
+def _device_rootfs(firmware: str = "1.7.19") -> Path | None:
+    """The firmware's private system image (C300X_FIRMWARE_WORK, default the sibling c300x-fwpatch/work)."""
+    folder, variable = FIRMWARES[firmware][:2]
+    if variable and os.environ.get(variable):
+        return Path(os.environ[variable])
+    candidate = Path(os.environ.get("C300X_FIRMWARE_WORK", ROOT.parent / "c300x-fwpatch/work")) / folder
+    if candidate.is_dir():
+        return candidate
+    if firmware != "1.7.19":
+        return None
     from scripts.setup_qt4_runtime import runtime_paths
 
     paths = runtime_paths()
     return Path(paths[1]) if paths else None
+
+
+def station_script(source: str, commands: Path, rootfs: Path) -> str:
+    """The init script as the station runs it, with the test's applets first in PATH.
+
+    It sources the firmware's own /etc/init.d/functions, which on 1.7.19,
+    2.0.2 and the C100X sets PATH again and on 3.0.6 defines status() and
+    killproc(); the test's applets are put back in front afterwards.
+    """
+    functions = rootfs / "etc/init.d/functions"
+    assert functions.is_file(), functions
+    loaded = (f". {functions} || exit 97\n"
+              "type status >/dev/null 2>&1 && type killproc >/dev/null 2>&1 || exit 97\n"
+              f"PATH={commands}:$PATH")
+    line = "[ -f /etc/init.d/functions ] && . /etc/init.d/functions"
+    if line in source:
+        source = source.replace(line, loaded)
+    return source.replace("#!/bin/sh", f"#!{commands}/sh", 1).replace(
+        "PATH=/sbin:/usr/sbin:/bin:/usr/bin", f"PATH={commands}:/bin:/usr/bin")
 
 
 STUB_AGENT = r"""
@@ -102,39 +142,64 @@ int main(void) {
 """
 
 
-def _device_init(tmp_path: Path, source: str | None = None):
+def _station_program(rootfs: Path, name: str) -> Path | None:
+    """The file the station runs for a command name, its links followed inside the image."""
+    for folder in ("bin", "sbin", "usr/bin", "usr/sbin"):
+        path = rootfs / folder / name
+        for _ in range(8):
+            if not path.is_symlink():
+                break
+            target = os.readlink(path)
+            path = rootfs / target.lstrip("/") if target.startswith("/") else path.parent / target
+        if path.is_file() and not path.is_symlink():
+            return path
+    return None
+
+
+def _device_init(tmp_path: Path, source: str | None = None, firmware: str = "1.7.19"):
     import shutil
     import socket
 
-    rootfs = _device_rootfs()
+    rootfs = _device_rootfs(firmware)
     qemu, compiler = shutil.which("qemu-arm"), shutil.which("cc")
     busybox = rootfs / "bin/busybox.nosuid" if rootfs else None
     if not qemu or not compiler or busybox is None or not busybox.is_file():
-        pytest.skip("needs qemu-arm, cc and the station's busybox (scripts/setup_qt4_runtime.py)")
+        pytest.skip(f"needs qemu-arm, cc and the {firmware} system image (C300X_FIRMWARE_WORK)")
+    assert f"BusyBox v{FIRMWARES[firmware][2]} ".encode() in busybox.read_bytes(), busybox
+    # Only the libraries: qemu would otherwise read the image's empty /proc.
+    sysroot = tmp_path / "sysroot"
+    sysroot.mkdir()
+    for part in ("lib", "usr"):
+        (sysroot / part).symlink_to(rootfs / part)
     commands = tmp_path / "commands"
     commands.mkdir()
     for applet in ("sh", "start-stop-daemon", "readlink", "cat", "usleep", "rm"):
+        program = _station_program(rootfs, applet)
+        assert program is not None, (firmware, applet)
+        if applet == "sh":
+            assert program.name == "bash.bash"
+            assert f"@(#)Bash version {FIRMWARES[firmware][3]}".encode() in program.read_bytes()
+        else:
+            assert program.name == ("busybox.nosuid" if applet in ("start-stop-daemon", "usleep")
+                                    else f"{applet}.coreutils"), (firmware, applet, program)
         wrapper = commands / applet
-        wrapper.write_text(f'#!/bin/sh\nexec {qemu} -L {rootfs} {busybox} {applet} "$@"\n')
+        wrapper.write_text(f'#!/bin/sh\nexec {qemu} -L {sysroot} -E LD_LIBRARY_PATH={rootfs}/lib:{rootfs}/usr/lib '
+                           f'-0 {applet} {program} "$@"\n')
         wrapper.chmod(0o700)
     (tmp_path / "c300x-agent-native.c").write_text(STUB_AGENT)
     subprocess.run([compiler, "-O", "-o", str(tmp_path / "c300x-agent-native"),
                     str(tmp_path / "c300x-agent-native.c")], check=True)
     (tmp_path / "config.json").write_text("{}")
     script = tmp_path / "init"
-    # The emulator falls back to host files, so the station's init functions
-    # would source host locale files; they are not part of this check.
-    script.write_text((source or SCRIPT.read_text()).replace(
-        "[ -f /etc/init.d/functions ] && . /etc/init.d/functions", "").replace(
-        "#!/bin/sh", f"#!{commands}/sh", 1).replace(
-        "PATH=/sbin:/usr/sbin:/bin:/usr/bin", f"PATH={commands}:/bin:/usr/bin"))
+    script.write_text(station_script(source or SCRIPT.read_text(), commands, rootfs))
     script.chmod(0o700)
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]
     log = tmp_path / "agent.log"
+    # The station has no locale files; the emulator would read the host's.
     env = {**os.environ, "C300X_AGENT_DIR": str(tmp_path), "C300X_AGENT_ENV": str(tmp_path / "absent"),
-           "STUB_LOG": str(log), "STUB_PORT": str(port)}
+           "STUB_LOG": str(log), "STUB_PORT": str(port), "NOLOCALE": "1"}
 
     def run(action: str, **extra: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run([str(script), action], capture_output=True, text=True,
@@ -179,8 +244,9 @@ def _reap_all(tmp_path: Path) -> None:
             os.kill(pid, signal.SIGKILL)
 
 
-def test_restart_waits_for_the_old_agent_on_the_station_busybox(tmp_path):
-    run, log, pidfile, _port = _device_init(tmp_path)
+@pytest.mark.parametrize("firmware", FIRMWARES)
+def test_restart_waits_for_the_old_agent_on_the_station_busybox(tmp_path, firmware):
+    run, log, pidfile, _port = _device_init(tmp_path, firmware=firmware)
     try:
         assert run("start").returncode == 0
         first = _wait_started(pidfile, log)
@@ -199,10 +265,11 @@ def test_restart_waits_for_the_old_agent_on_the_station_busybox(tmp_path):
         _reap_all(tmp_path)
 
 
-def test_restart_reports_an_agent_that_does_not_come_up(tmp_path):
+@pytest.mark.parametrize("firmware", FIRMWARES)
+def test_restart_reports_an_agent_that_does_not_come_up(tmp_path, firmware):
     import socket
 
-    run, log, pidfile, port = _device_init(tmp_path)
+    run, log, pidfile, port = _device_init(tmp_path, firmware=firmware)
     with socket.socket() as busy:
         busy.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         busy.bind(("127.0.0.1", port))
@@ -216,10 +283,11 @@ def test_restart_reports_an_agent_that_does_not_come_up(tmp_path):
             _reap_all(tmp_path)
 
 
-def test_stop_kills_an_agent_that_ignores_term_and_spares_a_foreign_pid(tmp_path):
+@pytest.mark.parametrize("firmware", FIRMWARES)
+def test_stop_kills_an_agent_that_ignores_term_and_spares_a_foreign_pid(tmp_path, firmware):
     import time
 
-    run, log, pidfile, _port = _device_init(tmp_path)
+    run, log, pidfile, _port = _device_init(tmp_path, firmware=firmware)
     try:
         assert run("start", STUB_IGNORE_TERM="1").returncode == 0
         agent = _wait_started(pidfile, log)

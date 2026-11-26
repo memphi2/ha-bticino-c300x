@@ -9,6 +9,14 @@ from __future__ import annotations
 
 import base64
 from collections.abc import Mapping
+from typing import Any
+
+from .const import (
+    CONF_BOOTSTRAP_SSH_KEY,
+    CONF_BOOTSTRAP_SSH_KEY_PASSPHRASE,
+    CONF_BOOTSTRAP_SSH_PASSWORD,
+    CONF_BOOTSTRAP_SSH_USERNAME,
+)
 
 _KEY = b"c300x-factory"
 _USERNAME = "EVxfRA=="
@@ -63,3 +71,28 @@ def ssh_login(user_input: dict[str, object] | None, username_key: str, password_
     if not username and not password:
         return factory_ssh_login(model)
     return username, password
+
+
+def install_login(user_input: dict[str, Any] | None, model: str = "") -> dict[str, Any]:
+    """The SSH login fields of an install request from a credential form.
+
+    Nothing typed: the factory login. A private key logs in as the typed
+    user, else as the factory user (also when a password is typed), with the
+    typed password as its fallback and never with the factory password.
+    """
+
+    values = user_input or {}
+    keys = (CONF_BOOTSTRAP_SSH_USERNAME, CONF_BOOTSTRAP_SSH_PASSWORD)
+    key = str(values.get(CONF_BOOTSTRAP_SSH_KEY, "") or "").strip()
+    factory = uses_factory_login(values, *keys)
+    username, password = ssh_login(values, *keys, model)
+    if key and not username:
+        username = factory_ssh_login(model)[0]
+    return {
+        "ssh_username": username,
+        "ssh_password": "" if key and factory else password,
+        "ssh_private_key": key,
+        "ssh_key_passphrase": str(values.get(CONF_BOOTSTRAP_SSH_KEY_PASSPHRASE, "") or "") if key else "",
+        "factory_login": factory and not key,
+        "device_model": model,
+    }

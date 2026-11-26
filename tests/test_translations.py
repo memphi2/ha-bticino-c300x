@@ -14,7 +14,7 @@ TRANSLATIONS = INTEGRATION / "translations"
 def test_localized_translation_files_match_english_keys() -> None:
     english = _load_json(TRANSLATIONS / "en.json")
 
-    for language in ("de", "it", "fr"):
+    for language in ("de", "it", "fr", "es"):
         localized = _load_json(TRANSLATIONS / f"{language}.json")
         assert _leaf_paths(localized) == _leaf_paths(english)
 
@@ -25,6 +25,7 @@ ACTIVATIONS_HINT = {
     "de": ("Weitere Türschlösser und Lichter", "legst du hier an"),
     "fr": ("Les serrures et lumières supplémentaires", "s'ajoutent ici"),
     "it": ("Serrature e luci aggiuntive", "si aggiungono qui"),
+    "es": ("más cerraduras y luces", "Aquí se añaden"),
 }
 
 
@@ -76,6 +77,7 @@ SPEAKER_PREEMPTED = {
     "de": "Von einem Ruf oder der Kameraansicht unterbrochen",
     "fr": "Interrompu par un appel ou l'affichage caméra",
     "it": "Interrotto da una chiamata o dalla vista telecamera",
+    "es": "Interrumpido por una llamada o una vista de cámara",
 }
 
 
@@ -180,7 +182,7 @@ def test_display_patch_help_says_that_the_alarmo_settings_are_kept() -> None:
             data["config"]["step"]["reconfigure_dashboard"]["data_description"]["device_ui_enabled"],
             data["options"]["step"]["dashboard"]["data_description"]["device_ui_enabled"],
         ]
-        actions_word = {"de": "Aktionen", "fr": "actions", "it": "azioni"}.get(
+        actions_word = {"de": "Aktionen", "fr": "actions", "it": "azioni", "es": "acciones"}.get(
             path.stem, "action"
         )
         for text in texts:
@@ -195,6 +197,7 @@ STAY_OPEN_WORDING = {
     "de": ("Seite im Bildschirm-Standby offen lassen", "Standby", "Alarm-Seite"),
     "fr": ("Garder la page ouverte pendant la veille de l'écran", "veille", "Alarme"),
     "it": ("Tenere aperta la pagina durante lo standby dello schermo", "standby", "Allarme"),
+    "es": ("Mantener la página abierta con la pantalla en reposo", "reposo", "Alarma"),
 }
 
 
@@ -305,6 +308,8 @@ def test_fixable_agent_update_repair_uses_ha_issue_fix_flow_schema() -> None:
         assert set(_path_value(ssh_install, "data")) == {
             "bootstrap_ssh_username",
             "bootstrap_ssh_password",
+            "bootstrap_ssh_key",
+            "bootstrap_ssh_key_passphrase",
         }
         assert _path_value(fix_flow, "error")["ssh_install_failed"]
         assert _path_value(fix_flow, "abort")["entry_not_loaded"]
@@ -723,6 +728,7 @@ def test_camera_quality_help_is_brief_and_preserves_reboot_and_runtime_details()
         "de": ("Gerät automatisch neu", "etwa eine Minute"),
         "fr": ("redémarre automatiquement l'appareil", "environ une minute"),
         "it": ("riavvia automaticamente il dispositivo", "circa un minuto"),
+        "es": ("reinicia automáticamente el dispositivo", "un minuto"),
     }
     for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
         step = _load_json(path)["options"]["step"]["camera_quality"]
@@ -741,6 +747,7 @@ def test_camera_quality_size_help_explains_agent_dependent_optional_size() -> No
         "de": ("Firmware", "installiertem Geräte-Agent", "Optionales", "Proportionen", "wenn angeboten"),
         "fr": ("firmware", "agent installé", "option", "proportions", "si proposée"),
         "it": ("firmware", "agente installato", "opzione", "proporzioni", "se disponibile"),
+        "es": ("firmware", "agente del dispositivo instalado", "opcional", "proporciones", "cuando se ofrece"),
     }
     for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
         step = _load_json(path)["options"]["step"]["camera_quality"]
@@ -911,9 +918,9 @@ def test_the_busy_station_message_is_plain_in_every_language() -> None:
         path.stem: _load_json(path)["exceptions"]["station_busy"]["message"]
         for path in TRANSLATIONS.glob("*.json")
     }
-    assert set(messages) == {"de", "en", "fr", "it"}
+    assert set(messages) == {"de", "en", "es", "fr", "it"}
     assert messages["en"] == "The station is busy with a call. Try again after it ends."
-    assert len(set(messages.values())) == 4
+    assert len(set(messages.values())) == 5
     for language, message in messages.items():
         # No agent, error code or HTTP wording reaches the user.
         assert not re.search(r"agent|409|station_busy|HTTP", message, re.IGNORECASE), language

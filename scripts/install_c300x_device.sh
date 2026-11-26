@@ -156,6 +156,15 @@ else
     "$ROOT_DIR/scripts/device_file_strip.py" --out "$QML_STAGE_DIR" >/dev/null
 fi
 
+# As the Home Assistant installer: a host without the vendor's folder is no
+# BTicino station and gets nothing.
+# An answer counts only from a command that succeeded, as there.
+station="$(ssh_cmd "test -d /home/bticino && echo station || echo other")" || station=""
+if [[ "$station" != *station* ]]; then
+    printf 'This host is not a BTicino station (no /home/bticino); nothing was installed.\n' >&2
+    exit 1
+fi
+
 # This installer knows the Classe 300X only. A Classe 100X is set up through
 # Home Assistant, which asks for it explicitly and installs its own display.
 if [[ "$(ssh_cmd "if [ -e /home/bticino/bin/gui/BtClass100 ] || grep -q '<webserver_type>[[:space:]]*C100X' /home/bticino/sp/dbfiles_ws.xml 2>/dev/null; then echo c100x; fi" || true)" == *c100x* ]]; then

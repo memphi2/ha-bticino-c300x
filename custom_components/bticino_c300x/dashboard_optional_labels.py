@@ -9,6 +9,8 @@ _LABELS = {
            "Quitter la maison", "Ouvert", "Ferm\u00e9", "Allum\u00e9", "\u00c9teint", "Indisponible", "Alarme", "Pr\u00eat", "Pas pr\u00eat", "Aucune v\u00e9rification s\u00e9lectionn\u00e9e"),
     "it": ("Agenda", "Nessun evento nei prossimi sette giorni", "Calendario non disponibile", "Tutto il giorno",
            "Esci di casa", "Aperto", "Chiuso", "Acceso", "Spento", "Non disponibile", "Allarme", "Pronto", "Non pronto", "Nessun controllo selezionato"),
+    "es": ("Agenda", "No hay eventos en los pr\u00f3ximos siete d\u00edas", "Calendario no disponible", "Todo el d\u00eda",
+           "Salir de casa", "Abierto", "Cerrado", "Encendido", "Apagado", "No disponible", "Alarma", "Lista", "No lista", "Ninguna comprobaci\u00f3n seleccionada"),
 }
 _KEYS = ("agenda", "empty", "calendar_error", "all_day", "leave_home", "open", "closed",
          "on", "off", "unavailable", "alarm", "ready", "not_ready", "no_checks")
@@ -16,7 +18,8 @@ _KEYS = ("agenda", "empty", "calendar_error", "all_day", "leave_home", "open", "
 
 def optional_labels(language: str) -> dict[str, str]:
     labels = dict(zip(_KEYS, _LABELS.get(language, _LABELS["en"]), strict=True))
-    labels["confirm"] = {"de": "Best\u00e4tigen", "fr": "Confirmer", "it": "Conferma"}.get(language, "Confirm")
-    labels["cancel"] = {"de": "Abbrechen", "fr": "Annuler", "it": "Annulla"}.get(language, "Cancel")
-    labels["loading"] = {"de": "Termine werden geladen", "fr": "Chargement des rendez-vous", "it": "Caricamento eventi"}.get(language, "Loading events")
+    labels["confirm"] = {"de": "Best\u00e4tigen", "fr": "Confirmer", "it": "Conferma", "es": "Confirmar"}.get(language, "Confirm")
+    labels["cancel"] = {"de": "Abbrechen", "fr": "Annuler", "it": "Annulla", "es": "Cancelar"}.get(language, "Cancel")
+    labels["loading"] = {"de": "Termine werden geladen", "fr": "Chargement des rendez-vous", "it": "Caricamento eventi",
+                         "es": "Cargando eventos"}.get(language, "Loading events")
     return labels

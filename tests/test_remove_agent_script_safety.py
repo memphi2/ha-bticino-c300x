@@ -47,7 +47,8 @@ def local_device(tmp_path):
            "C300X_QML_GUI_DIR": str(gui), "C300X_QML_SOURCE_DIR": str(SOURCE_DIR),
            "C300X_QML_BACKUP_DIR": str(backup / "original/gui/skins/default"),
            "C300X_QML_NO_REMOUNT": "1", "C300X_QML_RELOAD_GUI": "0",
-           "C300X_SSH_INIT": str(commands / "ssh-init"), "C300X_REBOOT": str(commands / "reboot")}
+           "C300X_SSH_INIT": str(commands / "ssh-init"), "C300X_REBOOT": str(commands / "reboot"),
+           "C300X_LEGACY_MQTT_BRIDGE": str(tmp_path / "etc/tcpdump2mqtt/TcpDump2Mqtt")}
     for key in ("C300X_INIT_SCRIPT", "C300X_INIT_LINK", "C300X_IPTABLES", "C300X_IPTABLES6"):
         path = tmp_path / key
         path.write_text("original\n")

@@ -24,17 +24,14 @@ Install integration -> add the station -> install the device agent -> choose opt
 
 The integration cannot root a stock station. This project provides no firmware
 images, firmware extraction output, APKs, exploits, rooting instructions or
-vendor files. Rooting is described by the community project
-[fquinto/bticinoClasse300x](https://github.com/fquinto/bticinoClasse300x), a
-third-party project that is not part of this project and is used at your own
-risk; flashing a station can brick it. If a separate rooting or SSH-enablement
-workflow asks for a firmware target, use `1.7.19`. A station on `2.0.2` or
-`3.0.6` needs a workflow made for that firmware. Dave describes one in
-[davemajor/c300x-root](https://github.com/davemajor/c300x-root), also a
-third-party project used at your own risk; it works on the circuit board over
-a serial console and USB recovery and can destroy the station. A C100X needs a
-working privileged SSH login before the first installation. Everything is used
-at your own risk and without warranty.
+vendor files. SSH can be enabled with the third-party projects
+[fquinto/bticinoClasse300x](https://github.com/fquinto/bticinoClasse300x)
+(C300X `1.7.x`), [davemajor/c300x-root](https://github.com/davemajor/c300x-root)
+(C300X `2.0.2` and `3.0.6`) and
+[daniel-sc/bticino-c100x-firmware-tools](https://github.com/daniel-sc/bticino-c100x-firmware-tools)
+(C100X `1.5.8`), at your own risk and without warranty; flashing can brick the
+station. The integration assumes a clean firmware: enable only SSH, no camera,
+MQTT or other extras.
 
 ### Firmware 3.0.6
 
@@ -106,17 +103,31 @@ The device agent is a small program on the station that Home Assistant talks
 to. What happens next depends on what Home Assistant finds:
 
 - **No agent:** setup offers **Install native agent on the C300X/C100X**; the
-  model is not known yet. Use it only on a rooted or SSH-enabled station. Home Assistant logs in
-  over SSH with the station's factory root login and asks for an SSH user and
-  password only if the station refuses it. While the model is still unknown it
-  tries the C300X factory login first and the C100X one only after the station
-  refused the first; a connection failure is not retried. A login you enter
-  always takes priority. It installs the agent, a configuration with generated
-  keys, the startup script and the display support files, then keeps the keys
-  itself. SSH credentials are used for this step only and are not stored in the
-  entry, diagnostics or logs.
+  model is not known yet. Use it only on a rooted or SSH-enabled station. Home
+  Assistant logs in over SSH with the station's factory root login first. While
+  the model is still unknown it tries the C300X factory login and the C100X one
+  only after the station refused the first; a connection failure is not
+  retried. If the station refuses the login, setup asks for an SSH user with
+  root rights (`root` or `root2`, never `bticino2`) and its password, an
+  optional private key, or both. The key is pasted as text (OpenSSH or PEM,
+  with its passphrase if it has one): RSA or ECDSA on `1.7.x`, `2.0.2` and the
+  C100X `1.5.8`, Ed25519 as well on `3.0.6`. A login you enter always takes
+  priority. Before it writes anything it checks for the folder `/home/bticino`
+  that every station has; any other host that accepts the login, such as a NAS
+  or a Raspberry Pi, is refused and left unchanged. It installs the agent, a
+  configuration with generated keys, the startup script and the display support
+  files, then keeps the keys itself. SSH credentials and the key are used for
+  this installation only and are not stored in the entry, diagnostics or logs.
 - **Agent already installed:** setup asks for its **Access key** and
   **Maintenance key**. See [Tokens and Access](advanced-maintenance.md#tokens-and-access).
+- **Agent already installed, keys lost** (for example the integration was
+  removed and only its entry had the keys): tick **I do not have the keys:
+  reinstall the agent** in the same dialog. Setup then runs the SSH install
+  step above: it stops the installed agent, writes the bundled agent with newly
+  generated keys and starts it again. The old keys stop working. If this
+  station already has an entry in Home Assistant, that entry gets the new keys
+  and no second entry is created. Display pages, the core media hook and the
+  other settings on the station stay; the station is not restarted.
 - **Older agent:** run the **C300X device agent update required** Repair before
   testing camera or calls.
 
@@ -260,7 +271,7 @@ remove the display pages completely as described in
 [Display Patch on Firmware 3.0.6](display.md#display-patch-on-firmware-306);
 older releases cannot remove them.
 
-`3.0.0b1` is the beta of the joint package for the Classe 300X and the Classe
+`3.0.0b2` is the beta of the joint package for the Classe 300X and the Classe
 100X. On a Classe 300X it works like stable 2.10.0. The Classe 100X support is
 experimental and checked offline only; no stable release supports a Classe
 100X, see [Classe 100X](c100x-experimental.md).

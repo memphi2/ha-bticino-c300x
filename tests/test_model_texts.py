@@ -56,13 +56,35 @@ def text(lang: str, *path: str, model: str) -> str:
 # are not his and need no entry here.
 ADDED_SINCE_2_10_0 = frozenset({
     "config/abort/model_mismatch",
+    "config/abort/reinstall_entry_updated",
+    "config/abort/station_entry_updated",
     "config/abort/unsupported_display",
     "config/error/c100x_confirmation_required",
     "config/error/device_model_incompatible",
+    "config/error/firewall_hook_changed",
     "config/error/installer_firewall_hook_unsupported",
+    "config/error/invalid_ssh_key",
+    "config/error/not_a_bticino_station",
+    "config/error/ssh_password_login_disabled",
+    "config/error/ssh_unreachable",
+    "config/error/ssh_user_not_root",
+    "config/step/agent_auth/data/reinstall_agent",
+    "config/step/agent_auth/data_description/reinstall_agent",
+    "config/step/bootstrap_install/data/bootstrap_ssh_key",
+    "config/step/bootstrap_install/data/bootstrap_ssh_key_passphrase",
+    "config/step/bootstrap_install/data_description/bootstrap_ssh_key",
     "config/step/c100x_experimental/data/c100x_experimental",
     "config/step/c100x_experimental/description",
     "config/step/c100x_experimental/title",
+    "config/step/reauth_confirm/data/reinstall_agent",
+    "config/step/reauth_confirm/data_description/reinstall_agent",
+    "config/step/reauth_reinstall/data/bootstrap_ssh_key",
+    "config/step/reauth_reinstall/data/bootstrap_ssh_key_passphrase",
+    "config/step/reauth_reinstall/data/bootstrap_ssh_password",
+    "config/step/reauth_reinstall/data/bootstrap_ssh_username",
+    "config/step/reauth_reinstall/data_description/bootstrap_ssh_key",
+    "config/step/reauth_reinstall/description",
+    "config/step/reauth_reinstall/title",
     "device/outdoor_unit/name",
     "entity/button/activate_display_pages/name",
     "entity/button/door/name",
@@ -76,7 +98,13 @@ ADDED_SINCE_2_10_0 = frozenset({
     "entity/sensor/call/state/idle",
     "entity/sensor/call/state/ringing",
     "entity/sensor/call/state/viewing",
+    "entity/switch/maintenance_ssh/state_attributes/managed_by/name",
+    "entity/switch/maintenance_ssh/state_attributes/ssh_state/name",
+    "entity/switch/maintenance_ssh/state_attributes/ssh_state/state/managed_externally",
+    "entity/switch/maintenance_ssh/state_attributes/ssh_state/state/running",
+    "entity/switch/maintenance_ssh/state_attributes/ssh_state/state/stopped",
     "exceptions/call_not_current/message",
+    "exceptions/ssh_managed_externally/message",
     "exceptions/target_unsupported/message",
     "exceptions/unit_video_unsupported/message",
     "exceptions/unknown_unit/message",
@@ -84,6 +112,14 @@ ADDED_SINCE_2_10_0 = frozenset({
     "issues/c100x_display_boot_check_failed/title",
     "issues/c100x_display_rolled_back/description",
     "issues/c100x_display_rolled_back/title",
+    "issues/device_agent_update_required/fix_flow/error/firewall_hook_changed",
+    "issues/device_agent_update_required/fix_flow/error/invalid_ssh_key",
+    "issues/device_agent_update_required/fix_flow/error/not_a_bticino_station",
+    "issues/device_agent_update_required/fix_flow/error/ssh_password_login_disabled",
+    "issues/device_agent_update_required/fix_flow/error/ssh_unreachable",
+    "issues/device_agent_update_required/fix_flow/error/ssh_user_not_root",
+    "issues/device_agent_update_required/fix_flow/step/ssh_install/data/bootstrap_ssh_key",
+    "issues/device_agent_update_required/fix_flow/step/ssh_install/data/bootstrap_ssh_key_passphrase",
     "issues/outdoor_units_breaking_change/description",
     "issues/outdoor_units_breaking_change/title",
     "options/abort/unsupported_display",
@@ -91,11 +127,14 @@ ADDED_SINCE_2_10_0 = frozenset({
     "options/step/init/menu_options/dashboard_alarm",
 })
 # Texts of 2.10.0 that read differently now: the SSH package message names the
-# package and the way out, the service name lost the model (neutral names) and
-# the services ask for a target instead of an entry id (3.1.0).
+# package and the way out, the service name lost the model (neutral names), the
+# SSH forms name the optional private key and the services ask for a target
+# instead of an entry id (3.1.0).
 CHANGED_SINCE_2_10_0 = frozenset({
     "config/error/installer_dependency_missing",
+    "config/step/bootstrap_install/description",
     "exceptions/entry_id_required/message",
+    "issues/device_agent_update_required/fix_flow/step/ssh_install/description",
     "services/capture_doorbell_call/name",
 })
 # Texts of 2.10.0 that 3.1.0 removed with the outdoor units and calls: the agent
@@ -137,11 +176,11 @@ REMOVED_SINCE_2_10_0 = frozenset({
 # sha256 over every text of 2.10.0 (f4f75ea3) but the changed and removed ones, per file:
 #   json.dumps({"a/b/c": text}, sort_keys=True, ensure_ascii=False)
 DIGESTS_2_10_0 = {
-    "base": "62bd15b1cf512ddc033dc0d821e1bad18de5062b4e0477f0dbed0150c7d6d50b",
-    "en": "62bd15b1cf512ddc033dc0d821e1bad18de5062b4e0477f0dbed0150c7d6d50b",
-    "de": "99c4eab5b770f4eb09cf4d8b8914ca7f73cea1241d1c58e9c788cecbf20506c8",
-    "it": "5f59ea72b709c5ee253c025fa9dfab13cce0d5943638864eaa3a06430d014307",
-    "fr": "3f69304b997fd19e9a4b40a3b57e2fb9b23e6f72d70cc1c3690629f2df35ce4b",
+    "base": "6b5f80e7a905c052598d6314f4d1dda0074d7dbf141ec15876ca5034574fdcc1",
+    "en": "6b5f80e7a905c052598d6314f4d1dda0074d7dbf141ec15876ca5034574fdcc1",
+    "de": "8d270cfcc488ef70132e1b8516be942dc7eb9097fd58d3580b1ae770eaeac4e8",
+    "it": "e099c26c0f0126a19caeb160e8c06a32c374c75c26926ed031f08094dca91c89",
+    "fr": "227f63ce639fd659804c8733232910c57b1784d04aec4efdd9d176f65db8e855",
 }
 
 

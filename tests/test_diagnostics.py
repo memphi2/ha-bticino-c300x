@@ -61,6 +61,7 @@ from custom_components.bticino_c300x.diagnostics import (
     _same_lan_prefix_guess,
     _self_test_diagnostics,
     _sequence_count,
+    _ssh_diagnostics,
     async_get_config_entry_diagnostics,
 )
 from custom_components.bticino_c300x.media_timeline import C300XMediaTimeline
@@ -823,6 +824,20 @@ def test_diagnostics_report_media_user_and_self_test_failure_reasons() -> None:
     assert self_test["checks"]["firewall"] == {"ok": True, "reason": "media_ports_open"}
     # Per-check details carry device paths and stay out of the report.
     assert "private-users" not in json.dumps(self_test)
+
+
+def test_diagnostics_name_the_tool_that_keeps_ssh_running() -> None:
+    runtime = SimpleNamespace(ssh_status={
+        "running": True, "enabled": True, "state": "managed_externally",
+        "manager": "c300x-ssh", "listening": True, "factory_running": False,
+    })
+    assert _ssh_diagnostics(runtime) == {
+        "running": True, "state": "managed_externally", "manager": "c300x-ssh",
+        "listening": True, "factory_running": False,
+    }
+    assert _ssh_diagnostics(None) is None
+    assert _ssh_diagnostics(SimpleNamespace(ssh_status={})) is None
+    assert _ssh_diagnostics(SimpleNamespace(ssh_status=[])) is None
 
 
 def test_diagnostics_helpers_handle_missing_or_invalid_runtime_data() -> None:

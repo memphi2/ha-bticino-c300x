@@ -6,7 +6,7 @@
 [![Marketplace](https://img.shields.io/badge/Home_Assistant-Marketplace-41BDF5?style=flat-square)](https://contributors.home-assistant.io/marketplace/)
 [![License Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-Beta: **3.0.0b1** (one package for the Classe 300X and the Classe 100X; the Classe 100X support is experimental and checked offline only), including **2.10.0**.
+Beta: **3.0.0b2** (one package for the Classe 300X and the Classe 100X; the Classe 100X support is experimental and checked offline only), including **2.10.0**.
 
 Local-first Home Assistant custom integration for the BTicino **Classe 300X
 (C300X)** and **Classe 100X (C100X)** video door stations. A small agent on
@@ -82,7 +82,8 @@ notes: [Classe 100X](docs/c100x-experimental.md).
 - Home Assistant `2026.10.0` or newer.
 - A supported station from the table above
   ([what differs on firmware 3.0.6](docs/quickstart.md#firmware-306)).
-- Root or SSH access on the station for the first agent installation.
+- Root or SSH access on the station for the first agent installation
+  ([how to enable SSH](docs/quickstart.md#requirements)).
 - A trusted local network between Home Assistant and the station.
 
 This project does not root a stock station and ships no firmware, APKs,
@@ -113,9 +114,9 @@ through the options and adds the card. Later releases: [Update](docs/quickstart.
 
 ### Beta Versions
 
-Betas are opt-in. The current beta, **3.0.0b1**, puts the Classe 300X and the
+Betas are opt-in. The current beta, **3.0.0b2**, puts the Classe 300X and the
 Classe 100X into one package. On a Classe 300X it works like stable 2.10.0,
-with the displayed names changed as the [changelog](CHANGELOG.md) lists. The
+with the changes the [changelog](CHANGELOG.md) lists. The
 Classe 100X support is experimental: it is checked against the original 1.5.8
 firmware files offline only and not yet confirmed on a device. Enable
 **Pre-release** for this repository in Marketplace, or beta versions in HACS.

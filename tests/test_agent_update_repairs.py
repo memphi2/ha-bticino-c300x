@@ -3312,7 +3312,9 @@ def test_ssh_install_uses_the_factory_login_and_asks_only_after_a_refusal(monkey
     assert logins == [factory_ssh_login(model)]
     assert refused["errors"] == {"base": "ssh_login_refused"}
     asked = refused["data_schema"]({})
-    assert set(asked) == {"bootstrap_ssh_username", "bootstrap_ssh_password"}
+    assert set(asked) == {
+        "bootstrap_ssh_username", "bootstrap_ssh_password", "bootstrap_ssh_key", "bootstrap_ssh_key_passphrase",
+    }
 
     asyncio.run(flow.async_step_ssh_install({
         "bootstrap_ssh_username": "admin", "bootstrap_ssh_password": "typed",
@@ -3320,6 +3322,31 @@ def test_ssh_install_uses_the_factory_login_and_asks_only_after_a_refusal(monkey
     assert logins[-1] == ("admin", "typed")
     # The fields stay once asked for, also after another kind of failure.
     assert set(asyncio.run(flow.async_step_ssh_install(None))["data_schema"]({})) == set(asked)
+
+
+def test_ssh_install_asks_for_another_login_when_the_login_has_no_root_rights(monkeypatch) -> None:
+    import custom_components.bticino_c300x.repairs as repairs
+    from custom_components.bticino_c300x.device_installer import C300XDeviceInstallError
+
+    entry = FakeEntry(
+        runtime_data=FakeRuntimeData(FakePatchApi()),
+        data={"agent_host": "192.0.2.60", "agent_token": "t", "maintenance_token": "m"},
+    )
+    entry.runtime_data.agent_update_state = FakeAgentUpdateState()
+    flow = DeviceAgentUpdateRepairFlow(FakeHass(entry), "entry-1")  # type: ignore[arg-type]
+
+    async def install_agent(_request: Any, **_kwargs: Any) -> Any:
+        raise C300XDeviceInstallError("ssh_user_not_root")
+
+    async def ensure_installer_dependencies(_hass: Any) -> None:
+        return None
+
+    monkeypatch.setattr(repairs, "async_install_device_agent", install_agent)
+    monkeypatch.setattr(repairs, "async_ensure_installer_dependencies", ensure_installer_dependencies)
+    flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}  # type: ignore[method-assign]
+    result = asyncio.run(flow.async_step_ssh_install({}))
+    assert result["errors"] == {"base": "ssh_user_not_root"}
+    assert "bootstrap_ssh_username" in result["data_schema"]({})
 
 
 def test_the_core_repair_runs_the_whole_owed_display_followup_and_clears_it() -> None:

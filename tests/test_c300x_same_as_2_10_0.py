@@ -22,6 +22,7 @@ import os
 import re
 import shutil
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -72,9 +73,25 @@ PATCH_OUTPUT_2_10_0 = {
 }
 
 SIDE_BY_SIDE_2_10_0 = "5dc87a9ad493adcc11e4515f139a4545f1f103cbdd9f0526ceecb3c3b4a9cdb3"
-# Output files whose content was changed on purpose after 2.10.0.
-PATCH_OUTPUT_CHANGED: frozenset[str] = frozenset()
+# Output files whose content was changed on purpose after 2.10.0: the display
+# texts in Spanish (3.0.0b2). Without them each file is the one of 2.10.0.
+PATCH_OUTPUT_CHANGED: frozenset[str] = frozenset({"Settings.qml", "HomePage.qml", "js/c300x_i18n.js"})
 PATCH_OUTPUT_ADDED: frozenset[str] = frozenset()
+SPANISH = (
+    (re.compile(r'\(trsl\.language === "es" \? "[^"]*" : ("[^"]*")\)'), r"\1"),
+    (re.compile(r"\nvar (?:WEATHER_)?ES = \{\n.*?\n\}\n", re.S), ""),
+    (re.compile(r'    if \((?:raw\.indexOf\("es"\) === 0|lang === "es")\) \{\n        return [^\n]+\n    \}\n'), ""),
+    (re.compile(r",\n    es: \{.*?\}(?=\n\})", re.S), ""),
+)
+
+
+def without_spanish(data: bytes) -> bytes:
+    """The text as 2.10.0 wrote it: every Spanish table and every Spanish choice taken out."""
+
+    text = data.decode("utf-8")
+    for pattern, replacement in SPANISH:
+        text = pattern.sub(replacement, text)
+    return text.encode("utf-8")
 
 
 def test_the_patch_writes_the_display_files_of_2_10_0() -> None:
@@ -82,7 +99,39 @@ def test_the_patch_writes_the_display_files_of_2_10_0() -> None:
     assert set(current) - PATCH_OUTPUT_ADDED == set(PATCH_OUTPUT_2_10_0)
     differing = {name for name, pin in PATCH_OUTPUT_2_10_0.items() if current[name] != pin}
     assert differing == PATCH_OUTPUT_CHANGED
-    assert patch.SIDE_BY_SIDE_HOME_PAGE_SHA256 == SIDE_BY_SIDE_2_10_0
+    assert patch.SIDE_BY_SIDE_HOME_PAGE_SHA256 != SIDE_BY_SIDE_2_10_0, "the Alarm button has a Spanish name"
+
+
+@pytest.mark.parametrize("dynamic", ["1", "0"])
+def test_the_changed_display_files_differ_from_2_10_0_only_by_spanish(tmp_path: Path, dynamic: str) -> None:
+    gui = tmp_path / "gui"
+    gui.mkdir()
+    patch._write_original_gui(gui)
+    status = patch._run_qml_patch(tmp_path, gui, tmp_path / "backups", "apply",
+                                  env_overrides={"C300X_QML_DYNAMIC_HOME_PAGE": dynamic})
+    assert status["state"] == "patched"
+    for name in sorted(PATCH_OUTPUT_CHANGED):
+        data = (gui / name).read_bytes()
+        assert without_spanish(data) != data, name
+        expected = SIDE_BY_SIDE_2_10_0 if (name, dynamic) == ("HomePage.qml", "0") else PATCH_OUTPUT_2_10_0[name]
+        assert hashlib.sha256(without_spanish(data)).hexdigest() == expected, name
+
+
+# The forwarding label of the media user (media-user-label-apply), on the
+# same original display files.
+CALL_BLOCK_POPUP_2_10_0 = "0f18ec26daf96244a4a2cc91f7c10c8d65ba539153d2196bb93f8fb16d4c6711"
+
+
+def test_the_forwarding_label_differs_from_2_10_0_only_by_spanish(tmp_path: Path) -> None:
+    gui = tmp_path / "gui"
+    gui.mkdir()
+    patch._write_original_gui(gui)
+    status = patch._run_qml_patch(tmp_path, gui, tmp_path / "backups", "media-user-label-apply")
+    assert status["media_user_label_state"] == "patched"
+    data = (gui / "Components/Settings/CallBlockPopup.qml").read_bytes()
+    assert without_spanish(data) != data, "the label has a Spanish text"
+    # The German, French, Italian and English texts and all the rest: as 2.10.0 wrote them.
+    assert hashlib.sha256(without_spanish(data)).hexdigest() == CALL_BLOCK_POPUP_2_10_0
 
 
 def test_the_shared_display_sources_do_not_name_a_model() -> None:
@@ -103,6 +152,8 @@ FIRMWARE_PATCH_2_10_0 = {
     "2.0.2": "2c1231858c338b1d4eedeb725355e661035c46d81c2e993e744cfcc15d6ef147",
     "3.0.6": "a94d01782f4bbf75f30331e0dad42f73efb6677e3c9132204cf517af5acc4513",
 }
+# What the Spanish display texts changed in the applied skin.
+FIRMWARE_SPANISH = ["HomePage.qml", "Settings.qml", "js/c300x_i18n.js"]
 
 
 def _skin(firmware: str) -> Path | None:
@@ -113,12 +164,16 @@ def _skin(firmware: str) -> Path | None:
     return Path(work) / f"rootfs-{firmware}/home/bticino/bin/gui/skins/default" if work else None
 
 
-def _files(root: Path) -> dict[str, str]:
-    return {path.relative_to(root).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+def _files(root: Path, read: Callable[[Path], bytes] = Path.read_bytes) -> dict[str, str]:
+    return {path.relative_to(root).as_posix(): hashlib.sha256(read(path)).hexdigest()
             for path in sorted(root.rglob("*")) if path.is_file()}
 
 
-def firmware_patch_record(skin: Path, top: Path, *, qt5: bool) -> dict[str, object]:
+def _without_spanish(path: Path) -> bytes:
+    return without_spanish(path.read_bytes()) if path.suffix in {".qml", ".js"} else path.read_bytes()
+
+
+def firmware_patch_record(skin: Path, top: Path, *, qt5: bool) -> tuple[dict[str, object], list[str]]:
     gui, backups = top / "gui", top / "backups"
     answers = []
     if qt5:
@@ -128,11 +183,13 @@ def firmware_patch_record(skin: Path, top: Path, *, qt5: bool) -> dict[str, obje
         shutil.copytree(skin, gui)
     for action in ("core-apply", "apply", "status"):
         answers.append(patch._run_qml_patch(top, gui, backups, action))
-    applied = _files(gui)
+    applied = _files(gui, _without_spanish)
+    spanish = sorted(path.relative_to(gui).as_posix() for path in gui.rglob("*")
+                     if path.is_file() and _without_spanish(path) != path.read_bytes())
     for action in ("restore", "core-restore", "restore-all", "status"):
         answers.append(patch._run_qml_patch(top, gui, backups, action))
     return {"applied": applied, "restored": _files(gui), "backups": _files(backups),
-            "answers": [json.loads(json.dumps(answer).replace(str(top), "<TMP>")) for answer in answers]}
+            "answers": [json.loads(json.dumps(answer).replace(str(top), "<TMP>")) for answer in answers]}, spanish
 
 
 @pytest.mark.parametrize("firmware", sorted(FIRMWARE_PATCH_2_10_0))
@@ -140,8 +197,9 @@ def test_the_patch_on_the_real_skin_is_byte_identical_to_2_10_0(firmware: str, t
     skin = _skin(firmware)
     if skin is None or not skin.is_dir():
         pytest.skip(f"firmware {firmware} skin not available (C300X_FIRMWARE_WORK, C300X_QT5_SKIN)")
-    record = firmware_patch_record(skin, tmp_path, qt5=firmware == "3.0.6")
+    record, spanish = firmware_patch_record(skin, tmp_path, qt5=firmware == "3.0.6")
     assert [answer.get("state") for answer in record["answers"]][-6:-4] == ["patched", "patched"]
+    assert spanish == FIRMWARE_SPANISH, "the files that differ from 2.10.0 by their Spanish texts"
     assert _digest(record) == FIRMWARE_PATCH_2_10_0[firmware]
 
 

@@ -192,7 +192,7 @@ def test_all_off_keeps_global_intent_and_position_without_a_visible_slot():
     assert position.description["suggested_value"] == 2
 
 
-@pytest.mark.parametrize("filename", ["strings.json", *[f"translations/{language}.json" for language in ("en", "de", "fr", "it")]])
+@pytest.mark.parametrize("filename", ["strings.json", *[f"translations/{language}.json" for language in ("en", "de", "fr", "it", "es")]])
 def test_all_energy_sections_translate_every_toggle(filename):
     path = Path(__file__).resolve().parents[1] / "custom_components/bticino_c300x" / filename
     catalog = json.loads(path.read_text(encoding="utf-8"))
@@ -217,7 +217,7 @@ def test_all_energy_sections_translate_every_toggle(filename):
     assert "energy_views" not in catalog["selector"]
 
 
-@pytest.mark.parametrize("language", ["en", "de", "fr", "it"])
+@pytest.mark.parametrize("language", ["en", "de", "fr", "it", "es"])
 def test_consumers_runtime_labels_replace_retired_view(language):
     labels = ENERGY_LABELS_BY_LANGUAGE[language]
     assert all(labels[key] for key in ("consumers", "consumers_empty", "consumers_incomplete"))

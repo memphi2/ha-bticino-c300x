@@ -33,6 +33,10 @@ _QT5_DISPLAY_MARKER = "/usr/lib/libQt5Core.so.5"
 _C100X_DISPLAY_MARKER = "/home/bticino/bin/gui/BtClass100"
 # The vendor's web server file, in which the station names its model.
 _MODEL_FILE = "/home/bticino/sp/dbfiles_ws.xml"
+# The vendor's folder, on every station of every firmware. A host without it
+# is no BTicino station and gets nothing from the installer.
+_STATION_HOME = "/home/bticino"
+NOT_A_BTICINO_STATION = "not_a_bticino_station"
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,6 +112,12 @@ def entry_profile(entry: Any) -> DeviceProfile:
     return setup_profile(
         getattr(runtime, "agent_info", None), getattr(runtime, "qml_patch_status", None)
     )
+
+
+def is_bticino_station(run: Callable[[str], str], quote: Callable[[str], str]) -> bool:
+    """True only when the host answers that it has the vendor's folder."""
+
+    return "station" in run(f"test -d {quote(_STATION_HOME)} && echo station || echo other").split()
 
 
 def station_profile(run: Callable[[str], str], quote: Callable[[str], str]) -> DeviceProfile:

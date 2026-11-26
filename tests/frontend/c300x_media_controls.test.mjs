@@ -415,7 +415,7 @@ test("mode labels are text-only; volume normalization and language updates are s
 
 test("four standalone translations cover controls and follow HA language fallback conventions", () => {
   const keys = Object.keys(C300X_MEDIA_TRANSLATIONS.en).sort();
-  for (const language of ["en", "de", "fr", "it"]) {
+  for (const language of ["en", "de", "fr", "it", "es"]) {
     assert.deepEqual(Object.keys(C300X_MEDIA_TRANSLATIONS[language]).sort(), keys);
     assert.ok(Object.values(C300X_MEDIA_TRANSLATIONS[language]).every((value) => typeof value === "string" && value));
   }

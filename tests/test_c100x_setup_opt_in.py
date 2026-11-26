@@ -5,10 +5,10 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+import station_flow_harness
 from homeassistant.const import CONF_NAME
 
 from custom_components.bticino_c300x import config_flow, config_flow_auth
@@ -30,7 +30,7 @@ C100X_REFUSAL = C300XDeviceInstallError("c100x_confirmation_required")
 
 def _auth_flow(monkeypatch, setup):
     flow = BticinoC300XConfigFlow()
-    flow.hass = SimpleNamespace()
+    flow.hass = station_flow_harness.hass()
     flow.context = {}
     flow._setup_connection = dict(CONNECTION)
     validate = AsyncMock(return_value=(setup, {}))
@@ -88,7 +88,7 @@ def test_a_c100x_with_a_running_agent_waits_for_the_confirmation(monkeypatch, se
 
 def _bootstrap_flow(monkeypatch, installer):
     flow = BticinoC300XConfigFlow()
-    flow.hass = SimpleNamespace()
+    flow.hass = station_flow_harness.hass()
     flow.context = {"source": "user"}
     flow._setup_connection = dict(CONNECTION)
     flow._async_abort_if_manual_setup_duplicate = AsyncMock()
@@ -153,7 +153,7 @@ def test_another_install_error_is_shown_as_before(monkeypatch):
 
 def test_the_question_without_a_station_returns_to_the_start(monkeypatch):
     flow = BticinoC300XConfigFlow()
-    flow.hass = SimpleNamespace()
+    flow.hass = station_flow_harness.hass()
     flow.context = {}
     flow.async_step_user = AsyncMock(return_value={"step_id": "user"})
     assert asyncio.run(flow.async_step_c100x_experimental({CONF_C100X_EXPERIMENTAL: True})) == {"step_id": "user"}

@@ -18,6 +18,7 @@ pending check; a wrong proof plans none.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import ipaddress
@@ -25,6 +26,7 @@ import json
 import logging
 import re
 import secrets
+import socket
 from collections.abc import Callable, Coroutine
 from time import monotonic
 from typing import Any
@@ -60,6 +62,7 @@ _MAX_REPLY_BYTES = 4096
 # The agent refuses proofs for shorter tokens: they could be guessed offline.
 _MIN_TOKEN_LENGTH = 32
 _PROOF = re.compile(r"[0-9a-f]{64}")
+_RESOLVE_SECONDS = 5.0
 
 
 def identity_proof(token: str, device_id: str, host: str, port: int, nonce: str) -> str:
@@ -267,6 +270,48 @@ def _proves(
     ):
         return False
     return hmac.compare_digest(proof, identity_proof(token, device_id, host, port, nonce))
+
+
+async def async_ipv4_addresses(host: str) -> list[str]:
+    """The routable IPv4 addresses a saved host stands for, at most four.
+
+    A proof binds the address the agent saw itself reached on, its IPv4
+    address: a host name is resolved first. An IPv6 address, or a name
+    without an IPv4 address, gives none.
+    """
+    host = str(host or "").strip()
+    literal = _routable_ipv4(host)
+    if literal is not None:
+        return [literal]
+    try:
+        ipaddress.ip_address(host.strip("[]"))
+    except ValueError:
+        pass
+    else:
+        return []
+    try:
+        async with asyncio.timeout(_RESOLVE_SECONDS):
+            infos = await asyncio.get_running_loop().getaddrinfo(
+                host, None, family=socket.AF_INET, type=socket.SOCK_STREAM,
+            )
+    except (OSError, UnicodeError, TimeoutError):
+        return []
+    found: list[str] = []
+    for *_, sockaddr in infos:
+        address = _routable_ipv4(sockaddr[0])
+        if address is not None and address not in found:
+            found.append(address)
+    return found[:4]
+
+
+async def async_identity_proven(
+    hass: Any, host: str, port: int, unique_id: str, token: str,
+) -> bool | None:
+    """Ask IPv4 host:port to prove the identity; None when it gave no proof reply.
+
+    The request carries the nonce only, never the token.
+    """
+    return await _async_identity_proven(hass, host, port, unique_id, token)
 
 
 async def _async_identity_proven(

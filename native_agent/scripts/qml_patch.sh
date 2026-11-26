@@ -46,6 +46,7 @@ HOME_BUTTONS_REQUEST="${C300X_QML_DYNAMIC_HOME_PAGE:-}"
 STAGING_DIR="${C300X_QML_STAGING_DIR:-${TMPDIR:-/tmp}/c300x-qml-patch.$$}"
 CORE_PATCH_FILES="C300XRingerControl.qml js/c300x_ringer.js EventManager.qml"
 MEDIA_USER_LABEL_FILES="Components/Settings/CallBlockPopup.qml"
+RENEWED_LABEL_FILES=
 # The display files this integration adds; every list of them derives from here.
 GENERATED_FEATURE_FILES="C300XSettings.qml js/c300x_maintenance.js Alarm.qml HomeAssistant.qml C300XEnergy.qml C300XEnergyConsumers.qml js/c300x_energy_consumers.js C300XPageNavigation.qml C300XAgenda.qml C300XLeaveHome.qml C300XChecks.qml C300XSituations.qml C300XOptionalPages.qml C300XDetailControl.qml C300XEnergyReadout.qml C300XEnergySums.qml C300XAlerts.qml js/c300x_alerts.js js/c300x_energy.js js/c300x_ha.js js/c300x_i18n.js js/c300x_memos.js"
 FEATURE_PATCH_FILES="Settings.qml MainApp.qml HomePage.qml MemoPage.qml Components/Settings/GeneralsChoice.qml $GENERATED_FEATURE_FILES"
@@ -337,7 +338,21 @@ core_partial_patch_present() {
 
 media_user_label_present() {
     file_contains "$GUI_DIR/Components/Settings/CallBlockPopup.qml" 'Forward calls to Home Assistant' \
-        && file_contains "$GUI_DIR/Components/Settings/CallBlockPopup.qml" 'Calls forwarded to Home Assistant'
+        && file_contains "$GUI_DIR/Components/Settings/CallBlockPopup.qml" 'Calls forwarded to Home Assistant' \
+        && media_user_label_current
+}
+
+media_user_label_current() {
+    label_backup="$BACKUP_DIR/Components/Settings/CallBlockPopup.qml"
+    [ -f "$label_backup" ] || return 0
+    render_call_block_popup "$label_backup" 2>/dev/null \
+        | cmp -s - "$GUI_DIR/Components/Settings/CallBlockPopup.qml"
+}
+
+media_user_label_renewable() {
+    media_user_label_partial_present && ! media_user_label_present \
+        && stock_backup_valid Components/Settings/CallBlockPopup.qml 2>/dev/null \
+        && render_call_block_popup "$BACKUP_DIR/Components/Settings/CallBlockPopup.qml" >/dev/null 2>&1
 }
 
 media_user_label_partial_present() {
@@ -1522,7 +1537,7 @@ render_settings() {
             print "        style: CheckableButtonStyle {"
             print "            defaultImage: \"images/settings/settings-menu_btn.svg\""
             print "            checkedImage: \"images/settings/settings-menu_btn_p.svg\""
-            print "            description: (trsl.language === \"it\" ? \"Integrazione\" : \"Integration\") + trsl.empty"
+            print "            description: (trsl.language === \"it\" ? \"Integrazione\" : (trsl.language === \"es\" ? \"Integración\" : \"Integration\")) + trsl.empty"
             print "        }"
             print "    }"
             print "    PageLoader {"
@@ -1744,7 +1759,7 @@ patch_home_page() {
                 print "                width: buttonPrototype.width * 2 + foobar.spacing"
                 print "                height: buttonPrototype.height"
             }
-            print_home_assistant_button("alarmButton", "alarmButtonVisible", "keylock_icon-small", "sourceSize.width: 46", "trsl.language === \"de\" ? \"Alarmanlage\" : (trsl.language === \"it\" ? \"Allarme\" : (trsl.language === \"fr\" ? \"Alarme\" : \"Alarm\"))", "alarmPage")
+            print_home_assistant_button("alarmButton", "alarmButtonVisible", "keylock_icon-small", "sourceSize.width: 46", "trsl.language === \"de\" ? \"Alarmanlage\" : (trsl.language === \"it\" ? \"Allarme\" : (trsl.language === \"fr\" ? \"Alarme\" : (trsl.language === \"es\" ? \"Alarma\" : \"Alarm\")))", "alarmPage")
             print ""
             print_home_assistant_button("haButton", "haButtonVisible", "call/icon_call-home", "sourceSize.height: 41", "\"Home Assistant\"", "haPage")
             if (layout != "stock") {
@@ -1982,6 +1997,28 @@ patch_memo_page() {
     mv "$temp_file" "$memo_page"
 }
 
+render_call_block_popup() {
+    awk '
+        /message: qsTr\("Calls forwarded to the smartphones in the home"\)/ {
+            sub(/message: qsTr\("Calls forwarded to the smartphones in the home"\) \+ trsl.empty/, "message: (trsl.language === \"de\" ? \"Anrufe an Home Assistant weitergeleitet\" : (trsl.language === \"it\" ? \"Chiamate inoltrate a Home Assistant\" : (trsl.language === \"fr\" ? \"Appels renvoyés vers Home Assistant\" : (trsl.language === \"es\" ? \"Llamadas enviadas a Home Assistant\" : \"Calls forwarded to Home Assistant\")))) + trsl.empty")
+            print
+            message_patched=1
+            next
+        }
+        /\/\/\{text: qsTr\("Forward calls to the smartphones in the home"\).*AnsweringMachine\.InHouseOnly/ {
+            print "                    {text: (trsl.language === \"de\" ? \"Anrufe an Home Assistant\" : (trsl.language === \"it\" ? \"Inoltra chiamate a Home Assistant\" : (trsl.language === \"fr\" ? \"Renvoyer les appels vers Home Assistant\" : (trsl.language === \"es\" ? \"Envía llamadas a Home Assistant\" : \"Forward calls to Home Assistant\")))) + trsl.empty, action: AnsweringMachine.InHouseOnly},"
+            button_patched=1
+            next
+        }
+        { print }
+        END {
+            if (!message_patched || !button_patched) {
+                exit 12
+            }
+        }
+    ' "$1"
+}
+
 patch_call_block_popup() {
     output_dir="${PATCH_OUTPUT_DIR:-$GUI_DIR}"
     popup="$output_dir/Components/Settings/CallBlockPopup.qml"
@@ -1994,25 +2031,7 @@ patch_call_block_popup() {
     fi
     mkdir -p "$output_dir"
     require_clean_call_block_popup "$source_popup"
-    awk '
-        /message: qsTr\("Calls forwarded to the smartphones in the home"\)/ {
-            sub(/message: qsTr\("Calls forwarded to the smartphones in the home"\) \+ trsl.empty/, "message: (trsl.language === \"de\" ? \"Anrufe an Home Assistant weitergeleitet\" : (trsl.language === \"it\" ? \"Chiamate inoltrate a Home Assistant\" : (trsl.language === \"fr\" ? \"Appels renvoyés vers Home Assistant\" : \"Calls forwarded to Home Assistant\"))) + trsl.empty")
-            print
-            message_patched=1
-            next
-        }
-        /\/\/\{text: qsTr\("Forward calls to the smartphones in the home"\).*AnsweringMachine\.InHouseOnly/ {
-            print "                    {text: (trsl.language === \"de\" ? \"Anrufe an Home Assistant\" : (trsl.language === \"it\" ? \"Inoltra chiamate a Home Assistant\" : (trsl.language === \"fr\" ? \"Renvoyer les appels vers Home Assistant\" : \"Forward calls to Home Assistant\"))) + trsl.empty, action: AnsweringMachine.InHouseOnly},"
-            button_patched=1
-            next
-        }
-        { print }
-        END {
-            if (!message_patched || !button_patched) {
-                exit 12
-            }
-        }
-    ' "$source_popup" > "$temp_file"
+    render_call_block_popup "$source_popup" > "$temp_file"
     verify_generated_page \
         "$temp_file" \
         "Components/Settings/CallBlockPopup.qml" \
@@ -2722,6 +2741,17 @@ generate_full_patch_stage() {
     unset PATCH_OUTPUT_DIR
 }
 
+stage_stale_media_user_label() {
+    RENEWED_LABEL_FILES=
+    media_user_label_renewable || return 0
+    mkdir -p "$STAGING_DIR/Components/Settings"
+    PATCH_OUTPUT_DIR="$STAGING_DIR"
+    export PATCH_OUTPUT_DIR
+    patch_call_block_popup
+    unset PATCH_OUTPUT_DIR
+    RENEWED_LABEL_FILES="$MEDIA_USER_LABEL_FILES"
+}
+
 generate_media_user_label_stage() {
     cleanup_staging
     trap cleanup_staging EXIT
@@ -2757,7 +2787,7 @@ apply_feature_stage_changed_count() {
 }
 
 apply_full_stage_changed_count() {
-    changed="$(apply_stage_changed_count $PATCH_FILES)"
+    changed="$(apply_stage_changed_count $PATCH_FILES $RENEWED_LABEL_FILES)"
     for rel in $OBSOLETE_GUI_FILES; do
         if [ -e "$GUI_DIR/$rel" ]; then
             changed=$((changed + 1))
@@ -2781,12 +2811,12 @@ copy_changed_feature_patch_files() {
 }
 
 copy_changed_full_patch_files() {
-    copy_changed_patch_files $PATCH_FILES
+    copy_changed_patch_files $PATCH_FILES $RENEWED_LABEL_FILES
     remove_obsolete_gui_files
 }
 
 copy_changed_core_patch_files() {
-    copy_changed_patch_files $CORE_PATCH_FILES
+    copy_changed_patch_files $CORE_PATCH_FILES $RENEWED_LABEL_FILES
 }
 
 copy_changed_media_user_label_files() {
@@ -2960,7 +2990,8 @@ patch_main_app() {
 
 apply_core_patch_files() {
     generate_core_patch_stage
-    changed_count="$(apply_stage_changed_count $CORE_PATCH_FILES)"
+    stage_stale_media_user_label
+    changed_count="$(apply_stage_changed_count $CORE_PATCH_FILES $RENEWED_LABEL_FILES)"
     apply_generated_patch_if_changed "$changed_count" copy_changed_core_patch_files
     cleanup_staging
 }
@@ -2981,6 +3012,7 @@ apply_feature_patch_files() {
 
 apply_patch_files() {
     generate_full_patch_stage
+    stage_stale_media_user_label
     changed_count="$(apply_full_stage_changed_count)"
     apply_generated_patch_if_changed "$changed_count" copy_changed_full_patch_files
     cleanup_staging

@@ -10,6 +10,7 @@ _LABELS = {
     "de": ("Situationen", "Keine aktiven Hinweise in der Auswahl", "Keine Entit\u00e4ten ausgew\u00e4hlt", "Unbekannt", "Nicht unterst\u00fctzt", "\u00d6ffnet", "Schlie\u00dft", "Offen: {count}"),
     "fr": ("Situations", "Aucun probl\u00e8me actif dans la s\u00e9lection", "Aucune entit\u00e9 s\u00e9lectionn\u00e9e", "Inconnu", "Non pris en charge", "Ouverture", "Fermeture", "En attente : {count}"),
     "it": ("Situazioni", "Nessun problema attivo nella selezione", "Nessuna entit\u00e0 selezionata", "Sconosciuto", "Non supportato", "Apertura", "Chiusura", "Da fare: {count}"),
+    "es": ("Situaciones", "No hay incidencias activas en la selecci\u00f3n", "Ninguna entidad seleccionada", "Desconocido", "No compatible", "Abriendo", "Cerrando", "Pendientes: {count}"),
 }
 
 

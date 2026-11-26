@@ -1,4 +1,4 @@
-import "./c300x-doorbell-call-card.js?v=63428580ad0ea32b";
+import "./c300x-doorbell-call-card.js?v=4e9f95acb10b0270";
 
 const C300X_CARD_TAG = "c300x-doorbell-call-card";
 const C300X_CARD_TYPE = `custom:${C300X_CARD_TAG}`;
@@ -19,6 +19,9 @@ const C300X_METADATA_TRANSLATIONS = {
   },
   it: {
     doorstation_card: "Scheda postazione porta",
+  },
+  es: {
+    doorstation_card: "Tarjeta del videoportero",
   },
 };
 

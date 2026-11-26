@@ -94,7 +94,7 @@ def test_projection_reads_only_selected_entities_and_retains_unknown():
     hass.services.async_call.assert_not_called()
 
 
-@pytest.mark.parametrize("language", ["en", "de", "fr", "it"])
+@pytest.mark.parametrize("language", ["en", "de", "fr", "it", "es"])
 def test_empty_and_confirmed_clear_have_distinct_messages(language):
     hass, entry, _ = environment({"situations_page": {"enabled": True}})
     empty = situations_dashboard_page(hass, entry, language)["situations"]

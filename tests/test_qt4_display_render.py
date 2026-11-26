@@ -139,7 +139,7 @@ def display_text(language: str, key: str) -> str:
 
 
 @pytest.mark.parametrize("reachable", [True, False], ids=["reachable", "not_reachable"])
-@pytest.mark.parametrize("language", ["de", "en", "it", "fr"])
+@pytest.mark.parametrize("language", ["de", "en", "it", "fr", "es"])
 def test_integration_tab_texts_stay_in_their_column_on_qt4(tab, language, reachable):
     """Every text of the tab ends inside the column; the values and the reason keep its 12 px inset.
 
@@ -168,7 +168,7 @@ def test_integration_tab_texts_stay_in_their_column_on_qt4(tab, language, reacha
         assert reason["bottom"] <= first["view"][1], "the reason shows without scrolling"
 
 
-@pytest.mark.parametrize("language", ["de", "en", "it", "fr"])
+@pytest.mark.parametrize("language", ["de", "en", "it", "fr", "es"])
 def test_integration_tab_failed_switch_message_shows_without_scrolling_on_qt4(tab, language):
     """A switch on the first screen that Home Assistant does not save: the message is on that screen.
 
@@ -194,7 +194,7 @@ def test_integration_tab_failed_switch_message_shows_without_scrolling_on_qt4(ta
     assert stages["cleared"]["view"][1] == stages["cleared"]["panel"][3], "without a message the page has the whole tab"
 
 
-@pytest.mark.parametrize("language", ["de", "en", "it", "fr"])
+@pytest.mark.parametrize("language", ["de", "en", "it", "fr", "es"])
 def test_integration_tab_message_keeps_the_end_of_the_page_in_view_on_qt4(tab, language):
     """A message that appears while the page is at its end leaves the row just used in view.
 
@@ -221,7 +221,7 @@ def test_integration_tab_message_keeps_the_end_of_the_page_in_view_on_qt4(tab, l
     assert end(cleared) - lost > 40 and stages["elsewhere"]["scrolled"] == 40, "a page that is elsewhere stays where it is"
 
 
-@pytest.mark.parametrize("language", ["de", "en", "it", "fr"])
+@pytest.mark.parametrize("language", ["de", "en", "it", "fr", "es"])
 def test_integration_tab_opens_without_a_message_when_the_agent_fails_on_qt4(tab, language):
     """What the tab cannot read on opening shows at its rows; the foot line is for what the user did.
 

@@ -260,6 +260,7 @@ async def async_get_config_entry_diagnostics(
                 else None
             ),
             "device_user": _device_user_diagnostics(runtime),
+            "ssh": _ssh_diagnostics(runtime),
             # Entry-side fact, not device state: it separates "never set up"
             # from "set up once and later lost", which the device status alone
             # cannot answer.
@@ -793,6 +794,18 @@ def _device_user_diagnostics(runtime: Any | None) -> dict[str, Any] | None:
         getattr(runtime, "device_user_status_updated_at", None)
     )
     return data
+
+
+_SSH_DIAGNOSTIC_KEYS = ("running", "state", "manager", "listening", "factory_running")
+
+
+def _ssh_diagnostics(runtime: Any | None) -> dict[str, Any] | None:
+    """Return the last SSH state read: whether another tool keeps SSH running."""
+
+    status = getattr(runtime, "ssh_status", None) if runtime is not None else None
+    if not isinstance(status, Mapping) or not status:
+        return None
+    return {key: status.get(key) for key in _SSH_DIAGNOSTIC_KEYS}
 
 
 def _self_test_diagnostics(runtime: Any | None) -> dict[str, Any] | None:

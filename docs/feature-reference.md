@@ -27,7 +27,7 @@ C100X device (issue #51). **No**: not offered on that model.
 
 | Feature | C300X | C100X 1.5.8 |
 | --- | --- | --- |
-| Agent installation over SSH | Yes; factory root login or your SSH login | In test; needs an SSH-enabled station, see [Install the Device Agent](quickstart.md#install-the-device-agent) |
+| Agent installation over SSH | Yes; factory root login, or your SSH login with a password or private key | In test; needs an SSH-enabled station, see [Install the Device Agent](quickstart.md#install-the-device-agent) |
 | Discovery on the network (mDNS) | Yes, `_bticino-c300x-agent._tcp` | In test, `_bticino-c100x-agent._tcp` |
 | Door unlock, stair light, device activations | Yes | In test |
 | Live video, Ring Call, talkback | Yes | In test |
@@ -154,9 +154,9 @@ Station entities:
 | `switch` | Save images | Automatic visitor images; on by default. |
 | `switch` | Touch tone | The display's touch sound. Needs the Display patch, on the C100X the display activation; unavailable without the agent's connection to the display. |
 | `switch` | Home Assistant media user | Creates or repairs the station's media access when used. |
-| `switch` | SSH, Agent noAuth, Agent noAuth maintenance, Agent mDNS discovery | Maintenance controls. |
+| `switch` | SSH, Agent noAuth, Agent noAuth maintenance, Agent mDNS discovery | Maintenance controls. SSH that another tool keeps running shows on and cannot be switched ([SSH](advanced-maintenance.md#ssh)). |
 | `switch` | Display patch, API firewall patch, IPv6 firewall patch | Device patches. No Display patch switch on the C100X. |
-| `switch` | Native MQTT bridge, Legacy MQTT bridge | Local MQTT controls. |
+| `switch` | Native MQTT bridge, Legacy MQTT bridge | Local MQTT controls. Legacy MQTT bridge off keeps fquinto's bridge off even when its watchdog tries to restart it; on restores it. |
 | `button` | Stair light, one per device activation | One-shot device actions. The doors are on the outdoor units. |
 | `button` | Stop doorbell video | Ends an on-demand session the agent owns. |
 | `button` | Reboot, Restart device agent, Reload device display, Remove device agent | Maintenance actions. No Reload device display on the C100X. |
@@ -286,8 +286,11 @@ The integration also fires two Home Assistant events:
 
 - `bticino_c300x_agent_event_received`: every station event. Data:
   `entry_id`, `event_key`, `event_at`, `event` (label in the HA language),
-  `data` (the agent's raw event data), `source_event_id` when the agent sends
-  one, and the extra data from the table above.
+  `event_label_de`, `event_label_en`, `event_label_es`, `event_label_fr` and
+  `event_label_it` (the label in each language), `data` (the agent's raw
+  event data), `source_event_id` when the agent sends one, and the extra data
+  from the table above. The Device event entity keeps the labels of the last
+  event as the attributes `last_event_label_<language>`.
 - `bticino_c300x_action_received`: Home Assistant itself ran an action. Data:
   `entry_id`, `action_id`; for a door the `action_id` is `door_unlock` with
   `unit_id` and `call_id`. Fired by `run_action`, the door buttons and display

@@ -25,10 +25,15 @@
       },
       "bootstrap_install": {
         "title": "Nativen {model}-Agent installieren",
-        "description": "Home Assistant meldet sich zuerst mit dem Werks-Login des {model} an. Gib SSH-User und Passwort nur ein, wenn das Gerät ihn abgelehnt hat; leer bleibt es beim Werks-Login. Schreibt den nativen Agent, eine Konfiguration mit generierten Schlüsseln, das Startscript und die Display-Supportdateien per SSH auf den {model}. SSH-Zugangsdaten werden nur für diesen Installationsschritt verwendet und nicht gespeichert.",
+        "description": "Home Assistant meldet sich zuerst mit dem Werks-Login des {model} an. Gib SSH-User und Passwort oder einen privaten Schlüssel nur ein, wenn das Gerät ihn abgelehnt hat; leer bleibt es beim Werks-Login. Schreibt den nativen Agent, eine Konfiguration mit generierten Schlüsseln, das Startscript und die Display-Supportdateien per SSH auf den {model}. SSH-Zugangsdaten und Schlüssel werden nur für diesen Installationsschritt verwendet und nicht gespeichert.",
         "data": {
           "bootstrap_ssh_username": "{model}-SSH-User",
-          "bootstrap_ssh_password": "{model}-SSH-Passwort"
+          "bootstrap_ssh_password": "{model}-SSH-Passwort",
+          "bootstrap_ssh_key": "{model}-SSH-Privatschlüssel (optional)",
+          "bootstrap_ssh_key_passphrase": "Passphrase des Schlüssels (optional)"
+        },
+        "data_description": {
+          "bootstrap_ssh_key": "Den ganzen privaten Schlüssel einfügen (OpenSSH oder PEM). Schlüsseltyp: RSA oder ECDSA bei 1.7.x, 2.0.2 und C100X 1.5.8; ed25519 nur bei 3.0.6. Mit Schlüssel und ohne User wird root verwendet; ein zusätzlich eingegebenes Passwort wird versucht, wenn der Schlüssel abgelehnt wird."
         }
       },
       "c100x_experimental": {
@@ -43,11 +48,13 @@
         "description": "Gib die Schlüssel des erreichbaren nativen Agent ein. Lasse den Zugangsschlüssel nur leer, solange der Agent noch im noAuth-Bootstrap-Modus läuft.",
         "data": {
           "agent_token": "Zugangsschlüssel",
-          "maintenance_token": "Wartungsschlüssel"
+          "maintenance_token": "Wartungsschlüssel",
+          "reinstall_agent": "Ich habe die Schlüssel nicht: Agent neu installieren"
         },
         "data_description": {
           "agent_token": "Schlüssel, mit dem sich Home Assistant beim {model} anmeldet. Er wurde bei der Installation erzeugt.",
-          "maintenance_token": "Eigener Schlüssel für Wartung: Updates, Änderungen am Display und Neustarts."
+          "maintenance_token": "Eigener Schlüssel für Wartung: Updates, Änderungen am Display und Neustarts.",
+          "reinstall_agent": "Installiert den mitgelieferten Agent per SSH erneut, mit neu erzeugten Schlüsseln. Die bisherigen Schlüssel gelten danach nicht mehr; alles andere auf dem {model} bleibt, wie es ist."
         }
       },
       "user_features": {
@@ -720,7 +727,24 @@
         "description": "Gib die aktuellen Schlüssel für {name} ein. Ein leeres Feld behält den gespeicherten Schlüssel.",
         "data": {
           "agent_token": "Zugriffsschlüssel",
-          "maintenance_token": "Wartungsschlüssel"
+          "maintenance_token": "Wartungsschlüssel",
+          "reinstall_agent": "Ich habe die Schlüssel nicht: Agent neu installieren"
+        },
+        "data_description": {
+          "reinstall_agent": "Installiert den mitgelieferten Agent per SSH erneut, mit neu erzeugten Schlüsseln, und speichert sie in diesem Eintrag. Die bisherigen Schlüssel gelten danach nicht mehr; alles andere auf dem {model} bleibt, wie es ist."
+        }
+      },
+      "reauth_reinstall": {
+        "title": "{model}-Agent neu installieren",
+        "description": "Home Assistant meldet sich zuerst mit dem Werks-Login des {model} an. Gib SSH-User und Passwort oder einen privaten Schlüssel nur ein, wenn das Gerät ihn abgelehnt hat; leer bleibt es beim Werks-Login. Hält den installierten Agent an, schreibt den mitgelieferten Agent und eine Konfiguration mit neu erzeugten Schlüsseln per SSH auf den {model} und startet ihn wieder. Die neuen Schlüssel werden für {name} gespeichert; die alten gelten nicht mehr. Display-Seiten und die übrigen Einstellungen auf dem {model} bleiben, das Gerät wird nicht neu gestartet. SSH-Zugangsdaten und Schlüssel werden nur für diesen Schritt verwendet und nicht gespeichert.",
+        "data": {
+          "bootstrap_ssh_username": "{model}-SSH-User",
+          "bootstrap_ssh_password": "{model}-SSH-Passwort",
+          "bootstrap_ssh_key": "{model}-SSH-Privatschlüssel (optional)",
+          "bootstrap_ssh_key_passphrase": "Passphrase des Schlüssels (optional)"
+        },
+        "data_description": {
+          "bootstrap_ssh_key": "Den ganzen privaten Schlüssel einfügen (OpenSSH oder PEM). Schlüsseltyp: RSA oder ECDSA bei 1.7.x, 2.0.2 und C100X 1.5.8; ed25519 nur bei 3.0.6. Mit Schlüssel und ohne User wird root verwendet; ein zusätzlich eingegebenes Passwort wird versucht, wenn der Schlüssel abgelehnt wird."
         }
       }
     },
@@ -732,6 +756,8 @@
       "unique_id_mismatch": "Das ist ein anderes Geraet als das eingerichtete. Konfiguriere den passenden Eintrag neu oder fuege das Geraet als neuen Eintrag hinzu.",
       "reauth_wrong_device": "Der Agent hat eine andere Identität. Der gespeicherte Eintrag wurde nicht geändert.",
       "reauth_successful": "Die Zugangsdaten wurden aktualisiert.",
+      "reinstall_entry_updated": "Der Agent wurde auf einer Station neu installiert, die bereits als {name} eingerichtet ist. Dieser Eintrag verwendet jetzt die neuen Schlüssel und diese Adresse; es wurde kein zweiter Eintrag angelegt.",
+      "station_entry_updated": "Diese Station ist bereits als {name} eingerichtet. Dieser Eintrag verwendet jetzt diese Schlüssel und diese Adresse; es wurde kein zweiter Eintrag angelegt.",
       "unsupported_display": "Dieses Geraet unterstuetzt keine Home-Assistant-Displayseiten oder Display-Benachrichtigungen. Gespeicherte Layouts bleiben unveraendert."
     },
     "error": {
@@ -768,9 +794,15 @@
       "invalid_maintenance_auth": "Der {model} hat den Wartungsschlüssel abgelehnt. Gib den aktuellen Wartungsschlüssel ein.",
       "cannot_connect": "Der {model} konnte nicht geprüft werden. Prüfe Adresse und Verbindung und versuche es erneut.",
       "ssh_login_refused": "Der {model} hat die SSH-Anmeldung abgelehnt. Gib den SSH-User und das Passwort des Geräts ein.",
+      "invalid_ssh_key": "Der private Schlüssel konnte nicht gelesen werden. Füge den ganzen Schlüssel mit seinen BEGIN- und END-Zeilen ein und, falls er eine hat, seine Passphrase.",
+      "ssh_user_not_root": "Dieser SSH-User hat keine Root-Rechte. Melde dich als root oder root2 an, nicht als bticino2.",
+      "ssh_unreachable": "Der {model} antwortet nicht per SSH (Port 22). SSH ist auf der Station aus oder blockiert; prüfe die Adresse und ob das Root-Tool SSH eingeschaltet hat.",
+      "ssh_password_login_disabled": "Der {model} nimmt keine Passwort-Anmeldung an, nur SSH-Schlüssel. Füge den privaten Schlüssel ein, den das Root-Tool eingerichtet hat, oder baue das Image mit Passwort-Anmeldung.",
       "installer_firewall_hook_unsupported": "Der Firewall-Hook lässt sich nicht sicher prüfen. Vor Änderungen am Gerät wurde abgebrochen. Bitte Dateityp und Berechtigungen prüfen und keinen Platzhalter anlegen.",
+      "firewall_hook_changed": "Das Firewall-Startscript des {model} (/etc/network/if-pre-up.d/iptables) wurde nach dem Eintrag der Agent-Ports von etwas anderem geändert; das gesicherte Original passt nicht mehr dazu. Das Script blieb unverändert. Stelle es wieder her oder entferne den Block des Agents daraus und versuche es erneut.",
       "device_model_incompatible": "Dieses Paket unterstützt diese Station nicht, oder das Modell der Station konnte nicht bestätigt werden. Es wurden keine Gerätedateien ersetzt.",
-      "c100x_confirmation_required": "Setze den Haken, um die Classe 100X einzurichten, oder schließe diesen Dialog, um die Station unverändert zu lassen."
+      "c100x_confirmation_required": "Setze den Haken, um die Classe 100X einzurichten, oder schließe diesen Dialog, um die Station unverändert zu lassen.",
+      "not_a_bticino_station": "Das Gerät unter dieser Adresse ist keine BTicino-Station. Es wurde nichts darauf geschrieben. Prüfe die Adresse."
     }
   },
   "options": {
@@ -1506,7 +1538,20 @@
         "name": "Klingel stummschalten"
       },
       "maintenance_ssh": {
-        "name": "SSH"
+        "name": "SSH",
+        "state_attributes": {
+          "ssh_state": {
+            "name": "SSH-Zustand",
+            "state": {
+              "running": "Läuft",
+              "stopped": "Gestoppt",
+              "managed_externally": "Von anderem Werkzeug betrieben"
+            }
+          },
+          "managed_by": {
+            "name": "Betrieben von"
+          }
+        }
       },
       "maintenance_no_auth": {
         "name": "Agent noAuth"
@@ -1568,6 +1613,9 @@
     },
     "station_busy": {
       "message": "Die Station ist gerade mit einem Anruf beschäftigt. Versuche es erneut, wenn er beendet ist."
+    },
+    "ssh_managed_externally": {
+      "message": "SSH auf der Station wird von einem anderen Werkzeug betrieben ({manager}). Schalte es mit diesem Werkzeug ein oder aus."
     },
     "gui_function_patch_required": {
       "message": "Diese Aktion benötigt den {model}-Display-Patch. Aktiviere und wende den Display-Patch zuerst in den Integrationsoptionen an."
@@ -1689,10 +1737,12 @@
           },
           "ssh_install": {
             "title": "{model} Device-Agent per SSH neu installieren",
-            "description": "Der installierte Agent kann sich noch nicht selbst aktualisieren. Home Assistant meldet sich mit dem Werks-Login des {model} an, oder mit den hier eingegebenen SSH-Zugangsdaten, wenn das Gerät ihn abgelehnt hat, installiert den paketierten Agent und erneuert danach nur aktive Display- und Firewall-Patches, wenn sich die paketierte Patch-Quelle geändert hat. Die SSH-Zugangsdaten werden nicht gespeichert. Wenn du Home-Assistant-only Ring Calls nutzt, prüfe nach dem Update zusätzlich den Home-Assistant-Media-User-/Routing-Setup in den Integrationsoptionen.\n\nInstalliert: {installed_version} (API {installed_api_version}, Bundle {installed_bundle_hash})\nPaketiert: {available_version} (API {available_api_version}, Bundle {available_bundle_hash})\nUpdate-Pfad: {update_path}\nDisplay-Patch-Status: {qml_patch_status}\nGrund: {reason}",
+            "description": "Der installierte Agent kann sich noch nicht selbst aktualisieren. Home Assistant meldet sich mit dem Werks-Login des {model} an, oder mit den hier eingegebenen SSH-Zugangsdaten oder dem privaten Schlüssel, wenn das Gerät ihn abgelehnt hat, installiert den paketierten Agent und erneuert danach nur aktive Display- und Firewall-Patches, wenn sich die paketierte Patch-Quelle geändert hat. Die SSH-Zugangsdaten und der Schlüssel werden nicht gespeichert. Wenn du Home-Assistant-only Ring Calls nutzt, prüfe nach dem Update zusätzlich den Home-Assistant-Media-User-/Routing-Setup in den Integrationsoptionen.\n\nInstalliert: {installed_version} (API {installed_api_version}, Bundle {installed_bundle_hash})\nPaketiert: {available_version} (API {available_api_version}, Bundle {available_bundle_hash})\nUpdate-Pfad: {update_path}\nDisplay-Patch-Status: {qml_patch_status}\nGrund: {reason}",
             "data": {
               "bootstrap_ssh_username": "SSH-Benutzername",
-              "bootstrap_ssh_password": "SSH-Passwort"
+              "bootstrap_ssh_password": "SSH-Passwort",
+              "bootstrap_ssh_key": "SSH-Privatschlüssel (optional)",
+              "bootstrap_ssh_key_passphrase": "Passphrase des Schlüssels (optional)"
             }
           }
         },
@@ -1704,7 +1754,13 @@
           "update_root_readonly_failed": "Das Update konnte das Root-Dateisystem (/) nicht wieder schreibgeschützt einhängen. Der endgültige Gerätezustand ist ungewiss; eine erfolgreiche Wiederherstellung ist nicht bestätigt. Bewahre Wiederherstellungsdateien auf und prüfe Agent und Dateisystem vor einem weiteren Update.",
           "update_apply_failed": "Der Agent meldet einen allgemeinen Updatefehler; Ursache und endgültiger Gerätezustand sind unbekannt. Falls du / zuvor manuell beschreibbar eingehängt hast, kann ein normaler Geräteneustart helfen. Prüfe vor einem neuen Versuch den Gerätezustand; der Fehler bestätigt keine erfolgreiche Wiederherstellung.",
           "update_verify_failed": "Das Update wurde gesendet, aber der Agent meldet weiterhin ein altes oder inkompatibles Bundle.",
-          "ssh_login_refused": "Der {model} hat die SSH-Anmeldung abgelehnt. Gib den SSH-User und das Passwort des Geräts ein."
+          "ssh_login_refused": "Der {model} hat die SSH-Anmeldung abgelehnt. Gib den SSH-User und das Passwort des Geräts ein.",
+          "invalid_ssh_key": "Der private Schlüssel konnte nicht gelesen werden. Füge den ganzen Schlüssel mit seinen BEGIN- und END-Zeilen ein und, falls er eine hat, seine Passphrase.",
+          "ssh_user_not_root": "Dieser SSH-User hat keine Root-Rechte. Melde dich als root oder root2 an, nicht als bticino2.",
+          "ssh_unreachable": "Der {model} antwortet nicht per SSH (Port 22). SSH ist auf der Station aus oder blockiert; prüfe die Adresse und ob das Root-Tool SSH eingeschaltet hat.",
+          "ssh_password_login_disabled": "Der {model} nimmt keine Passwort-Anmeldung an, nur SSH-Schlüssel. Füge den privaten Schlüssel ein, den das Root-Tool eingerichtet hat, oder baue das Image mit Passwort-Anmeldung.",
+          "firewall_hook_changed": "Das Firewall-Startscript des {model} (/etc/network/if-pre-up.d/iptables) wurde nach dem Eintrag der Agent-Ports von etwas anderem geändert; das gesicherte Original passt nicht mehr dazu. Das Script blieb unverändert. Stelle es wieder her oder entferne den Block des Agents daraus und versuche es erneut.",
+          "not_a_bticino_station": "Das Gerät unter dieser Adresse ist keine BTicino-Station. Es wurde nichts darauf geschrieben. Prüfe die Adresse."
         },
         "abort": {
           "entry_not_loaded": "Der BTicino-C300X-Eintrag ist nicht geladen."

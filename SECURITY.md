@@ -140,6 +140,9 @@ by removing that dependency, not by hiding the scanner result.
 - **Scope:** only the explicit installer connection to a supported local C300X.
   RSA/SHA-1 host signatures and legacy key exchange/cipher fallbacks are enabled
   per connection. No global SSH configuration or library defaults are changed.
+  A station whose SSH server offers an ECDSA or Ed25519 host key (as set up by
+  some root tools), or signs its RSA host key with SHA-2 (rsa-sha2-512/256),
+  is accepted as well; these are preferred over RSA/SHA-1 when offered.
 - **Reason:** the device's SSH implementation needs legacy interoperability.
   Updating the client does not modernize the device protocol. Paramiko 5 removes
   the required RSA/SHA-1 support; AsyncSSH retains a configurable legacy path.
@@ -148,10 +151,11 @@ by removing that dependency, not by hiding the scanner result.
   for a device you control on an isolated/trusted network.
 - **Credentials:** the installer first tries the C300X factory root login,
   which is the same on every device and therefore no secret. It is built in
-  encoded only so that it is not plain text in the code. A typed password is
-  used only when the device refuses that login, in process memory. No local
-  key discovery, SSH agent, user SSH config, proxy or interactive terminal is
-  used. Credentials are not stored by the integration.
+  encoded only so that it is not plain text in the code. A typed password, or
+  a private key pasted into the form (with its passphrase), is used only when
+  the device refuses that login, in process memory. No local key discovery,
+  SSH agent, user SSH config, proxy or interactive terminal is used.
+  Credentials and keys are not stored or logged by the integration.
 - **Exposure:** temporary first installation or explicit SSH recovery.
   Normal operation and supported agent self-updates use the authenticated agent
   API and existing maintenance credentials, not SSH. Startup never silently

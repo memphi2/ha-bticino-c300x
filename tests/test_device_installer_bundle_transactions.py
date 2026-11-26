@@ -1,5 +1,6 @@
 """The installed manifest commits only a completely verified bootstrap bundle."""
 
+import hashlib
 import json
 import subprocess
 from pathlib import Path
@@ -82,6 +83,13 @@ def transaction(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
                 self.files.pop(obsolete_path, None)
             elif command.endswith(" restart"):
                 self.stage("restart")
+            elif command.startswith("sha256sum "):
+                # After a failed configuration write: is the file there?
+                data = self.files.get(command.split(" ", 1)[1])
+                return f"{hashlib.sha256(data).hexdigest()}  -" if data is not None else ""
+            elif command.endswith(" start; fi"):
+                # A failed restart starts the agent again with what is there.
+                self.stage("start-again")
             elif "qml_patch.sh " in command:
                 action = command.rsplit(" ", 1)[1]
                 self.stage(action)
@@ -110,17 +118,23 @@ def transaction(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setattr(installer, "_write_remote_file_sync", write_config)
     monkeypatch.setattr(installer, "_install_startup_script_sync", startup)
-    monkeypatch.setattr(installer, "_apply_firewall_patch_sync", lambda *_args: client.stage("firewall"))
+    firewall_configs: list[bytes | None] = []
+
+    def firewall(*_args, config_bytes: bytes | None = None):
+        client.stage("firewall")
+        firewall_configs.append(config_bytes)
+
+    monkeypatch.setattr(installer, "_apply_firewall_patch_sync", firewall)
     monkeypatch.setattr(installer, "_verify_startup_sync", lambda *_args: client.stage("verify"))
 
-    def install(*, apply_gui_patch: bool):
+    def install(*, apply_gui_patch: bool, display: installer._DisplaySteps | None = None):
         client.closed = False
         return installer._install_device_agent_sync(
             installer.C300XDeviceInstallRequest(
                 host="unused.invalid", ssh_username="unused", ssh_password="unused",
                 remote_dir=remote_dir, apply_gui_patch=apply_gui_patch,
             ),
-            bundle, b"{}",
+            bundle, b"{}", display,
         )
 
     def update_required() -> bool:
@@ -134,7 +148,7 @@ def transaction(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     return SimpleNamespace(
         client=client, install=install, update_required=update_required,
         manifest_path=manifest_path, old_manifest=old_manifest,
-        obsolete_path=obsolete_path,
+        obsolete_path=obsolete_path, firewall_configs=firewall_configs,
     )
 
 
@@ -155,6 +169,7 @@ def test_failed_install_preserves_manifest_and_retry_is_idempotent(
     assert transaction.update_required()
     if failure != "manifest":
         assert "manifest" not in client.operations
+    assert ("start-again" in client.operations) is (failure == "restart")
 
     client.failure = None
     client.operations.clear()
@@ -169,6 +184,79 @@ def test_failed_install_preserves_manifest_and_retry_is_idempotent(
     assert transaction.install(apply_gui_patch=apply_gui_patch) == ()
     assert client.writes == writes
     assert client.writes.count(transaction.manifest_path) == 1
+
+
+# 3.0.6 (Qt 5 overlay) and the C100X (Qt 5 on disk) go through the same
+# transaction: the manifest is published last, and only after a complete install.
+QT5_FAILURES = {
+    "qt5_rcc": ["payload", "qml-transfer", "config", "startup", "firewall", "restart", "verify", "core-apply",
+                "manifest"],
+    # No display step on the C100X; its adapter is the only file below qml/.
+    "qt5_ondisk": ["payload", "qml-transfer", "config", "startup", "firewall", "restart", "verify", "manifest"],
+}
+
+
+@pytest.mark.parametrize("kind,failure", [(kind, failure) for kind, failures in QT5_FAILURES.items()
+                                          for failure in failures])
+def test_a_failed_qt5_install_preserves_the_manifest_and_its_retry_is_idempotent(
+    transaction, monkeypatch, kind, failure,
+) -> None:
+    monkeypatch.setattr(installer, "_admit_station_sync", lambda *_: kind)
+    client = transaction.client
+    client.qt5 = True
+    client.failure = failure
+    with pytest.raises(installer.C300XDeviceInstallError):
+        transaction.install(apply_gui_patch=False)
+    assert client.closed
+    assert client.files[transaction.manifest_path] == transaction.old_manifest
+    assert client.files[transaction.obsolete_path] == b"old distribution"
+    assert transaction.update_required()
+    if failure != "manifest":
+        assert "manifest" not in client.operations
+    assert ("start-again" in client.operations) is (failure == "restart")
+
+    client.failure = None
+    client.operations.clear()
+    display = installer._DisplaySteps()
+    changed = transaction.install(apply_gui_patch=False, display=display)
+    assert changed[-1] == transaction.manifest_path
+    assert client.operations[-2:] == ["manifest", "cleanup-source"]
+    assert ("core-apply" in client.operations) is (kind == "qt5_rcc")
+    assert (display.kind, display.pending) == (kind, False)
+    assert not transaction.update_required()
+    # The C100X adapter goes only to the C100X.
+    adapter = f"/synthetic/custom-agent/{installer.C100X_ADAPTER_NAME}"
+    assert (adapter in client.files) is (kind == "qt5_ondisk")
+    # The C100X firewall step gets the merged configuration with the low video stream.
+    config = transaction.firewall_configs[-1]
+    if kind == "qt5_ondisk":
+        assert config is not None and json.loads(config)["video"]["av"]["highResolution"] is False
+    else:
+        assert config is None
+    writes = client.writes.copy()
+    assert transaction.install(apply_gui_patch=False) == ()
+    assert client.writes == writes
+
+
+def test_a_failed_3_0_6_display_step_is_owed_and_the_manifest_published(transaction, monkeypatch) -> None:
+    monkeypatch.setattr(installer, "_admit_station_sync", lambda *_: "qt5_rcc")
+    transaction.client.qt5 = True
+    transaction.client.failure = "bad-core-apply"
+    display = installer._DisplaySteps()
+    changed = transaction.install(apply_gui_patch=True, display=display)
+    assert display.pending is True
+    # The full patch waits for the core step it needs; the core Repair runs both.
+    assert "apply" not in transaction.client.operations
+    assert changed[-1] == transaction.manifest_path
+    assert not transaction.update_required()
+
+
+def test_the_c100x_refuses_the_display_patch_before_any_write(transaction, monkeypatch) -> None:
+    monkeypatch.setattr(installer, "_admit_station_sync", lambda *_: "qt5_ondisk")
+    with pytest.raises(installer.C300XDeviceInstallError, match="device_install_verify_failed"):
+        transaction.install(apply_gui_patch=True)
+    assert transaction.client.writes == []
+    assert transaction.client.files[transaction.manifest_path] == transaction.old_manifest
 
 
 def test_missing_hook_leaves_firewall_alone_and_completes_install(transaction, monkeypatch) -> None:

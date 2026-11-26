@@ -136,7 +136,7 @@ test("editor preserves hidden readiness and device buttons when changing other o
 test("device action visibility labels are translated in every supported language", async () => {
   installCustomElementStubs();
   const module = await importEditorModule();
-  for (const language of ["en", "de", "fr", "it"]) {
+  for (const language of ["en", "de", "fr", "it", "es"]) {
     const { form } = createEditor(module, {}, language);
     for (const key of ["show_door_unlock", "show_stair_light"]) {
       assert.notEqual(form.computeLabel({ name: key }), key);

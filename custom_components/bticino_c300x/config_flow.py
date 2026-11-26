@@ -181,8 +181,6 @@ from .const import (
     CONF_AGENT_PORT,
     CONF_AGENT_TOKEN,
     CONF_BOOTSTRAP_INSTALL_AGENT,
-    CONF_BOOTSTRAP_SSH_PASSWORD,
-    CONF_BOOTSTRAP_SSH_USERNAME,
     CONF_CALLBACK_BASE_URL,
     CONF_CREATE_HOMEASSISTANT_USER,
     CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
@@ -229,7 +227,7 @@ from .display_support import (
     setup_is_c100x,
 )
 from .entry_types import BticinoC300XConfigEntry
-from .factory_login import login_model, ssh_login, uses_factory_login
+from .factory_login import install_login, login_model
 from .model_names import ModelTextConfigFlow, ModelTextOptionsFlow
 from .mqtt_migration import async_migrate_legacy_mqtt_for_connection
 
@@ -367,20 +365,10 @@ class BticinoC300XConfigFlow(ModelTextConfigFlow, config_flow_auth.AuthFlowSteps
         if user_input is not None or not self._factory_login_tried:
             self._factory_login_tried = True
             await self._async_abort_if_manual_setup_duplicate()
-            api_token = secrets.token_urlsafe(32)
-            maintenance_token = secrets.token_urlsafe(32)
-            ssh_username, ssh_password = ssh_login(
-                user_input, CONF_BOOTSTRAP_SSH_USERNAME, CONF_BOOTSTRAP_SSH_PASSWORD,
-                login_model(self._setup_agent_info),
-            )
+            api_token, maintenance_token = self._setup_install_keys()
             request = C300XDeviceInstallRequest(
                 host=self._setup_connection[CONF_AGENT_HOST],
-                ssh_username=ssh_username,
-                ssh_password=ssh_password,
-                factory_login=uses_factory_login(
-                    user_input, CONF_BOOTSTRAP_SSH_USERNAME, CONF_BOOTSTRAP_SSH_PASSWORD
-                ),
-                device_model=login_model(self._setup_agent_info),
+                **install_login(user_input, login_model(self._setup_agent_info)),
                 agent_port=int(
                     self._setup_connection.get(CONF_AGENT_PORT, DEFAULT_AGENT_PORT)
                 ),
@@ -398,6 +386,7 @@ class BticinoC300XConfigFlow(ModelTextConfigFlow, config_flow_auth.AuthFlowSteps
                 if self._c100x_install_refused(err):
                     return await self._async_ask_c100x_opt_in("install", user_input)
                 errors["base"] = err.reason
+                await self._async_keep_written_keys(err, api_token, maintenance_token)
             else:
                 if getattr(install_result, "display_pending", False):
                     # The core display step failed on the Qt 5 display: the
@@ -418,6 +407,8 @@ class BticinoC300XConfigFlow(ModelTextConfigFlow, config_flow_auth.AuthFlowSteps
                     errors["base"] = "device_install_verify_failed"
                 else:
                     await self._async_adopt_agent_unique_id(api_token=api_token)
+                    if done := await self._async_hand_keys_to_station_entry(install_result):
+                        return done
                     self._note_installed_station(install_result)
                     try:
                         # Legacy MQTT is migrated on a C300X only.
@@ -450,7 +441,11 @@ class BticinoC300XConfigFlow(ModelTextConfigFlow, config_flow_auth.AuthFlowSteps
         await self.async_set_unique_id(_manual_setup_unique_id(self._setup_connection))
         self._abort_if_unique_id_configured()
         for entry in self._async_current_entries():
-            if _entry_connection_matches_discovery(entry, self._setup_connection):
+            # The entry a failed install of this setup handed its keys to is no duplicate.
+            handed = self._setup_keys_entry is not None and entry.entry_id == self._setup_keys_entry
+            if not handed and _entry_connection_matches_discovery(
+                entry, self._setup_connection,
+            ):
                 raise AbortFlow("already_configured")
 
     async def _async_adopt_agent_unique_id(self, *, api_token: str = "") -> None:
@@ -466,19 +461,6 @@ class BticinoC300XConfigFlow(ModelTextConfigFlow, config_flow_auth.AuthFlowSteps
             return
         self._setup_unique_id = unique_id
         self._async_abort_duplicate_setup_flows(unique_id)
-
-    @callback
-    def _async_abort_duplicate_setup_flows(self, unique_id: str) -> None:
-        """Abort parallel discovery flows that target the same just-installed agent."""
-
-        flow_manager = getattr(getattr(self.hass, "config_entries", None), "flow", None)
-        if flow_manager is None:
-            return
-        for progress in self._async_in_progress(
-            include_uninitialized=True,
-            match_context={"unique_id": unique_id},
-        ):
-            flow_manager.async_abort(progress["flow_id"])
 
     async def async_step_zeroconf(
         self, discovery_info: Any

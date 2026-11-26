@@ -1,8 +1,8 @@
 """One-shot C300X native-agent bootstrap installer.
 
 The config flow uses this module only after the user explicitly submits SSH
-credentials for a device bootstrap. Passwords stay in memory and are passed only
-to the in-process SSH client, never through command arguments.
+credentials for a device bootstrap. Passwords and private keys stay in memory and
+are passed only to the in-process SSH client, never through command arguments.
 """
 
 from __future__ import annotations
@@ -33,11 +33,23 @@ from .const import (
 from .device_activations import desired_activation_items
 from .device_profile import (
     C100X_CONFIRMATION_REQUIRED,
+    NOT_A_BTICINO_STATION,
     QT4_ONDISK,
     QT5_ONDISK,
     QT5_RCC,
     DeviceProfile,
+    is_bticino_station,
     station_profile,
+)
+from .device_ssh_login import (
+    INVALID_SSH_KEY,
+    SSH_PASSWORD_LOGIN_DISABLED,
+    SSH_UNREACHABLE,
+    SSH_USER_NOT_ROOT,
+    key_login_options,
+    logged_in_as_root,
+    password_login_offered,
+    ssh_unreachable,
 )
 from .display_activation import (
     display_activation_confirmed,
@@ -65,10 +77,25 @@ REMOTE_FIREWALL_BACKUP = (
     "/home/bticino/cfg/extra/c300x-device-file-backups/original"
     "/etc/network/if-pre-up.d/iptables"
 )
+# bootstrap_firewall.sh: the hook holds our rules and its other rules changed
+# since, so the backup of the original no longer matches.
+FIREWALL_HOOK_CHANGED = "firewall_hook_changed"
+_FIREWALL_HOOK_CHANGED_STATUS = 3
 _SSH_CONNECT_TIMEOUT = 12.0
 # Probes, uploads of at most the agent binary, the init script and its
 # restart (5 s stop wait, 2 s after SIGKILL, 20 status checks of 100 ms).
 _SSH_COMMAND_TIMEOUT = 30.0
+_SSH_HOST_KEY_ALGS = (
+    "ssh-ed25519",
+    "ecdsa-sha2-nistp256",
+    "ecdsa-sha2-nistp384",
+    "ecdsa-sha2-nistp521",
+    # An RSA host key signed with SHA-2 (Dropbear 2020.81 of firmware 3.0.6
+    # offers rsa-sha2-256) before the factory Dropbear's SHA-1.
+    "rsa-sha2-512",
+    "rsa-sha2-256",
+    "ssh-rsa",
+)
 # A display write over SSH is the script the agent runs as a job, so it gets
 # the agent's handling (http_maintenance.h): this deadline, then SIGTERM for
 # the script's rollback trap and this grace period. On the Qt 5 display of
@@ -110,11 +137,17 @@ DISPLAY_FILES = (
 
 
 class C300XDeviceInstallError(Exception):
-    """Raised when the device-agent bootstrap installer cannot complete."""
+    """Raised when the device-agent bootstrap installer cannot complete.
 
-    def __init__(self, reason: str) -> None:
+    keys_written: the configuration with the keys of this install was in
+    place on the station when the install failed. The agent there accepts
+    only these keys now; whoever started the install must keep them.
+    """
+
+    def __init__(self, reason: str, *, keys_written: bool = False) -> None:
         super().__init__(reason)
         self.reason = reason
+        self.keys_written = keys_written
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,6 +157,9 @@ class C300XDeviceInstallRequest:
     host: str
     ssh_username: str
     ssh_password: str = field(repr=False)
+    # Optional: a private key for this install only, tried before the password.
+    ssh_private_key: str = field(default="", repr=False)
+    ssh_key_passphrase: str = field(default="", repr=False)
     agent_port: int = DEFAULT_AGENT_PORT
     remote_dir: str = DEFAULT_REMOTE_DIR
     apply_firewall_patch: bool = True
@@ -174,7 +210,7 @@ async def async_install_device_agent(
     api_token: str,
     maintenance_token: str,
 ) -> C300XDeviceInstallResult:
-    """Install the bundled native agent on the device through password SSH."""
+    """Install the bundled native agent on the device through SSH."""
 
     _validate_request(request)
     # About 30 Path.exists() calls: never on the event loop.
@@ -284,8 +320,10 @@ def _install_device_agent_sync(
 
     client = _connect_device_client(request)
     changed_files: list[str] = []
+    config_path = f"{request.remote_dir}/{REMOTE_CONFIG_NAME}"
+    sent_config: bytes | None = None
+    keys_written = False
     try:
-        config_path = f"{request.remote_dir}/{REMOTE_CONFIG_NAME}"
         existing = _read_remote_config_sync(client, config_path)
         kind = _admit_station_sync(client, bundle, request.remote_dir, request.c100x_confirmed)
         if display is not None:
@@ -313,24 +351,41 @@ def _install_device_agent_sync(
             if client.put_file(payload.source, payload.remote_path, payload.mode):
                 changed_files.append(payload.remote_path)
 
-        if _write_remote_file_sync(
-            client,
-            config_path,
-            merged_config,
-            mode="600",
-        ):
-            changed_files.append(f"{request.remote_dir}/{REMOTE_CONFIG_NAME}")
-        if manage_firewall:
-            if c100x:
-                _apply_firewall_patch_sync(
-                    client, request.remote_dir, request.agent_port, config_bytes=merged_config,
+        # From the stop of the old agent to the start of the new one, a
+        # failure must not leave the station without a running agent.
+        stopped = False
+        try:
+            if _replaces_keys(existing, merged_config):
+                stopped = True
+                _retire_old_keys_sync(
+                    client, request.remote_dir,
+                    _render_startup_script(bundle.init_script, request.remote_dir),
                 )
-            else:
-                _apply_firewall_patch_sync(client, request.remote_dir, request.agent_port)
-        changed_files.extend(
-            _install_startup_script_sync(client, bundle.init_script, request.remote_dir)
-        )
-        client.run(f"{_quote(REMOTE_INIT_SCRIPT)} restart")
+            sent_config = merged_config
+            if _write_remote_file_sync(
+                client,
+                config_path,
+                merged_config,
+                mode="600",
+            ):
+                changed_files.append(f"{request.remote_dir}/{REMOTE_CONFIG_NAME}")
+            keys_written = True
+            if manage_firewall:
+                if c100x:
+                    _apply_firewall_patch_sync(
+                        client, request.remote_dir, request.agent_port, config_bytes=merged_config,
+                    )
+                else:
+                    _apply_firewall_patch_sync(client, request.remote_dir, request.agent_port)
+            changed_files.extend(
+                _install_startup_script_sync(client, bundle.init_script, request.remote_dir)
+            )
+            stopped = True
+            client.run(f"{_quote(REMOTE_INIT_SCRIPT)} restart")
+        except C300XDeviceInstallError:
+            if stopped:
+                _start_agent_after_failure_sync(client)
+            raise
         _verify_startup_sync(client)
 
         display_is_qt5 = kind == QT5_RCC
@@ -350,6 +405,13 @@ def _install_device_agent_sync(
         ):
             changed_files.append(manifest.remote_path)
         _remove_obsolete_display_source_sync(client, request.remote_dir)
+    except C300XDeviceInstallError as err:
+        # A write whose answer was lost can still have put the file in place.
+        err.keys_written = keys_written or (
+            sent_config is not None
+            and _remote_content_matches_sync(client, config_path, sent_config)
+        )
+        raise
     finally:
         client.close()
     return tuple(changed_files)
@@ -360,12 +422,15 @@ def _admit_station_sync(
 ) -> str:
     """Decide before any installer write whether this station is served.
 
-    Every Classe 300X is, as before. A Classe 100X needs the user's explicit
-    confirmation and a package bound to its agent binary that names itself
-    compatible. A station whose own model name and display program disagree
-    is left alone.
+    A host without the vendor's folder is no BTicino station: an SSH login
+    alone proves nothing. Every Classe 300X is served, as before. A Classe
+    100X needs the user's explicit confirmation and a package bound to its
+    agent binary that names itself compatible. A station whose own model name
+    and display program disagree is left alone.
     """
 
+    if not is_bticino_station(client.run, _quote):
+        raise C300XDeviceInstallError(NOT_A_BTICINO_STATION)
     profile = _device_profile(client)
     if not profile.model_confirmed:
         raise C300XDeviceInstallError("device_model_incompatible")
@@ -415,7 +480,7 @@ def _validate_request(request: C300XDeviceInstallRequest) -> None:
         raise C300XDeviceInstallError("invalid_device_host")
     if not request.ssh_username.strip():
         raise C300XDeviceInstallError("invalid_ssh_username")
-    if not request.ssh_password:
+    if not request.ssh_password and not request.ssh_private_key.strip():
         raise C300XDeviceInstallError("invalid_ssh_password")
     if request.agent_port <= 0 or request.agent_port > 65535:
         raise C300XDeviceInstallError("invalid_agent_port")
@@ -663,6 +728,57 @@ def _merge_existing_device_config(template: bytes, existing: Any) -> bytes:
     return (json.dumps(config, indent=2, sort_keys=True) + "\n").encode("utf-8")
 
 
+def _agent_keys(config: Any) -> tuple[Any, Any]:
+    api = config.get("api")
+    maintenance = config.get("maintenance")
+    return (
+        api.get("token") if isinstance(api, dict) else None,
+        maintenance.get("adminToken") if isinstance(maintenance, dict) else None,
+    )
+
+
+def _replaces_keys(existing: Any, config: bytes) -> bool:
+    """The installed agent has other keys than the ones this install writes."""
+
+    return isinstance(existing, dict) and _agent_keys(existing) != _agent_keys(json.loads(config))
+
+
+def _retire_old_keys_sync(client: _DeviceSshClient, remote_dir: str, init_script: bytes) -> None:
+    """Stop the installed agent before its keys are replaced.
+
+    A running agent saves its whole configuration when a setting changes and
+    would write its old keys over the new file. It is stopped by the bundled
+    init script, read from standard input: it signals the PID of its PID file
+    only while that PID runs the agent binary. The init script on the station
+    can be older (2.9.0 and before) and signal a PID that is no longer the
+    agent; it is replaced later in the install. The install starts the new
+    agent. An unfinished copy of the old configuration, left by a cut save or
+    upload, holds the old keys as well and is removed.
+    """
+
+    config = _quote(f"{remote_dir}/{REMOTE_CONFIG_NAME}")
+    client.run(
+        f"sh -s stop || exit 1; rm -f {config}.tmp.* {config}.c300x-*.new",
+        init_script,
+    )
+
+
+def _start_agent_after_failure_sync(client: _DeviceSshClient) -> None:
+    """Start the agent again with what is on the station; best effort.
+
+    An install that fails after it stopped the agent would otherwise leave
+    the station without one until its next boot. The init script on the
+    station starts the agent binary with the configuration there, whichever
+    of old and new they are; a running agent is left alone.
+    """
+
+    init = _quote(REMOTE_INIT_SCRIPT)
+    try:
+        client.run(f"if [ -x {init} ]; then {init} start; fi")
+    except C300XDeviceInstallError:
+        _LOGGER.warning("C300X: the agent could not be started again after the failed install")
+
+
 def _device_activation_config(
     *,
     mode: str,
@@ -717,7 +833,7 @@ def _connect_device_client(request: C300XDeviceInstallRequest) -> _DeviceSshClie
 
 
 def _asyncssh_connect_kwargs(request: C300XDeviceInstallRequest) -> dict[str, Any]:
-    """Return C300X SSH connect arguments with legacy RSA compatibility."""
+    """Return station SSH connect arguments with legacy RSA compatibility."""
     return {
         "host": _ssh_host(request.host),
         "port": 22,
@@ -736,7 +852,9 @@ def _asyncssh_connect_kwargs(request: C300XDeviceInstallRequest) -> dict[str, An
         "host_based_auth": False,
         # LEGACY-SSH-001 in SECURITY.md: explicit local bootstrap/recovery only.
         "known_hosts": None,
-        "server_host_key_algs": ["ssh-rsa"],
+        # Modern host keys first; the factory Dropbear offers only RSA/SHA-1.
+        # Root tools can set it up with one ECDSA or Ed25519 key instead.
+        "server_host_key_algs": list(_SSH_HOST_KEY_ALGS),
         "kex_algs": "+diffie-hellman-group1-sha1",
         "encryption_algs": "+aes128-cbc,3des-cbc",
     }
@@ -770,8 +888,22 @@ class _AsyncSshDeviceSshClient(_DeviceSshClient):
         # private event loop/connection for the entire installation, never HA's.
         self._runner = asyncio.Runner()
         self._closed = False
+        self._key_options: dict[str, Any] = {}
+        if request.ssh_private_key.strip():
+            try:
+                self._key_options = key_login_options(
+                    asyncssh, request.ssh_private_key, request.ssh_key_passphrase, request.ssh_password,
+                )
+            except ValueError:
+                self._runner.close()
+                self._closed = True
+                raise C300XDeviceInstallError(INVALID_SSH_KEY) from None
         try:
             self._client = self._runner.run(self._connect(request))
+        except C300XDeviceInstallError:
+            self._runner.close()
+            self._closed = True
+            raise
         except (OSError, asyncssh.Error) as err:
             self._runner.close()
             self._closed = True
@@ -779,19 +911,37 @@ class _AsyncSshDeviceSshClient(_DeviceSshClient):
             # The cause stays attached: the log names its type, never its text.
             if isinstance(err, getattr(asyncssh, "PermissionDenied", ())):
                 raise C300XDeviceInstallError(LOGIN_REFUSED) from err
+            if ssh_unreachable(err):
+                raise C300XDeviceInstallError(SSH_UNREACHABLE) from err
             raise C300XDeviceInstallError("device_install_failed") from err
+        # Every install step needs root: a tool's second user (bticino2) logs
+        # in but cannot write. Nothing was changed on the device yet.
+        try:
+            root = logged_in_as_root(self.run)
+        except C300XDeviceInstallError:
+            self.close()
+            raise
+        if not root:
+            self.close()
+            raise C300XDeviceInstallError(SSH_USER_NOT_ROOT)
 
     async def _connect(self, request: C300XDeviceInstallRequest) -> Any:
         candidates: tuple[tuple[str, str], ...] = ((request.ssh_username, request.ssh_password),)
         defaults = factory_login_candidates(request.device_model)
         if request.factory_login and candidates[0] == defaults[0]:
             candidates = defaults
+        key_options = getattr(self, "_key_options", {})
         for index, (username, password) in enumerate(candidates):
+            # A key login replaces the password-only options.
+            options = {**_asyncssh_connect_kwargs(
+                replace(request, ssh_username=username, ssh_password=password)
+            ), **key_options}
             try:
-                return await self._asyncssh.connect(**_asyncssh_connect_kwargs(
-                    replace(request, ssh_username=username, ssh_password=password)
-                ))
-            except getattr(self._asyncssh, "PermissionDenied", ()):
+                return await self._asyncssh.connect(**options)
+            except getattr(self._asyncssh, "PermissionDenied", ()) as err:
+                # A key-only station (dropbear -s) refuses every password.
+                if not key_options and await password_login_offered(self._asyncssh, options) is False:
+                    raise C300XDeviceInstallError(SSH_PASSWORD_LOGIN_DISABLED) from err
                 if index + 1 == len(candidates):
                     raise
         raise C300XDeviceInstallError(LOGIN_REFUSED)  # pragma: no cover
@@ -1283,15 +1433,21 @@ def _apply_firewall_patch_sync(
             if type(port) is not int or not 1 <= port <= 65535:
                 raise C300XDeviceInstallError("device_install_failed")
             media_env += f"C300X_RTSP_PORT={port} "
-    client.run(
+    # The script's own status for a hook changed after it was patched becomes
+    # a word on the output: a failed command's output does not come back.
+    output = client.run(
         (
             f"C300X_IPTABLES={_quote(REMOTE_FIREWALL_PATH)} "
             f"C300X_IPTABLES_BACKUP={_quote(REMOTE_FIREWALL_BACKUP)} "
             f"{media_env}"
             f"{_quote(f'{remote_dir}/{REMOTE_BOOTSTRAP_FIREWALL_NAME}')} "
-            f"{api_port}"
+            f"{api_port}; rc=$?; "
+            f"if [ $rc -eq {_FIREWALL_HOOK_CHANGED_STATUS} ]; then printf '\\n%s\\n' {FIREWALL_HOOK_CHANGED}; exit 0; fi; "
+            "exit $rc"
         ),
     )
+    if FIREWALL_HOOK_CHANGED in str(output).split():
+        raise C300XDeviceInstallError(FIREWALL_HOOK_CHANGED)
 
 
 def _ssh_host(host: str) -> str:

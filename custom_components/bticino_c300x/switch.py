@@ -48,6 +48,7 @@ from .entity import (
 )
 from .entry_types import BticinoC300XConfigEntry
 from .event_payload import agent_event_key
+from .exceptions import home_assistant_error
 from .qml_patch import (
     async_apply_qml_patch_and_confirm,
     async_refresh_qml_patch_status,
@@ -423,8 +424,15 @@ class C300XAnsweringMachineSwitch(C300XEntity, SwitchEntity):
         self._attr_available = True
 
 
+_SSH_STATUS_KEYS = ("running", "state", "manager", "listening", "factory_running")
+
+
 class C300XMaintenanceSshSwitch(C300XEntity, SwitchEntity):
-    """Start or stop SSH through the device-agent maintenance API."""
+    """Start or stop SSH through the device-agent maintenance API.
+
+    When another tool keeps SSH running on the station (its own dropbear or a
+    watchdog), the switch shows SSH as on and refuses to change it.
+    """
 
     _attr_entity_category = EntityCategory.CONFIG
     _attr_entity_registry_enabled_default = False
@@ -434,6 +442,7 @@ class C300XMaintenanceSshSwitch(C300XEntity, SwitchEntity):
     def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "maintenance_ssh")
         self._running: bool | None = None
+        self._status: dict[str, Any] = {}
         self._attr_available = True
 
     @property
@@ -450,6 +459,15 @@ class C300XMaintenanceSshSwitch(C300XEntity, SwitchEntity):
             self._entry,
             "ssh_start",
         )
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return how SSH runs and which tool keeps it running, if any."""
+
+        return {
+            "ssh_state": self._status.get("state"),
+            "managed_by": self._status.get("manager"),
+        }
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Start SSH."""
@@ -476,14 +494,31 @@ class C300XMaintenanceSshSwitch(C300XEntity, SwitchEntity):
         self._apply_status(status)
 
     async def _set_enabled(self, enabled: bool) -> None:
+        if self._status.get("state") == "managed_externally":
+            # The other tool may be gone since the last read.
+            await self.async_update()
+            if self._status.get("state") == "managed_externally":
+                raise self._managed_error()
         try:
             status = await self._entry.runtime_data.api.async_set_ssh_enabled(enabled)
         except C300XAgentApiError as err:
+            if getattr(err, "agent_state", None) == "ssh_managed_externally":
+                await self.async_update()
+                raise self._managed_error() from err
             raise HomeAssistantError("C300X SSH update failed") from err
         self._apply_status(status)
 
+    def _managed_error(self) -> HomeAssistantError:
+        manager = self._status.get("manager") or "unknown"
+        return home_assistant_error(
+            "ssh_managed_externally", {"manager": str(manager)}, entry=self._entry
+        )
+
     def _apply_status(self, status: dict[str, Any]) -> None:
         self._running = status.get("running")
+        self._status = {key: status.get(key) for key in _SSH_STATUS_KEYS}
+        # Diagnostics report it without asking the station again.
+        self._entry.runtime_data.ssh_status = self._status
         self._attr_available = True
 
 
@@ -1040,6 +1075,8 @@ class C300XLegacyMqttBridgeSwitch(C300XEntity, SwitchEntity):
             "flexisip_reference_state": self._status.get(
                 "flexisip_reference_state"
             ),
+            "bridge_blocked": self._status.get("bridge_blocked"),
+            "watchdog": self._status.get("watchdog"),
         }
 
     @property

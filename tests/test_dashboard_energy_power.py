@@ -121,7 +121,7 @@ def test_incomplete_missing_and_duplicate_intervals_are_gaps():
     assert "sensor.unselected" not in result.values
 
 
-@pytest.mark.parametrize("language", ["en", "de", "fr", "it", "unsupported"])
+@pytest.mark.parametrize("language", ["en", "de", "fr", "it", "es", "unsupported"])
 def test_presentation_shares_axis_preserves_signs_gaps_and_revision(language):
     sources = EnergySources(
         grid_from=SOURCES.grid_from, grid_power=SOURCES.grid_power,

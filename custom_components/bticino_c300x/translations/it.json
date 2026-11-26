@@ -25,10 +25,15 @@
       },
       "bootstrap_install": {
         "title": "Installa agent {model} nativo",
-        "description": "Home Assistant accede prima con il login di fabbrica del {model}. Inserisci utente e password SSH solo se il dispositivo lo ha rifiutato; lasciati vuoti, viene riprovato il login di fabbrica. Scrive sul {model} l'agent nativo, una configurazione con chiavi generate, lo script di avvio e i file di supporto display tramite SSH. Le credenziali SSH sono usate solo per questa installazione e non vengono salvate.",
+        "description": "Home Assistant accede prima con il login di fabbrica del {model}. Inserisci utente e password SSH, o una chiave privata, solo se il dispositivo lo ha rifiutato; lasciati vuoti, viene riprovato il login di fabbrica. Scrive sul {model} l'agent nativo, una configurazione con chiavi generate, lo script di avvio e i file di supporto display tramite SSH. Le credenziali SSH e le chiavi sono usate solo per questa installazione e non vengono salvate.",
         "data": {
           "bootstrap_ssh_username": "Utente SSH {model}",
-          "bootstrap_ssh_password": "Password SSH {model}"
+          "bootstrap_ssh_password": "Password SSH {model}",
+          "bootstrap_ssh_key": "Chiave privata SSH {model} (facoltativa)",
+          "bootstrap_ssh_key_passphrase": "Passphrase della chiave (facoltativa)"
+        },
+        "data_description": {
+          "bootstrap_ssh_key": "Incolla l'intera chiave privata (OpenSSH o PEM). Tipo di chiave: RSA o ECDSA su 1.7.x, 2.0.2 e C100X 1.5.8; ed25519 solo su 3.0.6. Con una chiave e senza utente viene usato root; una password inserita in aggiunta viene provata se la chiave è rifiutata."
         }
       },
       "c100x_experimental": {
@@ -43,11 +48,13 @@
         "description": "Inserisci le chiavi dell'agent nativo raggiungibile. Lascia vuota la chiave di accesso solo mentre l'agent è ancora in modalità bootstrap noAuth.",
         "data": {
           "agent_token": "Chiave di accesso",
-          "maintenance_token": "Chiave di manutenzione"
+          "maintenance_token": "Chiave di manutenzione",
+          "reinstall_agent": "Non ho le chiavi: reinstalla l'agent"
         },
         "data_description": {
           "agent_token": "Chiave con cui Home Assistant accede al {model}. È stata creata durante l'installazione.",
-          "maintenance_token": "Chiave separata per la manutenzione: aggiornamenti, modifiche al display e riavvii."
+          "maintenance_token": "Chiave separata per la manutenzione: aggiornamenti, modifiche al display e riavvii.",
+          "reinstall_agent": "Reinstalla l'agent incluso tramite SSH con chiavi appena generate. Le chiavi usate finora non funzionano più; tutto il resto sul {model} rimane com'è."
         }
       },
       "user_features": {
@@ -720,7 +727,24 @@
         "description": "Inserisci le chiavi attuali per {name}. Lascia un campo vuoto per mantenere la chiave salvata.",
         "data": {
           "agent_token": "Chiave di accesso",
-          "maintenance_token": "Chiave di manutenzione"
+          "maintenance_token": "Chiave di manutenzione",
+          "reinstall_agent": "Non ho le chiavi: reinstalla l'agent"
+        },
+        "data_description": {
+          "reinstall_agent": "Reinstalla l'agent incluso tramite SSH con chiavi appena generate e le salva in questa voce. Le chiavi usate finora non funzionano più; tutto il resto sul {model} rimane com'è."
+        }
+      },
+      "reauth_reinstall": {
+        "title": "Reinstalla l'agent {model}",
+        "description": "Home Assistant accede prima con il login di fabbrica del {model}. Inserisci utente e password SSH, o una chiave privata, solo se il dispositivo lo ha rifiutato; lasciati vuoti, viene riprovato il login di fabbrica. Ferma l'agent installato, scrive sul {model} l'agent incluso e una configurazione con chiavi appena generate tramite SSH e lo riavvia. Le nuove chiavi vengono salvate per {name}; quelle vecchie non funzionano più. Le pagine del display e le altre impostazioni del {model} rimangono, e il dispositivo non viene riavviato. Le credenziali SSH e le chiavi sono usate solo per questo passaggio e non vengono salvate.",
+        "data": {
+          "bootstrap_ssh_username": "Utente SSH {model}",
+          "bootstrap_ssh_password": "Password SSH {model}",
+          "bootstrap_ssh_key": "Chiave privata SSH {model} (facoltativa)",
+          "bootstrap_ssh_key_passphrase": "Passphrase della chiave (facoltativa)"
+        },
+        "data_description": {
+          "bootstrap_ssh_key": "Incolla l'intera chiave privata (OpenSSH o PEM). Tipo di chiave: RSA o ECDSA su 1.7.x, 2.0.2 e C100X 1.5.8; ed25519 solo su 3.0.6. Con una chiave e senza utente viene usato root; una password inserita in aggiunta viene provata se la chiave è rifiutata."
         }
       }
     },
@@ -732,6 +756,8 @@
       "unique_id_mismatch": "Questo è un dispositivo diverso da quello configurato. Riconfigura la voce corrispondente oppure aggiungi il dispositivo come nuova voce.",
       "reauth_wrong_device": "L'agente ha un'identità diversa. La voce salvata non è stata modificata.",
       "reauth_successful": "Le credenziali sono state aggiornate.",
+      "reinstall_entry_updated": "L'agente è stato reinstallato su una stazione già configurata come {name}. Questa voce ora usa le nuove chiavi e questo indirizzo; non è stata creata una seconda voce.",
+      "station_entry_updated": "Questa stazione è già configurata come {name}. Questa voce ora usa queste chiavi e questo indirizzo; non è stata creata una seconda voce.",
       "unsupported_display": "Questo dispositivo non supporta le pagine Home Assistant o le notifiche sul display. I layout salvati non sono stati modificati."
     },
     "error": {
@@ -768,9 +794,15 @@
       "invalid_maintenance_auth": "Il {model} ha rifiutato la chiave di manutenzione. Inserisci la chiave di manutenzione attuale.",
       "cannot_connect": "Impossibile verificare il {model}. Controlla indirizzo e connessione, poi riprova.",
       "ssh_login_refused": "Il {model} ha rifiutato l'accesso SSH. Inserisci utente e password SSH del dispositivo.",
+      "invalid_ssh_key": "Impossibile leggere la chiave privata. Incolla l'intera chiave con le righe BEGIN ed END e la sua passphrase, se ne ha una.",
+      "ssh_user_not_root": "Questo utente SSH non ha i diritti di root. Accedi come root o root2, non come bticino2.",
+      "ssh_unreachable": "Il {model} non risponde via SSH (porta 22). SSH è disattivato o bloccato sulla stazione; controlla l'indirizzo e che lo strumento di root abbia attivato SSH.",
+      "ssh_password_login_disabled": "Il {model} non accetta l'accesso con password, solo chiavi SSH. Incolla la chiave privata configurata dallo strumento di root, oppure crea l'immagine con l'accesso tramite password.",
       "installer_firewall_hook_unsupported": "Impossibile verificare lo script firewall in sicurezza. Installazione interrotta prima di modificare il dispositivo. Controllare tipo e permessi del file senza creare uno script sostitutivo.",
+      "firewall_hook_changed": "Lo script di avvio del firewall del {model} (/etc/network/if-pre-up.d/iptables) è stato modificato da altro dopo che l'agent ha aggiunto le sue porte; l'originale salvato non corrisponde più. Lo script è rimasto invariato. Ripristinalo, o rimuovi da esso il blocco dell'agent, poi riprova.",
       "device_model_incompatible": "Questo pacchetto non supporta questa postazione, oppure non è stato possibile confermare il modello della postazione. Nessun file del dispositivo è stato sostituito.",
-      "c100x_confirmation_required": "Spunta la casella per configurare il Classe 100X, oppure chiudi questa finestra per lasciare la postazione invariata."
+      "c100x_confirmation_required": "Spunta la casella per configurare il Classe 100X, oppure chiudi questa finestra per lasciare la postazione invariata.",
+      "not_a_bticino_station": "Il dispositivo a questo indirizzo non è una postazione BTicino. Non è stato scritto nulla. Controlla l'indirizzo."
     }
   },
   "options": {
@@ -1506,7 +1538,20 @@
         "name": "Silenzia suoneria"
       },
       "maintenance_ssh": {
-        "name": "SSH"
+        "name": "SSH",
+        "state_attributes": {
+          "ssh_state": {
+            "name": "Stato SSH",
+            "state": {
+              "running": "In esecuzione",
+              "stopped": "Arrestato",
+              "managed_externally": "Gestito da un altro strumento"
+            }
+          },
+          "managed_by": {
+            "name": "Gestito da"
+          }
+        }
       },
       "maintenance_no_auth": {
         "name": "Agent noAuth"
@@ -1568,6 +1613,9 @@
     },
     "station_busy": {
       "message": "La stazione è occupata da una chiamata. Riprova quando è terminata."
+    },
+    "ssh_managed_externally": {
+      "message": "L'SSH della stazione è gestito da un altro strumento ({manager}). Attivalo o disattivalo con quello strumento."
     },
     "gui_function_patch_required": {
       "message": "Questa azione richiede la patch display {model}. Abilita e applica prima il patch display nelle opzioni dell'integrazione."
@@ -1689,10 +1737,12 @@
           },
           "ssh_install": {
             "title": "Reinstalla device agent {model} via SSH",
-            "description": "Questo agent installato non può ancora aggiornarsi da solo. Home Assistant accederà con il login di fabbrica del {model}, o con le credenziali SSH inserite qui se il dispositivo lo ha rifiutato, per installare l'agent incluso, poi aggiornerà solo le patch display e firewall attive quando la sorgente patch inclusa è cambiata. Le credenziali SSH non vengono salvate. Se usi Ring Call Solo Home Assistant, verifica anche la patch utente media Home Assistant / patch di routing nelle opzioni dell'integrazione dopo l'aggiornamento.\n\nInstallato: {installed_version} (API {installed_api_version}, bundle {installed_bundle_hash})\nIncluso: {available_version} (API {available_api_version}, bundle {available_bundle_hash})\nPercorso update: {update_path}\nStato patch display: {qml_patch_status}\nMotivo: {reason}",
+            "description": "Questo agent installato non può ancora aggiornarsi da solo. Home Assistant accederà con il login di fabbrica del {model}, o con le credenziali SSH o la chiave privata inserite qui se il dispositivo lo ha rifiutato, per installare l'agent incluso, poi aggiornerà solo le patch display e firewall attive quando la sorgente patch inclusa è cambiata. Le credenziali SSH e la chiave non vengono salvate. Se usi Ring Call Solo Home Assistant, verifica anche la patch utente media Home Assistant / patch di routing nelle opzioni dell'integrazione dopo l'aggiornamento.\n\nInstallato: {installed_version} (API {installed_api_version}, bundle {installed_bundle_hash})\nIncluso: {available_version} (API {available_api_version}, bundle {available_bundle_hash})\nPercorso update: {update_path}\nStato patch display: {qml_patch_status}\nMotivo: {reason}",
             "data": {
               "bootstrap_ssh_username": "Nome utente SSH",
-              "bootstrap_ssh_password": "Password SSH"
+              "bootstrap_ssh_password": "Password SSH",
+              "bootstrap_ssh_key": "Chiave privata SSH (facoltativa)",
+              "bootstrap_ssh_key_passphrase": "Passphrase della chiave (facoltativa)"
             }
           }
         },
@@ -1704,7 +1754,13 @@
           "update_root_readonly_failed": "L'aggiornamento non è riuscito a riportare il filesystem radice (/) in sola lettura. Lo stato finale del dispositivo è incerto; il ripristino non è confermato. Conserva i file di recupero e verifica l'agente e il filesystem prima di un altro aggiornamento.",
           "update_apply_failed": "L'agente ha segnalato un errore generico di aggiornamento; la causa e lo stato finale del dispositivo sono sconosciuti. Se in precedenza hai rimontato manualmente / in scrittura, un normale riavvio del dispositivo può aiutare. Verifica lo stato del dispositivo prima di riprovare; questo errore non conferma il ripristino.",
           "update_verify_failed": "L'aggiornamento è stato inviato, ma l'agent segnala ancora un bundle vecchio o incompatibile.",
-          "ssh_login_refused": "Il {model} ha rifiutato l'accesso SSH. Inserisci utente e password SSH del dispositivo."
+          "ssh_login_refused": "Il {model} ha rifiutato l'accesso SSH. Inserisci utente e password SSH del dispositivo.",
+          "invalid_ssh_key": "Impossibile leggere la chiave privata. Incolla l'intera chiave con le righe BEGIN ed END e la sua passphrase, se ne ha una.",
+          "ssh_user_not_root": "Questo utente SSH non ha i diritti di root. Accedi come root o root2, non come bticino2.",
+          "ssh_unreachable": "Il {model} non risponde via SSH (porta 22). SSH è disattivato o bloccato sulla stazione; controlla l'indirizzo e che lo strumento di root abbia attivato SSH.",
+          "ssh_password_login_disabled": "Il {model} non accetta l'accesso con password, solo chiavi SSH. Incolla la chiave privata configurata dallo strumento di root, oppure crea l'immagine con l'accesso tramite password.",
+          "firewall_hook_changed": "Lo script di avvio del firewall del {model} (/etc/network/if-pre-up.d/iptables) è stato modificato da altro dopo che l'agent ha aggiunto le sue porte; l'originale salvato non corrisponde più. Lo script è rimasto invariato. Ripristinalo, o rimuovi da esso il blocco dell'agent, poi riprova.",
+          "not_a_bticino_station": "Il dispositivo a questo indirizzo non è una postazione BTicino. Non è stato scritto nulla. Controlla l'indirizzo."
         },
         "abort": {
           "entry_not_loaded": "La voce BTicino C300X non è caricata."

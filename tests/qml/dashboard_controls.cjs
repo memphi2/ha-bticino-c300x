@@ -154,7 +154,7 @@ assert.equal(p.optionLabel({command: "preset_mode"}, "auto"), "auto", "custom pr
 assert.equal(p.optionLabel({command: "option", labels: ["Smartphone", "Blockiert"]}, "blocked", 1), "Blockiert", "a select shows the text Home Assistant sent for the option");
 assert.equal(p.optionLabel({command: "option", labels: ["Smartphone"]}, "blocked", 1), "blocked", "a missing text falls back to the option");
 assert.equal(p.optionLabel({command: "option"}, "Night", 1), "Night");
-for (const lang of ["en", "de", "fr", "it"]) {
+for (const lang of ["en", "de", "fr", "it", "es"]) {
     const modeLabels = {};
     for (const key of Object.keys(I18n.DETAIL_LABELS[lang])) {
         if (key.indexOf("mode_") !== 0) continue;
@@ -163,7 +163,7 @@ for (const lang of ["en", "de", "fr", "it"]) {
         modeLabels[label] = key;
     }
 }
-for (const lang of ["de", "fr", "it"]) {
+for (const lang of ["de", "fr", "it", "es"]) {
     assert.deepEqual(Object.keys(I18n.DETAIL_LABELS[lang]).sort(), Object.keys(I18n.DETAIL_LABELS.en).sort());
     for (const key of Object.keys(I18n.DETAIL_LABELS.en)) assert.notEqual(I18n.text(lang, key), key);
 }
@@ -608,7 +608,7 @@ assert.equal(p.itemName({entity_id: "light.room"}), "light.room");
 assert.equal(Api.dashboardMixedItems([{kind: "entity", domain: "c300x", entity_id: "light.room", name: "Room", glyph: "\u2600"}])[0].glyph, "\u2600");
 assert.equal(Api.dashboardMixedItems([{kind: "entity", domain: "c300x", entity_id: "light.room", name: "Room"}])[0].glyph, undefined);
 assert.equal(p.optionLabel({command: "effect"}, "off"), "off", "an effect name is never translated as a mode");
-for (const lang of ["en", "de", "fr", "it"]) {
+for (const lang of ["en", "de", "fr", "it", "es"]) {
     for (const key of ["shuffle", "repeat", "effect", "mode_all", "mode_one"]) {
         assert.notEqual(I18n.text(lang, key), key, key + " is translated in " + lang);
     }
@@ -651,7 +651,7 @@ p.quickAction(playerItem, {command: "media_next_track", kind: "button", steps: 0
 assert.match(queue[0].url, /media_player.kitchen%3Amedia_next_track$/);
 p.pendingEntity = ""; p.controlInFlight = false; queue.length = 0; p.controlFeedback = [];
 const everyPlayerControl = playerItem.controls.concat([{command: "sound_mode", kind: "choice", value: "Movie", options: ["Movie"]}]);
-for (const language of ["en", "de", "fr", "it"]) {
+for (const language of ["en", "de", "fr", "it", "es"]) {
     p.uiLanguage = language;
     for (const control of everyPlayerControl) {
         assert.notEqual(p.controlLabel(control), control.command, language + " label for " + control.command);
@@ -714,7 +714,7 @@ assert.equal(Api.dashboardExpectationMatches(lockItem, lockExpectation), false, 
 const unlockedItem = JSON.parse(JSON.stringify(lockItem));
 unlockedItem.details.activity = "unlocked";
 assert.equal(Api.dashboardExpectationMatches(unlockedItem, lockExpectation), true);
-for (const lang of ["en", "de", "fr", "it"]) {
+for (const lang of ["en", "de", "fr", "it", "es"]) {
     for (const key of ["lock", "unlock", "open", "confirm"]) assert.notEqual(I18n.text(lang, key), key, key + " in " + lang);
 }
 const vacuumItem = {entity_id: "vacuum.robot", domain: "c300x", available: true, state: false,
@@ -736,7 +736,7 @@ const dockExpectation = Api.dashboardExpectation(vacuumItem, vacuumItem.controls
 assert.equal(Api.dashboardExpectationMatches(vacuumItem, dockExpectation), true, "already docked confirms the way back");
 assert.equal(Api.dashboardExpectationMatches(cleaningItem, dockExpectation), false);
 assert.equal(Api.dashboardExpectation(vacuumItem, vacuumItem.controls[0], null).stateless, true, "finding it leaves no state to confirm");
-for (const lang of ["en", "de", "fr", "it"]) {
+for (const lang of ["en", "de", "fr", "it", "es"]) {
     for (const key of ["start", "pause", "stop", "return_to_base", "locate", "fan_speed"]) assert.notEqual(I18n.text(lang, key), key, key + " in " + lang);
 }
 const valveItem = {entity_id: "valve.water", domain: "c300x", available: true, state: false,
@@ -751,7 +751,7 @@ assert.equal(Api.dashboardExpectationMatches(valveItem, closeExpectation), false
 const closedItem = JSON.parse(JSON.stringify(valveItem));
 closedItem.details.activity = "closed";
 assert.equal(Api.dashboardExpectationMatches(closedItem, closeExpectation), true);
-for (const lang of ["en", "de", "fr", "it"]) {
+for (const lang of ["en", "de", "fr", "it", "es"]) {
     for (const key of ["open_valve", "stop_valve", "close_valve"]) assert.notEqual(I18n.text(lang, key), key, key + " in " + lang);
 }
 const humidifierItem = {entity_id: "humidifier.room", domain: "c300x", available: true, state: true, kind: "switch",
@@ -759,7 +759,7 @@ const humidifierItem = {entity_id: "humidifier.room", domain: "c300x", available
     {command: "toggle", kind: "button"}, {command: "target_humidity", kind: "number", value: 55, min: 30, max: 80, step: 1, unit: "%"}]};
 assert.deepEqual(Array.from(Api.dashboardVisibleControls(humidifierItem, ""), c => c.command), ["target_humidity"],
     "the power switch of a humidifier lives in the summary, not in the control list");
-for (const lang of ["en", "de", "fr", "it"]) {
+for (const lang of ["en", "de", "fr", "it", "es"]) {
     for (const key of ["mode", "target_humidity", "operation_mode"]) assert.notEqual(I18n.text(lang, key), key, key + " in " + lang);
 }
 assert.equal(I18n.text("en", "humidity"), "Humidity", "the weather label is not the target label");
@@ -778,7 +778,7 @@ const fanTile = Object.assign(JSON.parse(JSON.stringify(fanItem)), {kind: "switc
 assert.equal(p.itemDetail(fanTile), "On   Speed: 66 %", "a fan tile reads the speed it steps");
 const offFanTile = JSON.parse(JSON.stringify(fanTile)); offFanTile.state = false; offFanTile.controls[0].value = 0;
 assert.equal(p.itemDetail(offFanTile), "Off   Speed: 0 %", "an off fan reads speed 0");
-for (const language of ["en", "de", "fr", "it"]) {
+for (const language of ["en", "de", "fr", "it", "es"]) {
     p.uiLanguage = language;
     assert.equal(p.itemDetail(fanTile), p.uiText("on") + "   " + p.uiText("percentage") + ": 66 %", language + " fan tile reading");
     assert.notEqual(p.uiText("percentage"), "percentage", language + " names the fan speed");
@@ -827,7 +827,7 @@ Api.loadDashboardPage(p.status, p);
 assert.equal(p.energyVisible, false, "energy data without views is not shown");
 p.dashboardPages = []; p.items = []; p.currentPageIndex = 0;
 console.log("Energy page hand-over passed");
-const displayLanguages = ["de", "en", "fr", "it"];
+const displayLanguages = ["de", "en", "es", "fr", "it"];
 const keysOf = value => Object.keys(value).sort();
 for (const name of ["CONTROL_LABELS", "DETAIL_LABELS"]) {
     assert.deepEqual(keysOf(I18n[name]), displayLanguages, name + " covers every display language");
@@ -835,7 +835,7 @@ for (const name of ["CONTROL_LABELS", "DETAIL_LABELS"]) {
         assert.deepEqual(keysOf(I18n[name][lang]), keysOf(I18n[name].en), name + " is complete in " + lang);
     }
 }
-for (const [lang, catalog, weather] of [["de", I18n.DE, I18n.WEATHER_DE], ["fr", I18n.FR, I18n.WEATHER_FR], ["it", I18n.IT, I18n.WEATHER_IT]]) {
+for (const [lang, catalog, weather] of [["de", I18n.DE, I18n.WEATHER_DE], ["fr", I18n.FR, I18n.WEATHER_FR], ["it", I18n.IT, I18n.WEATHER_IT], ["es", I18n.ES, I18n.WEATHER_ES]]) {
     assert.deepEqual(keysOf(catalog), keysOf(I18n.EN), "the display texts are complete in " + lang);
     assert.deepEqual(keysOf(weather), keysOf(I18n.WEATHER_EN), "the weather texts are complete in " + lang);
     for (const key of keysOf(I18n.EN)) {
@@ -844,7 +844,8 @@ for (const [lang, catalog, weather] of [["de", I18n.DE, I18n.WEATHER_DE], ["fr",
     }
 }
 assert.notEqual(I18n.text("de", "ha_feedback_colors"), I18n.text("en", "ha_feedback_colors"));
-assert.equal(I18n.text("es", "ha_feedback_colors"), I18n.EN.ha_feedback_colors, "a language without texts shows English");
+assert.equal(I18n.text("pt", "ha_feedback_colors"), I18n.EN.ha_feedback_colors, "a language without texts shows English");
+assert.equal(I18n.text("es-ES", "ha_feedback_colors"), "Mensajes de estado", "Spanish of Spain picks the Spanish texts");
 const shadowed = keysOf(I18n.EN).filter(key => I18n.CONTROL_LABELS.en[key] || I18n.DETAIL_LABELS.en[key]);
 assert.deepEqual(shadowed, [], "no text is defined twice");
 console.log("Display languages passed");
@@ -852,7 +853,7 @@ console.log("Display languages passed");
 for (const [language, decimalComma, expected] of [
     ["en", true, "21,5 C"], ["de", false, "21.5 C"],
     ["de", true, "21,5 C"], ["fr", true, "21,5 C"],
-    ["it", true, "21,5 C"], ["en", false, "21.5 C"],
+    ["it", true, "21,5 C"], ["es", true, "21,5 C"], ["en", false, "21.5 C"],
 ]) {
     p.uiLanguage = language;
     Api.dashboard(p.status, p);
@@ -871,7 +872,7 @@ const detail = vm.createContext({hostPage: p, width: 752, preview: 0, control: {
     submitted: value => submitted.push(value), refreshRequested: () => refreshes++});
 detail.controlRow = detail;
 vm.runInContext(detailMethods, detail);
-for (const language of ["en", "de", "fr", "it"]) {
+for (const language of ["en", "de", "fr", "it", "es"]) {
     p.uiLanguage = language;
     detail.control = {command: "hvac_mode", kind: "choice", options: ["off", "heat", "cool", "auto", "dry"]};
     assert.equal(detail.choiceColumns(), 5, "five short climate modes fit one 800px landscape row: " + language);

@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "agent_version": "3.0.0b1",
-  "inputs_sha256": "471fba111f7f5082f2b025ae19ee43ec66b6ad4815d57d3c8f34f23da01bd7fd",
-  "binary_sha256": "b9c96b08386edfa34b982900725aa39dfe4fdc3aff1f8def0897ff7a3faf8024",
-  "local_build_settings_sha256": "3a477714388c497620a7bce2fd1b6b7ed13c58ddfcfa884a53472b11a72611ea"
+  "agent_version": "3.0.0b2",
+  "inputs_sha256": "b553a219ca371ca8de0fee66c2f4ad22848c670bc94e07ea561772bf1c1276c3",
+  "binary_sha256": "e8e5b39b4f54b71c027f6597429c8be5b2570a53e26fabf716bb529fa1e13094",
+  "local_build_settings_sha256": "5ed36b8c1dff656d8cf4d31c90d22fbed045f343828ac3a8d6b83dbf2d28a0fd"
 }

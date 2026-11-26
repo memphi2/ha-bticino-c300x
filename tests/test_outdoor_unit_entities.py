@@ -324,3 +324,28 @@ def test_ring_entities_listen_to_the_agent_event_bus() -> None:
     station.hass = SimpleNamespace(bus=SimpleNamespace(async_listen=lambda kind, _cb: listened.append(kind) or (lambda: None)))
     asyncio.run(station.async_added_to_hass())
     assert EVENT_AGENT_EVENT_RECEIVED in listened
+
+
+def test_only_a_unit_the_station_no_longer_reports_can_be_deleted() -> None:
+    import custom_components.bticino_c300x as integration
+
+    entry = _entry(THREE)
+
+    def device(*identifiers: str) -> Any:
+        return SimpleNamespace(identifiers={("bticino_c300x", value) for value in identifiers})
+
+    def removable(item: Any) -> bool:
+        return asyncio.run(integration.async_remove_config_entry_device(SimpleNamespace(), entry, item))  # type: ignore[arg-type]
+
+    gone = device("c300x-0123456789ab:unit:23")
+    assert removable(gone)
+    # The station, a unit it still reports, a unit of another station: they stay.
+    assert not removable(device("c300x-0123456789ab"))
+    assert not removable(device("c300x-0123456789ab:unit:21"))
+    assert not removable(device("c300x-0000000000aa:unit:23"))
+    # Not loaded: the units the entry kept decide; none kept, nothing goes.
+    entry.runtime_data = None  # type: ignore[assignment]
+    entry.data = {**entry.data, CONF_OUTDOOR_UNITS: THREE}
+    assert removable(gone) and not removable(device("c300x-0123456789ab:unit:22_1"))
+    entry.data = {CONF_STATION_ID: "c300x-0123456789ab"}
+    assert not removable(gone)

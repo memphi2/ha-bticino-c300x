@@ -105,9 +105,7 @@ rules:
   repair-issues:
     status: done
     comment: Repairs are created for invalid action maps, missing configured alarm entities, and empty agent capabilities.
-  stale-devices:
-    status: exempt
-    comment: Each config entry owns one physical C300X device; removing the entry removes that device. No separately discovered child devices can become stale.
+  stale-devices: done
 
   async-dependency:
     status: todo

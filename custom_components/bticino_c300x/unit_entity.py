@@ -15,8 +15,10 @@ from .call_registry import (
     SIGNAL_CALLS_CHANGED,
     SIGNAL_OUTDOOR_UNITS_CHANGED,
     C300XCallRegistry,
+    units_from_stored,
 )
 from .call_sync import entry_call_registry
+from .const import CONF_OUTDOOR_UNITS, DOMAIN
 from .entity import C300XEntity
 from .entry_types import BticinoC300XConfigEntry
 from .identity import unit_device_identifier, unit_unique_id
@@ -59,6 +61,29 @@ def async_register_unit_device(
         model=OUTDOOR_UNIT_MODEL,
         **names,
     )
+
+
+def unit_device_removable(entry: BticinoC300XConfigEntry, identifiers: Iterable[tuple[str, str]]) -> bool:
+    """A unit device may go once the station no longer reports its unit.
+
+    The station's own device and the device of a unit the station still
+    reports stay. Without a known unit list nothing is removed.
+    """
+
+    prefix = unit_device_identifier(entry, "")[1]
+    unit_ids = {value[len(prefix):] for domain, value in identifiers
+                if domain == DOMAIN and value.startswith(prefix)}
+    if not unit_ids:
+        return False
+    registry = entry_call_registry(entry)
+    if registry is not None and registry.loaded:
+        known: set[str] = set(registry.units)
+    else:
+        stored = units_from_stored(entry.data.get(CONF_OUTDOOR_UNITS))
+        if stored is None:
+            return False
+        known = {unit.id for unit in stored.units}
+    return not unit_ids & known
 
 
 class C300XUnitEntity(C300XEntity):

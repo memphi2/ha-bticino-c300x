@@ -121,7 +121,8 @@ offer creates no entity.
 The station is one device. Every outdoor unit (entrance panel) the station
 knows is its own device below it, also when there is only one. The station
 names its units from its own configuration; a unit that is not configured
-appears with its first ring.
+appears with its first ring. The device of a unit the station no longer
+reports can be deleted on its device page.
 
 | Outdoor unit entity | Notes |
 | --- | --- |

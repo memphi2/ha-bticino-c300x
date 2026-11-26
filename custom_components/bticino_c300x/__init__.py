@@ -27,9 +27,11 @@ from .runtime_manager import (
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
+    from homeassistant.helpers.device_registry import DeviceEntry
 
 __all__ = (
     "async_migrate_entry",
+    "async_remove_config_entry_device",
     "async_remove_entry",
     "async_setup",
     "async_setup_entry",
@@ -140,6 +142,16 @@ async def async_unload_entry(hass: HomeAssistant, entry: BticinoC300XConfigEntry
     if unload_ok:
         async_unload_notify(hass, entry)
     return unload_ok
+
+
+async def async_remove_config_entry_device(
+    hass: HomeAssistant, entry: BticinoC300XConfigEntry, device_entry: DeviceEntry,
+) -> bool:
+    """Let the user delete the device of an outdoor unit the station no longer reports."""
+
+    from .unit_entity import unit_device_removable
+
+    return unit_device_removable(entry, device_entry.identifiers)
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> None:

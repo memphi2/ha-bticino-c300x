@@ -18,7 +18,7 @@ def media_binaries(request, tmp_path_factory):
         "config", "json_parse", "json_util", "string_util", "time_util", "video_rtsp", "sha256", "audio_codec", "device_file",
         "media_audio", "media_sip", "media_sip_io", "media_sip_dialog", "media_base64", "media_session_guard",
         "media_rtsp_auth", "media_rtsp_io", "media_rtsp_reader", "talkback_g711", "device_detect", "file_io",
-        "root_mount",
+        "root_mount", "media_gop_cache",
     ]
     for name, dependencies in (
         ("media_lifecycle", sources),

@@ -304,4 +304,4 @@ def test_reference_ring_call_fingerprint_matches_native_ring_media_flow() -> Non
     assert ha_ref["answer_action"] == "/api/v1/calls/{call_id}/actions/answer"
     assert ha_ref["hangup_action"] == "/api/v1/calls/{call_id}/actions/hangup"
     assert "f\"/api/v1/calls/{quote(call_id, safe='')}/actions/{action}\"" in api
-    assert '_call_action(call_id, "answer")' in api and '_call_action(call_id, "hangup")' in api
+    assert '_call_action(call_id, "answer", unit)' in api and '_call_action(call_id, "hangup", unit)' in api

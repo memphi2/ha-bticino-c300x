@@ -795,6 +795,8 @@
       "ssh_login_refused": "Il {model} ha rifiutato l'accesso SSH. Inserisci utente e password SSH del dispositivo.",
       "invalid_ssh_key": "Impossibile leggere la chiave privata. Incolla l'intera chiave con le righe BEGIN ed END e la sua passphrase, se ne ha una.",
       "ssh_user_not_root": "Questo utente SSH non ha i diritti di root. Accedi come root o root2, non come bticino2.",
+      "ssh_unreachable": "Il {model} non risponde via SSH (porta 22). SSH è disattivato o bloccato sulla stazione; controlla l'indirizzo e che lo strumento di root abbia attivato SSH.",
+      "ssh_password_login_disabled": "Il {model} non accetta l'accesso con password, solo chiavi SSH. Incolla la chiave privata configurata dallo strumento di root, oppure crea l'immagine con l'accesso tramite password.",
       "installer_firewall_hook_unsupported": "Impossibile verificare lo script firewall in sicurezza. Installazione interrotta prima di modificare il dispositivo. Controllare tipo e permessi del file senza creare uno script sostitutivo.",
       "device_model_incompatible": "Questo pacchetto non supporta questa postazione, oppure non è stato possibile confermare il modello della postazione. Nessun file del dispositivo è stato sostituito.",
       "c100x_confirmation_required": "Spunta la casella per configurare il Classe 100X, oppure chiudi questa finestra per lasciare la postazione invariata.",
@@ -1738,6 +1740,8 @@
           "ssh_login_refused": "Il {model} ha rifiutato l'accesso SSH. Inserisci utente e password SSH del dispositivo.",
           "invalid_ssh_key": "Impossibile leggere la chiave privata. Incolla l'intera chiave con le righe BEGIN ed END e la sua passphrase, se ne ha una.",
           "ssh_user_not_root": "Questo utente SSH non ha i diritti di root. Accedi come root o root2, non come bticino2.",
+          "ssh_unreachable": "Il {model} non risponde via SSH (porta 22). SSH è disattivato o bloccato sulla stazione; controlla l'indirizzo e che lo strumento di root abbia attivato SSH.",
+          "ssh_password_login_disabled": "Il {model} non accetta l'accesso con password, solo chiavi SSH. Incolla la chiave privata configurata dallo strumento di root, oppure crea l'immagine con l'accesso tramite password.",
           "not_a_bticino_station": "Il dispositivo a questo indirizzo non è una postazione BTicino. Non è stato scritto nulla. Controlla l'indirizzo."
         },
         "abort": {

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import signal
+import socket
 import threading
 import time
 from pathlib import Path
@@ -246,6 +247,49 @@ def test_the_login_is_checked_for_root_rights_before_any_step(ssh_server, statio
         assert station_login["commands"] == ["id -u"]
     finally:
         client.close()
+
+
+@pytest.mark.parametrize("factory_login", [False, True])
+def test_a_key_only_station_tells_that_it_takes_no_password(ssh_server, station_login, factory_login):
+    """dropbear -s: only a key logs in. Without one the user is told so, not "refused"."""
+    from dataclasses import replace
+
+    station_login.update(password=False, keys=[_user_key("ecdsa-sha2-nistp256")], sig_algs=["ecdsa-sha2-nistp256"])
+    with pytest.raises(installer.C300XDeviceInstallError) as caught:
+        installer._connect_device_client(replace(ssh_server, factory_login=factory_login))
+    assert caught.value.reason == "ssh_password_login_disabled"
+    # A station that takes passwords still asks for another login after a wrong one.
+    station_login["password"] = True
+    with pytest.raises(installer.C300XDeviceInstallError, match="ssh_login_refused"):
+        installer._connect_device_client(replace(ssh_server, ssh_password="wrong"))
+
+
+def _station_without_ssh(monkeypatch, behaviour: str) -> socket.socket:
+    listener = socket.socket()
+    listener.bind(("127.0.0.1", 0))
+    port = listener.getsockname()[1]
+    if behaviour == "refused":
+        listener.close()
+    else:
+        # Packets dropped: the connection never gets an SSH answer.
+        listener.listen(1)
+        monkeypatch.setattr(installer, "_SSH_CONNECT_TIMEOUT", 0.5)
+    original = installer._asyncssh_connect_kwargs
+    monkeypatch.setattr(installer, "_asyncssh_connect_kwargs", lambda value: {**original(value), "port": port})
+    return listener
+
+
+@pytest.mark.parametrize("behaviour", ["refused", "silent"])
+def test_a_station_without_ssh_is_named_unreachable(monkeypatch, behaviour):
+    listener = _station_without_ssh(monkeypatch, behaviour)
+    try:
+        with pytest.raises(installer.C300XDeviceInstallError) as caught:
+            installer._connect_device_client(installer.C300XDeviceInstallRequest(
+                host="127.0.0.1", ssh_username="root", ssh_password="secret",
+            ))
+    finally:
+        listener.close()
+    assert caught.value.reason == "ssh_unreachable"
 
 
 def test_command_failure_does_not_expose_remote_output(ssh_server):

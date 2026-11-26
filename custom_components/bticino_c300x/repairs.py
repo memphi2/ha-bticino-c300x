@@ -75,7 +75,12 @@ from .device_installer import (
     async_install_device_agent,
 )
 from .device_profile import NOT_A_BTICINO_STATION
-from .device_ssh_login import INVALID_SSH_KEY, SSH_USER_NOT_ROOT
+from .device_ssh_login import (
+    INVALID_SSH_KEY,
+    SSH_PASSWORD_LOGIN_DISABLED,
+    SSH_UNREACHABLE,
+    SSH_USER_NOT_ROOT,
+)
 from .device_user import homeassistant_account_label
 from .display_activation import display_is_qt5, display_unsupported
 from .display_support import setup_is_c100x
@@ -495,7 +500,10 @@ def _ssh_install_error(err: BaseException) -> str:
     """Return the translated error of a failed SSH install."""
 
     reason = err.reason if isinstance(err, C300XDeviceInstallError) else ""
-    shown = (LOGIN_REFUSED, DISPLAY_WRITE_TIMEOUT, NOT_A_BTICINO_STATION, INVALID_SSH_KEY, SSH_USER_NOT_ROOT)
+    shown = (
+        LOGIN_REFUSED, DISPLAY_WRITE_TIMEOUT, NOT_A_BTICINO_STATION, INVALID_SSH_KEY, SSH_USER_NOT_ROOT,
+        SSH_UNREACHABLE, SSH_PASSWORD_LOGIN_DISABLED,
+    )
     return reason if reason in shown else "ssh_install_failed"
 
 
@@ -803,7 +811,9 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
         except Exception as err:  # noqa: BLE001 - Repairs shows a translated failure
             _LOGGER.warning("C300X SSH install failed: %s", _install_error_log_text(err))
             # Another login is needed: refused, or one without root rights.
-            refused = isinstance(err, C300XDeviceInstallError) and err.reason in (LOGIN_REFUSED, SSH_USER_NOT_ROOT)
+            refused = isinstance(err, C300XDeviceInstallError) and err.reason in (
+                LOGIN_REFUSED, SSH_USER_NOT_ROOT, SSH_PASSWORD_LOGIN_DISABLED,
+            )
             self._ask_ssh_login = self._ask_ssh_login or refused
             return self.async_show_form(
                 step_id="ssh_install",

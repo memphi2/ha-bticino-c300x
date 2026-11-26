@@ -795,6 +795,8 @@
       "ssh_login_refused": "Der {model} hat die SSH-Anmeldung abgelehnt. Gib den SSH-User und das Passwort des Geräts ein.",
       "invalid_ssh_key": "Der private Schlüssel konnte nicht gelesen werden. Füge den ganzen Schlüssel mit seinen BEGIN- und END-Zeilen ein und, falls er eine hat, seine Passphrase.",
       "ssh_user_not_root": "Dieser SSH-User hat keine Root-Rechte. Melde dich als root oder root2 an, nicht als bticino2.",
+      "ssh_unreachable": "Der {model} antwortet nicht per SSH (Port 22). SSH ist auf der Station aus oder blockiert; prüfe die Adresse und ob das Root-Tool SSH eingeschaltet hat.",
+      "ssh_password_login_disabled": "Der {model} nimmt keine Passwort-Anmeldung an, nur SSH-Schlüssel. Füge den privaten Schlüssel ein, den das Root-Tool eingerichtet hat, oder baue das Image mit Passwort-Anmeldung.",
       "installer_firewall_hook_unsupported": "Der Firewall-Hook lässt sich nicht sicher prüfen. Vor Änderungen am Gerät wurde abgebrochen. Bitte Dateityp und Berechtigungen prüfen und keinen Platzhalter anlegen.",
       "device_model_incompatible": "Dieses Paket unterstützt diese Station nicht, oder das Modell der Station konnte nicht bestätigt werden. Es wurden keine Gerätedateien ersetzt.",
       "c100x_confirmation_required": "Setze den Haken, um die Classe 100X einzurichten, oder schließe diesen Dialog, um die Station unverändert zu lassen.",
@@ -1738,6 +1740,8 @@
           "ssh_login_refused": "Der {model} hat die SSH-Anmeldung abgelehnt. Gib den SSH-User und das Passwort des Geräts ein.",
           "invalid_ssh_key": "Der private Schlüssel konnte nicht gelesen werden. Füge den ganzen Schlüssel mit seinen BEGIN- und END-Zeilen ein und, falls er eine hat, seine Passphrase.",
           "ssh_user_not_root": "Dieser SSH-User hat keine Root-Rechte. Melde dich als root oder root2 an, nicht als bticino2.",
+          "ssh_unreachable": "Der {model} antwortet nicht per SSH (Port 22). SSH ist auf der Station aus oder blockiert; prüfe die Adresse und ob das Root-Tool SSH eingeschaltet hat.",
+          "ssh_password_login_disabled": "Der {model} nimmt keine Passwort-Anmeldung an, nur SSH-Schlüssel. Füge den privaten Schlüssel ein, den das Root-Tool eingerichtet hat, oder baue das Image mit Passwort-Anmeldung.",
           "not_a_bticino_station": "Das Gerät unter dieser Adresse ist keine BTicino-Station. Es wurde nichts darauf geschrieben. Prüfe die Adresse."
         },
         "abort": {

@@ -43,9 +43,13 @@ from .device_profile import (
 )
 from .device_ssh_login import (
     INVALID_SSH_KEY,
+    SSH_PASSWORD_LOGIN_DISABLED,
+    SSH_UNREACHABLE,
     SSH_USER_NOT_ROOT,
     key_login_options,
     logged_in_as_root,
+    password_login_offered,
+    ssh_unreachable,
 )
 from .display_activation import (
     display_activation_confirmed,
@@ -888,6 +892,10 @@ class _AsyncSshDeviceSshClient(_DeviceSshClient):
                 raise C300XDeviceInstallError(INVALID_SSH_KEY) from None
         try:
             self._client = self._runner.run(self._connect(request))
+        except C300XDeviceInstallError:
+            self._runner.close()
+            self._closed = True
+            raise
         except (OSError, asyncssh.Error) as err:
             self._runner.close()
             self._closed = True
@@ -895,6 +903,8 @@ class _AsyncSshDeviceSshClient(_DeviceSshClient):
             # The cause stays attached: the log names its type, never its text.
             if isinstance(err, getattr(asyncssh, "PermissionDenied", ())):
                 raise C300XDeviceInstallError(LOGIN_REFUSED) from err
+            if ssh_unreachable(err):
+                raise C300XDeviceInstallError(SSH_UNREACHABLE) from err
             raise C300XDeviceInstallError("device_install_failed") from err
         # Every install step needs root: a tool's second user (bticino2) logs
         # in but cannot write. Nothing was changed on the device yet.
@@ -912,13 +922,18 @@ class _AsyncSshDeviceSshClient(_DeviceSshClient):
         defaults = factory_login_candidates(request.device_model)
         if request.factory_login and candidates[0] == defaults[0]:
             candidates = defaults
+        key_options = getattr(self, "_key_options", {})
         for index, (username, password) in enumerate(candidates):
+            # A key login replaces the password-only options.
+            options = {**_asyncssh_connect_kwargs(
+                replace(request, ssh_username=username, ssh_password=password)
+            ), **key_options}
             try:
-                # A key login replaces the password-only options.
-                return await self._asyncssh.connect(**{**_asyncssh_connect_kwargs(
-                    replace(request, ssh_username=username, ssh_password=password)
-                ), **getattr(self, "_key_options", {})})
-            except getattr(self._asyncssh, "PermissionDenied", ()):
+                return await self._asyncssh.connect(**options)
+            except getattr(self._asyncssh, "PermissionDenied", ()) as err:
+                # A key-only station (dropbear -s) refuses every password.
+                if not key_options and await password_login_offered(self._asyncssh, options) is False:
+                    raise C300XDeviceInstallError(SSH_PASSWORD_LOGIN_DISABLED) from err
                 if index + 1 == len(candidates):
                     raise
         raise C300XDeviceInstallError(LOGIN_REFUSED)  # pragma: no cover

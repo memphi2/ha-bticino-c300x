@@ -795,6 +795,8 @@
       "ssh_login_refused": "El {model} ha rechazado el inicio de sesión SSH. Introduce el usuario y la contraseña SSH del dispositivo.",
       "invalid_ssh_key": "No se ha podido leer la clave privada. Pega la clave completa con sus líneas BEGIN y END, y su frase de contraseña si tiene una.",
       "ssh_user_not_root": "Este usuario SSH no tiene derechos de root. Inicia sesión como root o root2, no como bticino2.",
+      "ssh_unreachable": "El {model} no responde por SSH (puerto 22). SSH está desactivado o bloqueado en la estación; comprueba la dirección y que la herramienta de root haya activado SSH.",
+      "ssh_password_login_disabled": "El {model} no acepta inicio de sesión con contraseña, solo claves SSH. Pega la clave privada que configuró la herramienta de root, o crea la imagen con inicio de sesión por contraseña.",
       "installer_firewall_hook_unsupported": "El hook de cortafuegos del dispositivo no se puede inspeccionar de forma segura. La instalación se ha detenido antes de cambiar el videoportero. Comprueba el tipo de hook y los permisos; no crees un marcador de posición.",
       "device_model_incompatible": "Este paquete no es compatible con este videoportero, o no se ha podido confirmar el modelo del videoportero. No se ha sustituido ningún archivo del dispositivo.",
       "c100x_confirmation_required": "Marca la casilla para configurar el Classe 100X o cierra este diálogo para dejar el videoportero sin cambios.",
@@ -1738,6 +1740,8 @@
           "ssh_login_refused": "El {model} ha rechazado el inicio de sesión SSH. Introduce el usuario y la contraseña SSH del dispositivo.",
           "invalid_ssh_key": "No se ha podido leer la clave privada. Pega la clave completa con sus líneas BEGIN y END, y su frase de contraseña si tiene una.",
           "ssh_user_not_root": "Este usuario SSH no tiene derechos de root. Inicia sesión como root o root2, no como bticino2.",
+          "ssh_unreachable": "El {model} no responde por SSH (puerto 22). SSH está desactivado o bloqueado en la estación; comprueba la dirección y que la herramienta de root haya activado SSH.",
+          "ssh_password_login_disabled": "El {model} no acepta inicio de sesión con contraseña, solo claves SSH. Pega la clave privada que configuró la herramienta de root, o crea la imagen con inicio de sesión por contraseña.",
           "not_a_bticino_station": "El dispositivo de esta dirección no es un videoportero BTicino. No se ha escrito nada en él. Comprueba la dirección."
         },
         "abort": {

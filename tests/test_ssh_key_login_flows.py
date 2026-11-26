@@ -114,3 +114,8 @@ def test_setup_installs_with_the_key_and_keeps_it_nowhere(monkeypatch):
 
 def test_a_login_without_root_rights_is_named_and_asks_for_another():
     assert _ssh_install_error(C300XDeviceInstallError("ssh_user_not_root")) == "ssh_user_not_root"
+
+
+@pytest.mark.parametrize("reason", ["ssh_unreachable", "ssh_password_login_disabled"])
+def test_the_repair_names_why_ssh_failed(reason):
+    assert _ssh_install_error(C300XDeviceInstallError(reason)) == reason

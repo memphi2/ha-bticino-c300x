@@ -6,35 +6,41 @@ Several outdoor units on one station (issue #53). This release changes
 devices, entities and services; a Repair lists what to redo after the update.
 
 - **Every outdoor unit is its own device** below the station, also when there
-  is only one. It has a **Doorbell ring event**, a **Door** button, a **Call**
+  is only one. It has a **Doorbell ring event**, a **Door unlock** button, a **Call**
   sensor (`idle`, `ringing`, `answered`, `viewing`), a **Last visitor** image
   and a camera. The station takes the names of its units from its own
   configuration; a unit that is not configured appears with its first ring.
 - The existing doorbell camera, doorbell ring event and door button move to
-  the device of the default outdoor unit. Their entity IDs and history stay.
+  the device of the default outdoor unit. Their entity IDs and history stay;
+  their displayed names now start with the unit's name instead of the
+  station's.
 - A unit's **Doorbell ring event** fires once the station has named the
   calling unit (about 0.3 s after the ring, at most 1 s), at once when the
   station has only one unit. The new **Station ring** event on the station
   fires at once with every ring, without the unit; use it for the fastest
-  notification. Both carry the same `call_id`.
+  notification. Both carry the same `call_id`. The ring event no longer has the
+  `video_available` attribute.
 - The card follows the current call: it shows the calling unit's name, and its
   door button opens the unit that rang.
 - **Blueprints** start from the **Doorbell ring event** of the outdoor unit you
   select (or the **Station ring** for the fastest reaction) and answer, hang
   up and record that unit's call. Automations made from the ring blueprints
   need the outdoor unit selected again; the calendar reminder and the strict
-  phrase decision take the station device instead of an entry ID.
+  phrase decision take the station device instead of an entry ID. Copies of
+  the blueprints that you edited are not replaced; import them again.
 - **Services take a target** (the station or an outdoor unit, as a device or
   entity) instead of `entry_id`. `answer_doorbell_call` and
   `hangup_doorbell_call` are now `answer_call` and `hangup_call`, with an
   optional `call_id`: a call that is over or no longer current is refused and
   nothing is sent to the station. `evaluate_ring_analysis` opens the door of
-  the target unit (with the station as target: of the unit that rang); its
-  `lock_id` is gone.
+  the unit that rang; a target of another unit is refused and nothing opens.
+  Its `lock_id` is gone.
 - **Removed services**, use the buttons with `button.press`: `unlock_door`,
   `stair_light`, `stop_doorbell_video`, `reboot`, `reload_gui`,
   `run_device_activation`, `delete_latest_video_message`,
-  `delete_latest_text_memo`, `delete_latest_voice_memo`.
+  `delete_latest_text_memo`, `delete_latest_voice_memo`. A stair light that
+  was triggered with its own address through `stair_light` has no button:
+  configure it as a device activation and use its button.
 - **Removed entities:** the **Doorbell state** sensor (use the outdoor unit's
   **Call** sensor) and the diagnostic **Device event** entity (use the event
   entities, or the `bticino_c300x_agent_event_received` event for the other

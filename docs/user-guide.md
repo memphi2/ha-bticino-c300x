@@ -218,13 +218,26 @@ agent.
 
 Under **Configure > Video and audio**:
 
-| Option | Default | Affects |
+| Option | Default | Choices |
 | --- | --- | --- |
-| **Live audio level (dB)** | `0 dB` | Sound of the door station in on-demand video and Ring Calls. At `0 dB` the sound is left unchanged. |
-| **Volume of ring recordings (dB)** | `6 dB` | Audio in Ring Capture MP4 files. At `0 dB` neither the gain nor its limiter is applied. The 16 kHz WAV for transcription is not affected. |
+| **Door level** | `+6 dB` | Stock, `+3`, `+6`, `+9` or `+12 dB`. |
+| **Fine adjustment (dB)** | `0 dB` | `-10` to `+10 dB` in 1 dB steps. |
 
-Both accept `-20` to `+20 dB`. Home Call has its own audio path; do not tune it
-with these options. The station loudspeaker's volume for announcements is the
+Both set the door station's sound everywhere Home Assistant hears it: the
+live view, answered Ring Calls and Ring Capture recordings (MP4 and the
+16 kHz WAV for transcription), with the same level in all of them and with
+either codec. Where the Classe 300X allows it, the door level is set in the
+station's own audio chip during a call answered through Home Assistant, which
+lifts the voice before it is compressed; the station then uses its own
+`/home/root/demo/Audio_State.sh` hook, which the agent writes and which **Stock**
+or removing the agent puts back. Elsewhere (the live view without a call, the
+Classe 100X, a station whose hook was changed by someone else) the agent adds
+the same amount in software, so the setting sounds the same either way. The
+fine adjustment is always added in software. Loud peaks are softened instead
+of clipped. `+12 dB` can bring loud speech close to full scale; lower the door
+level or use a negative fine adjustment if it sounds harsh.
+
+Home Call has its own audio path and is not changed by these options. The station loudspeaker's volume for announcements is the
 volume of the [Speaker](#speaker-announcements-and-tts) media player.
 
 ## Visitor Images and Media History

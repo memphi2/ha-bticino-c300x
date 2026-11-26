@@ -35,7 +35,8 @@ class _Bus:
 def capture(monkeypatch):
     status = {
         "media_owner": "ring", "last_media_started_at": "2026-11-14T12:00:00Z",
-        "bridge": {"media_owner": "ring", "clients": 0, "ring_call_active": True},
+        "bridge": {"media_owner": "ring", "clients": 0, "ring_call_active": True,
+                   "audio_level": {"door_level_db": 6, "fine_gain_db": 0}},
     }
     entry = _entry(status)
     api = entry.runtime_data.api
@@ -324,7 +325,7 @@ def test_new_client_before_answer_rejects_without_answer_or_cleanup(capture, mon
             connect()
 
     gain_sync = AsyncMock(side_effect=gain)
-    monkeypatch.setattr(ring_capture, "async_ensure_doorstation_audio_gain", gain_sync)
+    monkeypatch.setattr(ring_capture, "async_ensure_doorstation_audio_level", gain_sync)
     runtime.api.async_doorbell_video_status.side_effect = read
     with pytest.raises(ServiceValidationError) as err:
         asyncio.run(use_case.capture())
@@ -382,7 +383,7 @@ def test_answer_during_gain_sync_is_not_claimed_for_cleanup(capture, monkeypatch
     async def gain(*args, **kwargs):
         status["bridge"].update(ring_answered=True, ring_audio_active=True)
 
-    monkeypatch.setattr(ring_capture, "async_ensure_doorstation_audio_gain", gain)
+    monkeypatch.setattr(ring_capture, "async_ensure_doorstation_audio_level", gain)
     assert asyncio.run(use_case.capture()) == {"capture_id": "test"}
     entry.runtime_data.api.async_answer_doorbell_call.assert_not_awaited()
     entry.runtime_data.api.async_hangup_doorbell_call.assert_not_awaited()
@@ -414,7 +415,7 @@ def test_capture_answer_preserves_capability_check(capture, monkeypatch, stage):
     else:
         async def gain(*args, **kwargs):
             disable()
-        monkeypatch.setattr(ring_capture, "async_ensure_doorstation_audio_gain", gain)
+        monkeypatch.setattr(ring_capture, "async_ensure_doorstation_audio_level", gain)
     with pytest.raises(HomeAssistantError):
         asyncio.run(use_case.capture())
     entry.runtime_data.api.async_answer_doorbell_call.assert_not_awaited()

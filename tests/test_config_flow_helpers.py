@@ -97,11 +97,11 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
     CONF_DEVICE_UI_ENABLED,
-    CONF_DOORSTATION_AUDIO_GAIN_DB,
+    CONF_DOOR_AUDIO_LEVEL_DB,
     CONF_MAINTENANCE_TOKEN,
     CONF_NATIVE_TWO_WAY_AUDIO,
     CONF_EVENT_WEBHOOK_TOKEN,
-    CONF_RING_CAPTURE_AUDIO_GAIN_DB,
+    CONF_AUDIO_FINE_GAIN_DB,
     CONF_ROTATE_SHARED_SECRET,
     CONF_SHARED_SECRET,
     CONF_VIDEO_ENABLED,
@@ -109,8 +109,8 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_VIDEO_STREAM_PATH,
     CONF_WEATHER_ENTITY_ID,
     CONF_WEBRTC_ICE_POLICY,
-    DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
-    DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
+    DEFAULT_DOOR_AUDIO_LEVEL_DB,
+    DEFAULT_AUDIO_FINE_GAIN_DB,
     DEFAULT_STAIR_LIGHT_N,
     DEFAULT_STAIR_LIGHT_P,
     DEFAULT_VIDEO_STREAM_PATH,
@@ -641,8 +641,8 @@ def test_reconfigure_schema_preserves_defaults() -> None:
     assert CONF_WEATHER_ENTITY_ID not in features
     assert features[CONF_VIDEO_ENABLED] is True
     assert features[CONF_CREATE_HOMEASSISTANT_USER] is True
-    assert features[CONF_DOORSTATION_AUDIO_GAIN_DB] == DEFAULT_DOORSTATION_AUDIO_GAIN_DB
-    assert features[CONF_RING_CAPTURE_AUDIO_GAIN_DB] == DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB
+    assert features[CONF_DOOR_AUDIO_LEVEL_DB] == str(DEFAULT_DOOR_AUDIO_LEVEL_DB)
+    assert features[CONF_AUDIO_FINE_GAIN_DB] == DEFAULT_AUDIO_FINE_GAIN_DB
     assert CONF_DEVICE_UI_ENABLED not in features
 
 
@@ -657,8 +657,8 @@ def test_setup_features_schema_keeps_initial_video_defaults() -> None:
     assert CONF_WEATHER_ENTITY_ID not in result
     assert result[CONF_VIDEO_ENABLED] is True
     assert result[CONF_CREATE_HOMEASSISTANT_USER] is True
-    assert result[CONF_DOORSTATION_AUDIO_GAIN_DB] == DEFAULT_DOORSTATION_AUDIO_GAIN_DB
-    assert result[CONF_RING_CAPTURE_AUDIO_GAIN_DB] == DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB
+    assert result[CONF_DOOR_AUDIO_LEVEL_DB] == str(DEFAULT_DOOR_AUDIO_LEVEL_DB)
+    assert result[CONF_AUDIO_FINE_GAIN_DB] == DEFAULT_AUDIO_FINE_GAIN_DB
     assert CONF_VIDEO_PORT not in result
     assert CONF_VIDEO_STREAM_PATH not in result
     assert CONF_DEVICE_UI_ENABLED not in result
@@ -723,8 +723,8 @@ def test_feature_input_allows_empty_gui_optional_fields() -> None:
     assert data[CONF_DASHBOARD_DYNAMIC_HOMEPAGE] is True
     assert data[CONF_VIDEO_PORT] == 6554
     assert data[CONF_VIDEO_STREAM_PATH] == DEFAULT_VIDEO_STREAM_PATH
-    assert data[CONF_DOORSTATION_AUDIO_GAIN_DB] == DEFAULT_DOORSTATION_AUDIO_GAIN_DB
-    assert data[CONF_RING_CAPTURE_AUDIO_GAIN_DB] == DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB
+    assert data[CONF_DOOR_AUDIO_LEVEL_DB] == DEFAULT_DOOR_AUDIO_LEVEL_DB
+    assert data[CONF_AUDIO_FINE_GAIN_DB] == DEFAULT_AUDIO_FINE_GAIN_DB
 
 
 def test_initial_feature_input_defaults_video_enabled() -> None:
@@ -733,8 +733,8 @@ def test_initial_feature_input_defaults_video_enabled() -> None:
     assert errors == {}
     assert data[CONF_VIDEO_ENABLED] is True
     assert data[CONF_CREATE_HOMEASSISTANT_USER] is True
-    assert data[CONF_DOORSTATION_AUDIO_GAIN_DB] == DEFAULT_DOORSTATION_AUDIO_GAIN_DB
-    assert data[CONF_RING_CAPTURE_AUDIO_GAIN_DB] == DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB
+    assert data[CONF_DOOR_AUDIO_LEVEL_DB] == DEFAULT_DOOR_AUDIO_LEVEL_DB
+    assert data[CONF_AUDIO_FINE_GAIN_DB] == DEFAULT_AUDIO_FINE_GAIN_DB
 
 
 def test_native_camera_audio_requires_2026_11_even_for_saved_true_value(
@@ -768,8 +768,8 @@ def test_feature_input_can_disable_homeassistant_user_creation() -> None:
         {
             CONF_VIDEO_ENABLED: True,
             CONF_CREATE_HOMEASSISTANT_USER: False,
-            CONF_DOORSTATION_AUDIO_GAIN_DB: -20,
-            CONF_RING_CAPTURE_AUDIO_GAIN_DB: 20,
+            CONF_DOOR_AUDIO_LEVEL_DB: "12",
+            CONF_AUDIO_FINE_GAIN_DB: -10,
         },
         default_video_enabled=True,
     )
@@ -777,26 +777,27 @@ def test_feature_input_can_disable_homeassistant_user_creation() -> None:
     assert errors == {}
     assert data[CONF_VIDEO_ENABLED] is True
     assert data[CONF_CREATE_HOMEASSISTANT_USER] is False
-    assert data[CONF_DOORSTATION_AUDIO_GAIN_DB] == -20
-    assert data[CONF_RING_CAPTURE_AUDIO_GAIN_DB] == 20
+    assert data[CONF_DOOR_AUDIO_LEVEL_DB] == 12
+    assert data[CONF_AUDIO_FINE_GAIN_DB] == -10
 
 
-def test_feature_input_rejects_audio_gain_outside_supported_range() -> None:
+@pytest.mark.parametrize(("door", "fine"), [("4", 11), (-3, 0.5), (15, -11)])
+def test_feature_input_rejects_audio_levels_outside_the_choices(door, fine) -> None:
     data, errors = _feature_input(
         {
             CONF_VIDEO_ENABLED: True,
-            CONF_DOORSTATION_AUDIO_GAIN_DB: -20.5,
-            CONF_RING_CAPTURE_AUDIO_GAIN_DB: 20.5,
+            CONF_DOOR_AUDIO_LEVEL_DB: door,
+            CONF_AUDIO_FINE_GAIN_DB: fine,
         },
         default_video_enabled=True,
     )
 
     assert errors == {
-        CONF_DOORSTATION_AUDIO_GAIN_DB: "invalid_audio_gain",
-        CONF_RING_CAPTURE_AUDIO_GAIN_DB: "invalid_audio_gain",
+        CONF_DOOR_AUDIO_LEVEL_DB: "invalid_audio_level",
+        CONF_AUDIO_FINE_GAIN_DB: "invalid_audio_level",
     }
-    assert data[CONF_DOORSTATION_AUDIO_GAIN_DB] == DEFAULT_DOORSTATION_AUDIO_GAIN_DB
-    assert data[CONF_RING_CAPTURE_AUDIO_GAIN_DB] == DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB
+    assert data[CONF_DOOR_AUDIO_LEVEL_DB] == DEFAULT_DOOR_AUDIO_LEVEL_DB
+    assert data[CONF_AUDIO_FINE_GAIN_DB] == DEFAULT_AUDIO_FINE_GAIN_DB
 
 
 def test_feature_input_collects_activation_and_dashboard_errors() -> None:
@@ -844,8 +845,8 @@ def test_feature_input_disables_homeassistant_user_when_media_disabled() -> None
         {
             CONF_VIDEO_ENABLED: False,
             CONF_CREATE_HOMEASSISTANT_USER: True,
-            CONF_DOORSTATION_AUDIO_GAIN_DB: 99,
-            CONF_RING_CAPTURE_AUDIO_GAIN_DB: -99,
+            CONF_DOOR_AUDIO_LEVEL_DB: 99,
+            CONF_AUDIO_FINE_GAIN_DB: -99,
         },
         default_video_enabled=True,
     )
@@ -853,8 +854,8 @@ def test_feature_input_disables_homeassistant_user_when_media_disabled() -> None
     assert errors == {}
     assert data[CONF_VIDEO_ENABLED] is False
     assert data[CONF_CREATE_HOMEASSISTANT_USER] is False
-    assert data[CONF_DOORSTATION_AUDIO_GAIN_DB] == DEFAULT_DOORSTATION_AUDIO_GAIN_DB
-    assert data[CONF_RING_CAPTURE_AUDIO_GAIN_DB] == DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB
+    assert data[CONF_DOOR_AUDIO_LEVEL_DB] == DEFAULT_DOOR_AUDIO_LEVEL_DB
+    assert data[CONF_AUDIO_FINE_GAIN_DB] == DEFAULT_AUDIO_FINE_GAIN_DB
 
 
 def test_feature_input_keeps_selected_gui_features() -> None:
@@ -1511,13 +1512,13 @@ def test_user_features_invalid_input_stays_on_features_form() -> None:
         flow.async_step_user_features(
             {
                 CONF_VIDEO_ENABLED: True,
-                CONF_DOORSTATION_AUDIO_GAIN_DB: 42,
+                CONF_DOOR_AUDIO_LEVEL_DB: 42,
             }
         )
     )
 
     assert result["step_id"] == "user_features"
-    assert result["errors"] == {CONF_DOORSTATION_AUDIO_GAIN_DB: "invalid_audio_gain"}
+    assert result["errors"] == {CONF_DOOR_AUDIO_LEVEL_DB: "invalid_audio_level"}
 
 
 def test_user_dashboard_without_features_returns_features_form() -> None:
@@ -2011,8 +2012,8 @@ def test_reconfigure_schema_uses_effective_option_overrides() -> None:
             CONF_DASHBOARD_ENTITIES: ["switch.entry"],
             CONF_VIDEO_ENABLED: True,
             CONF_CREATE_HOMEASSISTANT_USER: False,
-            CONF_DOORSTATION_AUDIO_GAIN_DB: -3.5,
-            CONF_RING_CAPTURE_AUDIO_GAIN_DB: 4.5,
+            CONF_DOOR_AUDIO_LEVEL_DB: 9,
+            CONF_AUDIO_FINE_GAIN_DB: 4,
             CONF_VIDEO_PORT: 6555,
             CONF_VIDEO_STREAM_PATH: "/custom-video",
             CONF_DEVICE_UI_ENABLED: True,
@@ -2042,8 +2043,8 @@ def test_reconfigure_schema_uses_effective_option_overrides() -> None:
     assert CONF_WEATHER_ENTITY_ID not in features
     assert features[CONF_VIDEO_ENABLED] is True
     assert features[CONF_CREATE_HOMEASSISTANT_USER] is False
-    assert features[CONF_DOORSTATION_AUDIO_GAIN_DB] == -3.5
-    assert features[CONF_RING_CAPTURE_AUDIO_GAIN_DB] == 4.5
+    assert features[CONF_DOOR_AUDIO_LEVEL_DB] == "9"
+    assert features[CONF_AUDIO_FINE_GAIN_DB] == 4
     assert CONF_VIDEO_PORT not in features
     assert CONF_VIDEO_STREAM_PATH not in features
     assert CONF_DEVICE_UI_ENABLED not in features
@@ -2059,8 +2060,8 @@ def test_reconfigure_schema_uses_effective_option_overrides() -> None:
     assert _current_feature_options(entry)[CONF_VIDEO_STREAM_PATH] == "/custom-video"
     assert _current_feature_options(entry)[CONF_DEVICE_UI_ENABLED] is True
     assert _current_feature_options(entry)[CONF_CREATE_HOMEASSISTANT_USER] is False
-    assert _current_feature_options(entry)[CONF_DOORSTATION_AUDIO_GAIN_DB] == -3.5
-    assert _current_feature_options(entry)[CONF_RING_CAPTURE_AUDIO_GAIN_DB] == 4.5
+    assert _current_feature_options(entry)[CONF_DOOR_AUDIO_LEVEL_DB] == 9
+    assert _current_feature_options(entry)[CONF_AUDIO_FINE_GAIN_DB] == 4
     assert _current_feature_options(entry)[CONF_ACTIONS] == {
         "standby": {"domain": "button", "service": "press"}
     }
@@ -2083,8 +2084,8 @@ def test_reconfigure_hidden_gui_fields_keep_existing_actions() -> None:
         CONF_DASHBOARD_PREVENT_RETURN: False,
         CONF_VIDEO_PORT: 6555,
         CONF_VIDEO_STREAM_PATH: "/custom-video",
-        CONF_DOORSTATION_AUDIO_GAIN_DB: -2.5,
-        CONF_RING_CAPTURE_AUDIO_GAIN_DB: 5.5,
+        CONF_DOOR_AUDIO_LEVEL_DB: 3,
+        CONF_AUDIO_FINE_GAIN_DB: 5,
     }
 
     prepared = _feature_input_defaults(
@@ -2103,8 +2104,8 @@ def test_reconfigure_hidden_gui_fields_keep_existing_actions() -> None:
     assert feature_data[CONF_DASHBOARD_ENTITIES] == ["switch.entry"]
     assert feature_data[CONF_VIDEO_PORT] == 6555
     assert feature_data[CONF_VIDEO_STREAM_PATH] == "/custom-video"
-    assert feature_data[CONF_DOORSTATION_AUDIO_GAIN_DB] == -2.5
-    assert feature_data[CONF_RING_CAPTURE_AUDIO_GAIN_DB] == 5.5
+    assert feature_data[CONF_DOOR_AUDIO_LEVEL_DB] == 3
+    assert feature_data[CONF_AUDIO_FINE_GAIN_DB] == 5
     assert feature_data[CONF_ACTIONS] == defaults[CONF_ACTIONS]
     assert feature_data[CONF_DASHBOARD_PREVENT_RETURN] is False
 
@@ -2133,8 +2134,8 @@ def test_options_features_schema_excludes_dashboard_fields() -> None:
 
     assert result[CONF_VIDEO_ENABLED] is True
     assert result[CONF_CREATE_HOMEASSISTANT_USER] is True
-    assert result[CONF_DOORSTATION_AUDIO_GAIN_DB] == DEFAULT_DOORSTATION_AUDIO_GAIN_DB
-    assert result[CONF_RING_CAPTURE_AUDIO_GAIN_DB] == DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB
+    assert result[CONF_DOOR_AUDIO_LEVEL_DB] == str(DEFAULT_DOOR_AUDIO_LEVEL_DB)
+    assert result[CONF_AUDIO_FINE_GAIN_DB] == DEFAULT_AUDIO_FINE_GAIN_DB
     assert CONF_DEVICE_UI_ENABLED not in result
     assert CONF_DASHBOARD_PREVENT_RETURN not in result
     assert CONF_ACTIONS_JSON not in result
@@ -2233,8 +2234,8 @@ def test_options_features_schema_never_contains_dashboard_fields() -> None:
     expected = [
         CONF_VIDEO_ENABLED,
         CONF_CREATE_HOMEASSISTANT_USER,
-        CONF_DOORSTATION_AUDIO_GAIN_DB,
-        CONF_RING_CAPTURE_AUDIO_GAIN_DB,
+        CONF_DOOR_AUDIO_LEVEL_DB,
+        CONF_AUDIO_FINE_GAIN_DB,
     ]
     if config_schemas.HA_SUPPORTS_NATIVE_CAMERA_TWO_WAY_AUDIO:
         expected.insert(1, CONF_NATIVE_TWO_WAY_AUDIO)
@@ -2635,7 +2636,7 @@ def test_options_flow_saves_each_area_and_keeps_the_others() -> None:
     _flow, result = _options_area(entry, "features", {
         CONF_VIDEO_ENABLED: True,
         CONF_CREATE_HOMEASSISTANT_USER: False,
-        CONF_RING_CAPTURE_AUDIO_GAIN_DB: 2.5,
+        CONF_AUDIO_FINE_GAIN_DB: 2,
     })
     _save_options_area(entry, result)
 
@@ -2746,8 +2747,8 @@ def test_options_flow_saves_each_area_and_keeps_the_others() -> None:
     assert result["data"][CONF_CALLBACK_BASE_URL] == "http://192.0.2.10:8123"
     assert result["data"][CONF_VIDEO_ENABLED] is True
     assert result["data"][CONF_CREATE_HOMEASSISTANT_USER] is False
-    assert result["data"][CONF_DOORSTATION_AUDIO_GAIN_DB] == DEFAULT_DOORSTATION_AUDIO_GAIN_DB
-    assert result["data"][CONF_RING_CAPTURE_AUDIO_GAIN_DB] == 2.5
+    assert result["data"][CONF_DOOR_AUDIO_LEVEL_DB] == DEFAULT_DOOR_AUDIO_LEVEL_DB
+    assert result["data"][CONF_AUDIO_FINE_GAIN_DB] == 2
     assert result["data"][CONF_DEVICE_ACTIVATION_MODE] == DEVICE_ACTIVATION_MODE_MANUAL
     assert result["data"][CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P] == "02"
     assert result["data"][CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N] == "01"
@@ -3163,16 +3164,16 @@ def test_options_flow_invalid_feature_input_stays_on_features_page() -> None:
             {
                 CONF_VIDEO_ENABLED: True,
                 CONF_WEBRTC_ICE_POLICY: "prefer_ipv4_ula",
-                CONF_DOORSTATION_AUDIO_GAIN_DB: 21,
-                CONF_RING_CAPTURE_AUDIO_GAIN_DB: -21,
+                CONF_DOOR_AUDIO_LEVEL_DB: 21,
+                CONF_AUDIO_FINE_GAIN_DB: -21,
             }
         )
     )
 
     assert result["step_id"] == "features"
     assert result["errors"] == {
-        CONF_DOORSTATION_AUDIO_GAIN_DB: "invalid_audio_gain",
-        CONF_RING_CAPTURE_AUDIO_GAIN_DB: "invalid_audio_gain",
+        CONF_DOOR_AUDIO_LEVEL_DB: "invalid_audio_level",
+        CONF_AUDIO_FINE_GAIN_DB: "invalid_audio_level",
     }
     assert result["data_schema"]({})[CONF_WEBRTC_ICE_POLICY] == "prefer_ipv4_ula"
 
@@ -3209,7 +3210,7 @@ def test_reconfigure_invalid_connection_stays_on_reconfigure_page() -> None:
     assert result["errors"] == {CONF_AGENT_HOST: "invalid_agent_host"}
 
 
-def test_reconfigure_invalid_audio_gain_redisplays_features_page() -> None:
+def test_reconfigure_invalid_audio_level_redisplays_features_page() -> None:
     entry = SimpleNamespace(data={}, options={}, runtime_data=None)
     flow = BticinoC300XConfigFlow()
     flow._get_reconfigure_entry = lambda: entry  # type: ignore[method-assign]
@@ -3219,16 +3220,16 @@ def test_reconfigure_invalid_audio_gain_redisplays_features_page() -> None:
         flow.async_step_reconfigure_features(
             {
                 CONF_VIDEO_ENABLED: True,
-                CONF_DOORSTATION_AUDIO_GAIN_DB: "bad",
-                CONF_RING_CAPTURE_AUDIO_GAIN_DB: "worse",
+                CONF_DOOR_AUDIO_LEVEL_DB: "bad",
+                CONF_AUDIO_FINE_GAIN_DB: "worse",
             }
         )
     )
 
     assert result["step_id"] == "reconfigure_features"
     assert result["errors"] == {
-        CONF_DOORSTATION_AUDIO_GAIN_DB: "invalid_audio_gain",
-        CONF_RING_CAPTURE_AUDIO_GAIN_DB: "invalid_audio_gain",
+        CONF_DOOR_AUDIO_LEVEL_DB: "invalid_audio_level",
+        CONF_AUDIO_FINE_GAIN_DB: "invalid_audio_level",
     }
 
 
@@ -3286,20 +3287,19 @@ def _schema_key_names(schema: vol.Schema) -> list[str]:
 
 
 @pytest.mark.parametrize("value", ["nan", "NaN", float("nan"), "inf", "-inf", float("inf")])
-def test_audio_gain_rejects_values_that_are_not_finite(value) -> None:
+def test_audio_levels_reject_values_that_are_not_finite(value) -> None:
     """NaN is neither below nor above the range, so a plain range check passes it."""
 
     from custom_components.bticino_c300x.config_audio import (
-        audio_gain_db,
-        audio_gain_db_or_default,
+        audio_fine_gain_db,
+        audio_fine_gain_db_or_default,
+        door_audio_level_db,
     )
 
-    with pytest.raises(vol.Invalid):
-        audio_gain_db(value)
-    assert audio_gain_db_or_default(value, 6.0) == 6.0
-    assert audio_gain_db("0") == 0.0
-    assert audio_gain_db(-20) == -20.0
-    assert audio_gain_db("20.0") == 20.0
+    for validator in (door_audio_level_db, audio_fine_gain_db):
+        with pytest.raises(vol.Invalid):
+            validator(value)
+    assert audio_fine_gain_db_or_default(value, 0) == 0
 
 
 def test_alarmo_is_kept_when_the_display_patch_is_switched_off() -> None:

@@ -108,6 +108,26 @@ ADDED_SINCE_2_10_0 = frozenset({
     "options/abort/unsupported_display",
     "options/step/init/menu_option_descriptions/dashboard_alarm",
     "options/step/init/menu_options/dashboard_alarm",
+    # Door level and fine adjustment replace the two audio gains.
+    "config/error/invalid_audio_level",
+    "config/step/reconfigure_features/data/audio_fine_gain_db",
+    "config/step/reconfigure_features/data/door_audio_level_db",
+    "config/step/reconfigure_features/data_description/audio_fine_gain_db",
+    "config/step/reconfigure_features/data_description/door_audio_level_db",
+    "config/step/user_features/data/audio_fine_gain_db",
+    "config/step/user_features/data/door_audio_level_db",
+    "config/step/user_features/data_description/audio_fine_gain_db",
+    "config/step/user_features/data_description/door_audio_level_db",
+    "options/error/invalid_audio_level",
+    "options/step/features/data/audio_fine_gain_db",
+    "options/step/features/data/door_audio_level_db",
+    "options/step/features/data_description/audio_fine_gain_db",
+    "options/step/features/data_description/door_audio_level_db",
+    "selector/door_audio_level/options/0",
+    "selector/door_audio_level/options/12",
+    "selector/door_audio_level/options/3",
+    "selector/door_audio_level/options/6",
+    "selector/door_audio_level/options/9",
 })
 # Texts of 2.10.0 that read differently now: the SSH package message names the
 # package and the way out, the service name lost the model (neutral names), and
@@ -118,14 +138,33 @@ CHANGED_SINCE_2_10_0 = frozenset({
     "issues/device_agent_update_required/fix_flow/step/ssh_install/description",
     "services/capture_doorbell_call/name",
 })
-# sha256 over every text of 2.10.0 (f4f75ea3) but the changed ones, per file:
+# sha256 over every text of 2.10.0 (f4f75ea3) but the changed and the removed
+# ones, per file:
 #   json.dumps({"a/b/c": text}, sort_keys=True, ensure_ascii=False)
+# Texts of 2.10.0 that are gone: the two audio gains became the door level
+# and the fine adjustment.
+REMOVED_SINCE_2_10_0 = frozenset({
+    "config/error/invalid_audio_gain",
+    "config/step/reconfigure_features/data/doorstation_audio_gain_db",
+    "config/step/reconfigure_features/data/ring_capture_audio_gain_db",
+    "config/step/reconfigure_features/data_description/doorstation_audio_gain_db",
+    "config/step/reconfigure_features/data_description/ring_capture_audio_gain_db",
+    "config/step/user_features/data/doorstation_audio_gain_db",
+    "config/step/user_features/data/ring_capture_audio_gain_db",
+    "config/step/user_features/data_description/doorstation_audio_gain_db",
+    "config/step/user_features/data_description/ring_capture_audio_gain_db",
+    "options/error/invalid_audio_gain",
+    "options/step/features/data/doorstation_audio_gain_db",
+    "options/step/features/data/ring_capture_audio_gain_db",
+    "options/step/features/data_description/doorstation_audio_gain_db",
+    "options/step/features/data_description/ring_capture_audio_gain_db",
+})
 DIGESTS_2_10_0 = {
-    "base": "947c16b2f7f0f05760e8e1f3cb78b3ab21fe2890769bca46f07b7a2a10b9bd2e",
-    "en": "947c16b2f7f0f05760e8e1f3cb78b3ab21fe2890769bca46f07b7a2a10b9bd2e",
-    "de": "fd9ac997bab978ce16da01b6749c3c7da7f29ca7f20da238ff15d35538b0a596",
-    "it": "dad4153ef446b4aa686732b8ee836e66276b5c12a47195174a67e4208b7946f4",
-    "fr": "23f7e05d50d9fda67c280e8dfd4fcfe168e46ea209270526e1d0110a5eb9d064",
+    "base": "00167eb895dc8d0fed946205a6c2883048f9e0a94ace3dcb612cb97b0cfa9a50",
+    "en": "00167eb895dc8d0fed946205a6c2883048f9e0a94ace3dcb612cb97b0cfa9a50",
+    "de": "0b38b814ed93f85491c6359913309df49bed74a5f5691c2f9273c88a5ec9e18b",
+    "it": "09aee7e76bd6ce804a86eb44578e4c44692a88ce782c32c8aeacf1de73e33200",
+    "fr": "5c8142fb3b5f9ad2a74f42778bdd6e2fc8875969e21351d481beda13027a5555",
 }
 
 
@@ -152,6 +191,7 @@ def test_a_c300x_reads_the_texts_of_2_10_0():
         paths = {"/".join(path) for path in _leaves(_load(lang))}
         # The declared additions and changes exist; nothing is listed for nothing.
         assert paths >= ADDED_SINCE_2_10_0 | CHANGED_SINCE_2_10_0, lang
+        assert not paths & REMOVED_SINCE_2_10_0, lang
 
 
 def _setup_flow(monkeypatch, info=None, hint=""):

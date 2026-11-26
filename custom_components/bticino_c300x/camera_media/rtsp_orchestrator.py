@@ -11,7 +11,7 @@ from typing import Any, Protocol, cast
 from homeassistant.exceptions import HomeAssistantError
 
 from ..const import CONF_VIDEO_PORT, DEFAULT_VIDEO_PORT
-from ..doorstation_audio import async_ensure_doorstation_audio_gain
+from ..doorstation_audio import async_ensure_doorstation_audio_level
 from ..entry_config import entry_config_value
 from .rtsp_policy import (
     RtspAdmissionKind,
@@ -169,7 +169,7 @@ class CameraRtspOrchestrator:
 
         try:
             if audio:
-                await async_ensure_doorstation_audio_gain(
+                await async_ensure_doorstation_audio_level(
                     self._owner._entry,
                     status=status,
                 )
@@ -227,7 +227,7 @@ class CameraRtspOrchestrator:
                     consumer=rtsp_consumer_for_doorbell_request(decision),
                 )
                 if audio:
-                    await async_ensure_doorstation_audio_gain(
+                    await async_ensure_doorstation_audio_level(
                         self._owner._entry,
                         status=status,
                     )

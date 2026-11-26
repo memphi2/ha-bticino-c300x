@@ -1022,6 +1022,45 @@ def test_diagnostics_carry_the_bridge_counters_issue_44_needs() -> None:
     assert "/dev/video0" not in json.dumps(section)
 
 
+def test_bridge_diagnostics_show_where_the_door_level_went() -> None:
+    class _Api:
+        async def async_doorbell_video_status(self) -> dict[str, Any]:
+            return {
+                "bridge": {
+                    "audio_level": {
+                        "door_level_db": 9,
+                        "fine_gain_db": -2,
+                        "door_level_path": "chip",
+                        "chip_lever": "ready",
+                        "chip_gain_db": 9,
+                        "software_gain_db": -2,
+                        "unexpected": "/home/root/demo/Audio_State.sh",
+                    }
+                }
+            }
+
+    entry = _FakeEntry(
+        data={CONF_VIDEO_ENABLED: True, "door_audio_level_db": 9, "audio_fine_gain_db": -2},
+        runtime_data=SimpleNamespace(api=_Api()),
+    )
+
+    section = asyncio.run(
+        _async_video_bridge_diagnostics(entry, entry.runtime_data)  # type: ignore[arg-type]
+    )
+
+    assert section is not None
+    assert section["audio_level"] == {
+        "door_level_db": 9,
+        "fine_gain_db": -2,
+        "door_level_path": "chip",
+        "chip_lever": "ready",
+        "chip_gain_db": 9,
+        "software_gain_db": -2,
+    }
+    assert section["audio_level_configured"] == {"door_level_db": 9, "fine_gain_db": -2}
+    assert "Audio_State" not in json.dumps(section)
+
+
 def test_diagnostics_survive_an_agent_that_cannot_be_reached() -> None:
     """The download is what people fetch when the agent misbehaves."""
 

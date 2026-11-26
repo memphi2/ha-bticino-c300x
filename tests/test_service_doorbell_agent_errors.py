@@ -15,7 +15,7 @@ from custom_components.bticino_c300x.api_errors import (
     C300XAgentApiConnectionError,
 )
 from custom_components.bticino_c300x.const import (
-    CONF_DOORSTATION_AUDIO_GAIN_DB,
+    CONF_DOOR_AUDIO_LEVEL_DB,
     CONF_VIDEO_ENABLED,
 )
 from custom_components.bticino_c300x.data import (
@@ -29,7 +29,7 @@ from custom_components.bticino_c300x.use_cases import common
 def _setup(monkeypatch):
     api = SimpleNamespace(
         async_doorbell_video_status=AsyncMock(return_value={"bridge": {}}),
-        async_set_doorstation_audio_gain_db=AsyncMock(),
+        async_set_doorstation_audio_level=AsyncMock(),
         async_activate_doorbell_video=AsyncMock(return_value={"ok": True}),
         async_answer_doorbell_call=AsyncMock(return_value={"ok": True}),
     )
@@ -40,7 +40,7 @@ def _setup(monkeypatch):
     )
     entry = SimpleNamespace(
         entry_id="entry", runtime_data=runtime, data={},
-        options={CONF_VIDEO_ENABLED: True, CONF_DOORSTATION_AUDIO_GAIN_DB: 6.0},
+        options={CONF_VIDEO_ENABLED: True, CONF_DOOR_AUDIO_LEVEL_DB: 6},
         async_start_reauth=Mock(), state=ConfigEntryState.LOADED,
     )
     hass = SimpleNamespace(
@@ -73,21 +73,21 @@ def test_answer_reports_a_failed_status_read_as_agent_command_failed(monkeypatch
 
 
 @pytest.mark.parametrize("operation", ["answer_doorbell_call", "activate_doorbell_video"])
-def test_failed_gain_write_is_logged_and_the_command_still_runs(monkeypatch, caplog, operation):
+def test_failed_level_write_is_logged_and_the_command_still_runs(monkeypatch, caplog, operation):
     hass, _entry, api = _setup(monkeypatch)
-    api.async_set_doorstation_audio_gain_db.side_effect = C300XAgentApiConnectionError("offline")
+    api.async_set_doorstation_audio_level.side_effect = C300XAgentApiConnectionError("offline")
     handler = getattr(services._C300XServiceHandlers(hass), f"async_{operation}")
     with caplog.at_level(logging.WARNING):
         asyncio.run(handler(SimpleNamespace(data={"audio": True})))
-    api.async_set_doorstation_audio_gain_db.assert_awaited_once_with(6.0)
+    api.async_set_doorstation_audio_level.assert_awaited_once_with(6, 0)
     command = getattr(api, f"async_{operation}")
     command.assert_awaited_once()
-    assert "doorstation audio gain failed" in caplog.text
+    assert "door audio level failed" in caplog.text
 
 
-def test_failed_gain_write_and_failed_command_report_the_command_error(monkeypatch):
+def test_failed_level_write_and_failed_command_report_the_command_error(monkeypatch):
     hass, entry, api = _setup(monkeypatch)
-    api.async_set_doorstation_audio_gain_db.side_effect = C300XAgentApiAuthError()
+    api.async_set_doorstation_audio_level.side_effect = C300XAgentApiAuthError()
     api.async_activate_doorbell_video.side_effect = C300XAgentApiAuthError()
     handler = services._C300XServiceHandlers(hass).async_activate_doorbell_video
     with pytest.raises(HomeAssistantError) as err:

@@ -13,7 +13,11 @@ from .camera_media.ha_compat import HA_SUPPORTS_NATIVE_CAMERA_TWO_WAY_AUDIO
 from .config_flow_entry_update import async_ensure_entry_reload
 from .config_flow_features import current_connection_options
 from .config_flow_input import _feature_input
-from .const import CONF_NATIVE_TWO_WAY_AUDIO, CONF_VIDEO_ENABLED
+from .const import (
+    CONF_NATIVE_TWO_WAY_AUDIO,
+    CONF_VIDEO_ENABLED,
+    RETIRED_AUDIO_OPTION_KEYS,
+)
 from .entry_config import entry_config_value
 
 
@@ -68,6 +72,8 @@ class OptionsMenuSteps:
                     for key, value in options.items()
                 },
             }
+            for key in RETIRED_AUDIO_OPTION_KEYS:
+                merged.pop(key, None)
             # Preserved values must still satisfy the current media prerequisites.
             merged[CONF_NATIVE_TWO_WAY_AUDIO] = (
                 HA_SUPPORTS_NATIVE_CAMERA_TWO_WAY_AUDIO

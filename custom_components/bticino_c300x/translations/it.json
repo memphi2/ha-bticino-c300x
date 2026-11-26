@@ -63,16 +63,16 @@
         "data": {
           "video_enabled": "Video e audio del posto esterno",
           "create_homeassistant_user": "Creare l'accesso video e audio sul {model}",
-          "doorstation_audio_gain_db": "Livello audio dal vivo (dB)",
-          "ring_capture_audio_gain_db": "Volume delle registrazioni di chiamata (dB)",
+          "door_audio_level_db": "Livello del posto esterno",
+          "audio_fine_gain_db": "Regolazione fine (dB)",
           "webrtc_ice_policy": "Percorsi di connessione per l'immagine dal vivo",
           "native_two_way_audio": "Parlare dalla vista telecamera di Home Assistant"
         },
         "data_description": {
           "video_enabled": "Immagine e audio del posto esterno in Home Assistant: alla chiamata, su richiesta e per Home Call.",
           "create_homeassistant_user": "Video e audio richiedono un accesso proprio sul {model}. Se attivo, l'integrazione lo crea durante la configurazione o tramite la sua riparazione.",
-          "doorstation_audio_gain_db": "Livello dell'audio del posto esterno dal vivo e durante una chiamata. Da -20 a +20 dB; 0 lascia l'audio invariato.",
-          "ring_capture_audio_gain_db": "Volume dell'audio nelle registrazioni fatte quando qualcuno suona. Da -20 a +20 dB; il valore predefinito è 6.",
+          "door_audio_level_db": "Alza l'audio del posto esterno dal vivo, durante una chiamata e nelle registrazioni di chiamata. Dove la stazione lo consente, nel suo chip audio, altrimenti dello stesso valore via software. Predefinito: +6 dB.",
+          "audio_fine_gain_db": "Aggiunge da -10 a +10 dB al livello del posto esterno, uguale su ogni stazione e con ogni codec audio. Predefinito: 0.",
           "webrtc_ice_policy": "Quali indirizzi di rete il browser può usare per l'immagine dal vivo. Da modificare solo se l'immagine dal vivo non si collega.",
           "native_two_way_audio": "Opzionale, disattivato per impostazione predefinita. Richiede Home Assistant 2026.11 o successivo, \"Two-way audio\" attivato in Impostazioni > Sistema > Labs, l'immagine dal vivo tramite WebRTC, accesso in HTTPS e il microfono consentito nel browser. Rispondi prima a una chiamata nella scheda {model}; questa opzione non risponde. Parlare nella scheda {model} resta invariato."
         }
@@ -192,16 +192,16 @@
         "data": {
           "video_enabled": "Video e audio del posto esterno",
           "create_homeassistant_user": "Creare l'accesso video e audio sul {model}",
-          "doorstation_audio_gain_db": "Livello audio dal vivo (dB)",
-          "ring_capture_audio_gain_db": "Volume delle registrazioni di chiamata (dB)",
+          "door_audio_level_db": "Livello del posto esterno",
+          "audio_fine_gain_db": "Regolazione fine (dB)",
           "webrtc_ice_policy": "Percorsi di connessione per l'immagine dal vivo",
           "native_two_way_audio": "Parlare dalla vista telecamera di Home Assistant"
         },
         "data_description": {
           "video_enabled": "Immagine e audio del posto esterno in Home Assistant: alla chiamata, su richiesta e per Home Call.",
           "create_homeassistant_user": "Video e audio richiedono un accesso proprio sul {model}. Se attivo, l'integrazione lo crea durante la configurazione o tramite la sua riparazione.",
-          "doorstation_audio_gain_db": "Livello dell'audio del posto esterno dal vivo e durante una chiamata. Da -20 a +20 dB; 0 lascia l'audio invariato.",
-          "ring_capture_audio_gain_db": "Volume dell'audio nelle registrazioni fatte quando qualcuno suona. Da -20 a +20 dB; il valore predefinito è 6.",
+          "door_audio_level_db": "Alza l'audio del posto esterno dal vivo, durante una chiamata e nelle registrazioni di chiamata. Dove la stazione lo consente, nel suo chip audio, altrimenti dello stesso valore via software. Predefinito: +6 dB.",
+          "audio_fine_gain_db": "Aggiunge da -10 a +10 dB al livello del posto esterno, uguale su ogni stazione e con ogni codec audio. Predefinito: 0.",
           "webrtc_ice_policy": "Quali indirizzi di rete il browser può usare per l'immagine dal vivo. Da modificare solo se l'immagine dal vivo non si collega.",
           "native_two_way_audio": "Opzionale, disattivato per impostazione predefinita. Richiede Home Assistant 2026.11 o successivo, \"Two-way audio\" attivato in Impostazioni > Sistema > Labs, l'immagine dal vivo tramite WebRTC, accesso in HTTPS e il microfono consentito nel browser. Rispondi prima a una chiamata nella scheda {model}; questa opzione non risponde. Parlare nella scheda {model} resta invariato."
         }
@@ -775,7 +775,7 @@
       "invalid_alarm_entity": "Seleziona un'entità Alarmo alarm_control_panel oppure lascia vuoto il campo.",
       "invalid_alarm_page_entity": "Seleziona un'entità dashboard supportata per la pagina allarme oppure lascia vuoto il campo.",
       "invalid_weather_entity": "Seleziona un'entità meteo oppure lascia vuoto il campo.",
-      "invalid_audio_gain": "Scegli un guadagno audio tra -20 dB e +20 dB.",
+      "invalid_audio_level": "Scegli un livello dall'elenco e una regolazione fine tra -10 dB e +10 dB.",
       "invalid_device_activations": "Controlla ID, nome, tipo e indirizzo dell'attivazione. Gli ID devono essere unici; la modalità luce scale manuale riserva già stair_light.",
       "invalid_stair_light_part": "Inserisci un valore P/N numerico da 0 a 99.",
       "required": "Questo campo è obbligatorio.",
@@ -835,16 +835,16 @@
         "data": {
           "video_enabled": "Video e audio del posto esterno",
           "create_homeassistant_user": "Creare l'accesso video e audio sul {model}",
-          "doorstation_audio_gain_db": "Livello audio dal vivo (dB)",
-          "ring_capture_audio_gain_db": "Volume delle registrazioni di chiamata (dB)",
+          "door_audio_level_db": "Livello del posto esterno",
+          "audio_fine_gain_db": "Regolazione fine (dB)",
           "webrtc_ice_policy": "Percorsi di connessione per l'immagine dal vivo",
           "native_two_way_audio": "Parlare dalla vista telecamera di Home Assistant"
         },
         "data_description": {
           "video_enabled": "Immagine e audio del posto esterno in Home Assistant: alla chiamata, su richiesta e per Home Call.",
           "create_homeassistant_user": "Video e audio richiedono un accesso proprio sul {model}. Se attivo, l'integrazione lo crea durante la configurazione o tramite la sua riparazione.",
-          "doorstation_audio_gain_db": "Livello dell'audio del posto esterno dal vivo e durante una chiamata. Da -20 a +20 dB; 0 lascia l'audio invariato.",
-          "ring_capture_audio_gain_db": "Volume dell'audio nelle registrazioni fatte quando qualcuno suona. Da -20 a +20 dB; il valore predefinito è 6.",
+          "door_audio_level_db": "Alza l'audio del posto esterno dal vivo, durante una chiamata e nelle registrazioni di chiamata. Dove la stazione lo consente, nel suo chip audio, altrimenti dello stesso valore via software. Predefinito: +6 dB.",
+          "audio_fine_gain_db": "Aggiunge da -10 a +10 dB al livello del posto esterno, uguale su ogni stazione e con ogni codec audio. Predefinito: 0.",
           "webrtc_ice_policy": "Quali indirizzi di rete il browser può usare per l'immagine dal vivo. Da modificare solo se l'immagine dal vivo non si collega.",
           "native_two_way_audio": "Opzionale, disattivato per impostazione predefinita. Richiede Home Assistant 2026.11 o successivo, \"Two-way audio\" attivato in Impostazioni > Sistema > Labs, l'immagine dal vivo tramite WebRTC, accesso in HTTPS e il microfono consentito nel browser. Rispondi prima a una chiamata nella scheda {model}; questa opzione non risponde. Parlare nella scheda {model} resta invariato."
         }
@@ -1301,7 +1301,7 @@
       "invalid_alarm_entity": "Seleziona un'entità Alarmo alarm_control_panel oppure lascia vuoto il campo.",
       "invalid_alarm_page_entity": "Seleziona un'entità dashboard supportata per la pagina allarme oppure lascia vuoto il campo.",
       "invalid_weather_entity": "Seleziona un'entità meteo oppure lascia vuoto il campo.",
-      "invalid_audio_gain": "Scegli un guadagno audio tra -20 dB e +20 dB.",
+      "invalid_audio_level": "Scegli un livello dall'elenco e una regolazione fine tra -10 dB e +10 dB.",
       "invalid_device_activations": "Controlla ID, nome, tipo e indirizzo dell'attivazione. Gli ID devono essere unici; la modalità luce scale manuale riserva già stair_light.",
       "invalid_stair_light_part": "Inserisci un valore P/N numerico da 0 a 99.",
       "invalid_dashboard_entities": "Un'entità non può essere mostrata sul display.",
@@ -1929,6 +1929,15 @@
     }
   },
   "selector": {
+    "door_audio_level": {
+      "options": {
+        "0": "Impostazione di fabbrica",
+        "3": "+3 dB",
+        "6": "+6 dB",
+        "9": "+9 dB",
+        "12": "+12 dB"
+      }
+    },
     "capture_mode": {
       "options": {
         "ring": "Chiamata del campanello",

@@ -21,10 +21,8 @@ from custom_components.bticino_c300x.camera_media.rtsp_probe import (
 )
 from custom_components.bticino_c300x.const import (
     CONF_AGENT_HOST,
-    CONF_RING_CAPTURE_AUDIO_GAIN_DB,
     CONF_VIDEO_PORT,
     CONF_VIDEO_STREAM_PATH,
-    DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
 )
 from custom_components.bticino_c300x.ring_capture import (
     _announcement_input_path,
@@ -36,7 +34,6 @@ from custom_components.bticino_c300x.ring_capture import (
     _async_talkback_codec_is_pcmu,
     _async_wait_rtsp_ready,
     _cached_talkback_codec,
-    _capture_audio_gain_db,
     _capture_frame_offsets,
     _capture_media_dirs,
     _capture_metadata_path,
@@ -165,38 +162,6 @@ def test_capture_stream_path_prefers_audio_path_when_audio_is_requested() -> Non
     ) == "/audio"
     assert _capture_stream_path(entry, {"stream_path": "/video"}) == "/video"
     assert _capture_stream_path(entry, {}) == "/configured"
-
-
-def test_capture_audio_gain_uses_entry_option_and_clamps_range() -> None:
-    entry = _FakeEntry(
-        runtime_data=_FakeRuntimeData(_FakeApi({})),
-        data={},
-        options={CONF_RING_CAPTURE_AUDIO_GAIN_DB: -4.5},
-    )
-    high_entry = _FakeEntry(
-        runtime_data=_FakeRuntimeData(_FakeApi({})),
-        data={},
-        options={CONF_RING_CAPTURE_AUDIO_GAIN_DB: 99},
-    )
-    low_entry = _FakeEntry(
-        runtime_data=_FakeRuntimeData(_FakeApi({})),
-        data={},
-        options={CONF_RING_CAPTURE_AUDIO_GAIN_DB: -99},
-    )
-
-    assert _capture_audio_gain_db(entry) == -4.5
-    assert _capture_audio_gain_db(high_entry) == 20.0
-    assert _capture_audio_gain_db(low_entry) == -20.0
-
-
-def test_capture_audio_gain_falls_back_for_invalid_option() -> None:
-    entry = _FakeEntry(
-        runtime_data=_FakeRuntimeData(_FakeApi({})),
-        data={},
-        options={CONF_RING_CAPTURE_AUDIO_GAIN_DB: "bad"},
-    )
-
-    assert _capture_audio_gain_db(entry) == DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB
 
 
 def test_rtsp_url_uses_entry_host_port_and_status_path() -> None:
@@ -652,7 +617,6 @@ def test_capture_runs_ffmpeg_after_rtsp_ready(monkeypatch: pytest.MonkeyPatch, t
         work_dir: Path | None,
         duration_seconds: int,
         include_audio: bool,
-        audio_gain_db: float,
     ) -> None:
         calls.append(
             (
@@ -663,7 +627,6 @@ def test_capture_runs_ffmpeg_after_rtsp_ready(monkeypatch: pytest.MonkeyPatch, t
                     work_dir,
                     duration_seconds,
                     include_audio,
-                    audio_gain_db,
                 ),
             )
         )
@@ -712,7 +675,6 @@ def test_capture_runs_ffmpeg_after_rtsp_ready(monkeypatch: pytest.MonkeyPatch, t
                 work_dir,
                 4,
                 True,
-                6.0,
         ),
     ) in calls
     assert ("talkback", ("192.0.2.10", None, False)) in calls
@@ -905,7 +867,6 @@ def test_video_only_capture_shares_ring_preview_without_talkback(
                 "work_dir": _capture_metadata_path(tmp_path / "config" / "c300x").resolve().parent,
                 "duration_seconds": 5,
                 "include_audio": False,
-                "audio_gain_db": 6.0,
             },
         ),
     ]
@@ -950,9 +911,9 @@ def test_capture_ffmpeg_audio_uses_mp4_safe_normalized_aac(
     assert "48000" not in audio_filter
     assert "pan=" not in audio_filter
     assert "dynaudnorm=" not in audio_filter
-    assert "alimiter=" in audio_filter
-    assert "volume=6dB" in audio_filter
-    assert "volume=30dB" not in audio_filter
+    # The level comes from the agent; ffmpeg adds none.
+    assert "alimiter" not in audio_filter
+    assert "volume=" not in audio_filter
     mp4_audio = command[command.index("-af"):command.index("-movflags")]
     assert "-ac" not in mp4_audio and "-ar" not in mp4_audio
     assert mp4_audio[mp4_audio.index("-c:a") + 1] == "aac"
@@ -974,7 +935,7 @@ def test_capture_ffmpeg_audio_uses_mp4_safe_normalized_aac(
     ]
 
 
-def test_capture_ffmpeg_audio_uses_configured_gain(
+def test_capture_ffmpeg_audio_keeps_the_live_level(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -1002,29 +963,13 @@ def test_capture_ffmpeg_audio_uses_configured_gain(
             work_dir=tmp_path / "work",
             duration_seconds=4,
             include_audio=True,
-            audio_gain_db=-4.5,
         )
     )
 
+    # The agent already applies door level and fine adjustment to the stream:
+    # a second gain here would make recordings louder than the live audio.
     audio_filter = commands[0][commands[0].index("-af") + 1]
-    assert "volume=-4.5dB" in audio_filter
-    assert "alimiter=" in audio_filter
-
-    # At 0 dB the level is not touched at all: no volume step and no limiter.
-    commands.clear()
-    asyncio.run(
-        _async_run_ffmpeg(
-            "rtsp://192.0.2.10:6554/doorbell",
-            tmp_path / "clip.mp4",
-            work_dir=tmp_path / "work",
-            duration_seconds=4,
-            include_audio=True,
-            audio_gain_db=0,
-        )
-    )
-    audio_filter = commands[0][commands[0].index("-af") + 1]
-    assert "volume=" not in audio_filter
-    assert "alimiter" not in audio_filter
+    assert audio_filter == "aresample=async=1:first_pts=0"
 
 
 def test_capture_ffmpeg_video_only_disables_audio(
@@ -1256,7 +1201,6 @@ def test_capture_plays_announcement_in_parallel(monkeypatch: pytest.MonkeyPatch,
         work_dir: Path | None,
         duration_seconds: int,
         include_audio: bool,
-        audio_gain_db: float,
     ) -> None:
         calls.append(
             (
@@ -1267,7 +1211,6 @@ def test_capture_plays_announcement_in_parallel(monkeypatch: pytest.MonkeyPatch,
                     work_dir,
                     duration_seconds,
                     include_audio,
-                    audio_gain_db,
                 ),
             )
         )

@@ -67,8 +67,14 @@ CONF_TTS_ENGINE = "tts_engine"
 CONF_TTS_LANGUAGE = "tts_language"
 SPEECH_OPTION_KEYS = (CONF_TTS_ENGINE, CONF_TTS_LANGUAGE)
 CONF_NATIVE_TWO_WAY_AUDIO = "native_two_way_audio"
-CONF_DOORSTATION_AUDIO_GAIN_DB = "doorstation_audio_gain_db"
-CONF_RING_CAPTURE_AUDIO_GAIN_DB = "ring_capture_audio_gain_db"
+# Level of the door station's sound toward Home Assistant (live, calls and
+# ring recordings): the door level in the station's audio chip where it has
+# the lever, else the same dB in the agent; the fine adjustment always in the
+# agent. Whole dB.
+CONF_DOOR_AUDIO_LEVEL_DB = "door_audio_level_db"
+CONF_AUDIO_FINE_GAIN_DB = "audio_fine_gain_db"
+# The level options before 3.0.0; read by nothing, dropped when options are saved.
+RETIRED_AUDIO_OPTION_KEYS = ("doorstation_audio_gain_db", "ring_capture_audio_gain_db")
 CONF_VIDEO_PORT = "video_port"
 CONF_VIDEO_STREAM_PATH = "video_stream_path"
 CONF_WEBHOOK_ID = "webhook_id"
@@ -92,8 +98,11 @@ DEFAULT_STAIR_LIGHT_P = "01"
 DEFAULT_STAIR_LIGHT_N = "00"
 DEFAULT_VIDEO_PORT = 6554
 DEFAULT_VIDEO_STREAM_PATH = "/doorbell-video"
-DEFAULT_DOORSTATION_AUDIO_GAIN_DB = 0.0
-DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB = 6.0
+DOOR_AUDIO_LEVELS_DB = (0, 3, 6, 9, 12)
+DEFAULT_DOOR_AUDIO_LEVEL_DB = 6
+AUDIO_FINE_GAIN_DB_MIN = -10
+AUDIO_FINE_GAIN_DB_MAX = 10
+DEFAULT_AUDIO_FINE_GAIN_DB = 0
 WEBRTC_ICE_POLICY_ALL = "all"
 WEBRTC_ICE_POLICY_DROP_LINK_LOCAL = "drop_link_local"
 WEBRTC_ICE_POLICY_PREFER_IPV4_ULA = "prefer_ipv4_ula"

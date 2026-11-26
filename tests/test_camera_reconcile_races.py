@@ -134,7 +134,7 @@ def _video_status(*, active=False):
             "clients": int(active),
             "media_active": active,
             "media_owner": "agent" if active else "idle",
-            "doorstation_audio_gain_db": 0,
+            "audio_level": {"door_level_db": 6, "fine_gain_db": 0},
         },
     }
 

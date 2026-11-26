@@ -46,13 +46,10 @@ from .capture_artifacts import (
     publish_capture_aliases,
     reserve_capture_output,
 )
-from .config_audio import AUDIO_GAIN_DB_MAX, AUDIO_GAIN_DB_MIN
 from .const import (
     CONF_AGENT_HOST,
-    CONF_RING_CAPTURE_AUDIO_GAIN_DB,
     CONF_VIDEO_PORT,
     CONF_VIDEO_STREAM_PATH,
-    DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
     DEFAULT_VIDEO_PORT,
     DEFAULT_VIDEO_STREAM_PATH,
     DOMAIN,
@@ -125,7 +122,6 @@ async def _async_capture_to_output(
     rtsp_url = _rtsp_url_from_status(
         entry, status, include_audio=include_audio, capture_mode=capture_mode
     )
-    audio_gain_db = _capture_audio_gain_db(entry)
 
     await _async_wait_rtsp_ready(rtsp_url)
     await _async_mkdir(hass, target.parent)
@@ -164,7 +160,6 @@ async def _async_capture_to_output(
             work_dir=work_dir,
             duration_seconds=duration,
             include_audio=include_audio,
-            audio_gain_db=audio_gain_db,
         )
     )
     talkback_stop = threading.Event()
@@ -726,22 +721,6 @@ def _agent_host(entry: Any) -> str:
     return host
 
 
-def _capture_audio_gain_db(entry: Any) -> float:
-    """Return configured ring capture audio gain in dB."""
-
-    try:
-        gain = float(
-            entry_config_value(
-                entry,
-                CONF_RING_CAPTURE_AUDIO_GAIN_DB,
-                DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
-            )
-        )
-    except (TypeError, ValueError):
-        return DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB
-    return min(AUDIO_GAIN_DB_MAX, max(AUDIO_GAIN_DB_MIN, gain))
-
-
 def _agent_host_for_socket(host: str) -> str:
     return _agent_host_for_socket_value(host)
 
@@ -821,7 +800,6 @@ async def _async_run_ffmpeg(
     work_dir: Path | None = None,
     duration_seconds: int,
     include_audio: bool,
-    audio_gain_db: float = DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
 ) -> None:
     audio_dir = work_dir or target.parent
     raw_audio_target = _capture_raw_audio_path(audio_dir)
@@ -855,12 +833,10 @@ async def _async_run_ffmpeg(
     if include_audio:
         # The device audio keeps its own sample rate and channel count; the
         # resampler only keeps it in step with the video. MP4 needs AAC, which
-        # browsers play at the device's 8 kHz mono as well.
+        # browsers play at the device's 8 kHz mono as well. The level is the
+        # live one: the agent applies door level and fine adjustment to the
+        # stream itself.
         audio_filter = "aresample=async=1:first_pts=0"
-        if audio_gain_db:
-            # The limiter only catches what the gain may push over full scale;
-            # at 0 dB the level of the device audio is left alone.
-            audio_filter += f",volume={audio_gain_db:g}dB,alimiter=limit=0.95"
         command.extend(
             [
                 "-map",

@@ -63,16 +63,16 @@
         "data": {
           "video_enabled": "Vidéo et son du poste de porte",
           "create_homeassistant_user": "Créer l'accès vidéo et audio sur le {model}",
-          "doorstation_audio_gain_db": "Niveau audio en direct (dB)",
-          "ring_capture_audio_gain_db": "Volume des enregistrements d'appel (dB)",
+          "door_audio_level_db": "Niveau du poste de porte",
+          "audio_fine_gain_db": "Réglage fin (dB)",
           "webrtc_ice_policy": "Chemins de connexion de l'image en direct",
           "native_two_way_audio": "Parler depuis la vue caméra de Home Assistant"
         },
         "data_description": {
           "video_enabled": "Image et son du poste de porte dans Home Assistant : lors d'un appel, à la demande et pour Home Call.",
           "create_homeassistant_user": "La vidéo et le son ont besoin d'un accès propre sur le {model}. Si l'option est active, l'intégration le crée lors de la configuration ou via sa réparation.",
-          "doorstation_audio_gain_db": "Niveau du son du poste de porte en direct et pendant un appel. De -20 à +20 dB ; 0 laisse le son inchangé.",
-          "ring_capture_audio_gain_db": "Volume du son des enregistrements faits lorsqu'on sonne. De -20 à +20 dB ; la valeur par défaut est 6.",
+          "door_audio_level_db": "Augmente le son du poste de porte en direct, pendant un appel et dans les enregistrements d'appel. Là où la station le permet, dans sa puce audio, sinon de la même valeur par logiciel. Par défaut : +6 dB.",
+          "audio_fine_gain_db": "Ajoute de -10 à +10 dB au niveau du poste de porte, identique sur chaque station et chaque codec audio. Par défaut : 0.",
           "webrtc_ice_policy": "Quelles adresses réseau le navigateur peut utiliser pour l'image en direct. À modifier seulement si l'image en direct ne se connecte pas.",
           "native_two_way_audio": "Facultatif, désactivé par défaut. Nécessite Home Assistant 2026.11 ou plus récent, « Two-way audio » activé dans Paramètres > Système > Labs, l'image en direct via WebRTC, un accès en HTTPS et le microphone autorisé dans le navigateur. Répondez d'abord à un appel dans la carte {model} ; cette option n'y répond pas. Parler dans la carte {model} reste inchangé."
         }
@@ -192,16 +192,16 @@
         "data": {
           "video_enabled": "Vidéo et son du poste de porte",
           "create_homeassistant_user": "Créer l'accès vidéo et audio sur le {model}",
-          "doorstation_audio_gain_db": "Niveau audio en direct (dB)",
-          "ring_capture_audio_gain_db": "Volume des enregistrements d'appel (dB)",
+          "door_audio_level_db": "Niveau du poste de porte",
+          "audio_fine_gain_db": "Réglage fin (dB)",
           "webrtc_ice_policy": "Chemins de connexion de l'image en direct",
           "native_two_way_audio": "Parler depuis la vue caméra de Home Assistant"
         },
         "data_description": {
           "video_enabled": "Image et son du poste de porte dans Home Assistant : lors d'un appel, à la demande et pour Home Call.",
           "create_homeassistant_user": "La vidéo et le son ont besoin d'un accès propre sur le {model}. Si l'option est active, l'intégration le crée lors de la configuration ou via sa réparation.",
-          "doorstation_audio_gain_db": "Niveau du son du poste de porte en direct et pendant un appel. De -20 à +20 dB ; 0 laisse le son inchangé.",
-          "ring_capture_audio_gain_db": "Volume du son des enregistrements faits lorsqu'on sonne. De -20 à +20 dB ; la valeur par défaut est 6.",
+          "door_audio_level_db": "Augmente le son du poste de porte en direct, pendant un appel et dans les enregistrements d'appel. Là où la station le permet, dans sa puce audio, sinon de la même valeur par logiciel. Par défaut : +6 dB.",
+          "audio_fine_gain_db": "Ajoute de -10 à +10 dB au niveau du poste de porte, identique sur chaque station et chaque codec audio. Par défaut : 0.",
           "webrtc_ice_policy": "Quelles adresses réseau le navigateur peut utiliser pour l'image en direct. À modifier seulement si l'image en direct ne se connecte pas.",
           "native_two_way_audio": "Facultatif, désactivé par défaut. Nécessite Home Assistant 2026.11 ou plus récent, « Two-way audio » activé dans Paramètres > Système > Labs, l'image en direct via WebRTC, un accès en HTTPS et le microphone autorisé dans le navigateur. Répondez d'abord à un appel dans la carte {model} ; cette option n'y répond pas. Parler dans la carte {model} reste inchangé."
         }
@@ -775,7 +775,7 @@
       "invalid_alarm_entity": "Sélectionnez une entité alarm_control_panel Alarmo ou laissez vide.",
       "invalid_alarm_page_entity": "Sélectionnez une entité dashboard prise en charge pour la page alarme ou laissez vide.",
       "invalid_weather_entity": "Sélectionnez une entité météo ou laissez vide.",
-      "invalid_audio_gain": "Choisissez un gain audio entre -20 dB et +20 dB.",
+      "invalid_audio_level": "Choisissez un niveau dans la liste et un réglage fin entre -10 dB et +10 dB.",
       "invalid_device_activations": "Vérifiez l'ID, le nom, le type et l'adresse d'activation. Les ID doivent être uniques; le mode lumière escalier manuel réserve déjà stair_light.",
       "invalid_stair_light_part": "Saisissez une valeur P/N numérique de 0 à 99.",
       "required": "Ce champ est obligatoire.",
@@ -835,16 +835,16 @@
         "data": {
           "video_enabled": "Vidéo et son du poste de porte",
           "create_homeassistant_user": "Créer l'accès vidéo et audio sur le {model}",
-          "doorstation_audio_gain_db": "Niveau audio en direct (dB)",
-          "ring_capture_audio_gain_db": "Volume des enregistrements d'appel (dB)",
+          "door_audio_level_db": "Niveau du poste de porte",
+          "audio_fine_gain_db": "Réglage fin (dB)",
           "webrtc_ice_policy": "Chemins de connexion de l'image en direct",
           "native_two_way_audio": "Parler depuis la vue caméra de Home Assistant"
         },
         "data_description": {
           "video_enabled": "Image et son du poste de porte dans Home Assistant : lors d'un appel, à la demande et pour Home Call.",
           "create_homeassistant_user": "La vidéo et le son ont besoin d'un accès propre sur le {model}. Si l'option est active, l'intégration le crée lors de la configuration ou via sa réparation.",
-          "doorstation_audio_gain_db": "Niveau du son du poste de porte en direct et pendant un appel. De -20 à +20 dB ; 0 laisse le son inchangé.",
-          "ring_capture_audio_gain_db": "Volume du son des enregistrements faits lorsqu'on sonne. De -20 à +20 dB ; la valeur par défaut est 6.",
+          "door_audio_level_db": "Augmente le son du poste de porte en direct, pendant un appel et dans les enregistrements d'appel. Là où la station le permet, dans sa puce audio, sinon de la même valeur par logiciel. Par défaut : +6 dB.",
+          "audio_fine_gain_db": "Ajoute de -10 à +10 dB au niveau du poste de porte, identique sur chaque station et chaque codec audio. Par défaut : 0.",
           "webrtc_ice_policy": "Quelles adresses réseau le navigateur peut utiliser pour l'image en direct. À modifier seulement si l'image en direct ne se connecte pas.",
           "native_two_way_audio": "Facultatif, désactivé par défaut. Nécessite Home Assistant 2026.11 ou plus récent, « Two-way audio » activé dans Paramètres > Système > Labs, l'image en direct via WebRTC, un accès en HTTPS et le microphone autorisé dans le navigateur. Répondez d'abord à un appel dans la carte {model} ; cette option n'y répond pas. Parler dans la carte {model} reste inchangé."
         }
@@ -1301,7 +1301,7 @@
       "invalid_alarm_entity": "Sélectionnez une entité alarm_control_panel Alarmo ou laissez vide.",
       "invalid_alarm_page_entity": "Sélectionnez une entité dashboard prise en charge pour la page alarme ou laissez vide.",
       "invalid_weather_entity": "Sélectionnez une entité météo ou laissez vide.",
-      "invalid_audio_gain": "Choisissez un gain audio entre -20 dB et +20 dB.",
+      "invalid_audio_level": "Choisissez un niveau dans la liste et un réglage fin entre -10 dB et +10 dB.",
       "invalid_device_activations": "Vérifiez l'ID, le nom, le type et l'adresse d'activation. Les ID doivent être uniques; le mode lumière escalier manuel réserve déjà stair_light.",
       "invalid_stair_light_part": "Saisissez une valeur P/N numérique de 0 à 99.",
       "invalid_dashboard_entities": "Une entité ne peut pas être affichée sur l'écran.",
@@ -1929,6 +1929,15 @@
     }
   },
   "selector": {
+    "door_audio_level": {
+      "options": {
+        "0": "Réglage d'usine",
+        "3": "+3 dB",
+        "6": "+6 dB",
+        "9": "+9 dB",
+        "12": "+12 dB"
+      }
+    },
     "capture_mode": {
       "options": {
         "ring": "Appel de sonnette",

@@ -113,7 +113,6 @@ from .const import (
     SIGNAL_SYSTEM_METRICS_CHANGED,
 )
 from .device_user import media_user_attribute
-from .doorstation_audio import doorstation_audio_gain_db
 from .entity import C300XEntity, entry_config_value, supports_capability
 from .entry_types import BticinoC300XConfigEntry
 from .event_payload import agent_event_key
@@ -284,10 +283,6 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
             "talkback_supported": self._talkback_supported(),
             "picture_controls_supported": picture_supported,
             "picture_controls_scope": ("ring_and_on_demand" if shared_picture else "ring") if picture_supported else None,
-            # The configured doorstation gain (from HA's own config-flow option,
-            # not the agent) so the card can apply it client-side in PCMU mode
-            # where the agent stays at passthrough.
-            "doorstation_audio_gain_db": doorstation_audio_gain_db(self._entry),
             **media_user_attribute(self._entry),
         }
 

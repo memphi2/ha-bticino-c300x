@@ -154,8 +154,8 @@ Setup then walks through the settings areas one after the other. Later,
 | --- | --- |
 | **Door station video and audio** | On, for camera, Ring Call, Home Call and talkback. |
 | **Set up video and audio access on the C300X** | On. Video and audio need their own access on the station. |
-| **Live audio level (dB)** | `0 dB` (unchanged sound). |
-| **Volume of ring recordings (dB)** | The default `6 dB`, unless you already use Ring capture. |
+| **Door level** | The default `+6 dB`. |
+| **Fine adjustment (dB)** | The default `0 dB`. |
 | **Connection paths for the live picture** | **IPv4 and local IPv6 (ULA) - recommended** (the default). |
 | **Talk through the Home Assistant camera view** | Off. Talkback in the card does not need it. |
 | **Visitor Snapshot** (only with video on) | The defaults: 800x480, 3 seconds, 14 days, date and time in the image. |

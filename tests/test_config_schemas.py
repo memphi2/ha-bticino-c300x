@@ -4,7 +4,8 @@ from types import SimpleNamespace
 
 from custom_components.bticino_c300x import config_schemas as config_schemas_module
 from custom_components.bticino_c300x.config_schemas import (
-    audio_gain_db_selector,
+    audio_fine_gain_selector,
+    door_audio_level_selector,
     reconfigure_connection_schema,
 )
 from custom_components.bticino_c300x.const import (
@@ -17,7 +18,7 @@ from custom_components.bticino_c300x.const import (
 )
 
 
-def test_audio_gain_selector_uses_home_assistant_number_selector(
+def test_fine_adjustment_selector_uses_home_assistant_number_selector(
     monkeypatch,
 ) -> None:
     class _NumberSelectorConfig:
@@ -35,14 +36,39 @@ def test_audio_gain_selector_uses_home_assistant_number_selector(
     )
     monkeypatch.setattr(config_schemas_module, "selector", fake_selector)
 
-    result = audio_gain_db_selector()
+    result = audio_fine_gain_selector()
 
     assert result.config.kwargs == {
-        "min": -20.0,
-        "max": 20.0,
-        "step": 0.5,
+        "min": -10,
+        "max": 10,
+        "step": 1,
         "mode": "slider",
         "unit_of_measurement": "dB",
+    }
+
+
+def test_door_level_selector_offers_the_five_steps(monkeypatch) -> None:
+    class _SelectSelectorConfig:
+        def __init__(self, **kwargs) -> None:
+            self.kwargs = kwargs
+
+    class _SelectSelector:
+        def __init__(self, config: _SelectSelectorConfig) -> None:
+            self.config = config
+
+    fake_selector = SimpleNamespace(
+        SelectSelector=_SelectSelector,
+        SelectSelectorConfig=_SelectSelectorConfig,
+        SelectSelectorMode=SimpleNamespace(DROPDOWN="dropdown"),
+    )
+    monkeypatch.setattr(config_schemas_module, "selector", fake_selector)
+
+    result = door_audio_level_selector()
+
+    assert result.config.kwargs == {
+        "options": ["0", "3", "6", "9", "12"],
+        "translation_key": "door_audio_level",
+        "mode": "dropdown",
     }
 
 

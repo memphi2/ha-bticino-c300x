@@ -13,7 +13,7 @@ from .callback_url import (
     validated_callback_base_url as _validated_callback_base_url,
 )
 from .camera_media.ha_compat import HA_SUPPORTS_NATIVE_CAMERA_TWO_WAY_AUDIO
-from .config_audio import audio_gain_db
+from .config_audio import audio_fine_gain_db, door_audio_level_db
 from .config_flow_dashboard import (
     DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT as _DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT,
 )
@@ -50,6 +50,7 @@ from .const import (
     CONF_AGENT_TOKEN,
     CONF_ALARM_ENTITY_ID,
     CONF_ALARM_PAGE_ENTITY_ID,
+    CONF_AUDIO_FINE_GAIN_DB,
     CONF_BOOTSTRAP_INSTALL_AGENT,
     CONF_BOOTSTRAP_SSH_PASSWORD,
     CONF_BOOTSTRAP_SSH_USERNAME,
@@ -67,12 +68,11 @@ from .const import (
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
     CONF_DEVICE_ACTIVATIONS,
     CONF_DEVICE_UI_ENABLED,
-    CONF_DOORSTATION_AUDIO_GAIN_DB,
+    CONF_DOOR_AUDIO_LEVEL_DB,
     CONF_ENERGY_PAGE,
     CONF_MAINTENANCE_TOKEN,
     CONF_NATIVE_TWO_WAY_AUDIO,
     CONF_REINSTALL_AGENT,
-    CONF_RING_CAPTURE_AUDIO_GAIN_DB,
     CONF_ROTATE_SHARED_SECRET,
     CONF_VIDEO_ENABLED,
     CONF_VIDEO_PORT,
@@ -80,9 +80,9 @@ from .const import (
     CONF_WEATHER_ENTITY_ID,
     CONF_WEBRTC_ICE_POLICY,
     DEFAULT_AGENT_PORT,
-    DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
+    DEFAULT_AUDIO_FINE_GAIN_DB,
+    DEFAULT_DOOR_AUDIO_LEVEL_DB,
     DEFAULT_NAME,
-    DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
     DEFAULT_STAIR_LIGHT_N,
     DEFAULT_STAIR_LIGHT_P,
     DEFAULT_VIDEO_PORT,
@@ -497,33 +497,27 @@ def _audio_feature_input(
     errors: dict[str, str],
     *,
     media_enabled: bool,
-) -> tuple[float, float]:
-    """Validate media audio feature fields."""
+) -> tuple[int, int]:
+    """Validate the door level and the fine adjustment."""
 
     if not media_enabled:
-        return DEFAULT_DOORSTATION_AUDIO_GAIN_DB, DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB
+        return DEFAULT_DOOR_AUDIO_LEVEL_DB, DEFAULT_AUDIO_FINE_GAIN_DB
 
     try:
-        doorstation_audio_gain_db = audio_gain_db(
-            user_input.get(
-                CONF_DOORSTATION_AUDIO_GAIN_DB,
-                DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
-            )
+        door_level = door_audio_level_db(
+            user_input.get(CONF_DOOR_AUDIO_LEVEL_DB, DEFAULT_DOOR_AUDIO_LEVEL_DB)
         )
     except vol.Invalid:
-        errors[CONF_DOORSTATION_AUDIO_GAIN_DB] = "invalid_audio_gain"
-        doorstation_audio_gain_db = DEFAULT_DOORSTATION_AUDIO_GAIN_DB
+        errors[CONF_DOOR_AUDIO_LEVEL_DB] = "invalid_audio_level"
+        door_level = DEFAULT_DOOR_AUDIO_LEVEL_DB
     try:
-        ring_capture_audio_gain_db = audio_gain_db(
-            user_input.get(
-                CONF_RING_CAPTURE_AUDIO_GAIN_DB,
-                DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
-            )
+        fine_gain = audio_fine_gain_db(
+            user_input.get(CONF_AUDIO_FINE_GAIN_DB, DEFAULT_AUDIO_FINE_GAIN_DB)
         )
     except vol.Invalid:
-        errors[CONF_RING_CAPTURE_AUDIO_GAIN_DB] = "invalid_audio_gain"
-        ring_capture_audio_gain_db = DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB
-    return doorstation_audio_gain_db, ring_capture_audio_gain_db
+        errors[CONF_AUDIO_FINE_GAIN_DB] = "invalid_audio_level"
+        fine_gain = DEFAULT_AUDIO_FINE_GAIN_DB
+    return door_level, fine_gain
 
 
 def _webrtc_ice_policy_input(user_input: dict[str, Any]) -> str:
@@ -558,7 +552,7 @@ def _feature_input(
         device_activation_stair_light_n,
     ) = _device_activation_input(user_input, errors)
     media_enabled = bool(user_input.get(CONF_VIDEO_ENABLED, default_video_enabled))
-    doorstation_audio_gain_db, ring_capture_audio_gain_db = _audio_feature_input(
+    door_level, fine_gain = _audio_feature_input(
         user_input,
         errors,
         media_enabled=media_enabled,
@@ -601,15 +595,15 @@ def _feature_input(
                 if media_enabled
                 else False
             ),
-            CONF_DOORSTATION_AUDIO_GAIN_DB: (
-                doorstation_audio_gain_db
+            CONF_DOOR_AUDIO_LEVEL_DB: (
+                door_level
                 if media_enabled
-                else DEFAULT_DOORSTATION_AUDIO_GAIN_DB
+                else DEFAULT_DOOR_AUDIO_LEVEL_DB
             ),
-            CONF_RING_CAPTURE_AUDIO_GAIN_DB: (
-                ring_capture_audio_gain_db
+            CONF_AUDIO_FINE_GAIN_DB: (
+                fine_gain
                 if media_enabled
-                else DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB
+                else DEFAULT_AUDIO_FINE_GAIN_DB
             ),
             CONF_WEBRTC_ICE_POLICY: (
                 _webrtc_ice_policy_input(user_input)

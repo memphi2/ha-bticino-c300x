@@ -92,7 +92,7 @@ void c300x_calls_tick(struct c300x_calls *calls, const struct c300x_call_sink *s
 int c300x_calls_timeout_ms(const struct c300x_calls *calls, long long now);
 
 const struct c300x_call *c300x_calls_find(const struct c300x_calls *calls, const char *call_id);
-/* The live ring call. */
+/* The live ring call, else the newest view. */
 const struct c300x_call *c300x_calls_current(const struct c300x_calls *calls);
 const struct c300x_call *c300x_calls_live_for_unit(const struct c300x_calls *calls, const char *unit);
 int c300x_calls_is_current(const struct c300x_calls *calls, const char *call_id);

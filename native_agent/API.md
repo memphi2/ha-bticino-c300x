@@ -237,7 +237,7 @@ for example `config_error`, `api_token_missing`, `api_bind_failed`,
 | `GET` | `/api/v1/calls/doorbell/status` | API | None. |
 | `GET` | `/api/v1/calls` | API | None. |
 | `POST` | `/api/v1/calls/{call_id}/actions/answer` | API | Answers the current ring call locally. |
-| `POST` | `/api/v1/calls/{call_id}/actions/hangup` | API | Hangs up the current ring call. |
+| `POST` | `/api/v1/calls/{call_id}/actions/hangup` | API | Hangs up the current ring call or stops the current view. |
 | `GET` | `/api/v1/outdoor-units` | API | None (reads the station's archive on every request). |
 | `POST` | `/api/v1/outdoor-units/{unit_id}/actions/unlock` | API | Sends the lock command of that outdoor unit. |
 | `POST` | `/api/v1/calls/doorbell/actions/capture` | API | Marks native capture action accepted. |
@@ -1210,9 +1210,11 @@ Capabilities report `api_version: "2"`, `capabilities.outdoor_units` and
 - `GET /api/v1/calls`: `boot_id` (drawn at agent start), `current_call_id`,
   `caller_frames_ignored` and live calls plus calls ended in the last 60 s.
 - `POST /api/v1/calls/{call_id}/actions/answer`, `.../hangup`: answer or hang
-  up the current ring call. A call id that is unknown, ended or not current
-  gets `409 call_not_current` with `current_call_id`; nothing reaches the
-  station. Success bodies are those of the 2.x unscoped routes, which are gone.
+  up the current call: the live ring call, else the live on-demand view, which
+  a hang-up stops (an answer of a view gets `409 call_not_ringing`). A call id
+  that is unknown, ended or not current gets `409 call_not_current` with
+  `current_call_id`; nothing reaches the station. Success bodies are those of
+  the 2.x unscoped routes, which are gone.
 - `POST /api/v1/outdoor-units/{unit_id}/actions/unlock`, `{unit_id}` may be
   `current`; optional body `{"call_id": "..."}`, which must be a call of that
   unit, live or ended less than 60 s ago (else `409 call_not_current`).

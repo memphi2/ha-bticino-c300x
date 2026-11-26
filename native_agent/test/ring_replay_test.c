@@ -731,7 +731,9 @@ static void lifecycle_ondemand_view(void) {
     usleep(300000);
     assert(count_events("call.ended") == 0 && count_events("call.answered") == 0);
     assert(calls_api("GET", "/api/v1/calls", "", data, sizeof(data)) == 200);
-    assert(strstr(data, "\"current_call_id\":null") && strstr(data, "\"state\":\"viewing\""));
+    assert(strstr(data, "\"state\":\"viewing\""));
+    assert_current(id);
+    /* Stopped elsewhere (HA's stop button): the view's media closes. */
     c300x_video_stop(runtime->video);
     wait_byes(1);
     wait_event("call.ended", 1, data, sizeof(data));
@@ -891,6 +893,28 @@ static void abandoned_answer_then_station(void) {
     wait_event("call.answered", 1, data, sizeof(data));
     assert(strstr(data, id) && strstr(data, "\"answered_by\":\"station\""));
     close(preview);
+}
+
+/* HA's on-demand view is the current call; the card ends it with the
+ * call's hang-up. */
+static void view_is_current(void) {
+    char data[4096], id[32];
+    atomic_store(&station_busy, 0);
+    assert(c300x_video_activate(runtime->video, 1));
+    int fd = rtsp_open();
+    assert(rtsp_play(fd, "/doorbell") == 200);
+    bus("*8*1#5#4#20*11##");
+    wait_event("call.view_started", 1, data, sizeof(data));
+    call_id_of(data, id);
+    assert(calls_api("GET", "/api/v1/calls", "", data, sizeof(data)) == 200);
+    assert(strstr(data, "\"state\":\"viewing\""));
+    assert_current(id);
+    call_api_action(id, "hangup", 200);
+    wait_byes(1);
+    wait_event("call.ended", 1, data, sizeof(data));
+    assert(strstr(data, id) && strstr(data, "\"kind\":\"view\",\"reason\":\"hangup\""));
+    close(fd);
+    assert_current("");
 }
 
 /* HA's answer is refused (the agent has no ring leg: only the bus rang);
@@ -1124,6 +1148,7 @@ int main(int argc, char **argv) {
     else if (strcmp(argv[1], "display_answer_end_lost_call") == 0) display_answer_end_lost_call();
     else if (strcmp(argv[1], "answer_before_caller") == 0) answer_before_caller();
     else if (strcmp(argv[1], "abandoned_answer_then_station") == 0) abandoned_answer_then_station();
+    else if (strcmp(argv[1], "view_is_current") == 0) view_is_current();
     else if (strcmp(argv[1], "call_id_lengths") == 0) call_id_lengths();
     else if (strcmp(argv[1], "boot_id_at_start") == 0) boot_id_at_start();
     else if (strcmp(argv[1], "station_busy_bus_end") == 0) station_busy_case(true);

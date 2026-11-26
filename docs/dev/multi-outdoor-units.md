@@ -126,7 +126,9 @@ session are one call, named by the last caller frame.
 
 ### Current call
 
-Only the current call can be answered or hung up: the live ring call.
+Only the current call can be answered or hung up: the live ring call, else
+the live on-demand view (`state: "viewing"`). Hanging up a view stops it, as
+the stop button does.
 
 ### End of a call
 

@@ -235,21 +235,59 @@ static void send_not_current(int client_fd, const struct c300x_calls *calls)
     c300x_http_send_json(client_fd, 409, "Conflict", body);
 }
 
+/* A view ends as HA's stop button ends it; 1 when the request was answered with success. */
+static int stop_view(int client_fd, const struct c300x_call_routes *routes)
+{
+    const char *error = "";
+    char body[96];
+    int result = 0;
+
+    if (routes->video == NULL) {
+        c300x_http_send_json(client_fd, 503, "Service Unavailable", "{\"ok\":false,\"error\":\"video_unavailable\"}\n");
+        return 0;
+    }
+    if (routes->control == NULL) {
+        c300x_video_stop(routes->video);
+    } else {
+        enum c300x_video_control_state state = c300x_video_control_run(
+            routes->control, routes->video, C300X_VIDEO_CONTROL_STOP, 0, &result, &error);
+        if (state == C300X_VIDEO_CONTROL_DEFERRED) {
+            return 0;
+        }
+        if (state == C300X_VIDEO_CONTROL_REFUSED) {
+            snprintf(body, sizeof(body), "{\"ok\":false,\"error\":\"%s\"}\n", error);
+            c300x_http_send_json(client_fd, 503, "Service Unavailable", body);
+            return 0;
+        }
+    }
+    c300x_http_send_json(client_fd, 200, "OK", "{\"ok\":true}\n");
+    return 1;
+}
+
 static void call_action(int client_fd, const struct c300x_call_routes *routes, const struct request *request,
                         const char *call_id, int answer)
 {
     struct c300x_call_hub *hub = routes->hub;
     /* Checked before the operation starts, not when its result is answered. */
     int owns = routes->control != NULL && routes->control->worker.owner_fd == client_fd;
+    const struct c300x_call *call = c300x_calls_find(&hub->calls, call_id);
     int done;
 
     if (!owns && !c300x_calls_is_current(&hub->calls, call_id)) {
         send_not_current(client_fd, &hub->calls);
         return;
     }
+    if (call != NULL && call->view && answer) {
+        c300x_http_send_json(client_fd, 409, "Conflict", "{\"ok\":false,\"error\":\"call_not_ringing\"}\n");
+        return;
+    }
     hub->stopping = !answer;
-    done = answer ? c300x_http_doorbell_call_answer(client_fd, routes->control, routes->video, request)
-                  : c300x_http_doorbell_call_hangup(client_fd, routes->control, routes->video);
+    if (call != NULL && call->view) {
+        done = stop_view(client_fd, routes);
+    } else {
+        done = answer ? c300x_http_doorbell_call_answer(client_fd, routes->control, routes->video, request)
+                      : c300x_http_doorbell_call_hangup(client_fd, routes->control, routes->video);
+    }
     if (done && answer) {
         c300x_calls_answered(&hub->calls, &hub->sink, call_id, "ha", c300x_monotonic_ms());
     } else if (done) {

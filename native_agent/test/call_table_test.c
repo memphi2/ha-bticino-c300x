@@ -363,7 +363,7 @@ static void view_and_media_closed(void)
     frame("*8*9#5#4*20##", 300);
     assert(count("call.view_started") == 1);
     expect(nth("call.view_started", 1), "\"unit\":\"20\"");
-    assert(c300x_calls_current(&calls) == NULL);
+    assert(c300x_calls_is_current(&calls, "8f3a1c2e-1"));
     /* c300x-ha-first-click-click-stop-20260621-214931: *8*100#5 578 ms after the view. */
     frame("*8*100#5#4*20##", 578);
     media.agent = 1;

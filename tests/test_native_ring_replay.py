@@ -27,7 +27,7 @@ CASES = {
     "call_id_lengths": 0, "boot_id_at_start": 0,
     "display_answer_without_preview": 0, "app_answer_end_frame_first": 0,
     "display_answer_end_lost_call": 0, "answer_before_caller": 0,
-    "abandoned_answer_then_station": 0,
+    "abandoned_answer_then_station": 0, "view_is_current": 1,
     "station_busy_bus_end": 2, "station_busy_timeout": 2,
     "station_freed_before_486": 2, "station_freed_after_486": 2,
 }

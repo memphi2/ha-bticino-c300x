@@ -43,11 +43,13 @@
         "description": "Inserisci le chiavi dell'agent nativo raggiungibile. Lascia vuota la chiave di accesso solo mentre l'agent è ancora in modalità bootstrap noAuth.",
         "data": {
           "agent_token": "Chiave di accesso",
-          "maintenance_token": "Chiave di manutenzione"
+          "maintenance_token": "Chiave di manutenzione",
+          "reinstall_agent": "Non ho le chiavi: reinstalla l'agent"
         },
         "data_description": {
           "agent_token": "Chiave con cui Home Assistant accede al {model}. È stata creata durante l'installazione.",
-          "maintenance_token": "Chiave separata per la manutenzione: aggiornamenti, modifiche al display e riavvii."
+          "maintenance_token": "Chiave separata per la manutenzione: aggiornamenti, modifiche al display e riavvii.",
+          "reinstall_agent": "Reinstalla l'agent incluso tramite SSH con chiavi appena generate. Le chiavi usate finora non funzionano più; tutto il resto sul {model} rimane com'è."
         }
       },
       "user_features": {
@@ -720,7 +722,19 @@
         "description": "Inserisci le chiavi attuali per {name}. Lascia un campo vuoto per mantenere la chiave salvata.",
         "data": {
           "agent_token": "Chiave di accesso",
-          "maintenance_token": "Chiave di manutenzione"
+          "maintenance_token": "Chiave di manutenzione",
+          "reinstall_agent": "Non ho le chiavi: reinstalla l'agent"
+        },
+        "data_description": {
+          "reinstall_agent": "Reinstalla l'agent incluso tramite SSH con chiavi appena generate e le salva in questa voce. Le chiavi usate finora non funzionano più; tutto il resto sul {model} rimane com'è."
+        }
+      },
+      "reauth_reinstall": {
+        "title": "Reinstalla l'agent {model}",
+        "description": "Home Assistant accede prima con il login di fabbrica del {model}. Inserisci utente e password SSH solo se il dispositivo lo ha rifiutato; lasciati vuoti, viene riprovato il login di fabbrica. Ferma l'agent installato, scrive sul {model} l'agent incluso e una configurazione con chiavi appena generate tramite SSH e lo riavvia. Le nuove chiavi vengono salvate per {name}; quelle vecchie non funzionano più. Le pagine del display e le altre impostazioni del {model} rimangono, e il dispositivo non viene riavviato. Le credenziali SSH sono usate solo per questo passaggio e non vengono salvate.",
+        "data": {
+          "bootstrap_ssh_username": "Utente SSH {model}",
+          "bootstrap_ssh_password": "Password SSH {model}"
         }
       }
     },

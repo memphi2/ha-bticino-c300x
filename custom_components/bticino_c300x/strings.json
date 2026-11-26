@@ -43,11 +43,13 @@
         "description": "Enter the keys of the reachable native agent. Leave the access key empty only while the agent is still in noAuth bootstrap mode.",
         "data": {
           "agent_token": "Access key",
-          "maintenance_token": "Maintenance key"
+          "maintenance_token": "Maintenance key",
+          "reinstall_agent": "I do not have the keys: reinstall the agent"
         },
         "data_description": {
           "agent_token": "Key Home Assistant signs in to the {model} with. It was created during installation.",
-          "maintenance_token": "Separate key for maintenance: updates, display changes and restarts."
+          "maintenance_token": "Separate key for maintenance: updates, display changes and restarts.",
+          "reinstall_agent": "Installs the bundled agent again through SSH with newly generated keys. The keys used so far stop working; everything else on the {model} stays as it is."
         }
       },
       "user_features": {
@@ -720,7 +722,19 @@
         "description": "Enter the current keys for {name}. Leave a key empty to keep its saved value.",
         "data": {
           "agent_token": "Access key",
-          "maintenance_token": "Maintenance key"
+          "maintenance_token": "Maintenance key",
+          "reinstall_agent": "I do not have the keys: reinstall the agent"
+        },
+        "data_description": {
+          "reinstall_agent": "Installs the bundled agent again through SSH with newly generated keys and saves them in this entry. The keys used so far stop working; everything else on the {model} stays as it is."
+        }
+      },
+      "reauth_reinstall": {
+        "title": "Reinstall the {model} agent",
+        "description": "Home Assistant logs in with the factory login of the {model} first. Enter the SSH user and password only if the device refused it; left empty, the factory login is tried again. This stops the installed agent, writes the bundled agent and a configuration with newly generated keys to the {model} through SSH, and starts it again. The new keys are saved for {name}; the old ones stop working. Display pages and the other settings on the {model} stay, and the device is not restarted. SSH credentials are used only for this step and are not stored.",
+        "data": {
+          "bootstrap_ssh_username": "{model} SSH user",
+          "bootstrap_ssh_password": "{model} SSH password"
         }
       }
     },

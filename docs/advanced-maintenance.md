@@ -87,8 +87,16 @@ is set and its fingerprint, diagnostics only whether it is set. Policy:
 - **Key rejected:** Home Assistant starts a re-authentication flow that asks
   for the current keys.
 - **Webhook credentials:** **Reconfigure > Rotate shared secret**.
-- **Lost maintenance key:** an access key cannot create one. Without a working
-  maintenance key or the noAuth bootstrap configuration, recovery needs SSH.
+- **Lost keys:** an access key cannot create a maintenance key. Without a
+  working maintenance key or the noAuth bootstrap configuration, recovery needs
+  SSH: tick **I do not have the keys: reinstall the agent** in the
+  re-authentication dialog, or in the key dialog of a new setup. Home Assistant
+  logs in with the factory login (it asks for the SSH user and password only if
+  the station refuses it, and does not store them), stops the installed agent,
+  writes the bundled agent with two newly generated keys and starts it again.
+  The entry stores the new keys; the old ones stop working. Display pages, the
+  core media hook and the other settings on the station stay, and the station
+  is not restarted. See [Agent already installed](quickstart.md#install-the-device-agent).
 
 `noAuth` is a bootstrap state; turn it off once keys are configured. Saving the
 agent's `/setup` page with an access key set, or turning off the

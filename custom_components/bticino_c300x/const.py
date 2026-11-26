@@ -16,6 +16,7 @@ CONF_DISPLAY_SETTING_PENDING = "display_setting_pending"
 # Display steps the agent update or install owes on the Qt 5 display: True
 # with the full Display patch, False with the core hook only.
 CONF_DISPLAY_FOLLOWUP_PENDING = "display_followup_pending"
+CONF_REINSTALL_AGENT = "reinstall_agent"
 CONF_ALARM_ENTITY_ID = "alarm_entity_id"
 CONF_ALARM_PAGE_ENTITY_ID = "alarm_page_entity_id"
 CONF_AGENT_HOST = "agent_host"

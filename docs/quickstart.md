@@ -117,6 +117,13 @@ to. What happens next depends on what Home Assistant finds:
   entry, diagnostics or logs.
 - **Agent already installed:** setup asks for its **Access key** and
   **Maintenance key**. See [Tokens and Access](advanced-maintenance.md#tokens-and-access).
+- **Agent already installed, keys lost** (for example the integration was
+  removed and only its entry had the keys): tick **I do not have the keys:
+  reinstall the agent** in the same dialog. Setup then runs the SSH install
+  step above: it stops the installed agent, writes the bundled agent with newly
+  generated keys and starts it again. The old keys stop working. Display pages,
+  the core media hook and the other settings on the station stay; the station
+  is not restarted.
 - **Older agent:** run the **C300X device agent update required** Repair before
   testing camera or calls.
 

@@ -313,6 +313,8 @@ def _install_device_agent_sync(
             if client.put_file(payload.source, payload.remote_path, payload.mode):
                 changed_files.append(payload.remote_path)
 
+        if _replaces_keys(existing, merged_config):
+            _retire_old_keys_sync(client, request.remote_dir)
         if _write_remote_file_sync(
             client,
             config_path,
@@ -661,6 +663,39 @@ def _merge_existing_device_config(template: bytes, existing: Any) -> bytes:
         if isinstance(existing.get(section), dict):
             config[section] = existing[section]
     return (json.dumps(config, indent=2, sort_keys=True) + "\n").encode("utf-8")
+
+
+def _agent_keys(config: Any) -> tuple[Any, Any]:
+    api = config.get("api")
+    maintenance = config.get("maintenance")
+    return (
+        api.get("token") if isinstance(api, dict) else None,
+        maintenance.get("adminToken") if isinstance(maintenance, dict) else None,
+    )
+
+
+def _replaces_keys(existing: Any, config: bytes) -> bool:
+    """The installed agent has other keys than the ones this install writes."""
+
+    return isinstance(existing, dict) and _agent_keys(existing) != _agent_keys(json.loads(config))
+
+
+def _retire_old_keys_sync(client: _DeviceSshClient, remote_dir: str) -> None:
+    """Stop the installed agent before its keys are replaced.
+
+    A running agent saves its whole configuration when a setting changes and
+    would write its old keys over the new file. It is stopped by its own init
+    script (PID file, agent binary only); the install starts the new one. An
+    unfinished copy of the old configuration, left by a cut save or upload,
+    holds the old keys as well and is removed.
+    """
+
+    init = _quote(REMOTE_INIT_SCRIPT)
+    config = _quote(f"{remote_dir}/{REMOTE_CONFIG_NAME}")
+    client.run(
+        f"if [ -x {init} ]; then {init} stop || exit 1; fi; "
+        f"rm -f {config}.tmp.* {config}.c300x-*.new"
+    )
 
 
 def _device_activation_config(

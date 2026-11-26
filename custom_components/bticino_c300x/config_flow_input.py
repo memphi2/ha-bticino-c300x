@@ -70,6 +70,7 @@ from .const import (
     CONF_ENERGY_PAGE,
     CONF_MAINTENANCE_TOKEN,
     CONF_NATIVE_TWO_WAY_AUDIO,
+    CONF_REINSTALL_AGENT,
     CONF_RING_CAPTURE_AUDIO_GAIN_DB,
     CONF_ROTATE_SHARED_SECRET,
     CONF_VIDEO_ENABLED,
@@ -146,20 +147,25 @@ def _bootstrap_install_schema() -> vol.Schema:
     )
 
 
-def _agent_auth_schema(require_agent_token: bool) -> vol.Schema:
-    """Return the agent token schema."""
+def _agent_auth_schema(require_agent_token: bool, *, reinstall: bool = False) -> vol.Schema:
+    """Return the agent token schema.
+
+    With the reinstall choice no key is marked as required: the form must be
+    sendable without one. The step still asks for a missing access key.
+    """
 
     token_key = (
         vol.Required(CONF_AGENT_TOKEN, default="")
-        if require_agent_token
+        if require_agent_token and not reinstall
         else vol.Optional(CONF_AGENT_TOKEN, default="")
     )
-    return vol.Schema(
-        {
-            token_key: _password_selector(),
-            vol.Optional(CONF_MAINTENANCE_TOKEN, default=""): _password_selector(),
-        }
-    )
+    schema: dict[Any, Any] = {
+        token_key: _password_selector(),
+        vol.Optional(CONF_MAINTENANCE_TOKEN, default=""): _password_selector(),
+    }
+    if reinstall:
+        schema[vol.Optional(CONF_REINSTALL_AGENT, default=False)] = bool
+    return vol.Schema(schema)
 
 
 def _device_activation_mode(value: Any) -> str:

@@ -21,6 +21,7 @@ from .config_flow_identity import (
     stable_unique_id_from_setup_data,
 )
 from .config_flow_input import _agent_auth_input, _agent_auth_schema, _key_or_saved
+from .config_flow_reinstall import ReinstallSteps
 from .config_schemas import reconfigure_connection_schema
 from .const import (
     CONF_AGENT_HOST,
@@ -28,6 +29,7 @@ from .const import (
     CONF_AGENT_TOKEN,
     CONF_CALLBACK_BASE_URL,
     CONF_MAINTENANCE_TOKEN,
+    CONF_REINSTALL_AGENT,
     DEFAULT_AGENT_PORT,
 )
 from .discovery import discovery_matches_entry
@@ -94,7 +96,7 @@ async def async_validate_entry_connection(
     return setup, errors
 
 
-class AuthFlowSteps(C100XOptInSteps):
+class AuthFlowSteps(C100XOptInSteps, ReinstallSteps):
     """Share setup validation and reauth without expanding the main wizard."""
 
     _setup_unique_id: str | None
@@ -156,9 +158,17 @@ class AuthFlowSteps(C100XOptInSteps):
     def _show_agent_auth(self: Any, errors: dict[str, str]) -> ConfigFlowResult:
         return cast(ConfigFlowResult, self.async_show_form(
             step_id="agent_auth",
-            data_schema=_agent_auth_schema(self._setup_agent_needs_token),
+            # An agent that asks for a key can be reinstalled when the key is lost.
+            data_schema=_agent_auth_schema(
+                self._setup_agent_needs_token, reinstall=self._setup_agent_needs_token,
+            ),
             errors=errors,
         ))
+
+    async def _async_validate_reinstalled(
+        self: Any, entry: Any, connection: dict[str, Any],
+    ) -> tuple[dict[str, Any], dict[str, str]]:
+        return await async_validate_entry_connection(self.hass, entry, connection)
 
     async def async_step_agent_auth(
         self: Any, user_input: dict[str, Any] | None = None,
@@ -166,6 +176,12 @@ class AuthFlowSteps(C100XOptInSteps):
         if not self._setup_connection:
             return cast(ConfigFlowResult, await self.async_step_user())
         errors: dict[str, str] = {}
+        if user_input is not None and self._setup_agent_needs_token and (
+            user_input.get(CONF_REINSTALL_AGENT) is True
+        ):
+            # The keys are lost: the SSH installer writes the agent with new ones.
+            self._factory_login_tried = False
+            return cast(ConfigFlowResult, await self.async_step_bootstrap_install())
         if user_input is not None:
             auth_data, errors = _agent_auth_input(
                 user_input, require_agent_token=self._setup_agent_needs_token,
@@ -222,6 +238,9 @@ class AuthFlowSteps(C100XOptInSteps):
     ) -> ConfigFlowResult:
         entry = self._get_reauth_entry()
         errors: dict[str, str] = {}
+        if user_input is not None and user_input.get(CONF_REINSTALL_AGENT) is True:
+            self._reinstall_login_tried = False
+            return cast(ConfigFlowResult, await self.async_step_reauth_reinstall())
         if user_input is not None:
             connection = current_connection_options(entry)
             keys = {key: _key_or_saved(user_input, connection, key) for key in _KEYS}
@@ -250,5 +269,5 @@ class AuthFlowSteps(C100XOptInSteps):
                 async_ensure_entry_reload(self.hass, entry, changed=changed, had_listeners=had_listeners, force=True)
                 return cast(ConfigFlowResult, result)
         return cast(ConfigFlowResult, self.async_show_form(
-            step_id="reauth_confirm", data_schema=_agent_auth_schema(False), errors=errors,
+            step_id="reauth_confirm", data_schema=_agent_auth_schema(False, reinstall=True), errors=errors,
         ))

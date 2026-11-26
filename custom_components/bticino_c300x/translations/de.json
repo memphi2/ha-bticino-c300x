@@ -43,11 +43,13 @@
         "description": "Gib die Schlüssel des erreichbaren nativen Agent ein. Lasse den Zugangsschlüssel nur leer, solange der Agent noch im noAuth-Bootstrap-Modus läuft.",
         "data": {
           "agent_token": "Zugangsschlüssel",
-          "maintenance_token": "Wartungsschlüssel"
+          "maintenance_token": "Wartungsschlüssel",
+          "reinstall_agent": "Ich habe die Schlüssel nicht: Agent neu installieren"
         },
         "data_description": {
           "agent_token": "Schlüssel, mit dem sich Home Assistant beim {model} anmeldet. Er wurde bei der Installation erzeugt.",
-          "maintenance_token": "Eigener Schlüssel für Wartung: Updates, Änderungen am Display und Neustarts."
+          "maintenance_token": "Eigener Schlüssel für Wartung: Updates, Änderungen am Display und Neustarts.",
+          "reinstall_agent": "Installiert den mitgelieferten Agent per SSH erneut, mit neu erzeugten Schlüsseln. Die bisherigen Schlüssel gelten danach nicht mehr; alles andere auf dem {model} bleibt, wie es ist."
         }
       },
       "user_features": {
@@ -720,7 +722,19 @@
         "description": "Gib die aktuellen Schlüssel für {name} ein. Ein leeres Feld behält den gespeicherten Schlüssel.",
         "data": {
           "agent_token": "Zugriffsschlüssel",
-          "maintenance_token": "Wartungsschlüssel"
+          "maintenance_token": "Wartungsschlüssel",
+          "reinstall_agent": "Ich habe die Schlüssel nicht: Agent neu installieren"
+        },
+        "data_description": {
+          "reinstall_agent": "Installiert den mitgelieferten Agent per SSH erneut, mit neu erzeugten Schlüsseln, und speichert sie in diesem Eintrag. Die bisherigen Schlüssel gelten danach nicht mehr; alles andere auf dem {model} bleibt, wie es ist."
+        }
+      },
+      "reauth_reinstall": {
+        "title": "{model}-Agent neu installieren",
+        "description": "Home Assistant meldet sich zuerst mit dem Werks-Login des {model} an. Gib SSH-User und Passwort nur ein, wenn das Gerät ihn abgelehnt hat; leer bleibt es beim Werks-Login. Hält den installierten Agent an, schreibt den mitgelieferten Agent und eine Konfiguration mit neu erzeugten Schlüsseln per SSH auf den {model} und startet ihn wieder. Die neuen Schlüssel werden für {name} gespeichert; die alten gelten nicht mehr. Display-Seiten und die übrigen Einstellungen auf dem {model} bleiben, das Gerät wird nicht neu gestartet. SSH-Zugangsdaten werden nur für diesen Schritt verwendet und nicht gespeichert.",
+        "data": {
+          "bootstrap_ssh_username": "{model}-SSH-User",
+          "bootstrap_ssh_password": "{model}-SSH-Passwort"
         }
       }
     },

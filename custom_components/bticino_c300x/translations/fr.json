@@ -43,11 +43,13 @@
         "description": "Saisissez les clés de l'agent natif joignable. Laissez la clé d'accès vide uniquement tant que l'agent est encore en mode bootstrap noAuth.",
         "data": {
           "agent_token": "Clé d'accès",
-          "maintenance_token": "Clé de maintenance"
+          "maintenance_token": "Clé de maintenance",
+          "reinstall_agent": "Je n'ai pas les clés : réinstaller l'agent"
         },
         "data_description": {
           "agent_token": "Clé avec laquelle Home Assistant se connecte au {model}. Elle a été créée à l'installation.",
-          "maintenance_token": "Clé distincte pour la maintenance : mises à jour, modifications de l'écran et redémarrages."
+          "maintenance_token": "Clé distincte pour la maintenance : mises à jour, modifications de l'écran et redémarrages.",
+          "reinstall_agent": "Réinstalle l'agent fourni via SSH avec de nouvelles clés générées. Les clés utilisées jusqu'ici ne fonctionnent plus ; tout le reste sur le {model} reste tel quel."
         }
       },
       "user_features": {
@@ -720,7 +722,19 @@
         "description": "Saisissez les clés actuelles pour {name}. Laissez un champ vide pour conserver la clé enregistrée.",
         "data": {
           "agent_token": "Clé d'accès",
-          "maintenance_token": "Clé de maintenance"
+          "maintenance_token": "Clé de maintenance",
+          "reinstall_agent": "Je n'ai pas les clés : réinstaller l'agent"
+        },
+        "data_description": {
+          "reinstall_agent": "Réinstalle l'agent fourni via SSH avec de nouvelles clés générées et les enregistre dans cette entrée. Les clés utilisées jusqu'ici ne fonctionnent plus ; tout le reste sur le {model} reste tel quel."
+        }
+      },
+      "reauth_reinstall": {
+        "title": "Réinstaller l'agent {model}",
+        "description": "Home Assistant se connecte d'abord avec l'identifiant d'usine du {model}. Saisissez l'utilisateur et le mot de passe SSH seulement si l'appareil l'a refusé ; laissés vides, l'identifiant d'usine est réessayé. Cette étape arrête l'agent installé, écrit l'agent fourni et une configuration avec de nouvelles clés générées sur le {model} via SSH, puis le redémarre. Les nouvelles clés sont enregistrées pour {name} ; les anciennes ne fonctionnent plus. Les pages de l'écran et les autres réglages du {model} sont conservés, et l'appareil n'est pas redémarré. Les identifiants SSH ne sont utilisés que pour cette étape et ne sont pas stockés.",
+        "data": {
+          "bootstrap_ssh_username": "Utilisateur SSH {model}",
+          "bootstrap_ssh_password": "Mot de passe SSH {model}"
         }
       }
     },

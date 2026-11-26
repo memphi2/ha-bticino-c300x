@@ -223,7 +223,7 @@ def test_auth_forms_and_errors_are_translated(language):
     root = Path(__file__).resolve().parents[1] / "custom_components/bticino_c300x"
     translation = json.loads((root / f"translations/{language}.json").read_text())
     assert translation["config"]["step"]["reauth_confirm"]["data"].keys() == {
-        "agent_token", "maintenance_token",
+        "agent_token", "maintenance_token", "reinstall_agent",
     }
     assert translation["config"]["abort"]["reauth_wrong_device"]
     for section in ("config", "options"):

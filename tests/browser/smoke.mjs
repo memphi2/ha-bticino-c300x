@@ -221,7 +221,8 @@ try {
     lab.hass.states["button.synthetic_door"].state = "unknown";
     lab.hass.callService = async (domain, service, data) => {
       lab.calls.push({ domain, service, data });
-      if (domain === "button") await new Promise((resolve) => { lab.releaseAction = resolve; });
+      // Only the door press stays pending; the stop video button answers.
+      if (data?.entity_id === "button.synthetic_door") await new Promise((resolve) => { lab.releaseAction = resolve; });
     };
     lab.card.hass = { ...lab.hass };
   });

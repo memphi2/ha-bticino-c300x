@@ -56,6 +56,12 @@ def ssh_server(monkeypatch, request, host_key_type, station_login):
 
     async def process_handler(process):
         assert process.term_type is None
+        state.setdefault("commands", []).append(process.command)
+        if process.command == "id -u":
+            # The user id of the login: the station's root unless a test says otherwise.
+            process.stdout.write(f"{station_login.get('uid', 0)}\n".encode())
+            process.exit(0)
+            return
         if process.command == "hang":
             await process.stdin.read()
             await state["stop"].wait()
@@ -111,6 +117,7 @@ def ssh_server(monkeypatch, request, host_key_type, station_login):
         return {**original(value), "port": port}
 
     monkeypatch.setattr(installer, "_asyncssh_connect_kwargs", connection_options)
+    station_login["commands"] = state.setdefault("commands", [])
     try:
         yield installer.C300XDeviceInstallRequest(
             host="127.0.0.1", ssh_username="test-user", ssh_password="test-password",
@@ -221,6 +228,24 @@ def test_an_unreadable_key_is_named_and_never_quoted(ssh_server, caplog, pasted)
     assert caught.value.__cause__ is None and caught.value.__suppress_context__
     assert text.strip() not in caplog.text and "wrong" not in caplog.text
     assert text.strip() not in repr(replace(ssh_server, ssh_private_key=text))
+
+
+@pytest.mark.parametrize(("uid", "reason"), [(1000, "ssh_user_not_root"), (0, None)])
+def test_the_login_is_checked_for_root_rights_before_any_step(ssh_server, station_login, uid, reason):
+    """A tool's second user (bticino2, uid 1000) logs in but cannot install anything."""
+    station_login["uid"] = uid
+    if reason is not None:
+        with pytest.raises(installer.C300XDeviceInstallError) as caught:
+            installer._connect_device_client(ssh_server)
+        assert caught.value.reason == reason
+        # Nothing else ran on the station.
+        assert station_login["commands"] == ["id -u"]
+        return
+    client = installer._connect_device_client(ssh_server)
+    try:
+        assert station_login["commands"] == ["id -u"]
+    finally:
+        client.close()
 
 
 def test_command_failure_does_not_expose_remote_output(ssh_server):

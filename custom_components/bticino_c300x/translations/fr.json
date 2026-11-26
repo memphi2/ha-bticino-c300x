@@ -794,6 +794,7 @@
       "cannot_connect": "Le {model} n'a pas pu être vérifié. Vérifiez son adresse et sa connexion, puis réessayez.",
       "ssh_login_refused": "Le {model} a refusé la connexion SSH. Saisissez l'utilisateur et le mot de passe SSH de l'appareil.",
       "invalid_ssh_key": "La clé privée n'a pas pu être lue. Collez la clé entière avec ses lignes BEGIN et END, et sa phrase secrète si elle en a une.",
+      "ssh_user_not_root": "Cet utilisateur SSH n'a pas les droits root. Connectez-vous en tant que root ou root2, pas bticino2.",
       "installer_firewall_hook_unsupported": "Impossible de vérifier le script de pare-feu en toute sécurité. Installation arrêtée avant toute modification. Vérifiez le type et les permissions du fichier, sans créer de script de substitution.",
       "device_model_incompatible": "Ce paquet ne prend pas en charge cette platine, ou le modèle de la platine n'a pas pu être confirmé. Aucun fichier de l'appareil n'a été remplacé.",
       "c100x_confirmation_required": "Cochez la case pour configurer le Classe 100X, ou fermez cette fenêtre pour laisser la platine inchangée.",
@@ -1736,6 +1737,7 @@
           "update_verify_failed": "La mise à jour a été envoyée, mais l'agent signale encore un bundle plus ancien ou incompatible.",
           "ssh_login_refused": "Le {model} a refusé la connexion SSH. Saisissez l'utilisateur et le mot de passe SSH de l'appareil.",
           "invalid_ssh_key": "La clé privée n'a pas pu être lue. Collez la clé entière avec ses lignes BEGIN et END, et sa phrase secrète si elle en a une.",
+          "ssh_user_not_root": "Cet utilisateur SSH n'a pas les droits root. Connectez-vous en tant que root ou root2, pas bticino2.",
           "not_a_bticino_station": "L'appareil à cette adresse n'est pas une platine BTicino. Rien n'y a été écrit. Vérifiez l'adresse."
         },
         "abort": {

@@ -110,3 +110,7 @@ def test_setup_installs_with_the_key_and_keeps_it_nowhere(monkeypatch):
     asyncio.run(exercise())
     # Nothing of the key stays in the flow, whose connection becomes the entry.
     assert "key-material" not in repr(vars(flow)) and "phrase" not in repr(vars(flow))
+
+
+def test_a_login_without_root_rights_is_named_and_asks_for_another():
+    assert _ssh_install_error(C300XDeviceInstallError("ssh_user_not_root")) == "ssh_user_not_root"

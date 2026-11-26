@@ -41,7 +41,12 @@ from .device_profile import (
     is_bticino_station,
     station_profile,
 )
-from .device_ssh_login import INVALID_SSH_KEY, key_login_options
+from .device_ssh_login import (
+    INVALID_SSH_KEY,
+    SSH_USER_NOT_ROOT,
+    key_login_options,
+    logged_in_as_root,
+)
 from .display_activation import (
     display_activation_confirmed,
     display_restart_pending,
@@ -891,6 +896,16 @@ class _AsyncSshDeviceSshClient(_DeviceSshClient):
             if isinstance(err, getattr(asyncssh, "PermissionDenied", ())):
                 raise C300XDeviceInstallError(LOGIN_REFUSED) from err
             raise C300XDeviceInstallError("device_install_failed") from err
+        # Every install step needs root: a tool's second user (bticino2) logs
+        # in but cannot write. Nothing was changed on the device yet.
+        try:
+            root = logged_in_as_root(self.run)
+        except C300XDeviceInstallError:
+            self.close()
+            raise
+        if not root:
+            self.close()
+            raise C300XDeviceInstallError(SSH_USER_NOT_ROOT)
 
     async def _connect(self, request: C300XDeviceInstallRequest) -> Any:
         candidates: tuple[tuple[str, str], ...] = ((request.ssh_username, request.ssh_password),)

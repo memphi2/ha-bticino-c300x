@@ -6,10 +6,13 @@ password: never stored, logged or shown, and never passed in a command.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 # The pasted key cannot be read: not a private key, or a wrong passphrase.
 INVALID_SSH_KEY = "invalid_ssh_key"
+# The login works but has no root rights (a tool's bticino2, uid 1000).
+SSH_USER_NOT_ROOT = "ssh_user_not_root"
 
 
 def normalized_private_key(text: str) -> str:
@@ -37,3 +40,9 @@ def key_login_options(asyncssh: Any, private_key: str, passphrase: str, password
         "password_auth": bool(password),
         "preferred_auth": ["publickey", "password"] if password else ["publickey"],
     }
+
+
+def logged_in_as_root(run: Callable[[str], str]) -> bool:
+    """True when the login's user id is 0, read right after the login."""
+
+    return run("id -u").strip() == "0"

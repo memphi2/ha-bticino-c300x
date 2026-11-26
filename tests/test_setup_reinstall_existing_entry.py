@@ -10,6 +10,8 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+import station_flow_harness
+from homeassistant.data_entry_flow import AbortFlow
 
 from custom_components.bticino_c300x import (
     config_flow,
@@ -47,28 +49,21 @@ def _entry(unique_id: str, host: str, title: str = "Door") -> SimpleNamespace:
     )
 
 
-def _update(entry, *, data=None, options=None, unique_id=None):
-    entry.data = data if data is not None else entry.data
-    entry.options = options if options is not None else entry.options
-    entry.unique_id = unique_id or entry.unique_id
-    return True
-
-
 def _setup(monkeypatch, entries, read_setup, installer=None):
     flow = BticinoC300XConfigFlow()
-    flow.context = {"source": "user"}
+    # HA's own duplicate and unique id checks run against these entries.
+    hass = station_flow_harness.hass(entries)
+    registry = hass.config_entries
+    registry.async_update_entry = Mock(side_effect=registry.async_update_entry)
+    registry.async_schedule_reload = Mock(side_effect=registry.async_schedule_reload)
+    station_flow_harness.attach(flow, hass)
     flow._setup_connection = {"name": "Door", CONF_AGENT_HOST: "station.example", CONF_AGENT_PORT: 8091}
     flow._setup_agent_needs_token = True
-    flow._async_abort_if_manual_setup_duplicate = AsyncMock()
 
     async def adopt(*, api_token: str = "") -> None:
         flow._setup_unique_id = STATION
 
     flow._async_adopt_agent_unique_id = adopt
-    flow._async_current_entries = lambda include_ignore=None: entries
-    flow.hass = SimpleNamespace(config_entries=SimpleNamespace(
-        async_update_entry=Mock(side_effect=_update), async_schedule_reload=Mock(), flow=None,
-    ))
     installer = installer or AsyncMock(return_value=_INSTALLED)
     migrate = AsyncMock()
     monkeypatch.setattr(config_flow, "async_ensure_installer_dependencies", AsyncMock())
@@ -212,11 +207,25 @@ def test_keys_a_failed_install_left_on_the_station_are_kept(monkeypatch):
     assert result["errors"] == {"base": "device_install_verify_failed"}
     assert asked == [("station.example", keys["api_token"])]
     _assert_entry_has_the_new_keys(flow, existing, keys)
-    # The retry writes the same keys again: nothing on the station changes hands.
+    # The entry now has the setup's address. It is the station this setup
+    # installs, not a duplicate: the retry runs the install again and writes
+    # the same keys, so nothing on the station changes hands.
     result = asyncio.run(flow.async_step_bootstrap_install({}))
+    assert installer.await_count == 2
     assert installer.await_args.kwargs == keys
     assert result["reason"] == "reinstall_entry_updated"
     assert existing.data[CONF_AGENT_TOKEN] == keys["api_token"]
+
+
+def test_an_entry_of_the_same_address_still_stops_a_new_setup_before_any_install(monkeypatch):
+    """Only the entry this setup handed its keys to is exempt from the duplicate check."""
+    same = _entry("bticino_c300x:elsewhere:8080", "station.example")
+    same.data[CONF_AGENT_PORT] = 8091
+    same.options = {}
+    installer = AsyncMock(return_value=_INSTALLED)
+    with pytest.raises(AbortFlow, match="already_configured"):
+        _setup(monkeypatch, [same], AsyncMock(), installer)
+    installer.assert_not_called()
 
 
 def test_keys_of_a_failed_install_that_wrote_none_are_not_reused(monkeypatch):

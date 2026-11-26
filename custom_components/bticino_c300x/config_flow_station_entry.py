@@ -107,6 +107,9 @@ class StationEntrySteps:
 
     # The station, port and keys of an install that failed after it wrote them.
     _setup_written_keys: tuple[str, int, str, str] | None = None
+    # The existing entry that got those keys (and the setup's address) then.
+    # It is the station this setup installs, not a duplicate: the retry runs.
+    _setup_keys_entry: str | None = None
 
     def _setup_install_endpoint(self: Any) -> tuple[str, int]:
         connection = self._setup_connection
@@ -144,6 +147,7 @@ class StationEntrySteps:
         entry = await async_station_entry(self.hass, self._async_current_entries(), unique_id, connection)
         if entry is not None:
             hand_keys_to_entry(self.hass, entry, connection, unique_id=unique_id, display_pending=False)
+            self._setup_keys_entry = entry.entry_id
 
     async def _async_hand_keys_to_station_entry(
         self: Any, install_result: object,

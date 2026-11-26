@@ -441,7 +441,11 @@ class BticinoC300XConfigFlow(ModelTextConfigFlow, config_flow_auth.AuthFlowSteps
         await self.async_set_unique_id(_manual_setup_unique_id(self._setup_connection))
         self._abort_if_unique_id_configured()
         for entry in self._async_current_entries():
-            if _entry_connection_matches_discovery(entry, self._setup_connection):
+            # The entry a failed install of this setup handed its keys to is no duplicate.
+            handed = self._setup_keys_entry is not None and entry.entry_id == self._setup_keys_entry
+            if not handed and _entry_connection_matches_discovery(
+                entry, self._setup_connection,
+            ):
                 raise AbortFlow("already_configured")
 
     async def _async_adopt_agent_unique_id(self, *, api_token: str = "") -> None:

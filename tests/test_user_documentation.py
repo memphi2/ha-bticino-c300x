@@ -131,9 +131,11 @@ def test_root_access_page_only_links_third_party_projects_and_states_the_risk():
     assert [link for link, _note in rows] == links
     notes = dict(rows)
     assert "it can destroy the station" in notes["https://github.com/davemajor/c300x-root"]
-    # Setup logs in with a password only (preferred_auth in device_installer.py).
+    # Setup logs in with a password only (preferred_auth in device_installer.py)
+    # and takes RSA, ECDSA and ed25519 host keys.
     hints = " ".join(section("root-access.md", "Hints").split())
     assert "SSH keys are not supported" in hints
+    assert "RSA, ECDSA or ed25519 host key" in hints
     assert "never updates to `3.0.x`" in hints
 
 

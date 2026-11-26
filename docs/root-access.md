@@ -34,16 +34,14 @@ state before you start.
   them off.
 - **Firmware version.** Where a C300X tool asks for a firmware version, choose
   `1.7.19`.
-- **Keep a password login.** Setup logs in with a user name and password; SSH
-  keys are not supported. It tries the station's factory login first and asks
-  for a user and password only if the station refuses it. Enter the account the
-  tool created and the password you chose: `root2` for fquinto's, jorgeavlobo's
-  and daniel-sc's tools, `root` for davemajor's. Do not build a key-only image
-  or turn off password login in the tool. Setup uses the credentials for the
+- **Keep a password login.** Setup connects to a station with an RSA, ECDSA or
+  ed25519 host key and logs in with a user name and password only; SSH keys
+  are not supported. It tries the station's factory login first and asks for a
+  user and password only if the station refuses it. Enter the account the tool
+  created and the password you chose: `root2` for fquinto's, jorgeavlobo's and
+  daniel-sc's tools, `root` for davemajor's. Do not build a key-only image or
+  turn off password login in the tool. Setup uses the credentials for the
   installation only and does not store them.
-- **Host key.** Setup expects the RSA host key (`ssh-rsa`) that the station's
-  SSH server offers from the factory. If the login works in a terminal but
-  setup cannot connect, check which host keys the tool's SSH service offers.
 - **Firmware families do not mix.** A C300X on `1.7.x` or `2.0.2` never updates
   to `3.0.x`; firmware `3.0.6` needs hardware revision 4. Use a tool made for
   the firmware the station has now.

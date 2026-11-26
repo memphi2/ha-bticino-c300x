@@ -180,7 +180,7 @@ class _FakeApi:
         self.doorbell_video_status_calls += 1
         return self.doorbell_video_status
 
-    async def async_answer_doorbell_call(self, call_id: str | None = None) -> dict[str, Any]:
+    async def async_answer_doorbell_call(self, call_id: str | None = None, *, unit: str | None = None) -> dict[str, Any]:
         self.answer_doorbell_call_calls.append(True)
         self.call_ids.append(("answer", call_id))
         bridge = dict(self.doorbell_video_status.get("bridge", {}))
@@ -213,7 +213,7 @@ class _FakeApi:
         self.doorstation_audio_gain_calls.append(gain_db)
         return {"ok": True, "doorstation_audio_gain_db": gain_db}
 
-    async def async_hangup_doorbell_call(self, call_id: str | None = None) -> dict[str, Any]:
+    async def async_hangup_doorbell_call(self, call_id: str | None = None, *, unit: str | None = None) -> dict[str, Any]:
         self.hangup_doorbell_call_calls += 1
         self.call_ids.append(("hangup", call_id))
         if self.hangup_doorbell_call_error is not None:
@@ -1078,9 +1078,11 @@ def test_hangup_doorbell_call_service_prepares_stop_before_agent_hangup() -> Non
         calls: list[str] = []
 
         class _RecordingApi(_FakeApi):
-            async def async_hangup_doorbell_call(self, call_id: str | None = None) -> dict[str, Any]:
+            async def async_hangup_doorbell_call(
+                self, call_id: str | None = None, *, unit: str | None = None,
+            ) -> dict[str, Any]:
                 calls.append("agent_hangup")
-                return await super().async_hangup_doorbell_call(call_id)
+                return await super().async_hangup_doorbell_call(call_id, unit=unit)
 
         api = _RecordingApi()
 

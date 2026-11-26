@@ -81,7 +81,7 @@ def test_call_control_needs_control_of_the_media_camera(tmp_path, monkeypatch):
             await hass.services.async_call(
                 DOMAIN, "write_text_memo", {"text": "hi"}, blocking=True, context=context
             )
-        entry.runtime_data.api.async_answer_doorbell_call.assert_awaited_once_with("0badc0de-3")
+        entry.runtime_data.api.async_answer_doorbell_call.assert_awaited_once_with("0badc0de-3", unit=None)
         entry.runtime_data.api.async_create_text_memo.assert_not_awaited()
 
     asyncio.run(run())
@@ -94,7 +94,7 @@ def test_owner_and_trusted_automation_can_control_calls(tmp_path, monkeypatch, u
         await hass.services.async_call(
             DOMAIN, "answer_call", {}, blocking=True, context=Context(user_id=user_id)
         )
-        entry.runtime_data.api.async_answer_doorbell_call.assert_awaited_once_with(None)
+        entry.runtime_data.api.async_answer_doorbell_call.assert_awaited_once_with(None, unit=None)
 
     asyncio.run(run())
 

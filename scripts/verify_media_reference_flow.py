@@ -345,8 +345,8 @@ def collect_code_checks(mode: str, root: Path = ROOT) -> list[Check]:
         Check("code.camera.preview_path_available", 'DEFAULT_VIDEO_STREAM_PATH = "/doorbell-video"' in const),
         Check("code.camera.answered_path_available", '"/doorbell"' in camera),
         # 3.1.0: answer and hang-up name the call (/api/v1/calls/{call_id}/actions/...).
-        Check("code.api.answer_action", CALL_ACTION_ROUTE in api and '_call_action(call_id, "answer")' in api),
-        Check("code.api.hangup_action", CALL_ACTION_ROUTE in api and '_call_action(call_id, "hangup")' in api),
+        Check("code.api.answer_action", CALL_ACTION_ROUTE in api and '_call_action(call_id, "answer", unit)' in api),
+        Check("code.api.hangup_action", CALL_ACTION_ROUTE in api and '_call_action(call_id, "hangup", unit)' in api),
         Check("code.state_model.ring_pending_answerable", 'mediaState === "ring_pending"' in state_model),
         Check("code.state_model.preview_answerable", 'mediaState === "ring_preview_active"' in state_model),
         Check("code.card.answer_service", '"answer_call"' in card_actions),

@@ -4183,3 +4183,21 @@ def test_reboot_and_removal_wait_for_the_ssh_start_before_them() -> None:
     asyncio.run(api.async_reboot())
     asyncio.run(api.async_remove_agent())
     assert [request["kwargs"]["timeout"] for request in session.requests] == [75.0, 75.0]
+
+
+def test_a_unit_answers_only_its_own_current_call() -> None:
+    # A unit target without call_id: the current call must be that unit's.
+    session = _QueuedSession([(200, _CALLS), (200, '{"ok": true, "answer_requested": true}')])
+    api = C300XAgentApi(session, "http://agent.local:8080", "agent-token")  # type: ignore[arg-type]
+    assert asyncio.run(api.async_answer_doorbell_call(unit="21")) == {"ok": True, "answer_requested": True}
+    assert session.requests[-1]["args"] == (
+        "POST", "http://agent.local:8080/api/v1/calls/0badc0de-2/actions/answer",
+    )
+
+    for unit in ("20", "22"):
+        session = _QueuedSession([(200, _CALLS)])
+        api = C300XAgentApi(session, "http://agent.local:8080", "agent-token")  # type: ignore[arg-type]
+        with pytest.raises(C300XCallNotCurrentError) as raised:
+            asyncio.run(api.async_hangup_doorbell_call(unit=unit))
+        assert raised.value.current_call_id == "0badc0de-2"
+        assert len(session.requests) == 1

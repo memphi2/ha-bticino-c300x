@@ -19,8 +19,8 @@ class RingCallUseCase:
     def __init__(self, entry: Any) -> None:
         self._entry = entry
 
-    async def answer(self, call_id: str | None = None) -> None:
-        """Answer the call (default: the current one) through the agent."""
+    async def answer(self, call_id: str | None = None, unit: str | None = None) -> None:
+        """Answer the call (default: the current one, of ``unit`` when given)."""
 
         ensure_doorbell_call_supported(self._entry)
         runtime = self._entry.runtime_data
@@ -32,11 +32,11 @@ class RingCallUseCase:
         await async_ensure_doorstation_audio_gain(self._entry, status=status)
         ensure_current_runtime(self._entry, runtime)
         await raise_agent_command_failed(
-            runtime.api.async_answer_doorbell_call(call_id), entry=self._entry,
+            runtime.api.async_answer_doorbell_call(call_id, unit=unit), entry=self._entry,
         )
 
-    async def hangup(self, call_id: str | None = None) -> None:
-        """Hang up the call (default: the current one) through the agent."""
+    async def hangup(self, call_id: str | None = None, unit: str | None = None) -> None:
+        """Hang up the call (default: the current one, of ``unit`` when given)."""
 
         ensure_doorbell_call_supported(self._entry)
         runtime = self._entry.runtime_data
@@ -51,5 +51,5 @@ class RingCallUseCase:
                 await prepare_stop()
                 ensure_current_runtime(self._entry, runtime)
             await raise_agent_command_failed(
-                runtime.api.async_hangup_doorbell_call(call_id), entry=self._entry,
+                runtime.api.async_hangup_doorbell_call(call_id, unit=unit), entry=self._entry,
             )

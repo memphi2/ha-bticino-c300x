@@ -236,16 +236,22 @@ class _C300XServiceHandlers:
         )
 
     async def async_answer_call(self, call: ServiceCall) -> None:
-        """Answer a call through the agent: ``call_id``, else the current call."""
+        """Answer a call through the agent: ``call_id``, else the current call.
 
-        entry = _entry_for_call(self._hass, call)
-        await RingCallUseCase(entry).answer(call.data.get(_ATTR_CALL_ID))
+        A unit target answers only a current call of that unit.
+        """
+
+        target = _target_for_call(self._hass, call)
+        await RingCallUseCase(target.entry).answer(call.data.get(_ATTR_CALL_ID), target.unit_id)
 
     async def async_hangup_call(self, call: ServiceCall) -> None:
-        """Hang up a call through the agent: ``call_id``, else the current call."""
+        """Hang up a call through the agent: ``call_id``, else the current call.
 
-        entry = _entry_for_call(self._hass, call)
-        await RingCallUseCase(entry).hangup(call.data.get(_ATTR_CALL_ID))
+        A unit target hangs up only a current call of that unit.
+        """
+
+        target = _target_for_call(self._hass, call)
+        await RingCallUseCase(target.entry).hangup(call.data.get(_ATTR_CALL_ID), target.unit_id)
 
     async def async_capture_doorbell_call(self, call: ServiceCall) -> dict[str, Any]:
         """Capture a short C300X doorbell ring-call clip on Home Assistant."""

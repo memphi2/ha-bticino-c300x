@@ -96,3 +96,17 @@ def test_failed_gain_write_and_failed_command_report_the_command_error(monkeypat
         asyncio.run(handler(SimpleNamespace(data={"audio": True})))
     assert err.value.translation_key == "agent_command_failed"
     entry.async_start_reauth.assert_called_once_with(hass)
+
+
+def test_a_unit_target_answers_and_hangs_up_only_that_units_call(monkeypatch):
+    from custom_components.bticino_c300x.service_target import ServiceTarget
+
+    hass, entry, api = _setup(monkeypatch)
+    api.async_hangup_doorbell_call = AsyncMock(return_value={"ok": True})
+    entry.runtime_data.resources.prepare_doorbell_video_stop = None
+    monkeypatch.setattr(services, "_target_for_call", lambda _hass, _call: ServiceTarget(entry, "21"))
+    handlers = services._C300XServiceHandlers(hass)
+    asyncio.run(handlers.async_answer_call(SimpleNamespace(data={})))
+    asyncio.run(handlers.async_hangup_call(SimpleNamespace(data={})))
+    api.async_answer_doorbell_call.assert_awaited_once_with(None, unit="21")
+    api.async_hangup_doorbell_call.assert_awaited_once_with(None, unit="21")

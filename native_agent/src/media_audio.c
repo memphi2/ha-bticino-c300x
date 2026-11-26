@@ -2,57 +2,6 @@
 
 #include <stddef.h>
 
-int c300x_doorstation_audio_gain_normalize_tenths(int gain_tenths)
-{
-    int offset;
-    int remainder;
-
-    if (gain_tenths < C300X_DOORSTATION_AUDIO_GAIN_MIN_TENTHS) {
-        gain_tenths = C300X_DOORSTATION_AUDIO_GAIN_MIN_TENTHS;
-    } else if (gain_tenths > C300X_DOORSTATION_AUDIO_GAIN_MAX_TENTHS) {
-        gain_tenths = C300X_DOORSTATION_AUDIO_GAIN_MAX_TENTHS;
-    }
-    offset = gain_tenths - C300X_DOORSTATION_AUDIO_GAIN_MIN_TENTHS;
-    remainder = offset % C300X_DOORSTATION_AUDIO_GAIN_STEP_TENTHS;
-    if (remainder >= 3) {
-        offset += C300X_DOORSTATION_AUDIO_GAIN_STEP_TENTHS - remainder;
-    } else {
-        offset -= remainder;
-    }
-    return C300X_DOORSTATION_AUDIO_GAIN_MIN_TENTHS + offset;
-}
-
-int c300x_doorstation_audio_gain_q12_for_tenths(int gain_tenths)
-{
-    static const int gain_q12[] = {
-        410, 434, 460, 487, 516, 546, 579, 613, 649, 688,
-        728, 772, 817, 866, 917, 971, 1029, 1090, 1154, 1223,
-        1295, 1372, 1453, 1539, 1631, 1727, 1830, 1938, 2053, 2175,
-        2303, 2440, 2584, 2738, 2900, 3072, 3254, 3446, 3651, 3867,
-        4096, 4339, 4596, 4868, 5157, 5462, 5786, 6129, 6492, 6876,
-        7284, 7715, 8173, 8657, 9170, 9713, 10289, 10898, 11544, 12228,
-        12953, 13720, 14533, 15394, 16306, 17273, 18296, 19380, 20529, 21745,
-        23034, 24398, 25844, 27375, 28997, 30716, 32536, 34464, 36506, 38669,
-        40960
-    };
-    int normalized = c300x_doorstation_audio_gain_normalize_tenths(gain_tenths);
-    int index = (normalized - C300X_DOORSTATION_AUDIO_GAIN_MIN_TENTHS)
-        / C300X_DOORSTATION_AUDIO_GAIN_STEP_TENTHS;
-
-    if (index < 0) {
-        return gain_q12[0];
-    }
-    if ((size_t)index >= sizeof(gain_q12) / sizeof(gain_q12[0])) {
-        return gain_q12[(sizeof(gain_q12) / sizeof(gain_q12[0])) - 1];
-    }
-    return gain_q12[index];
-}
-
-int c300x_audio_gain_q12_or_neutral(int gain_q12)
-{
-    return gain_q12 > 0 ? gain_q12 : C300X_AUDIO_GAIN_Q12_NEUTRAL;
-}
-
 bool c300x_rtp_payload_offset(
     const unsigned char *packet,
     int packet_len,
@@ -118,30 +67,6 @@ int16_t c300x_pcma_decode(unsigned char value)
         sample <<= exponent - 1;
     }
     return (int16_t)((value & 0x80) ? sample : -sample);
-}
-
-int16_t c300x_audio_gain_apply(int16_t sample, int gain_q12)
-{
-    long scaled;
-
-    if (gain_q12 == C300X_AUDIO_GAIN_Q12_NEUTRAL) {
-        return sample;
-    }
-    scaled = (long)sample * gain_q12;
-    if (scaled >= 0) {
-        scaled = (scaled + (C300X_AUDIO_GAIN_Q12_NEUTRAL / 2))
-            / C300X_AUDIO_GAIN_Q12_NEUTRAL;
-    } else {
-        scaled = (scaled - (C300X_AUDIO_GAIN_Q12_NEUTRAL / 2))
-            / C300X_AUDIO_GAIN_Q12_NEUTRAL;
-    }
-    if (scaled > INT16_MAX) {
-        return INT16_MAX;
-    }
-    if (scaled < INT16_MIN) {
-        return INT16_MIN;
-    }
-    return (int16_t)scaled;
 }
 
 unsigned char c300x_pcmu_encode(int16_t sample)

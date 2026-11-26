@@ -1569,47 +1569,45 @@ def run_smoke(
             assert_json_field(video["bridge"], "device_audio_codec", "speex")
             assert_json_field(video["bridge"], "talkback_codec", "speex/8000")
             assert_json_field(video["bridge"], "talkback_payload_type", 97)
-            assert_json_field(video["bridge"], "doorstation_audio_gain_db", 0.0)
+            level = video["bridge"]["audio_level"]
+            assert_json_field(level, "door_level_db", 0)
+            assert_json_field(level, "fine_gain_db", 0)
+            assert_json_field(level, "chip_lever", "unsupported")
+            assert_json_field(level, "software_gain_db", 0)
+            stored = api_post(
+                api_port,
+                "/api/v1/video/doorbell/audio",
+                {"door_level_db": 6, "fine_gain_db": -3},
+            )
+            assert_json_field(stored, "ok", True)
+            assert_json_field(stored["audio_level"], "door_level_path", "software")
+            assert_json_field(stored["audio_level"], "software_gain_db", 3)
+            for invalid in (
+                {"door_level_db": 5, "fine_gain_db": 0},
+                {"door_level_db": 15, "fine_gain_db": 0},
+                {"door_level_db": 6, "fine_gain_db": 11},
+                {"door_level_db": 6, "fine_gain_db": 1.5},
+                {"door_level_db": 6},
+                {"doorstation_audio_gain_tenths": 60},
+            ):
+                assert_json_field(
+                    api_post(api_port, "/api/v1/video/doorbell/audio", invalid, expected_status=400),
+                    "error",
+                    "invalid_audio_level",
+                )
             assert_json_field(
                 api_post(
                     api_port,
                     "/api/v1/video/doorbell/audio",
-                    {"doorstation_audio_gain_tenths": 35},
+                    {"door_level_db": 12, "fine_gain_db": 10},
                 ),
                 "ok",
                 True,
-            )
-            assert_json_field(
-                api_post(
-                    api_port,
-                    "/api/v1/video/doorbell/audio",
-                    {"doorstation_audio_gain_tenths": 37},
-                    expected_status=400,
-                ),
-                "error",
-                "invalid_audio_gain",
-            )
-            assert_json_field(
-                api_post(
-                    api_port,
-                    "/api/v1/video/doorbell/audio",
-                    {"doorstation_audio_gain_tenths": 200},
-                ),
-                "ok",
-                True,
-            )
-            assert_json_field(
-                api_post(
-                    api_port,
-                    "/api/v1/video/doorbell/audio",
-                    {"doorstation_audio_gain_tenths": 205},
-                    expected_status=400,
-                ),
-                "error",
-                "invalid_audio_gain",
             )
             video = api_get(api_port, "/api/v1/video/doorbell/status")
-            assert_json_field(video["bridge"], "doorstation_audio_gain_db", 20.0)
+            assert_json_field(video["bridge"]["audio_level"], "door_level_db", 12)
+            assert_json_field(video["bridge"]["audio_level"], "fine_gain_db", 10)
+            assert_json_field(video["bridge"]["audio_level"], "software_gain_db", 22)
             rtsp_describe(rtsp_port, "/doorbell-video")
             assert_json_field(
                 api_post(api_port, "/api/v1/video/doorbell/actions/activate", {}),

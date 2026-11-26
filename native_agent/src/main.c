@@ -1,5 +1,6 @@
 #include "c300x_agent.h"
 #include "audio_codec.h"
+#include "audio_level.h"
 #include "camera_quality.h"
 #include "device_routing.h"
 #include "display_qt5.h"
@@ -206,6 +207,10 @@ int main(int argc, char **argv)
         }
         if (!c300x_audio_codec_remove_patches(error, sizeof(error))) {
             fprintf(stderr, "Failed to restore media patches: %s\n", error);
+            return 1;
+        }
+        if (!c300x_audio_level_remove_patches(error, sizeof(error))) {
+            fprintf(stderr, "Failed to restore the audio state hook: %s\n", error);
             return 1;
         }
         const char *quality_error = "";

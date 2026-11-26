@@ -1045,8 +1045,8 @@ Side effects: none.
 
 Returns doorbell video availability, stream paths, media ownership, and bridge
 state. The endpoint must reflect agent/device state, not Home Assistant UI
-state. `bridge.doorstation_audio_gain_db` reports the runtime-only downstream
-gain that is applied to doorstation audio before RTSP output.
+state. `bridge.audio_level` reports the door level and fine adjustment (see
+`POST /api/v1/video/doorbell/audio`) and where the door level is applied.
 `bridge.ring_hangup_requested` is true while the native ring-call hangup path is
 being driven.
 
@@ -1054,16 +1054,57 @@ being driven.
 
 Authentication: normal API token.
 
-Side effects: updates only the native agent's in-memory doorstation downstream
-audio gain. It does not write C300X device files or change Home Call audio.
-
-Request fields:
+Sets the level of the door station's sound toward Home Assistant (live view,
+answered calls and the ring recordings taken from `/doorbell`). Calls with the
+home (Home Call) keep their level. Both fields are required whole numbers:
 
 ```json
-{"doorstation_audio_gain_tenths": 60}
+{"door_level_db": 6, "fine_gain_db": 0}
 ```
 
-Accepted gain range is `-200` to `200` tenths of a dB, in 0.5 dB steps.
+- `door_level_db`: `0` (stock), `3`, `6`, `9` or `12`.
+- `fine_gain_db`: `-10` to `10`.
+
+Anything else is answered `400` with `invalid_audio_level`. Success returns
+`{"ok": true, "audio_level": {...}}` with the object described below.
+
+The software stage applies `fine_gain_db + door_level_db - chip_gain_db` once
+per packet before the RTSP fan-out, on every codec (Speex is decoded first,
+PCMU and PCMA go through the same curve). Above 0 dB a soft limiter keeps the
+sound linear up to -6 dBFS and bends louder peaks toward full scale without
+clipping; at 0 dB PCMU passes unchanged.
+
+Side effects on a Classe 300X with the audio chip lever (`chip_lever` is not
+`unsupported`): a door level above stock writes the agent's version of the
+vendor's empty `/home/root/demo/Audio_State.sh`, which the vendor audio driver
+runs at every audio state change. In the state for the app and Home Assistant
+(`EN_AUDIO_IP_EU`) it raises `ZL0 Sout Gain Volume` from the profile's 11 by
+one step (about 3 dB) per 3 dB of door level and marks that in
+`/run/c300x-sout-raised`; in `EN_AUDIO_OFF` and `EN_AUDIO_IP_IU`, which load
+no profile of their own, it sets 11 again. The vendor file is backed up once
+under `/home/bticino/cfg/extra/c300x-device-file-backups/original` and only
+replaced while it is the known vendor stub (or already the agent's own); the
+root filesystem is writable only for the write. A level change rewrites the
+file; `door_level_db: 0` puts the vendor stub back and lowers a gain a running
+call still has. A hook that is neither is never touched. Removing the agent
+puts the vendor stub back; without a valid backup the removal stops.
+
+`audio_level` fields:
+
+- `door_level_db`, `fine_gain_db`: the current settings. After an agent
+  restart the door level is read back from the hook; without the hook it is 0
+  until Home Assistant sets it.
+- `chip_lever`: `ready` (the hook carries the door level), `off` (stock door
+  level, vendor stub in place), `not_installed`, `unsupported` (no ZL38005
+  lever: another model, an unknown `IP_PE.cr`, no `amixer` or no readable
+  control; the door level is applied in software), `hook_foreign`,
+  `hook_missing`, `hook_backup_invalid` or `write_failed`.
+- `door_level_path`: where the door level went in the last audio: `chip`,
+  `software`, `chip_and_software` (a level changed during a call), or `none`
+  for a stock door level. Before any audio it names the prepared path.
+- `chip_gain_db`: what the chip adds right now, read from the control while
+  sound flows (at most every 500 ms); 0 outside a raised call.
+- `software_gain_db`: what the software stage applies.
 
 ### `POST /api/v1/video/doorbell/actions/activate`
 

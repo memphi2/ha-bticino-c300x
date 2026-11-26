@@ -256,27 +256,6 @@ static void view_started(struct c300x_calls *calls, const struct c300x_call_sink
     emit(sink, "call.view_started", data);
 }
 
-static void unit_ended(struct c300x_calls *calls, const struct c300x_call_sink *sink, const char *where,
-                       int view, long long now)
-{
-    char id[C300X_UNIT_WHERE_LEN];
-    int index = -1;
-
-    if (sink != NULL && sink->units != NULL) {
-        for (int unit = 0; unit < sink->units->count && index < 0; unit++) {
-            if (strcmp(sink->units->items[unit].where, where) == 0) index = unit;
-        }
-    }
-    if (index < 0) {
-        return;
-    }
-    c300x_copy_string(id, sizeof(id), sink->units->items[index].id);
-    struct c300x_call *call = live_for_unit(calls, id, view);
-    if (call != NULL) {
-        c300x_calls_end(calls, sink, call->id, "hangup_frame", now);
-    }
-}
-
 /* *8*<what>#<kind>#<mode>[#<where>]*<where>## */
 void c300x_calls_frame(struct c300x_calls *calls, const struct c300x_call_sink *sink,
                        const char *frame, long long now)
@@ -306,17 +285,22 @@ void c300x_calls_frame(struct c300x_calls *calls, const struct c300x_call_sink *
         memcpy(tail_where, star + 1, (size_t)(frame + length - 2 - star - 1));
         tail_where[frame + length - 2 - star - 1] = '\0';
     }
+    /* Only the caller and the view frame name a unit. Start, answer and end
+     * come from the agent's ring and media events: *8*100 follows an answer
+     * or a view start by 100-500 ms and is no end. */
     if (what == 9 && kind == 1 && head_where[0] == '\0') {
         caller(calls, sink, tail_where, frame, now);
-    } else if (what == 100 && (kind == 1 || kind == 5) && head_where[0] == '\0') {
-        unit_ended(calls, sink, tail_where, kind == 5, now);
     } else if (what == 1 && kind == 5 && head_where[0] != '\0') {
         view_started(calls, sink, head_where, now);
-    } else if (what == 2 && kind == 1) {
-        struct c300x_call *call = newest(calls, C300X_CALL_RINGING, 0);
-        if (call != NULL) {
-            c300x_calls_answered(calls, sink, call->id, call->answer_pending ? "ha" : "station", now);
-        }
+    }
+}
+
+void c300x_calls_answer_seen(struct c300x_calls *calls, const struct c300x_call_sink *sink, long long now)
+{
+    struct c300x_call *call = newest(calls, C300X_CALL_RINGING, 0);
+
+    if (call != NULL) {
+        c300x_calls_answered(calls, sink, call->id, call->answer_pending ? "ha" : "station", now);
     }
 }
 
@@ -324,7 +308,8 @@ void c300x_calls_media_closed(struct c300x_calls *calls, const struct c300x_call
 {
     for (int index = 0; index < C300X_MAX_CALLS; index++) {
         if (live(&calls->items[index])) {
-            c300x_calls_end(calls, sink, calls->items[index].id, "media_closed", now);
+            c300x_calls_end(calls, sink, calls->items[index].id,
+                            calls->items[index].hangup_pending ? "hangup" : "media_closed", now);
         }
     }
 }
@@ -430,6 +415,22 @@ void c300x_calls_answer_started(struct c300x_calls *calls, const char *call_id)
     struct c300x_call *call = (struct c300x_call *)c300x_calls_find(calls, call_id);
     if (call != NULL) {
         call->answer_pending = 1;
+    }
+}
+
+void c300x_calls_hangup_started(struct c300x_calls *calls, const char *call_id)
+{
+    struct c300x_call *call = (struct c300x_call *)c300x_calls_find(calls, call_id);
+    if (call != NULL) {
+        call->hangup_pending = 1;
+    }
+}
+
+void c300x_calls_action_refused(struct c300x_calls *calls, const char *call_id)
+{
+    struct c300x_call *call = (struct c300x_call *)c300x_calls_find(calls, call_id);
+    if (call != NULL) {
+        call->hangup_pending = 0;
     }
 }
 

@@ -16,9 +16,9 @@ installation (1.7.19, units `20#2`, `21`, `22`):
 | --- | --- |
 | `*8*1#1#4#21*11##` | Ring. The `21` is a literal of `bt_vct`, not the caller: every unit rings with the same frame. |
 | `*8*9#<kind>#<mode>*<where>##` | Caller (CALLING_ADDR), ~300 ms after the ring (`kind` 1) or after an on-demand view (`kind` 5). `<where>` is the calling unit, for example `20`, `21`, `20#2`. |
-| `*8*100#<kind>#<mode>*<where>##` | End of the call or view of that unit. |
+| `*8*100#<kind>#<mode>*<where>##` | At most the end of the ringing or announcement phase: it follows an answer or a view start by 100-500 ms, and an unanswered ring has none. Not the end of a call; the agent ignores it. |
 | `*8*1#5#4#<where>*11##` | On-demand view of unit `<where>`. |
-| `*8*2#1#4*<n>##` | The ring was answered on the station. |
+| `*8*2#1#4*<n>##` | The ring was answered (on the station, in the app, or by Home Assistant's answer). |
 | `*8*3#1#4*<n>##`, `*8*3#5#4*<n>##` | Media closed (no unit). |
 | `*8*19*<where>##` / `*8*20*<where>##` | Door lock pressed / released. |
 
@@ -134,12 +134,20 @@ until it ends.
 
 ### End of a call
 
+Start, answer and end come from the agent's ring and media events, the same
+as in 3.0.0; the bus frames only name the unit (caller frame) or open a view
+(view frame).
+
+| Event | Call |
+| --- | --- |
+| `doorbell.pressed` (ring frame or SIP INVITE) | Opens a `ringing` call (see Ring timing). |
+| `doorbell.view_requested` of the ring (`*8*2#1#…`, or the agent's own answer) | The newest `ringing` call is `answered`: `answered_by: "ha"` while Home Assistant's answer runs, else `"station"`. |
+| View frame `*8*1#5#4#<where>*…##` | Opens a `viewing` call of that unit. |
+
 | Source | Ends |
 | --- | --- |
-| `*8*100#1#…*<where>##` | The live ring call of that unit. |
-| `*8*100#5#…*<where>##` | The view of that unit. |
-| `doorbell.media.closed` as the agent sends it (after its answer and on-demand start filters) | Every live call (`reason: "media_closed"`). |
-| Hang-up through the API | That call (`reason: "hangup"`). |
+| `doorbell.media.closed` as the agent sends it (after its answer and on-demand start filters) | Every live call (`reason: "media_closed"`), unless its payload still reports the station's own media (`external_media_active`: the display answered and holds the call). |
+| Hang-up through the API | That call (`reason: "hangup"`, also when the hang-up's own media close ends it). |
 | No change for 90 s while `ringing`, 15 min while `answered` or `viewing` | That call (`reason: "timeout"`). |
 
 The timer exists only while a call is live; an idle agent has no extra wakeup.

@@ -82,10 +82,6 @@ int c300x_call_hub_event(struct c300x_call_hub *hub, const char *type, const cha
         c300x_json_string_field(data, "raw", text, sizeof(text));
         return c300x_calls_ring(&hub->calls, &hub->sink, text, now, out, out_len) ? 2 : 0;
     }
-    if (strcmp(type, "doorbell.media.closed") == 0) {
-        c300x_calls_media_closed(&hub->calls, &hub->sink, now);
-        return 1;
-    }
     if (strcmp(type, "door_unlock.started") == 0 || strcmp(type, "door_unlock.ended") == 0) {
         c300x_json_string_field(data, "address", text, sizeof(text));
         int index = c300x_outdoor_units_find_lock(&hub->units, text);
@@ -97,6 +93,12 @@ int c300x_call_hub_event(struct c300x_call_hub *hub, const char *type, const cha
         return decorate(data, unit, call ? call->id : NULL, out, out_len);
     }
     if (strcmp(type, "doorbell.view_requested") == 0) {
+        /* The ring answered: on the station (*8*2#1#) or by the agent's own
+         * answer (no frame). A view frame (*8*1#5#) opened its view already. */
+        c300x_json_string_field(data, "raw", text, sizeof(text));
+        if (text[0] == '\0' || strncmp(text, "*8*2#1#", 7) == 0) {
+            c300x_calls_answer_seen(&hub->calls, &hub->sink, now);
+        }
         const struct c300x_call *call = c300x_calls_current(&hub->calls);
         for (int index = 0; call == NULL && index < hub->units.count; index++) {
             const struct c300x_call *view = c300x_calls_live_for_unit(&hub->calls, hub->units.items[index].id);
@@ -105,6 +107,15 @@ int c300x_call_hub_event(struct c300x_call_hub *hub, const char *type, const cha
         return call != NULL && call->unit[0] != '\0' ? decorate(data, call->unit, call->id, out, out_len) : 1;
     }
     return 1;
+}
+
+void c300x_call_hub_media_closed(struct c300x_call_hub *hub, int station_holds_media)
+{
+    /* The display answered: the agent's ring leg closed, the call goes on
+     * until the station's own close. */
+    if (hub != NULL && !station_holds_media) {
+        c300x_calls_media_closed(&hub->calls, &hub->sink, c300x_monotonic_ms());
+    }
 }
 
 int c300x_call_hub_timeout_ms(struct c300x_call_hub *hub)
@@ -143,14 +154,20 @@ static void call_action(int client_fd, const struct c300x_call_routes *routes, c
         }
         if (answer) {
             c300x_calls_answer_started(&hub->calls, call_id);
+        } else {
+            c300x_calls_hangup_started(&hub->calls, call_id);
         }
     }
-    if (answer) {
-        if (c300x_http_doorbell_call_answer(client_fd, routes->control, routes->video, request)) {
+    int done = answer ? c300x_http_doorbell_call_answer(client_fd, routes->control, routes->video, request)
+                      : c300x_http_doorbell_call_hangup(client_fd, routes->control, routes->video);
+    if (done) {
+        if (answer) {
             c300x_calls_answered(&hub->calls, &hub->sink, call_id, "ha", c300x_monotonic_ms());
+        } else {
+            c300x_calls_end(&hub->calls, &hub->sink, call_id, "hangup", c300x_monotonic_ms());
         }
-    } else if (c300x_http_doorbell_call_hangup(client_fd, routes->control, routes->video)) {
-        c300x_calls_end(&hub->calls, &hub->sink, call_id, "hangup", c300x_monotonic_ms());
+    } else if (routes->control == NULL || !c300x_video_control_deferred(routes->control)) {
+        c300x_calls_action_refused(&hub->calls, call_id);
     }
 }
 

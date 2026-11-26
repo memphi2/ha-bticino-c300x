@@ -31,6 +31,7 @@ struct c300x_call {
     const char *answered_by;         /* NULL, ha, station */
     const char *end_reason;
     int answer_pending;
+    int hangup_pending; /* HA's hang-up runs: the media close it causes ends the call as "hangup" */
     long long started_ms;
     long long last_ring_ms;
     long long bound_ms;
@@ -61,9 +62,12 @@ void c300x_calls_init(struct c300x_calls *calls, const char *boot_id);
  * call fields in data (an object to send as doorbell.pressed), 0 for a repeat. */
 int c300x_calls_ring(struct c300x_calls *calls, const struct c300x_call_sink *sink,
                      const char *raw, long long now, char *data, size_t data_len);
-/* Caller, end, view and station-answer frames. */
+/* Caller and view frames: they name the unit of a call. */
 void c300x_calls_frame(struct c300x_calls *calls, const struct c300x_call_sink *sink,
                        const char *frame, long long now);
+/* The agent saw the ring answered (doorbell.view_requested of the ring):
+ * by Home Assistant while its answer runs, else on the station. */
+void c300x_calls_answer_seen(struct c300x_calls *calls, const struct c300x_call_sink *sink, long long now);
 void c300x_calls_media_closed(struct c300x_calls *calls, const struct c300x_call_sink *sink, long long now);
 void c300x_calls_tick(struct c300x_calls *calls, const struct c300x_call_sink *sink, long long now);
 /* -1 while no call needs a timer. */
@@ -78,6 +82,9 @@ int c300x_calls_is_current(const struct c300x_calls *calls, const char *call_id)
 int c300x_calls_unlock_allowed(const struct c300x_calls *calls, const char *call_id,
                                const char *unit, long long now);
 void c300x_calls_answer_started(struct c300x_calls *calls, const char *call_id);
+void c300x_calls_hangup_started(struct c300x_calls *calls, const char *call_id);
+/* HA's hang-up was refused: a later close is not HA's. */
+void c300x_calls_action_refused(struct c300x_calls *calls, const char *call_id);
 void c300x_calls_answered(struct c300x_calls *calls, const struct c300x_call_sink *sink,
                           const char *call_id, const char *by, long long now);
 void c300x_calls_end(struct c300x_calls *calls, const struct c300x_call_sink *sink,

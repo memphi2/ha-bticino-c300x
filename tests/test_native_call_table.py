@@ -13,6 +13,8 @@ NATIVE = Path(__file__).resolve().parents[1] / "native_agent"
 SOURCES = ("call_table.c", "outdoor_units.c", "json_util.c", "json_parse.c", "string_util.c", "file_io.c", "sha256.c")
 CASES = (
     "single_unit_capture",
+    "unanswered_capture",
+    "station_answer",
     "unit_behind_interface",
     "two_units_within_one_second",
     "caller_missing",

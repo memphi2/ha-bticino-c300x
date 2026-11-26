@@ -132,6 +132,7 @@ static bool payload_external(const char *data) {
 static int sip_listen_fd = -1;
 static atomic_int ring_fd = -1;
 static atomic_int ondemand_invites;
+static atomic_int station_byes; /* BYEs the agent sent the station */
 static atomic_int station_busy = 1;
 /* The call the station is busy with ends before its 486 answer, or right
  * after it while the agent still cleans up the failed start. */
@@ -196,6 +197,7 @@ static void *station_connection(void *arg) {
             if (atomic_load(&station_busy)) reply(fd, message, 486, "Busy here", NULL);
             else reply(fd, message, 200, "Ok", station_sdp);
         } else if (strncmp(message, "BYE ", 4) == 0) {
+            atomic_fetch_add(&station_byes, 1);
             reply(fd, message, 200, "Ok", NULL);
         } else if (strncmp(message, "SIP/2.0 ", 8) == 0 && ring) {
             pthread_mutex_lock(&codes_mutex);
@@ -544,14 +546,203 @@ static void two_units(void) {
     wait_event("door_unlock.started", 1, data, sizeof(data));
     assert(strstr(data, "\"unit\":\"22\"") && strstr(data, second));
     bus("*8*100#1#4*21##");
-    wait_event("call.ended", 1, data, sizeof(data));
-    assert(strstr(data, first) && strstr(data, "\"reason\":\"hangup_frame\""));
+    usleep(100000);
+    assert(count_events("call.ended") == 0);
     station_send("CANCEL", 1, NULL);
     wait_ring_code(200, 1);
     wait_event("call.ended", 2, data, sizeof(data));
-    assert(strstr(data, second) && strstr(data, "\"reason\":\"media_closed\""));
+    assert(strstr(data, first) || strstr(data, second));
+    assert(strstr(data, "\"reason\":\"media_closed\""));
     close(preview);
     assert(atomic_load(&ondemand_invites) == 0);
+}
+
+/* ---- the call lifecycle against captured sequences (1.7.19, one unit) ----
+ * Start, answer and end come from the agent's ring and media events; the
+ * caller and view frames only name the unit. *8*100 follows an answer or a
+ * view start by 100-500 ms and ends nothing. */
+
+static void current_call(char *id, size_t id_len) {
+    char data[4096];
+    assert(calls_api("GET", "/api/v1/calls", "", data, sizeof(data)) == 200);
+    const char *at = strstr(data, "\"current_call_id\":");
+    assert(at != NULL);
+    at += strlen("\"current_call_id\":");
+    id[0] = '\0';
+    if (*at == '"') sscanf(at + 1, "%31[^\"]", id);
+    (void)id_len;
+}
+
+static void assert_current(const char *expected) {
+    char id[32];
+    current_call(id, sizeof(id));
+    if (strcmp(id, expected) != 0) {
+        fprintf(stderr, "current call %s, expected %s\n", id, expected);
+        abort();
+    }
+}
+
+static void call_id_of(const char *data, char *id) {
+    const char *at = strstr(data, "\"call_id\":\"");
+    assert(at != NULL);
+    sscanf(at + 11, "%31[^\"]", id);
+}
+
+static void ring_with_caller(char *id, int *preview) {
+    char data[4096];
+    ring_starts(preview);
+    bus("*8*9#1#4*20##");
+    wait_event("call.caller_identified", 1, data, sizeof(data));
+    assert(strstr(data, "\"unit\":\"20\"") && strstr(data, "\"attribution\":\"caller_frame\""));
+    call_id_of(data, id);
+    assert_current(id);
+}
+
+static void call_api_action(const char *id, const char *action, int expected) {
+    char path[96], data[4096];
+    snprintf(path, sizeof(path), "/api/v1/calls/%s/actions/%s", id, action);
+    int code = calls_api("POST", path, "", data, sizeof(data));
+    if (code != expected) {
+        fprintf(stderr, "%s: %d %s\n", path, code, data);
+        abort();
+    }
+}
+
+static void wait_byes(int count) {
+    long long deadline = __real_c300x_monotonic_ms() + WAIT_MS;
+    while (atomic_load(&station_byes) < count) {
+        assert(__real_c300x_monotonic_ms() < deadline);
+        usleep(5000);
+    }
+}
+
+/* c300x-unanswered-ring-20260708-134502: nobody answers, no *8*100; the
+ * station cancels after 29.9 s and the agent's media close ends the call. */
+static void lifecycle_unanswered(void) {
+    char data[4096], id[32];
+    int preview;
+    ring_with_caller(id, &preview);
+    atomic_store(&clock_offset, 29600);
+    assert_current(id);
+    bus("*8*3#1#4*411##");
+    station_send("CANCEL", 1, NULL);
+    wait_ring_code(200, 1);
+    wait_event("call.ended", 1, data, sizeof(data));
+    assert(strstr(data, id) && strstr(data, "\"reason\":\"media_closed\""));
+    close(preview);
+    assert_current("");
+    assert(count_events("call.answered") == 0);
+}
+
+/* c300x-ha-device-20260615-230207: HA answers after 13 s; *8*2, *8*3 and
+ * *8*100 follow within 300 ms; HA hangs up 6.9 s later. */
+static void lifecycle_ha_answer_ha_hangup(void) {
+    char data[4096], id[32];
+    int preview;
+    ring_with_caller(id, &preview);
+    atomic_store(&clock_offset, 13000);
+    call_api_action(id, "answer", 200);
+    wait_ring_code(200, 1);
+    wait_event("call.answered", 1, data, sizeof(data));
+    assert(strstr(data, id) && strstr(data, "\"answered_by\":\"ha\""));
+    bus("*8*2#1#4*11##");
+    bus("*8*3#1#4*411##");
+    bus("*8*100#1#4*20##");
+    bus("*8*2#1#4*11##");
+    bus("*8*100#1#4*20##");
+    usleep(300000);
+    assert(count_events("call.ended") == 0 && count_events("call.answered") == 1);
+    assert_current(id);
+    atomic_store(&clock_offset, 19900);
+    call_api_action(id, "hangup", 200);
+    wait_byes(1);
+    wait_event("call.ended", 1, data, sizeof(data));
+    assert(strstr(data, id) && strstr(data, "\"reason\":\"hangup\""));
+    close(preview);
+    assert_current("");
+}
+
+/* Capture 13:37:27-13:38:35: the display answers; the agent's ring leg is
+ * cancelled while the display call goes on until its end frame. */
+static void lifecycle_station_answer_station_hangup(void) {
+    char data[4096], id[32];
+    int preview;
+    ring_with_caller(id, &preview);
+    bus("*8*84*11##");
+    bus("*8*85*11##");
+    station_send("CANCEL", 1, NULL);
+    wait_ring_code(200, 1);
+    usleep(300000);
+    bus("*8*2#1#4*11##");
+    wait_event("call.answered", 1, data, sizeof(data));
+    assert(strstr(data, id) && strstr(data, "\"answered_by\":\"station\""));
+    wait_event("doorbell.media.closed", 1, data, sizeof(data));
+    assert(payload_external(data));
+    close(preview);
+    bus("*8*100#1#4*20##");
+    usleep(300000);
+    assert(count_events("call.ended") == 0);
+    assert_current(id);
+    atomic_store(&clock_offset, 60000);
+    bus("*8*3#1#4*411##");
+    wait_event("call.ended", 1, data, sizeof(data));
+    assert(strstr(data, id) && strstr(data, "\"reason\":\"media_closed\""));
+    assert_current("");
+    assert(atomic_load(&station_byes) == 0);
+}
+
+/* c300x-ha-device-20260616-000849: HA answers; 60 s later the station ends
+ * the call (*8*3, then its BYE). */
+static void lifecycle_ha_answer_station_hangup(void) {
+    char data[4096], id[32];
+    int preview;
+    ring_with_caller(id, &preview);
+    atomic_store(&clock_offset, 17100);
+    call_api_action(id, "answer", 200);
+    wait_ring_code(200, 1);
+    bus("*8*2#1#4*11##");
+    bus("*8*3#1#4*411##");
+    bus("*8*100#1#4*20##");
+    usleep(300000);
+    assert_current(id);
+    atomic_store(&clock_offset, 77400);
+    bus("*8*3#1#4*411##");
+    usleep(300000);
+    assert_current(id);
+    station_send("BYE", 2, NULL);
+    wait_event("call.ended", 1, data, sizeof(data));
+    assert(strstr(data, id) && strstr(data, "\"reason\":\"media_closed\""));
+    close(preview);
+    assert_current("");
+    assert(atomic_load(&station_byes) == 0);
+}
+
+/* c300x-ha-first-click-click-stop-20260621-214931: HA's on-demand view of
+ * the default unit; *8*100#5 follows 578 ms later; HA stops 2.1 s later. */
+static void lifecycle_ondemand_view(void) {
+    char data[4096], id[32];
+    atomic_store(&station_busy, 0);
+    assert(c300x_video_activate(runtime->video, 1));
+    int fd = rtsp_open();
+    assert(rtsp_play(fd, "/doorbell") == 200);
+    bus("*8*1#5#4#20*11##");
+    wait_event("call.view_started", 1, data, sizeof(data));
+    assert(strstr(data, "\"unit\":\"20\""));
+    call_id_of(data, id);
+    bus("*8*9#5#4*20##");
+    bus("*8*2#5#4*11##");
+    bus("*8*3#5#4*411##");
+    bus("*8*100#5#4*20##");
+    usleep(300000);
+    assert(count_events("call.ended") == 0 && count_events("call.answered") == 0);
+    assert(calls_api("GET", "/api/v1/calls", "", data, sizeof(data)) == 200);
+    assert(strstr(data, "\"current_call_id\":null") && strstr(data, "\"state\":\"viewing\""));
+    c300x_video_stop(runtime->video);
+    wait_byes(1);
+    wait_event("call.ended", 1, data, sizeof(data));
+    assert(strstr(data, id) && strstr(data, "\"kind\":\"view\",\"reason\":\"media_closed\""));
+    close(fd);
+    assert_current("");
 }
 
 /* (d) The station answers 486 Busy with no external marker (here: no bus
@@ -659,6 +850,9 @@ int main(int argc, char **argv) {
     assert(runtime != NULL);
     runtime->config = &config;
     c300x_call_hub_init(&runtime->calls, &config, dispatch_call_event, runtime);
+    /* No request worker: the media operations of API requests run in place. */
+    runtime->video_control.worker.armed_fd = -1;
+    runtime->video_control.worker.owner_fd = C300X_REQUEST_WORKER_FREE;
     runtime->video = c300x_video_create(&config, NULL, 0);
     assert(runtime->video != NULL);
     c300x_video_set_event_callback(runtime->video, dispatch_video_event, runtime);
@@ -676,6 +870,11 @@ int main(int argc, char **argv) {
     else if (strcmp(argv[1], "unanswered") == 0) unanswered();
     else if (strcmp(argv[1], "ha_answer") == 0) ha_answer();
     else if (strcmp(argv[1], "two_units") == 0) two_units();
+    else if (strcmp(argv[1], "lifecycle_unanswered") == 0) lifecycle_unanswered();
+    else if (strcmp(argv[1], "lifecycle_ha_answer_ha_hangup") == 0) lifecycle_ha_answer_ha_hangup();
+    else if (strcmp(argv[1], "lifecycle_station_answer_station_hangup") == 0) lifecycle_station_answer_station_hangup();
+    else if (strcmp(argv[1], "lifecycle_ha_answer_station_hangup") == 0) lifecycle_ha_answer_station_hangup();
+    else if (strcmp(argv[1], "lifecycle_ondemand_view") == 0) lifecycle_ondemand_view();
     else if (strcmp(argv[1], "station_busy_bus_end") == 0) station_busy_case(true);
     else if (strcmp(argv[1], "station_busy_timeout") == 0) station_busy_case(false);
     else if (strcmp(argv[1], "station_freed_before_486") == 0) station_freed_during_start(true);

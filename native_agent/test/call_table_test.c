@@ -86,23 +86,59 @@ static void ring_with_caller(long long t, const char *caller)
     frame(caller, t + 460);
 }
 
+/* c300x-ha-device-20260615-230207 (1.7.19, one unit), times from the ring
+ * frame on the multicast path: HA answers, *8*100 follows the answer by
+ * 130 ms and ends nothing, HA hangs up. */
 static void single_unit_capture(void)
 {
     reset(NULL);
     assert(c300x_calls_timeout_ms(&calls, 0) == -1);
-    ring_with_caller(0, "*8*9#1#4*20##");
+    ring(0);
+    frame("*8*9#1#4*20##", 166);
     assert(count("doorbell.pressed") == 1);
     expect(nth("doorbell.pressed", 1), "\"call_id\":\"8f3a1c2e-1\",\"unit\":null,\"attribution\":\"pending\"");
     assert(count("call.caller_identified") == 1);
     expect(nth("call.caller_identified", 1), "\"unit\":\"20\",\"where\":\"20\",\"action_where\":\"20\",\"attribution\":\"caller_frame\"");
     c300x_calls_tick(&calls, &sink, 1500);
     assert(count("call.caller_identified") == 1);
-    frame("*8*2#1#4*11##", 14300);
-    expect(nth("call.answered", 1), "\"answered_by\":\"station\"");
-    frame("*8*100#1#4*20##", 30000);
-    expect(nth("call.ended", 1), "\"unit\":\"20\",\"kind\":\"ring\",\"reason\":\"hangup_frame\"");
-    assert(c300x_calls_timeout_ms(&calls, 30000) == -1);
+    /* POST .../answer at 13043; the agent's answer reports the view at 13073. */
+    c300x_calls_answer_started(&calls, "8f3a1c2e-1");
+    c300x_calls_answer_seen(&calls, &sink, 13073);
+    expect(nth("call.answered", 1), "\"answered_by\":\"ha\"");
+    frame("*8*2#1#4*11##", 13173);
+    frame("*8*100#1#4*20##", 13305);
+    c300x_calls_answer_seen(&calls, &sink, 13395);
+    assert(count("call.answered") == 1 && count("call.ended") == 0);
+    assert(c300x_calls_is_current(&calls, "8f3a1c2e-1"));
+    /* POST .../hangup at 19900. */
+    c300x_calls_end(&calls, &sink, "8f3a1c2e-1", "hangup", 19900);
+    expect(nth("call.ended", 1), "\"unit\":\"20\",\"kind\":\"ring\",\"reason\":\"hangup\"");
+    assert(c300x_calls_timeout_ms(&calls, 19900) == -1);
     assert(c300x_calls_current(&calls) == NULL);
+}
+
+/* c300x-unanswered-ring-20260708-134502: no *8*100 at all; the station
+ * cancels at 29.9 s and the agent's media close ends the call. */
+static void unanswered_capture(void)
+{
+    reset(NULL);
+    ring(0);
+    frame("*8*9#1#4*20##", 352);
+    assert(c300x_calls_is_current(&calls, "8f3a1c2e-1"));
+    c300x_calls_media_closed(&calls, &sink, 29951);
+    expect(nth("call.ended", 1), "\"unit\":\"20\",\"kind\":\"ring\",\"reason\":\"media_closed\"");
+    assert(count("call.answered") == 0);
+}
+
+/* The display answers: no answer of HA runs. */
+static void station_answer(void)
+{
+    reset(NULL);
+    ring_with_caller(0, "*8*9#1#4*20##");
+    c300x_calls_answer_seen(&calls, &sink, 5600);
+    expect(nth("call.answered", 1), "\"answered_by\":\"station\"");
+    frame("*8*100#1#4*20##", 5800);
+    assert(c300x_calls_is_current(&calls, "8f3a1c2e-1"));
 }
 
 static void unit_behind_interface(void)
@@ -173,7 +209,7 @@ static void stale_call_id(void)
     reset(NULL);
     ring_with_caller(0, "*8*9#1#4*20##");
     assert(c300x_calls_is_current(&calls, "8f3a1c2e-1"));
-    frame("*8*100#1#4*20##", 20000);
+    c300x_calls_media_closed(&calls, &sink, 20000);
     ring_with_caller(40000, "*8*9#1#4*20##");
     assert(!c300x_calls_is_current(&calls, "8f3a1c2e-1"));
     assert(c300x_calls_is_current(&calls, "8f3a1c2e-2"));
@@ -189,13 +225,15 @@ static void second_ring_during_answered_call(void)
     ring_with_caller(0, "*8*9#1#4*21##");
     c300x_calls_answer_started(&calls, "8f3a1c2e-1");
     c300x_calls_answered(&calls, &sink, "8f3a1c2e-1", "ha", 2000);
-    frame("*8*2#1#4*11##", 2100);
+    c300x_calls_answer_seen(&calls, &sink, 2100);
     assert(count("call.answered") == 1);
     ring_with_caller(5000, "*8*9#1#4*22##");
     assert(count("doorbell.pressed") == 2);
     expect(nth("call.caller_identified", 2), "\"call_id\":\"8f3a1c2e-2\",\"unit\":\"22\"");
     assert(c300x_calls_is_current(&calls, "8f3a1c2e-1"));
     frame("*8*100#1#4*21##", 9000);
+    assert(c300x_calls_is_current(&calls, "8f3a1c2e-1"));
+    c300x_calls_end(&calls, &sink, "8f3a1c2e-1", "hangup", 9000);
     assert(c300x_calls_is_current(&calls, "8f3a1c2e-2"));
 }
 
@@ -226,8 +264,11 @@ static void view_and_media_closed(void)
     assert(count("call.view_started") == 1);
     expect(nth("call.view_started", 1), "\"unit\":\"20\"");
     assert(c300x_calls_current(&calls) == NULL);
-    frame("*8*100#5#4*20##", 8000);
-    expect(nth("call.ended", 1), "\"kind\":\"view\",\"reason\":\"hangup_frame\"");
+    /* c300x-ha-first-click-click-stop-20260621-214931: *8*100#5 578 ms after the view. */
+    frame("*8*100#5#4*20##", 578);
+    assert(count("call.ended") == 0);
+    c300x_calls_media_closed(&calls, &sink, 1660);
+    expect(nth("call.ended", 1), "\"kind\":\"view\",\"reason\":\"media_closed\"");
     ring(10000);
     c300x_calls_media_closed(&calls, &sink, 12000);
     expect(nth("call.ended", 2), "\"unit\":null,\"kind\":\"ring\",\"reason\":\"media_closed\"");
@@ -254,6 +295,8 @@ int main(int argc, char **argv)
 {
     static const struct { const char *name; void (*run)(void); } cases[] = {
         {"single_unit_capture", single_unit_capture},
+        {"unanswered_capture", unanswered_capture},
+        {"station_answer", station_answer},
         {"unit_behind_interface", unit_behind_interface},
         {"two_units_within_one_second", two_units_within_one_second},
         {"caller_missing", caller_missing},

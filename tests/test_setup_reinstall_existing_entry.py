@@ -22,9 +22,11 @@ from custom_components.bticino_c300x.const import (
     CONF_MAINTENANCE_TOKEN,
     CONF_REINSTALL_AGENT,
 )
+from custom_components.bticino_c300x.device_installer import C300XDeviceInstallError
 
 DEVICE = "c300x-0003504a1b2c"
 STATION = stable_unique_id_from_setup_data({"device_id": DEVICE})
+_INSTALLED = SimpleNamespace(display_pending=False, display_kind="qt4_ondisk")
 
 
 def _entry(unique_id: str, host: str, title: str = "Door") -> SimpleNamespace:
@@ -43,7 +45,7 @@ def _update(entry, *, data=None, options=None, unique_id=None):
     return True
 
 
-def _setup(monkeypatch, entries, read_setup):
+def _setup(monkeypatch, entries, read_setup, installer=None):
     flow = BticinoC300XConfigFlow()
     flow.context = {"source": "user"}
     flow._setup_connection = {"name": "Door", CONF_AGENT_HOST: "station.example", CONF_AGENT_PORT: 8091}
@@ -58,7 +60,7 @@ def _setup(monkeypatch, entries, read_setup):
     flow.hass = SimpleNamespace(config_entries=SimpleNamespace(
         async_update_entry=Mock(side_effect=_update), async_schedule_reload=Mock(), flow=None,
     ))
-    installer = AsyncMock(return_value=SimpleNamespace(display_pending=False, display_kind="qt4_ondisk"))
+    installer = installer or AsyncMock(return_value=_INSTALLED)
     migrate = AsyncMock()
     monkeypatch.setattr(config_flow, "async_ensure_installer_dependencies", AsyncMock())
     monkeypatch.setattr(config_flow, "async_install_device_agent", installer)
@@ -117,3 +119,38 @@ def test_the_entry_of_another_station_is_left_alone(monkeypatch):
     flow.hass.config_entries.async_update_entry.assert_not_called()
     assert flow._setup_connection[CONF_AGENT_TOKEN] == keys["api_token"]
     migrate.assert_awaited_once()
+
+
+def test_keys_a_failed_install_left_on_the_station_are_kept(monkeypatch):
+    existing = _entry(STATION, "door-old.local")
+    failure = C300XDeviceInstallError("device_install_verify_failed")
+    # The configuration with the new keys was written; a later step failed.
+    failure.keys_written = True
+    installer = AsyncMock(side_effect=[failure, _INSTALLED])
+    asked = []
+
+    async def read_setup(_hass, connection, *, api_token=""):
+        asked.append((connection[CONF_AGENT_HOST], api_token))
+        return {"device_id": DEVICE}
+
+    flow, result, keys, _ = _setup(monkeypatch, [existing], read_setup, installer)
+    # The failure is shown; the entry of the station has the keys at once.
+    assert result["step_id"] == "bootstrap_install"
+    assert result["errors"] == {"base": "device_install_verify_failed"}
+    assert asked == [("station.example", keys["api_token"])]
+    _assert_entry_has_the_new_keys(flow, existing, keys)
+    # The retry writes the same keys again: nothing on the station changes hands.
+    result = asyncio.run(flow.async_step_bootstrap_install({}))
+    assert installer.await_args.kwargs == keys
+    assert result["reason"] == "reinstall_entry_updated"
+    assert existing.data[CONF_AGENT_TOKEN] == keys["api_token"]
+
+
+def test_keys_of_a_failed_install_that_wrote_none_are_not_reused(monkeypatch):
+    installer = AsyncMock(side_effect=[C300XDeviceInstallError("ssh_login_refused"), _INSTALLED])
+    read_setup = AsyncMock()
+    flow, result, first, _ = _setup(monkeypatch, [], read_setup, installer)
+    assert result["errors"] == {"base": "ssh_login_refused"}
+    read_setup.assert_not_called()
+    asyncio.run(flow.async_step_bootstrap_install({}))
+    assert installer.await_args.kwargs["api_token"] != first["api_token"]

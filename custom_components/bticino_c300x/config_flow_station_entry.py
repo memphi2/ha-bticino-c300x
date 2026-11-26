@@ -11,6 +11,7 @@ created and no keys are lost.
 
 from __future__ import annotations
 
+import secrets
 from collections.abc import Awaitable, Callable, Iterable
 from typing import Any, cast
 
@@ -104,6 +105,49 @@ def hand_keys_to_entry(
 
 class StationEntrySteps:
     """Setup steps that keep one entry per station across an agent install."""
+
+    # The station, port and keys of an install that failed after it wrote them.
+    _setup_written_keys: tuple[str, int, str, str] | None = None
+
+    def _setup_install_endpoint(self: Any) -> tuple[str, int]:
+        connection = self._setup_connection
+        return str(connection[CONF_AGENT_HOST]), int(connection.get(CONF_AGENT_PORT, DEFAULT_AGENT_PORT))
+
+    def _setup_install_keys(self: Any) -> tuple[str, str]:
+        """The keys an install writes: those a failed install left on this station, else new ones.
+
+        A retry then replaces no keys, and nothing the station holds is lost.
+        """
+
+        kept = self._setup_written_keys
+        if kept is not None and kept[:2] == self._setup_install_endpoint():
+            return kept[2], kept[3]
+        return secrets.token_urlsafe(32), secrets.token_urlsafe(32)
+
+    async def _async_keep_written_keys(self: Any, err: Exception, api_token: str, maintenance_token: str) -> None:
+        """Keep the keys a failed install left on the station; the failure is still shown.
+
+        The setup uses them again on its retry. An existing entry of the
+        station gets them at once.
+        """
+
+        if not getattr(err, "keys_written", False):
+            return
+        self._setup_written_keys = (*self._setup_install_endpoint(), api_token, maintenance_token)
+        connection = {**self._setup_connection, CONF_AGENT_TOKEN: api_token, CONF_MAINTENANCE_TOKEN: maintenance_token}
+        try:
+            setup = await config_flow_agent.async_agent_setup_data(self.hass, connection, api_token=api_token)
+        except C300XAgentApiError:
+            return
+        unique_id = stable_unique_id_from_setup_data(setup)
+        if unique_id is None:
+            return
+        entry = await async_station_entry(
+            self.hass, self._async_current_entries(), unique_id, connection,
+            config_flow_agent.async_agent_setup_data,
+        )
+        if entry is not None:
+            hand_keys_to_entry(self.hass, entry, connection, unique_id=unique_id, display_pending=False)
 
     async def _async_hand_keys_to_station_entry(
         self: Any, install_result: object,

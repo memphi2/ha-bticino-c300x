@@ -79,6 +79,15 @@ def entry_reinstall_request(
     )
 
 
+def _async_keep_keys(hass: Any, entry: Any, keys: dict[str, str]) -> None:
+    """Save keys on the station in the entry and reload it, without ending the flow."""
+
+    options = {key: value for key, value in entry.options.items() if key not in _KEYS}
+    had_listeners = bool(entry.update_listeners)
+    changed = hass.config_entries.async_update_entry(entry, data={**entry.data, **keys}, options=options)
+    async_ensure_entry_reload(hass, entry, changed=bool(changed), had_listeners=had_listeners, force=True)
+
+
 class ReinstallSteps:
     """Replace the lost keys of an entry through the SSH installer."""
 
@@ -104,6 +113,10 @@ class ReinstallSteps:
             except C300XDeviceInstallError as err:
                 _LOGGER.warning("Reinstalling the device agent failed: %s", err.reason)
                 errors["base"] = err.reason
+                if err.keys_written and current_connection_options(entry) == connection:
+                    # The station holds these keys now: the entry keeps them
+                    # while the form shows what failed after they were written.
+                    _async_keep_keys(self.hass, entry, keys)
             else:
                 if current_connection_options(entry) != connection:
                     # The entry was pointed elsewhere while the install ran.

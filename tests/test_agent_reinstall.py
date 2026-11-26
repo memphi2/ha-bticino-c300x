@@ -1,6 +1,7 @@
 """Lost agent keys: the SSH installer writes the agent again with new ones."""
 
 import asyncio
+import hashlib
 import json
 import os
 import subprocess
@@ -221,6 +222,36 @@ def test_reauth_reinstall_saves_no_keys_for_an_entry_moved_meanwhile(monkeypatch
     flow.async_update_and_abort.assert_not_called()
 
 
+@pytest.mark.parametrize("written", [True, False])
+def test_reauth_reinstall_keeps_the_keys_on_the_station_when_a_later_step_fails(monkeypatch, written):
+    existing = _entry()
+    flow = _reauth_flow(existing)
+
+    def update(entry, *, data, options):
+        entry.data, entry.options = data, options
+        return True
+
+    flow.hass.config_entries.async_update_entry = Mock(side_effect=update)
+    failure = C300XDeviceInstallError("device_install_verify_failed")
+    failure.keys_written = written
+    installer = AsyncMock(side_effect=failure)
+    result, _ = _reinstall(monkeypatch, flow, installer)
+    # The failure is shown either way.
+    assert result["step_id"] == "reauth_reinstall"
+    assert result["errors"] == {"base": "device_install_verify_failed"}
+    flow.async_update_and_abort.assert_not_called()
+    keys = installer.await_args.kwargs
+    if written:
+        assert existing.data[CONF_AGENT_TOKEN] == keys["api_token"]
+        assert existing.data[CONF_MAINTENANCE_TOKEN] == keys["maintenance_token"]
+        assert existing.data["shared_secret"] == "keep"
+        assert existing.options == {CONF_DEVICE_ACTIVATION_MODE: "manual"}
+        flow.hass.config_entries.async_schedule_reload.assert_called_once_with("entry")
+    else:
+        assert existing.data[CONF_AGENT_TOKEN] == "lost"
+        flow.hass.config_entries.async_update_entry.assert_not_called()
+
+
 def test_reauth_with_keys_is_as_before(monkeypatch):
     flow = _reauth_flow(_entry())
     installer = AsyncMock()
@@ -258,6 +289,8 @@ class _Station:
         _Station.last = self
 
     def run(self, command: str, input_data: bytes | None = None) -> str:
+        if self.fail == "display" and "qml_patch.sh " in command:
+            raise C300XDeviceInstallError("device_install_verify_failed")
         output = self._run(command, input_data)
         if self.steps and self.steps[-1] == self.fail:
             self.fail = ""
@@ -279,6 +312,9 @@ class _Station:
         elif input_data and b'"adminToken"' in input_data:
             self.steps.append("config")
             self.config = input_data
+        elif command.startswith("sha256sum ") and self.config is not None:
+            # A configuration write whose answer was lost: the file is there.
+            return f"{hashlib.sha256(self.config).hexdigest()}  config.json"
         elif "qml_patch.sh " in command:
             return json.dumps({"ok": True, "core_patched": True, "gui_running": True, "patched": False})
         return ""
@@ -349,6 +385,15 @@ def test_an_install_that_fails_before_any_stop_starts_nothing(monkeypatch, tmp_p
     with pytest.raises(C300XDeviceInstallError):
         _install(monkeypatch, tmp_path, _installed("new-access", "new-maintenance"), fail="config")
     assert _Station.last.steps == ["config"]
+
+
+@pytest.mark.parametrize("failing,written", [
+    ("stop", False), ("config", True), ("restart", True), ("display", True),
+])
+def test_a_failed_install_tells_whether_the_station_holds_its_keys(monkeypatch, tmp_path, failing, written):
+    with pytest.raises(C300XDeviceInstallError) as raised:
+        _install(monkeypatch, tmp_path, _installed("old-access", "old-maintenance"), fail=failing)
+    assert raised.value.keys_written is written
 
 
 class _Shell:

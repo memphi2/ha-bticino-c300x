@@ -1,5 +1,6 @@
 """The installed manifest commits only a completely verified bootstrap bundle."""
 
+import hashlib
 import json
 import subprocess
 from pathlib import Path
@@ -82,6 +83,10 @@ def transaction(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
                 self.files.pop(obsolete_path, None)
             elif command.endswith(" restart"):
                 self.stage("restart")
+            elif command.startswith("sha256sum "):
+                # After a failed configuration write: is the file there?
+                data = self.files.get(command.split(" ", 1)[1])
+                return f"{hashlib.sha256(data).hexdigest()}  -" if data is not None else ""
             elif command.endswith(" start; fi"):
                 # A failed restart starts the agent again with what is there.
                 self.stage("start-again")

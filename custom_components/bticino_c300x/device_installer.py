@@ -112,11 +112,17 @@ DISPLAY_FILES = (
 
 
 class C300XDeviceInstallError(Exception):
-    """Raised when the device-agent bootstrap installer cannot complete."""
+    """Raised when the device-agent bootstrap installer cannot complete.
 
-    def __init__(self, reason: str) -> None:
+    keys_written: the configuration with the keys of this install was in
+    place on the station when the install failed. The agent there accepts
+    only these keys now; whoever started the install must keep them.
+    """
+
+    def __init__(self, reason: str, *, keys_written: bool = False) -> None:
         super().__init__(reason)
         self.reason = reason
+        self.keys_written = keys_written
 
 
 @dataclass(frozen=True, slots=True)
@@ -286,8 +292,10 @@ def _install_device_agent_sync(
 
     client = _connect_device_client(request)
     changed_files: list[str] = []
+    config_path = f"{request.remote_dir}/{REMOTE_CONFIG_NAME}"
+    sent_config: bytes | None = None
+    keys_written = False
     try:
-        config_path = f"{request.remote_dir}/{REMOTE_CONFIG_NAME}"
         existing = _read_remote_config_sync(client, config_path)
         kind = _admit_station_sync(client, bundle, request.remote_dir, request.c100x_confirmed)
         if display is not None:
@@ -325,6 +333,7 @@ def _install_device_agent_sync(
                     client, request.remote_dir,
                     _render_startup_script(bundle.init_script, request.remote_dir),
                 )
+            sent_config = merged_config
             if _write_remote_file_sync(
                 client,
                 config_path,
@@ -332,6 +341,7 @@ def _install_device_agent_sync(
                 mode="600",
             ):
                 changed_files.append(f"{request.remote_dir}/{REMOTE_CONFIG_NAME}")
+            keys_written = True
             if manage_firewall:
                 if c100x:
                     _apply_firewall_patch_sync(
@@ -367,6 +377,13 @@ def _install_device_agent_sync(
         ):
             changed_files.append(manifest.remote_path)
         _remove_obsolete_display_source_sync(client, request.remote_dir)
+    except C300XDeviceInstallError as err:
+        # A write whose answer was lost can still have put the file in place.
+        err.keys_written = keys_written or (
+            sent_config is not None
+            and _remote_content_matches_sync(client, config_path, sent_config)
+        )
+        raise
     finally:
         client.close()
     return tuple(changed_files)

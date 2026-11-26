@@ -367,8 +367,7 @@ class BticinoC300XConfigFlow(ModelTextConfigFlow, config_flow_auth.AuthFlowSteps
         if user_input is not None or not self._factory_login_tried:
             self._factory_login_tried = True
             await self._async_abort_if_manual_setup_duplicate()
-            api_token = secrets.token_urlsafe(32)
-            maintenance_token = secrets.token_urlsafe(32)
+            api_token, maintenance_token = self._setup_install_keys()
             ssh_username, ssh_password = ssh_login(
                 user_input, CONF_BOOTSTRAP_SSH_USERNAME, CONF_BOOTSTRAP_SSH_PASSWORD,
                 login_model(self._setup_agent_info),
@@ -398,6 +397,7 @@ class BticinoC300XConfigFlow(ModelTextConfigFlow, config_flow_auth.AuthFlowSteps
                 if self._c100x_install_refused(err):
                     return await self._async_ask_c100x_opt_in("install", user_input)
                 errors["base"] = err.reason
+                await self._async_keep_written_keys(err, api_token, maintenance_token)
             else:
                 if getattr(install_result, "display_pending", False):
                     # The core display step failed on the Qt 5 display: the

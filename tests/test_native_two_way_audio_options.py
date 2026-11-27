@@ -73,6 +73,18 @@ def test_native_audio_option_survives_forms_and_unrelated_edits(enabled):
         )
 
 
+def _run_bounded(step):
+    """A flow step that does not end within a minute fails instead of hanging."""
+
+    async def bounded():
+        try:
+            return await asyncio.wait_for(step, 60)
+        except TimeoutError:
+            pytest.fail("the flow step did not end within 60 s")
+
+    return asyncio.run(bounded())
+
+
 @pytest.mark.parametrize("kind", ["setup", "options", "reconfigure"])
 @pytest.mark.parametrize("enabled", [False, True])
 @pytest.mark.parametrize("invalid", [False, True])
@@ -94,7 +106,7 @@ def test_native_audio_choice_is_retained_on_success_and_validation_error(kind, e
                 else flow.async_step_reconfigure_features)
         pending = "_setup_feature_data" if kind == "setup" else "_reconfigure_feature_data"
     flow.async_show_form = lambda **kwargs: kwargs
-    result = asyncio.run(step({
+    result = _run_bounded(step({
         CONF_VIDEO_ENABLED: True,
         CONF_NATIVE_TWO_WAY_AUDIO: enabled,
         # A changed level: the options flow writes nothing for an unchanged area.
@@ -139,7 +151,7 @@ def test_an_entry_with_the_retired_audio_keys_loads_and_saving_drops_them():
     areas = _OptionsAreas(entry)
     flow = areas._flow()
     flow.async_show_form = lambda **kwargs: kwargs
-    asyncio.run(flow.async_step_features({CONF_VIDEO_ENABLED: True, CONF_DOOR_AUDIO_LEVEL_DB: "9"}))
+    _run_bounded(flow.async_step_features({CONF_VIDEO_ENABLED: True, CONF_DOOR_AUDIO_LEVEL_DB: "9"}))
     saved = areas.hass.config_entries.async_update_entry.call_args.kwargs["options"]
     assert saved[CONF_DOOR_AUDIO_LEVEL_DB] == 9
     assert saved[CONF_AUDIO_FINE_GAIN_DB] == 0

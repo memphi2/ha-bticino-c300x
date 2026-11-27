@@ -93,14 +93,17 @@ class _ApiDeviceMixin(_C300XApiCore):
         )
         return normalize_smartphone_forwarding(data)
 
-    async def async_stair_light(self, address: str) -> dict[str, Any]:
-        """Activate the staircase light through an agent endpoint."""
+    async def async_stair_light(self, address: str | None = None) -> dict[str, Any]:
+        """Press and release the stair light; without an address at the agent's own.
 
-        address = normalize_stair_light_address(address)
+        The answer names the address used: ``{"ok": true, "address": "11"}``.
+        """
+
+        body = {"address": normalize_stair_light_address(address)} if address else {}
         data = await self._request_json(
             "POST",
             "/api/v1/stair-light/actions/activate",
-            json_data={"address": address},
+            json_data=body,
         )
         return _ok_response(data)
 

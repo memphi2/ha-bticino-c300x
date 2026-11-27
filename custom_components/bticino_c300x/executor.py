@@ -11,7 +11,7 @@ from .action import (
     alarm_service_for_command,
     normalize_action_id,
 )
-from .activation_address import stair_light_where_from_entry_values
+from .activation_address import user_stair_light_where
 from .alarm_state import (
     _ALARMO_DOMAIN,
     _alarmo_command_preflight,
@@ -20,6 +20,7 @@ from .alarm_state import (
 )
 from .const import (
     ALARM_DOMAIN,
+    CONF_DEVICE_ACTIVATION_MODE,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
     DASHBOARD_ENTITY_ANSWERING_MACHINE,
@@ -245,17 +246,23 @@ async def async_trigger_stair_light(
     entry: BticinoC300XConfigEntry,
     address: str | None = None,
 ) -> dict[str, Any]:
-    """Activate the staircase light through the configured agent."""
+    """Activate the staircase light through the configured agent.
 
-    target_address = address or stair_light_where_from_entry_values(
+    An address goes along only when given or set by the user; else the agent
+    takes its own and answers which one it used.
+    """
+
+    target_address = address or user_stair_light_where(
+        entry_config_value(entry, CONF_DEVICE_ACTIVATION_MODE, ""),
         entry_config_value(entry, CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P, ""),
         entry_config_value(entry, CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N, ""),
     )
-    await entry.runtime_data.api.async_stair_light(target_address)
+    result = await entry.runtime_data.api.async_stair_light(target_address)
+    used = result.get("address")
     return {
         "ok": True,
         "action_id": DASHBOARD_ENTITY_STAIR_LIGHT,
-        "address": str(target_address),
+        "address": used if isinstance(used, str) else target_address,
     }
 
 

@@ -79,6 +79,8 @@ def test_installer_config_closes_noauth_and_enables_runtime_defaults() -> None:
     assert config["activations"]["autoDiscover"] is True
     # The agent reads the station's own items from archive.xml; it scans no directories.
     assert "discoveryRoots" not in config["activations"]
+    # No stair light address set: the agent uses the station's own.
+    assert config["device"]["stairLightDefaultAddress"] == ""
     assert config["activations"]["items"] == []
     assert config["video"]["enabled"] is True
     assert config["displayBridge"]["enabled"] is False
@@ -196,3 +198,18 @@ def test_native_agent_config_save_preserves_existing_owner() -> None:
     assert save_body.index("fchmod(fd, 0600)") < save_body.index("fdopen(fd,")
     assert save_body.index("fdopen(fd,") < save_body.index("fprintf(file,")
     assert save_body.rindex("fclose(file)") < save_body.index("rename(")
+
+
+def test_installer_config_keeps_the_stair_light_address_the_user_set() -> None:
+    config = json.loads(
+        _device_config_json(
+            api_token="api-token",
+            maintenance_token="maintenance-token",
+            agent_port=8091,
+            device_activation_mode="manual",
+            device_activation_stair_light_p="02",
+            device_activation_stair_light_n="01",
+        )
+    )
+
+    assert config["device"]["stairLightDefaultAddress"] == "21"

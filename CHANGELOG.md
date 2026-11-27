@@ -93,6 +93,12 @@ devices, entities and services; a Repair lists what to redo after the update.
   hold no such items and found nothing. The activation buttons' attribute
   `source` is now `config` or `station` (no longer `device`); new is `unit`,
   the outdoor unit whose door a station lock opens.
+- **The stair light works at the station's own address.** In the Automatic
+  mode the stair light button switches the light at the address the station
+  is set up with (for example `11`), as its display does, and releases it
+  100 ms later. Before, Home Assistant sent the fixed address `10`, which
+  switched nothing on a station at another address. An address set in the Manual mode (P and N) is
+  used as before.
 - The native agent changed; an agent update is required. Until the agent
   update Repair has run, the integration shows no entities: the devices and
   entities move to the outdoor units with that update.

@@ -106,7 +106,7 @@
           "device_activation_flow_target": "Attivazione"
         },
         "data_description": {
-          "device_activation_mode": "Automatico usa le attivazioni come impostate qui o segnalate dal dispositivo. Manuale aggiunge una luce scale costruita dai valori P e N qui sotto.",
+          "device_activation_mode": "Automatico: la luce scale è all'indirizzo proprio della stazione, che la stazione conosce dalla sua configurazione. Manuale aggiunge una luce scale costruita dai valori P e N qui sotto.",
           "device_activation_stair_light_p": "Solo in modalità manuale: parte P dell'indirizzo della luce scale, da 0 a 99.",
           "device_activation_stair_light_n": "Solo in modalità manuale: parte N dell'indirizzo della luce scale, da 0 a 99.",
           "device_activation_flow_action": "Aggiungere, modificare o rimuovere un'attivazione - oppure terminare e salvare.",
@@ -235,7 +235,7 @@
           "device_activation_flow_target": "Attivazione"
         },
         "data_description": {
-          "device_activation_mode": "Automatico usa le attivazioni come impostate qui o segnalate dal dispositivo. Manuale aggiunge una luce scale costruita dai valori P e N qui sotto.",
+          "device_activation_mode": "Automatico: la luce scale è all'indirizzo proprio della stazione, che la stazione conosce dalla sua configurazione. Manuale aggiunge una luce scale costruita dai valori P e N qui sotto.",
           "device_activation_stair_light_p": "Solo in modalità manuale: parte P dell'indirizzo della luce scale, da 0 a 99.",
           "device_activation_stair_light_n": "Solo in modalità manuale: parte N dell'indirizzo della luce scale, da 0 a 99.",
           "device_activation_flow_action": "Aggiungere, modificare o rimuovere un'attivazione - oppure terminare e salvare.",
@@ -906,7 +906,7 @@
           "device_activation_flow_target": "Attivazione"
         },
         "data_description": {
-          "device_activation_mode": "Automatico usa le attivazioni come impostate qui o segnalate dal dispositivo. Manuale aggiunge una luce scale costruita dai valori P e N qui sotto.",
+          "device_activation_mode": "Automatico: la luce scale è all'indirizzo proprio della stazione, che la stazione conosce dalla sua configurazione. Manuale aggiunge una luce scale costruita dai valori P e N qui sotto.",
           "device_activation_stair_light_p": "Solo in modalità manuale: parte P dell'indirizzo della luce scale, da 0 a 99.",
           "device_activation_stair_light_n": "Solo in modalità manuale: parte N dell'indirizzo della luce scale, da 0 a 99.",
           "device_activation_flow_action": "Aggiungere, modificare o rimuovere un'attivazione - oppure terminare e salvare.",

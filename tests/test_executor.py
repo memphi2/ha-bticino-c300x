@@ -19,6 +19,7 @@ from custom_components.bticino_c300x.const import (
     CONF_DASHBOARD_ENTITIES,
     CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
     CONF_DASHBOARD_PREVENT_RETURN,
+    CONF_DEVICE_ACTIVATION_MODE,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
     CONF_DEVICE_UI_ENABLED,
@@ -177,10 +178,11 @@ class FakeApi:
     unlock_calls: list[str] = field(default_factory=list)
     answering_machine_enabled: bool = False
 
-    async def async_stair_light(self, address: str) -> dict[str, bool]:
+    async def async_stair_light(self, address: str | None = None) -> dict[str, Any]:
         self.stair_light_calls += 1
         self.last_stair_light_address = address
-        return {"ok": True}
+        # The agent answers the address it used: without one the station's own.
+        return {"ok": True, "address": address or "11"}
 
     async def async_unlock_outdoor_unit(self, unit_id: str, call_id: str | None = None) -> dict[str, Any]:
         self.unlock_calls.append(unit_id)
@@ -2129,26 +2131,36 @@ def test_async_trigger_stair_light_calls_agent_api() -> None:
 
     result = run(async_trigger_stair_light(hass, entry))
 
-    assert result == {"ok": True, "action_id": "stair_light", "address": "10"}
+    # No address set by the user: the agent takes the station's own.
+    assert result == {"ok": True, "action_id": "stair_light", "address": "11"}
     assert entry.runtime_data.api.stair_light_calls == 1
-    assert entry.runtime_data.api.last_stair_light_address == "10"
+    assert entry.runtime_data.api.last_stair_light_address is None
     assert hass.bus.events == []
 
 
-def test_async_trigger_stair_light_uses_default_p_n_address() -> None:
-    hass = FakeHass()
-    entry = FakeEntry(data={})
+def test_async_trigger_stair_light_sends_no_address_the_user_did_not_set() -> None:
+    """Automatic mode, also with P and N stored: they are the manual mode's only."""
 
-    result = run(async_trigger_stair_light(hass, entry))
+    for data, options in (
+        ({}, {}),
+        ({CONF_DEVICE_ACTIVATION_MODE: "automatic", CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P: "01",
+          CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N: "00"}, {}),
+        ({}, {CONF_DEVICE_ACTIVATION_MODE: "automatic"}),
+    ):
+        hass = FakeHass()
+        entry = FakeEntry(data=data, options=options)
 
-    assert result == {"ok": True, "action_id": "stair_light", "address": "10"}
-    assert entry.runtime_data.api.last_stair_light_address == "10"
+        result = run(async_trigger_stair_light(hass, entry))
+
+        assert result == {"ok": True, "action_id": "stair_light", "address": "11"}
+        assert entry.runtime_data.api.last_stair_light_address is None
 
 
-def test_async_trigger_stair_light_uses_configured_p_n_address() -> None:
+def test_async_trigger_stair_light_uses_the_user_set_p_n_address() -> None:
     hass = FakeHass()
     entry = FakeEntry(
         data={
+            CONF_DEVICE_ACTIVATION_MODE: "manual",
             CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P: "02",
             CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N: "01",
         }
@@ -2158,16 +2170,6 @@ def test_async_trigger_stair_light_uses_configured_p_n_address() -> None:
 
     assert result == {"ok": True, "action_id": "stair_light", "address": "21"}
     assert entry.runtime_data.api.last_stair_light_address == "21"
-
-
-def test_async_trigger_stair_light_uses_default_p_n_address_with_options() -> None:
-    hass = FakeHass()
-    entry = FakeEntry(data={}, options={})
-
-    result = run(async_trigger_stair_light(hass, entry))
-
-    assert result == {"ok": True, "action_id": "stair_light", "address": "10"}
-    assert entry.runtime_data.api.last_stair_light_address == "10"
 
 
 def test_async_trigger_stair_light_accepts_override_address() -> None:

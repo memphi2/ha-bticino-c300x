@@ -700,10 +700,12 @@ its activation list differs, never on a plain HA start.
 
 **Stair light address:**
 
-- **Automatic** uses the activations set up here or reported by the device and
-  leaves the built-in stair-light action alone.
-- **Manual (P and N)** builds one `stair_light` activation from the P and N
-  parts (0-99 each) and reserves that ID, so up to 15 more activations fit.
+- **Automatic** switches the stair light at the station's own address, which
+  the station knows from its configuration (for example `11`), as its
+  display does. Home Assistant sends no address.
+- **Manual (P and N)** uses the address built from the P and N parts (0-99
+  each) for the stair light button and builds one `stair_light` activation
+  from it; that ID is reserved, so up to 15 more activations fit.
 
 At most 16 activations are sent to the agent.
 

@@ -106,7 +106,7 @@
           "device_activation_flow_target": "Aktivierung"
         },
         "data_description": {
-          "device_activation_mode": "Automatisch nutzt die Aktivierungen, wie sie hier angelegt sind oder vom Gerät gemeldet werden. Manuell legt zusätzlich ein Treppenlicht aus den Werten P und N unten an.",
+          "device_activation_mode": "Automatisch: Das Treppenlicht liegt an der eigenen Adresse der Station, die sie aus ihrer Konfiguration kennt. Manuell legt zusätzlich ein Treppenlicht aus den Werten P und N unten an.",
           "device_activation_stair_light_p": "Nur im manuellen Modus: P-Teil der Treppenlicht-Adresse, 0 bis 99.",
           "device_activation_stair_light_n": "Nur im manuellen Modus: N-Teil der Treppenlicht-Adresse, 0 bis 99.",
           "device_activation_flow_action": "Eine Aktivierung hinzufügen, bearbeiten oder entfernen - oder fertigstellen und speichern.",
@@ -235,7 +235,7 @@
           "device_activation_flow_target": "Aktivierung"
         },
         "data_description": {
-          "device_activation_mode": "Automatisch nutzt die Aktivierungen, wie sie hier angelegt sind oder vom Gerät gemeldet werden. Manuell legt zusätzlich ein Treppenlicht aus den Werten P und N unten an.",
+          "device_activation_mode": "Automatisch: Das Treppenlicht liegt an der eigenen Adresse der Station, die sie aus ihrer Konfiguration kennt. Manuell legt zusätzlich ein Treppenlicht aus den Werten P und N unten an.",
           "device_activation_stair_light_p": "Nur im manuellen Modus: P-Teil der Treppenlicht-Adresse, 0 bis 99.",
           "device_activation_stair_light_n": "Nur im manuellen Modus: N-Teil der Treppenlicht-Adresse, 0 bis 99.",
           "device_activation_flow_action": "Eine Aktivierung hinzufügen, bearbeiten oder entfernen - oder fertigstellen und speichern.",
@@ -906,7 +906,7 @@
           "device_activation_flow_target": "Aktivierung"
         },
         "data_description": {
-          "device_activation_mode": "Automatisch nutzt die Aktivierungen, wie sie hier angelegt sind oder vom Gerät gemeldet werden. Manuell legt zusätzlich ein Treppenlicht aus den Werten P und N unten an.",
+          "device_activation_mode": "Automatisch: Das Treppenlicht liegt an der eigenen Adresse der Station, die sie aus ihrer Konfiguration kennt. Manuell legt zusätzlich ein Treppenlicht aus den Werten P und N unten an.",
           "device_activation_stair_light_p": "Nur im manuellen Modus: P-Teil der Treppenlicht-Adresse, 0 bis 99.",
           "device_activation_stair_light_n": "Nur im manuellen Modus: N-Teil der Treppenlicht-Adresse, 0 bis 99.",
           "device_activation_flow_action": "Eine Aktivierung hinzufügen, bearbeiten oder entfernen - oder fertigstellen und speichern.",

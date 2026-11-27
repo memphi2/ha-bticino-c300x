@@ -176,6 +176,10 @@ CHANGED_SINCE_2_10_0 = frozenset({
     "options/step/init/menu_options/device_activations",
     "options/step/init_c100x/menu_option_descriptions/device_activations",
     "options/step/init_c100x/menu_options/device_activations",
+    # The stair light is at the station's own address unless the user sets one (3.1.0).
+    "config/step/reconfigure_device_activations/data_description/device_activation_mode",
+    "config/step/user_device_activations/data_description/device_activation_mode",
+    "options/step/device_activations/data_description/device_activation_mode",
 })
 # Texts of 2.10.0 that are gone: 3.1.0 removed the agent event entity, the
 # doorbell state sensor, the station's door button (each unit has its own) and
@@ -234,11 +238,11 @@ REMOVED_SINCE_2_10_0 = frozenset({
 # ones, per file:
 #   json.dumps({"a/b/c": text}, sort_keys=True, ensure_ascii=False)
 DIGESTS_2_10_0 = {
-    "base": "447d8f3eeab58e2825bddf95fbe80a9218524b73bb97196a31fbfea7b60a6ce7",
-    "en": "447d8f3eeab58e2825bddf95fbe80a9218524b73bb97196a31fbfea7b60a6ce7",
-    "de": "9554f0d09644a071f8bef8178c3a6c510c3dc3ef7a811f0069bf16eb9cdbc612",
-    "it": "a06054c5015c11fd21a9e5f0b64ee0849509dc3a374fb7a331960cc4f7ab3e1d",
-    "fr": "ddd9c45cb4c81e8f87b50e4ef7de02ff3d2644a537098e2123248451f3cf8a0b",
+    "base": "50e239e2d705050f956a5a1fa901cacf322eb1741946d463357a056483932658",
+    "en": "50e239e2d705050f956a5a1fa901cacf322eb1741946d463357a056483932658",
+    "de": "d86320ce9cfffc3207159ae9da8b5f35e188023d8f9b3596af4281651bab42b0",
+    "it": "d1edbfb02e14fa59b58c19863b28bc8bcde5cf1c461c157a36d3c8069514631e",
+    "fr": "9785052b358010d146c1ad7e5acbc93a43224e5cdaffe806b4d9d84237cbb5a1",
 }
 
 

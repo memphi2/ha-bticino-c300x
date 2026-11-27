@@ -20,7 +20,10 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
-from .activation_address import stair_light_where_from_entry_values
+from .activation_address import (
+    stair_light_where_from_entry_values,
+    user_stair_light_where,
+)
 from .const import (
     DEFAULT_AGENT_PORT,
     DEFAULT_STAIR_LIGHT_N,
@@ -603,10 +606,12 @@ def _device_config_json(
         "device": {
             "model": "C300X",
             "firmware": "",
-            "stairLightDefaultAddress": stair_light_where_from_entry_values(
-                DEFAULT_STAIR_LIGHT_P,
-                DEFAULT_STAIR_LIGHT_N,
-            ),
+            # Empty: the station's own address, unless the user set one.
+            "stairLightDefaultAddress": user_stair_light_where(
+                device_activation_mode,
+                device_activation_stair_light_p,
+                device_activation_stair_light_n,
+            ) or "",
         },
         "activations": activations,
         "maintenance": {

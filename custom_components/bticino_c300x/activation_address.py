@@ -7,6 +7,7 @@ from typing import Any
 from .const import (
     DEFAULT_STAIR_LIGHT_N,
     DEFAULT_STAIR_LIGHT_P,
+    DEVICE_ACTIVATION_MODE_MANUAL,
 )
 from .schema_compat import vol
 
@@ -36,4 +37,16 @@ def stair_light_where_from_entry_values(
 ) -> str:
     """Return the configured OpenWebNet where segment from firmware P/N values."""
 
+    return stair_light_where_from_parts(p_value, n_value)
+
+
+def user_stair_light_where(mode: Any, p_value: Any, n_value: Any) -> str | None:
+    """The stair light's address the user set (manual mode), else None.
+
+    Without one the agent uses its own: its configured default, else the
+    station's own address from conf.xml.
+    """
+
+    if str(mode or "").strip() != DEVICE_ACTIVATION_MODE_MANUAL:
+        return None
     return stair_light_where_from_parts(p_value, n_value)

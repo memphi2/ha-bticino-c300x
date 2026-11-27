@@ -601,10 +601,12 @@ def test_api_control_methods_normalize_payloads_before_posting() -> None:
 
     forwarding = asyncio.run(api.async_set_smartphone_forwarding_mode(" enabled "))
     stair_light = asyncio.run(api.async_stair_light(" 21 "))
+    own_stair_light = asyncio.run(api.async_stair_light())
     unlock = asyncio.run(api.async_unlock_door(" front_door "))
 
     assert forwarding["state"] == "enabled"
     assert stair_light == {"ok": True}
+    assert own_stair_light == {"ok": True}
     assert unlock == {"ok": True}
     assert calls == [
         (
@@ -616,6 +618,12 @@ def test_api_control_methods_normalize_payloads_before_posting() -> None:
             "POST",
             "/api/v1/stair-light/actions/activate",
             {"json_data": {"address": "21"}},
+        ),
+        # Without an address the agent takes its own.
+        (
+            "POST",
+            "/api/v1/stair-light/actions/activate",
+            {"json_data": {}},
         ),
         (
             "POST",

@@ -106,7 +106,7 @@
           "device_activation_flow_target": "Activación"
         },
         "data_description": {
-          "device_activation_mode": "Automático usa las activaciones tal como están configuradas aquí o como las comunica el dispositivo. Manual añade una activación de luz de escalera formada con los valores P y N de abajo.",
+          "device_activation_mode": "Automático: la luz de escalera está en la dirección propia de la estación, que la estación conoce por su configuración. Manual añade una activación de luz de escalera formada con los valores P y N de abajo.",
           "device_activation_stair_light_p": "Solo en modo manual: parte P de la dirección de la luz de escalera, de 0 a 99.",
           "device_activation_stair_light_n": "Solo en modo manual: parte N de la dirección de la luz de escalera, de 0 a 99.",
           "device_activation_flow_action": "Añade, edita o elimina una activación, o termina y guarda.",
@@ -235,7 +235,7 @@
           "device_activation_flow_target": "Activación"
         },
         "data_description": {
-          "device_activation_mode": "Automático usa las activaciones tal como están configuradas aquí o como las comunica el dispositivo. Manual añade una activación de luz de escalera formada con los valores P y N de abajo.",
+          "device_activation_mode": "Automático: la luz de escalera está en la dirección propia de la estación, que la estación conoce por su configuración. Manual añade una activación de luz de escalera formada con los valores P y N de abajo.",
           "device_activation_stair_light_p": "Solo en modo manual: parte P de la dirección de la luz de escalera, de 0 a 99.",
           "device_activation_stair_light_n": "Solo en modo manual: parte N de la dirección de la luz de escalera, de 0 a 99.",
           "device_activation_flow_action": "Añade, edita o elimina una activación, o termina y guarda.",
@@ -906,7 +906,7 @@
           "device_activation_flow_target": "Activación"
         },
         "data_description": {
-          "device_activation_mode": "Automático usa las activaciones tal como están configuradas aquí o como las comunica el dispositivo. Manual añade una activación de luz de escalera formada con los valores P y N de abajo.",
+          "device_activation_mode": "Automático: la luz de escalera está en la dirección propia de la estación, que la estación conoce por su configuración. Manual añade una activación de luz de escalera formada con los valores P y N de abajo.",
           "device_activation_stair_light_p": "Solo en modo manual: parte P de la dirección de la luz de escalera, de 0 a 99.",
           "device_activation_stair_light_n": "Solo en modo manual: parte N de la dirección de la luz de escalera, de 0 a 99.",
           "device_activation_flow_action": "Añade, edita o elimina una activación, o termina y guarda.",

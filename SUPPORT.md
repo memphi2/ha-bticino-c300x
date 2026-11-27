@@ -11,11 +11,11 @@
 
 ## Supported Release Line
 
-- `3.0.x`: next stable (3.0.0): one package for the Classe 300X and the Classe 100X (Classe 100X experimental, checked offline only); includes 2.10.0
-- `2.10.x`: current stable (2.10.0); adds firmware 3.0.6 (display pages checked on a station at start, the other pages offline only)
-- `2.9.x`: previous stable; upgrade to 2.10.x for maintenance fixes
-- `2.8.x`: no longer maintained; upgrade to 2.10.x
-- `2.7.x`: no longer maintained; upgrade to 2.10.x
+- `3.0.x`: current stable (3.0.0): one package for the Classe 300X and the Classe 100X (Classe 100X experimental, checked offline only); includes 2.10.0
+- `2.10.x`: previous stable; upgrade to 3.0.x for maintenance fixes
+- `2.9.x`: no longer maintained; upgrade to 3.0.x
+- `2.8.x`: no longer maintained; upgrade to 3.0.x
+- `2.7.x`: no longer maintained; upgrade to 3.0.x
 - `2.6.0`: withdrawn because the energy page did not load on the display
 - `2.2.0`: withdrawn because its display update can cause repeated device restarts
 

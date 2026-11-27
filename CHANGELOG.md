@@ -1,6 +1,6 @@
 # Changelog
 
-## v3.0.0 - Unreleased
+## v3.0.0 - 2026-11-28
 
 3.0.0 puts the Classe 300X and, as an experiment, the Classe 100X into one
 package. Everything below is new against 2.10.0. The betas of 3.0.0 ran on a

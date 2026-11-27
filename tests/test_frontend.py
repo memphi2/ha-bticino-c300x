@@ -454,7 +454,7 @@ def test_bundled_card_supports_editor_languages_and_multi_device_config() -> Non
     assert "optional_hangup_script" not in translations_source
     assert "c300xResolveEntity" in source
     assert "c300xRelatedEntity" in source
-    assert "C300X_MEDIA_READINESS_OBJECT_ID" in source
+    assert "C300X_MEDIA_READINESS_KEY" in source
     assert 'getGridOptions()' in source
     assert "_cardHeightRows" not in source
     assert "rows," not in source
@@ -501,8 +501,11 @@ def test_bundled_card_supports_editor_languages_and_multi_device_config() -> Non
     assert "state_label" not in source
     assert "config.doorbell_state_entity" not in resolver_source
     assert "config.home_call_entity" not in resolver_source
-    assert "bticino_c300x_doorbell_camera" in resolver_source
-    assert "bticino_c300x_media_readiness" in resolver_source
+    # The card finds its entities by registry role, never by a 2.x entity id.
+    for source_text in (source, resolver_source, editor_source):
+        assert "bticino_c300x_doorbell_camera" not in source_text
+        assert "bticino_c300x_media_readiness" not in source_text
+    assert 'C300X_CAMERA_KEY = "doorbell_camera"' in resolver_source
     assert "script.c300x_stop_doorbell_call_simulation" not in source
     assert "<ha-button" not in source
     assert "Answer / Talkback" not in source
@@ -560,7 +563,9 @@ def test_picker_metadata_is_split_from_card_custom_element_module() -> None:
     assert "c300xMetadataRegistryEntity" not in metadata_source
     assert "c300xMetadataRelatedCamera" not in metadata_source
     assert "translation_key" in metadata_source
-    assert "unique_id" in metadata_source
+    # The registry role alone marks the camera: no unique id or entity id guess.
+    assert "unique_id" not in metadata_source
+    assert "bticino_c300x_doorbell_camera" not in metadata_source
     assert "getEntitySuggestion: c300xMetadataEntitySuggestion" in metadata_source
     assert "customElements.define" not in metadata_source
     assert "extends HTMLElement" not in metadata_source

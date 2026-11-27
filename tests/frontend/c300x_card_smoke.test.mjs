@@ -201,6 +201,27 @@ function fakeHass({ cameraEntity, connection } = {}) {
   };
 }
 
+test("the card is suggested for the doorbell camera's registry role, never for an entity id", async () => {
+  installFakeDom();
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card-metadata.js?suggestion-test");
+  const Card = customElements.get("c300x-doorbell-call-card");
+  const [{ getEntitySuggestion }] = window.customCards;
+  const hass = {
+    language: "en",
+    states: { "camera.front": {}, "camera.bticino_c300x_doorbell_camera": {}, "camera.gate": {} },
+    entities: {
+      "camera.front": { platform: "bticino_c300x", device_id: "unit20", translation_key: "doorbell_camera" },
+      "camera.gate": { platform: "bticino_c300x", device_id: "unit21", translation_key: "unit_camera" },
+    },
+  };
+  for (const suggest of [getEntitySuggestion, Card.getEntitySuggestion.bind(Card)]) {
+    assert.equal(suggest(hass, "camera.front")[0].config.entity, "camera.front");
+    // The 2.x entity id names nothing, and another unit's camera has no calls.
+    assert.equal(suggest(hass, "camera.bticino_c300x_doorbell_camera"), null);
+    assert.equal(suggest(hass, "camera.gate"), null);
+  }
+});
+
 test("inline media controls preserve card actions and give calls priority", async () => {
   const registry = installFakeDom();
   await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?inline-media");

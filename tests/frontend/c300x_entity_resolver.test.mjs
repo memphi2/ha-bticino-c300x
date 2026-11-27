@@ -2,21 +2,22 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  C300X_CAMERA_OBJECT_ID,
+  C300X_CAMERA_KEY,
   C300X_DEFAULT_CONFIG,
-  C300X_MEDIA_READINESS_OBJECT_ID,
+  C300X_MEDIA_READINESS_KEY,
   C300X_PLATFORM,
   c300xDeviceActionEntity,
-  c300xEntityId,
   c300xEntryId,
   c300xFirstEntity,
-  c300xObjectSuffix,
   c300xRelatedEntity,
   c300xResolveEntity,
 } from "../../custom_components/bticino_c300x/frontend/c300x-entity-resolver.js";
 
 // A select of the same device, to cover a domain other than sensor and button.
-const AUDIO_CODEC_OBJECT_ID = "bticino_c300x_audio_codec";
+const AUDIO_CODEC_KEY = "audio_codec";
+// The 2.x entity ids: a name, never a role.
+const OLD_CAMERA_OBJECT_ID = "bticino_c300x_doorbell_camera";
+const OLD_READINESS_OBJECT_ID = "bticino_c300x_media_readiness";
 
 function hass({
   states = {},
@@ -113,31 +114,39 @@ test("physical actions find station buttons and other units' doors through the o
   assert.equal(c300xDeviceActionEntity(state, config, "stair_light"), "");
 });
 
-test("object suffix and entity id helpers keep multi-device suffixes stable", () => {
-  assert.equal(c300xObjectSuffix(C300X_CAMERA_OBJECT_ID, C300X_CAMERA_OBJECT_ID), "");
-  assert.equal(c300xObjectSuffix(`${C300X_CAMERA_OBJECT_ID}_entry2`, C300X_CAMERA_OBJECT_ID), "_entry2");
-  assert.equal(c300xObjectSuffix("other_camera", C300X_CAMERA_OBJECT_ID), null);
-  assert.equal(
-    c300xEntityId("camera", C300X_CAMERA_OBJECT_ID, "_entry2"),
-    `camera.${C300X_CAMERA_OBJECT_ID}_entry2`,
-  );
+test("the camera comes from the registry role only, never from an entity id", () => {
+  const state = hass({
+    states: {
+      [`camera.${OLD_CAMERA_OBJECT_ID}`]: {},
+      [`camera.${OLD_CAMERA_OBJECT_ID}_entry2`]: {},
+      "camera.unit": {},
+    },
+    entities: {
+      // A registry entry without the camera role, under the 2.x name.
+      [`camera.${OLD_CAMERA_OBJECT_ID}_entry2`]: { platform: C300X_PLATFORM, device_id: "unit20" },
+    },
+  });
+  assert.equal(c300xFirstEntity(state, "camera", C300X_CAMERA_KEY), undefined);
+  assert.equal(c300xResolveEntity(state, {}, "camera", C300X_CAMERA_KEY), "");
+  state.entities["camera.unit"] = { platform: C300X_PLATFORM, device_id: "unit20", translation_key: "doorbell_camera" };
+  assert.equal(c300xResolveEntity(state, {}, "camera", C300X_CAMERA_KEY), "camera.unit");
 });
 
 test("first entity prefers registry matches for the requested config entry", () => {
   const state = hass({
     states: {
-      [`camera.${C300X_CAMERA_OBJECT_ID}`]: {},
+      [`camera.${OLD_CAMERA_OBJECT_ID}`]: {},
       "camera.custom_door": {},
-      [`sensor.${C300X_MEDIA_READINESS_OBJECT_ID}`]: {},
+      [`sensor.${OLD_READINESS_OBJECT_ID}`]: {},
     },
     entities: {
-      [`camera.${C300X_CAMERA_OBJECT_ID}`]: registryEntry({ configEntryId: "entry-1" }),
+      [`camera.${OLD_CAMERA_OBJECT_ID}`]: registryEntry({ configEntryId: "entry-1" }),
       "camera.custom_door": registryEntry({
         configEntryId: "entry-2",
         translationKey: "doorbell_camera",
         uniqueId: "custom_doorbell_camera",
       }),
-      [`sensor.${C300X_MEDIA_READINESS_OBJECT_ID}`]: registryEntry({
+      [`sensor.${OLD_READINESS_OBJECT_ID}`]: registryEntry({
         configEntryId: "entry-1",
         translationKey: "media_readiness",
         uniqueId: "device_media_readiness",
@@ -146,11 +155,11 @@ test("first entity prefers registry matches for the requested config entry", () 
   });
 
   assert.equal(
-    c300xFirstEntity(state, "camera", C300X_CAMERA_OBJECT_ID, "entry-2"),
+    c300xFirstEntity(state, "camera", C300X_CAMERA_KEY, "entry-2"),
     "camera.custom_door",
   );
   assert.equal(
-    c300xFirstEntity(state, "camera", C300X_CAMERA_OBJECT_ID, "missing-entry"),
+    c300xFirstEntity(state, "camera", C300X_CAMERA_KEY, "missing-entry"),
     undefined,
   );
 });
@@ -158,14 +167,14 @@ test("first entity prefers registry matches for the requested config entry", () 
 test("registry entries without states are ignored when HA states are available", () => {
   const state = hass({
     states: {
-      [`camera.${C300X_CAMERA_OBJECT_ID}_visible`]: {},
+      [`camera.${OLD_CAMERA_OBJECT_ID}_visible`]: {},
     },
     entities: {
       "camera.hidden": registryEntry({
         configEntryId: "entry-1",
         translationKey: "doorbell_camera",
       }),
-      [`camera.${C300X_CAMERA_OBJECT_ID}_visible`]: registryEntry({
+      [`camera.${OLD_CAMERA_OBJECT_ID}_visible`]: registryEntry({
         configEntryId: "entry-1",
         translationKey: "doorbell_camera",
       }),
@@ -173,8 +182,8 @@ test("registry entries without states are ignored when HA states are available",
   });
 
   assert.equal(
-    c300xFirstEntity(state, "camera", C300X_CAMERA_OBJECT_ID, "entry-1"),
-    `camera.${C300X_CAMERA_OBJECT_ID}_visible`,
+    c300xFirstEntity(state, "camera", C300X_CAMERA_KEY, "entry-1"),
+    `camera.${OLD_CAMERA_OBJECT_ID}_visible`,
   );
 });
 
@@ -194,7 +203,7 @@ test("configured camera never falls back to another camera when missing", () => 
       state,
       { entity: "camera.configured", entry_id: "entry-1" },
       "camera",
-      C300X_CAMERA_OBJECT_ID,
+      C300X_CAMERA_KEY,
     ),
     "camera.configured",
   );
@@ -203,7 +212,7 @@ test("configured camera never falls back to another camera when missing", () => 
       state,
       { entity: "camera.missing", entry_id: "entry-1" },
       "camera",
-      C300X_CAMERA_OBJECT_ID,
+      C300X_CAMERA_KEY,
     ),
     "camera.missing",
   );
@@ -212,12 +221,12 @@ test("configured camera never falls back to another camera when missing", () => 
 test("related media readiness follows the selected camera config entry", () => {
   const state = hass({
     states: {
-      [`camera.${C300X_CAMERA_OBJECT_ID}`]: {},
+      [`camera.${OLD_CAMERA_OBJECT_ID}`]: {},
       "sensor.readiness_one": {},
       "sensor.readiness_two": {},
     },
     entities: {
-      [`camera.${C300X_CAMERA_OBJECT_ID}`]: registryEntry({ configEntryId: "entry-2" }),
+      [`camera.${OLD_CAMERA_OBJECT_ID}`]: registryEntry({ configEntryId: "entry-2" }),
       "sensor.readiness_one": registryEntry({
         configEntryId: "entry-1",
         translationKey: "media_readiness",
@@ -232,15 +241,15 @@ test("related media readiness follows the selected camera config entry", () => {
   });
 
   assert.equal(
-    c300xEntryId(state, {}, `camera.${C300X_CAMERA_OBJECT_ID}`),
+    c300xEntryId(state, {}, `camera.${OLD_CAMERA_OBJECT_ID}`),
     "entry-2",
   );
   assert.equal(
     c300xRelatedEntity(
       state,
-      { entity: `camera.${C300X_CAMERA_OBJECT_ID}` },
+      { entity: `camera.${OLD_CAMERA_OBJECT_ID}` },
       "sensor",
-      C300X_MEDIA_READINESS_OBJECT_ID,
+      C300X_MEDIA_READINESS_KEY,
       "media_readiness_entity",
     ),
     "sensor.readiness_two",
@@ -259,7 +268,7 @@ test("configured related entity wins when it exists", () => {
       state,
       { media_readiness_entity: "sensor.manual_readiness" },
       "sensor",
-      C300X_MEDIA_READINESS_OBJECT_ID,
+      C300X_MEDIA_READINESS_KEY,
       "media_readiness_entity",
     ),
     "sensor.manual_readiness",
@@ -290,16 +299,16 @@ for (const [name, device] of [
   test(`display registry resolves renamed camera, sensors, controls and service owner (${name})`, () => {
     const state = displayHass(device);
     const config = { entity: "camera.front_doorbell_camera", entry_id: "front-entry" };
-    assert.equal(c300xFirstEntity(state, "camera", C300X_CAMERA_OBJECT_ID, "front-entry"), config.entity);
+    assert.equal(c300xFirstEntity(state, "camera", C300X_CAMERA_KEY, "front-entry"), config.entity);
     assert.equal(c300xEntryId(state, config, config.entity), "front-entry");
-    assert.equal(c300xRelatedEntity(state, config, "sensor", C300X_MEDIA_READINESS_OBJECT_ID), "sensor.front_media_readiness");
-    assert.equal(c300xRelatedEntity(state, config, "select", AUDIO_CODEC_OBJECT_ID), "select.front_audio_codec");
+    assert.equal(c300xRelatedEntity(state, config, "sensor", C300X_MEDIA_READINESS_KEY), "sensor.front_media_readiness");
+    assert.equal(c300xRelatedEntity(state, config, "select", AUDIO_CODEC_KEY), "select.front_audio_codec");
     assert.equal(c300xDeviceActionEntity(state, config, "door_unlock"), "button.front_door");
     assert.equal(c300xDeviceActionEntity(state, config, "stair_light"), "button.front_stair_light");
 
     const wrong = { ...config, entry_id: "other-entry" };
     assert.equal(c300xEntryId(state, wrong, config.entity), "");
-    assert.equal(c300xRelatedEntity(state, wrong, "sensor", C300X_MEDIA_READINESS_OBJECT_ID), undefined);
+    assert.equal(c300xRelatedEntity(state, wrong, "sensor", C300X_MEDIA_READINESS_KEY), undefined);
     assert.equal(c300xDeviceActionEntity(state, wrong, "door_unlock"), "");
   });
 }
@@ -309,7 +318,7 @@ test("same-device lookups do not need an owner but service routing requires an u
     const state = displayHass(device);
     const config = { entity: "camera.front_doorbell_camera" };
     assert.equal(c300xEntryId(state, config, config.entity), "");
-    assert.equal(c300xRelatedEntity(state, config, "select", AUDIO_CODEC_OBJECT_ID), "select.front_audio_codec");
+    assert.equal(c300xRelatedEntity(state, config, "select", AUDIO_CODEC_KEY), "select.front_audio_codec");
     assert.equal(c300xDeviceActionEntity(state, config, "door_unlock"), "button.front_door");
     assert.equal(c300xDeviceActionEntity(state, { ...config, entry_id: "front-entry" }, "door_unlock"), "");
   }
@@ -322,23 +331,23 @@ test("missing related entities never resolve to another device, even with the sa
   delete state.states["sensor.front_media_readiness"];
   delete state.states["select.front_audio_codec"];
   delete state.states["button.front_door"];
-  assert.equal(c300xRelatedEntity(state, config, "sensor", C300X_MEDIA_READINESS_OBJECT_ID), undefined);
-  assert.equal(c300xRelatedEntity(state, config, "select", AUDIO_CODEC_OBJECT_ID), undefined);
+  assert.equal(c300xRelatedEntity(state, config, "sensor", C300X_MEDIA_READINESS_KEY), undefined);
+  assert.equal(c300xRelatedEntity(state, config, "select", AUDIO_CODEC_KEY), undefined);
   assert.equal(c300xDeviceActionEntity(state, config, "door_unlock"), "");
-  assert.equal(c300xResolveEntity(state, { entry_id: "missing" }, "camera", C300X_CAMERA_OBJECT_ID), "");
+  assert.equal(c300xResolveEntity(state, { entry_id: "missing" }, "camera", C300X_CAMERA_KEY), "");
   delete state.entities[config.entity];
-  assert.equal(c300xRelatedEntity(state, config, "sensor", C300X_MEDIA_READINESS_OBJECT_ID), undefined);
+  assert.equal(c300xRelatedEntity(state, config, "sensor", C300X_MEDIA_READINESS_KEY), undefined);
   assert.equal(c300xEntryId(state, config, config.entity), "");
 });
 
 test("a missing manual related entity and conflicting registry roles never trigger name guessing", () => {
   const state = displayHass({ config_entry_id: "front-entry" });
   const config = { entity: "camera.front_doorbell_camera", media_readiness_entity: "sensor.removed" };
-  assert.equal(c300xRelatedEntity(state, config, "sensor", C300X_MEDIA_READINESS_OBJECT_ID, "media_readiness_entity"), "sensor.removed");
-  const misleading = `sensor.${C300X_MEDIA_READINESS_OBJECT_ID}`;
+  assert.equal(c300xRelatedEntity(state, config, "sensor", C300X_MEDIA_READINESS_KEY, "media_readiness_entity"), "sensor.removed");
+  const misleading = `sensor.${OLD_READINESS_OBJECT_ID}`;
   state.entities[misleading] = { platform: C300X_PLATFORM, device_id: "front", translation_key: "other" };
   state.states[misleading] = {};
   delete state.states["sensor.front_media_readiness"];
   delete state.states["sensor.other_media_readiness"];
-  assert.equal(c300xFirstEntity(state, "sensor", C300X_MEDIA_READINESS_OBJECT_ID), undefined);
+  assert.equal(c300xFirstEntity(state, "sensor", C300X_MEDIA_READINESS_KEY), undefined);
 });

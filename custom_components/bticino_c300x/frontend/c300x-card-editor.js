@@ -1,26 +1,20 @@
 import {
   c300xLanguage,
   c300xLocalize,
-} from "./c300x-translations.js?v=93532382eee6e74c";
+} from "./c300x-translations.js?v=466ac4d70e303efc";
 import {
-  C300X_CAMERA_OBJECT_ID,
+  C300X_CAMERA_KEY,
   C300X_DEFAULT_CONFIG,
-  c300xEntityId,
   c300xEntryId,
   c300xFirstEntity,
   c300xResolveEntity,
-} from "./c300x-entity-resolver.js?v=93532382eee6e74c";
+} from "./c300x-entity-resolver.js?v=466ac4d70e303efc";
 
 export const C300X_CARD_EDITOR_TAG = "c300x-doorbell-call-card-editor";
 
 export function c300xDoorbellCardStubConfig(hass, entityId) {
-  const entity = entityId || c300xFirstEntity(
-    hass,
-    "camera",
-    C300X_CAMERA_OBJECT_ID,
-  );
   return {
-    entity: entity || c300xEntityId("camera", C300X_CAMERA_OBJECT_ID),
+    entity: entityId || c300xFirstEntity(hass, "camera", C300X_CAMERA_KEY) || "",
     ...C300X_DEFAULT_CONFIG,
   };
 }
@@ -45,7 +39,7 @@ export class C300XDoorbellCallCardEditor extends HTMLElement {
   set hass(hass) {
     const languageChanged = c300xLanguage(this._hass) !== c300xLanguage(hass);
     this._hass = hass;
-    const entity = c300xResolveEntity(hass, this._config, "camera", C300X_CAMERA_OBJECT_ID);
+    const entity = c300xResolveEntity(hass, this._config, "camera", C300X_CAMERA_KEY);
     if (!this._form || languageChanged || entity !== this._displayedEntity) {
       this._render();
       return;
@@ -80,7 +74,7 @@ export class C300XDoorbellCallCardEditor extends HTMLElement {
     form.hass = this._hass;
     // An inferred camera is display-only until the user changes the picker.
     this._displayedEntity = c300xResolveEntity(
-      this._hass, this._config, "camera", C300X_CAMERA_OBJECT_ID,
+      this._hass, this._config, "camera", C300X_CAMERA_KEY,
     );
     form.data = {
       ...this._config,

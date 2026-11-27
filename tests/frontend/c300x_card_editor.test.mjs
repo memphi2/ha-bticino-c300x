@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  C300X_CAMERA_OBJECT_ID,
+  C300X_CAMERA_KEY,
   c300xDeviceActionEntity,
   c300xEntryId,
   c300xResolveEntity,
@@ -51,21 +51,32 @@ test("card editor module registers the same custom element tag", async () => {
   );
 });
 
-test("card editor stub config resolves configured doorbell cameras", async () => {
+test("card editor stub config takes the doorbell camera from the registry", async () => {
   installCustomElementStubs();
   const module = await importEditorModule();
   const config = module.c300xDoorbellCardStubConfig({
-    states: {
-      "camera.bticino_c300x_doorbell_camera_kitchen": {},
+    states: { "camera.kitchen": {} },
+    entities: {
+      "camera.kitchen": { platform: "bticino_c300x", translation_key: "doorbell_camera", device_id: "unit20" },
     },
   });
 
   assert.deepEqual(config, {
-    entity: "camera.bticino_c300x_doorbell_camera_kitchen",
+    entity: "camera.kitchen",
     mode: "auto",
     ringback_tone: true,
     ringback_volume: 12,
   });
+});
+
+test("card editor stub config never guesses a camera from its entity id", async () => {
+  installCustomElementStubs();
+  const module = await importEditorModule();
+  // Neither a 2.x entity id in the states nor the bare name without any
+  // entity names the station's camera.
+  for (const states of [{ "camera.bticino_c300x_doorbell_camera": {} }, {}]) {
+    assert.equal(module.c300xDoorbellCardStubConfig({ states, entities: {} }).entity, "");
+  }
 });
 
 function createEditor(module, config = {}, language = "en") {
@@ -215,7 +226,7 @@ test("choosing A or C updates the owner and routes actions only to that camera",
     const saved = events.at(-1).detail.config;
     assert.equal(saved.entity, `camera.${selected}`);
     assert.equal(saved.entry_id, `entry-${selected}`);
-    assert.equal(c300xResolveEntity(hass, saved, "camera", C300X_CAMERA_OBJECT_ID), saved.entity);
+    assert.equal(c300xResolveEntity(hass, saved, "camera", C300X_CAMERA_KEY), saved.entity);
     assert.equal(c300xEntryId(hass, saved, saved.entity), saved.entry_id);
     for (const key of ["door_unlock", "stair_light"]) {
       assert.equal(c300xDeviceActionEntity(hass, saved, key), `button.${selected}_${key}`);

@@ -933,6 +933,9 @@ def test_the_outdoor_units_repair_names_what_replaces_the_removed_parts() -> Non
         text = _load_json(path)["issues"]["outdoor_units_breaking_change"]["description"]
         for name in (
             "bticino_c300x_agent_event_received",
+            # Its key field, and the event a door no longer fires.
+            "event_type",
+            "bticino_c300x_action_received",
             '"BTicino Calendar display reminder"',
             '"BTicino strict phrase decision"',
         ):

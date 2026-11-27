@@ -482,7 +482,7 @@ def test_a_later_caller_frame_moves_the_visit_to_its_unit(tmp_path, monkeypatch)
 
     def call_event(kind, sequence, unit):
         item = event(kind, sequence)
-        item.data.update({"call_id": "0badc0de-1", "unit_id": unit})
+        item.data.update({"call_id": "0badc0de-1", "unit": unit})
         return item
 
     journal.event(call_event("doorbell_pressed", 1, None))

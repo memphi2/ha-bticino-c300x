@@ -157,13 +157,13 @@ def async_apply_call_event(
             # A unit the station had not listed; outdoor_units.changed may be lost.
             _schedule(hass, entry, async_refresh_units(hass, entry), "units")
     call_id = call.call_id if call is not None else data.get("call_id")
-    if not isinstance(call_id, str):
-        return {}
-    known = registry.call(call_id)
+    known = registry.call(call_id) if isinstance(call_id, str) else None
+    # A door frame names its unit also outside a call.
     unit = known.unit if known is not None else data.get("unit")
-    fields: dict[str, Any] = {"call_id": call_id, "unit_id": unit if isinstance(unit, str) else None}
-    if fields["unit_id"] is not None:
-        fields["unit_name"] = registry.unit_name(fields["unit_id"])
+    fields: dict[str, Any] = {
+        "call_id": call_id if isinstance(call_id, str) else None,
+        "unit": unit if isinstance(unit, str) else None,
+    }
     if ring_unit is not None:
         # The unit whose doorbell event entity fires for this event.
         fields["ring_unit_id"] = ring_unit

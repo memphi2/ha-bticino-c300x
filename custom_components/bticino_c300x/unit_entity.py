@@ -21,7 +21,7 @@ from .call_sync import entry_call_registry
 from .const import CONF_OUTDOOR_UNITS, DOMAIN
 from .entity import C300XEntity
 from .entry_types import BticinoC300XConfigEntry
-from .identity import unit_device_identifier, unit_unique_id
+from .identity import station_device_identifier, unit_device_identifier, unit_unique_id
 
 if TYPE_CHECKING:
     from homeassistant.helpers.device_registry import DeviceInfo
@@ -61,6 +61,22 @@ def async_register_unit_device(
         model=OUTDOOR_UNIT_MODEL,
         **names,
     )
+
+
+@callback
+def event_device_id(hass: HomeAssistant, entry: BticinoC300XConfigEntry, unit_id: str | None) -> str | None:
+    """The device a station event belongs to: its unit's, else the station's."""
+
+    devices = dr.async_get(hass)
+    identifiers = [station_device_identifier(entry)]
+    if unit_id is not None:
+        # A unit that rang for the first time has no device yet.
+        identifiers.insert(0, unit_device_identifier(entry, unit_id))
+    for identifier in identifiers:
+        device = devices.async_get_device(identifiers={identifier})
+        if device is not None:
+            return device.id
+    return None
 
 
 def unit_device_removable(entry: BticinoC300XConfigEntry, identifiers: Iterable[tuple[str, str]]) -> bool:

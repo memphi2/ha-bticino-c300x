@@ -294,8 +294,10 @@ frequent while writing; the sensor is disabled by default).
 
 The bus event `bticino_c300x_agent_event_received` keeps every event,
 rings included: the card, the ring preview, captures and the event entities
-listen to it. Events of a call add `call_id`, `unit_id` (`null` while not
-known) and `unit_name`. Automations should trigger on the event entities.
+listen to it. Its `event_type` is the stable key; `unit` and `call_id` are
+`null` while not known (a door frame names its unit also outside a call),
+`device_id` is the unit's device, else the station's. Automations should
+trigger on the event entities.
 `bticino_c300x_action_received` for a door carries `unit_id` and `call_id`
 instead of `lock_id`.
 

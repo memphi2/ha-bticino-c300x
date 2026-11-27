@@ -111,7 +111,7 @@ def _send(entities: list[Any], entry: _Entry, key: str, scheduled: list[str] | N
     fields = call_sync.async_apply_call_event(hass, entry, key, {  # type: ignore[arg-type]
         "call_id": data.get("call_id"), "unit": data.get("unit_id"), "attribution": data.get("attribution"),
     })
-    event = SimpleNamespace(data={"entry_id": entry.entry_id, "event_key": key, "event_at": "now",
+    event = SimpleNamespace(data={"entry_id": entry.entry_id, "event_type": key, "event_at": "now",
                                   "call_id": data.get("call_id"), **fields})
     for entity in entities:
         entity._agent_event(event)
@@ -315,6 +315,24 @@ def test_a_fresh_entry_takes_the_station_id_without_moving_anything() -> None:
     assert identity_migration.identity_migration_needed(entry, "c300x-0123456789ab")  # type: ignore[arg-type]
     assert not identity_migration.identity_migration_needed(entry, None)  # type: ignore[arg-type]
     assert not identity_migration.identity_migration_needed(entry, "../bad")  # type: ignore[arg-type]
+
+
+def test_a_station_event_belongs_to_its_unit_device_else_to_the_station(monkeypatch: pytest.MonkeyPatch) -> None:
+    devices = {
+        ("bticino_c300x", "c300x-0123456789ab:unit:21"): "device-21",
+        ("bticino_c300x", "c300x-0123456789ab"): "device-station",
+    }
+
+    def get_device(*, identifiers: set[tuple[str, str]]) -> Any:
+        (identifier,) = identifiers
+        return SimpleNamespace(id=devices[identifier]) if identifier in devices else None
+
+    monkeypatch.setattr(unit_entity.dr, "async_get", lambda _hass: SimpleNamespace(async_get_device=get_device))
+    entry = _entry(THREE)
+    assert unit_entity.event_device_id(None, entry, "21") == "device-21"  # type: ignore[arg-type]
+    # A unit that rang for the first time has no device yet.
+    assert unit_entity.event_device_id(None, entry, "22_1") == "device-station"  # type: ignore[arg-type]
+    assert unit_entity.event_device_id(None, entry, None) == "device-station"  # type: ignore[arg-type]
 
 
 def test_ring_entities_listen_to_the_agent_event_bus() -> None:

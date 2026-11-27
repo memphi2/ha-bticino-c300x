@@ -48,6 +48,12 @@ devices, entities and services; a Repair lists what to redo after the update.
   entities, or the `bticino_c300x_agent_event_received` event for the other
   station events).
 - Station events now reach Home Assistant whatever entities are enabled.
+- **`bticino_c300x_agent_event_received`** carries `event_type` (a fixed key
+  such as `door_unlock_started`, no longer a translated text), `entry_id`,
+  `device_id`, `unit`, `call_id`, `event_at` and `data`. The fields `event`,
+  `event_key`, `event_type_key`, `event_name`, `event_value`, `event_label`,
+  `event_label_<language>`, `unit_id`, `unit_name` and the top-level `address`
+  (now in `data`) are gone.
 - **Notifications:** the `mode` field is gone; a call that still sends it is
   refused. Use the switches instead: `display` -> `display: true`, `speech` ->
   `tts: true`, `both` -> `display: true` and `tts: true`, `led` -> `led: true`.

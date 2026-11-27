@@ -63,6 +63,7 @@ def test_delayed_media_closed_event_cannot_close_replacement_session(monkeypatch
             async_create_task=asyncio.create_task,
         )
         monkeypatch.setattr(webhook, "resolve_doorbell_camera_entity_id", lambda *_: "camera.review")
+        monkeypatch.setattr(webhook, "event_device_id", lambda *_: None)
         request = delayed_request({"event": "doorbell_media_closed"}, entered, release)
         pending = asyncio.create_task(webhook._async_handle_agent_event(hass, entry, old.event_state, request))
         camera = None
@@ -89,7 +90,7 @@ def test_delayed_media_closed_event_cannot_close_replacement_session(monkeypatch
             fired = []
 
             def fire(_kind, data):
-                fired.append(data["event_key"])
+                fired.append(data["event_type"])
                 camera._handle_agent_event(SimpleNamespace(data=data))
 
             hass.bus = SimpleNamespace(async_fire=fire)

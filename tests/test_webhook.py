@@ -128,6 +128,11 @@ def webhook_ha_boundary(monkeypatch):
     monkeypatch.setattr(event, "async_call_later", lambda *_: lambda: None)
     monkeypatch.setattr(repair_issues.ir, "async_create_issue", lambda *args, **kwargs: None)
     monkeypatch.setattr(repair_issues.ir, "async_delete_issue", lambda *args, **kwargs: None)
+    # The device registry: a unit's device, else the station's.
+    monkeypatch.setattr(
+        webhook_module, "event_device_id",
+        lambda _hass, _entry, unit: f"device-unit-{unit}" if unit else "device-station",
+    )
     monkeypatch.setattr(webhook_module.dt_util, "utcnow", _utcnow)
 
 
@@ -744,9 +749,9 @@ def test_doorbell_media_closed_clears_runtime_video_state() -> None:
     assert event_state.video_available is False
     assert event_state.video_window_available is False
     assert event_state.video_stream_path is None
-    assert event_state.last_event_data["event_key"] == "doorbell_media_closed"
+    assert event_state.last_event_data["event_type"] == "doorbell_media_closed"
     assert event_state.last_event_data["doorbell"] == "idle"
-    assert hass.bus.events[-1][1]["event_key"] == "doorbell_media_closed"
+    assert hass.bus.events[-1][1]["event_type"] == "doorbell_media_closed"
 
 
 def test_real_doorbell_event_fires_public_event() -> None:
@@ -812,13 +817,12 @@ def test_ringer_event_updates_state_and_public_event_data() -> None:
     assert response.status == 200
     assert event_state.ringer_muted is True
     assert event_state.last_event_data["muted"] is True
-    assert hass.bus.events[-1][1]["event_key"] == "ringer_muted"
-    labels = {key: value for key, value in hass.bus.events[-1][1].items() if key.startswith("event_label_")}
-    assert labels == {
-        "event_label_en": "Ringer muted", "event_label_de": "Klingelton stummgeschaltet",
-        "event_label_it": "Suoneria disattivata", "event_label_fr": "Sonnerie coupee",
-        "event_label_es": "Timbre silenciado",
-    }
+    assert hass.bus.events[-1][1]["event_type"] == "ringer_muted"
+    # The stable key only: no label in any language, no duplicate of the key.
+    assert not {"event", "event_key", "event_type_key", "event_name", "event_value", "event_label"} & set(
+        hass.bus.events[-1][1]
+    )
+    assert not [key for key in hass.bus.events[-1][1] if key.startswith("event_label_")]
 
 
 def test_ringer_volume_event_updates_state_and_public_event_data() -> None:
@@ -848,7 +852,7 @@ def test_ringer_volume_event_updates_state_and_public_event_data() -> None:
     assert response.status == 200
     assert event_state.ringer_volume == 7
     assert event_state.last_event_data["volume"] == 7
-    assert hass.bus.events[-1][1]["event_key"] == "ringer_volume_changed"
+    assert hass.bus.events[-1][1]["event_type"] == "ringer_volume_changed"
 
 
 def test_smartphone_forwarding_event_updates_state_and_public_event_data() -> None:
@@ -935,7 +939,8 @@ def test_door_unlock_event_keeps_address_in_public_event_data() -> None:
 
     assert response.status == 200
     assert event_state.door_unlock_state == "door_unlock_started"
-    assert event_state.last_event_data["address"] == "20"
+    assert event_state.last_event_data["data"]["address"] == "20"
+    assert "address" not in event_state.last_event_data
 
 
 def test_stair_light_release_event_keeps_address_in_public_event_data() -> None:
@@ -963,8 +968,7 @@ def test_stair_light_release_event_keeps_address_in_public_event_data() -> None:
     )
 
     assert response.status == 200
-    assert event_state.last_event_data["event_key"] == "stair_light_released"
-    assert event_state.last_event_data["address"] == "21"
+    assert event_state.last_event_data["event_type"] == "stair_light_released"
     assert event_state.last_event_data["data"]["address"] == "21"
 
 
@@ -1002,9 +1006,9 @@ def test_call_events_feed_the_call_registry_and_name_the_unit(monkeypatch: pytes
         assert response.status == 200
 
     send("doorbell.pressed", {"call_id": "0badc0de-1", "unit": None, "attribution": "pending"})
-    assert fired[-1]["call_id"] == "0badc0de-1" and fired[-1]["unit_id"] is None
+    assert fired[-1]["call_id"] == "0badc0de-1" and fired[-1]["unit"] is None
     send("call.caller_identified", {"call_id": "0badc0de-1", "unit": "21", "attribution": "caller_frame"})
-    assert (fired[-1]["unit_id"], fired[-1]["unit_name"]) == ("21", "Garden")
+    assert fired[-1]["unit"] == "21" and "unit_name" not in fired[-1]
     assert registry.unit_state("21") == ("ringing", "0badc0de-1")
     # A second unit rings: its own call, which becomes the current one.
     send("doorbell.pressed", {"call_id": "0badc0de-2", "unit": "20", "attribution": "caller_frame"})
@@ -1012,7 +1016,10 @@ def test_call_events_feed_the_call_registry_and_name_the_unit(monkeypatch: pytes
     send("call.answered", {"call_id": "0badc0de-1", "unit": "21", "answered_by": "station"})
     assert registry.current_call_id == "0badc0de-1"
     send("door_unlock.started", {"address": "21", "unit": "21", "call_id": "0badc0de-1"})
-    assert (fired[-1]["call_id"], fired[-1]["unit_id"]) == ("0badc0de-1", "21")
+    assert (fired[-1]["call_id"], fired[-1]["unit"], fired[-1]["device_id"]) == ("0badc0de-1", "21", "device-unit-21")
+    # A door opened outside a call names its unit too.
+    send("door_unlock.started", {"address": "20", "unit": "20", "call_id": None})
+    assert (fired[-1]["call_id"], fired[-1]["unit"], fired[-1]["device_id"]) == (None, "20", "device-unit-20")
     send("call.ended", {"call_id": "0badc0de-1", "unit": "21", "kind": "ring", "reason": "hangup"})
     assert registry.unit_state("21") == ("idle", None)
     assert registry.current_call_id == "0badc0de-2"
@@ -1289,7 +1296,7 @@ def test_touch_tone_snapshots_refresh_only_internal_state(monkeypatch, snapshot,
         assert len(hass.bus.events) == 1
         topic, event = hass.bus.events[0]
         assert topic == EVENT_AGENT_EVENT_RECEIVED
-        assert event["event_key"] == "display_touch_tone_changed"
+        assert event["event_type"] == "display_touch_tone_changed"
         assert event["data"] == data
         assert event_state.event_sequence == 1
 

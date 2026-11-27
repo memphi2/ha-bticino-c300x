@@ -99,11 +99,11 @@ async def _async_check_events() -> None:
             entity.hass = hass
             if expected not in entity.event_types:
                 raise RuntimeError(f"{cls.__name__}: event type {expected} not advertised")
-            payload = {"entry_id": entry.entry_id, "event_key": key, "call_id": f"boot-{index}",
-                       "unit_id": None if index == 0 else unit.id,
+            payload = {"entry_id": entry.entry_id, "event_type": key, "call_id": f"boot-{index}",
+                       "unit": None if index == 0 else unit.id,
                        # call_sync names the unit that rings.
                        "ring_unit_id": None if index == 0 else unit.id,
-                       "event_type": "Display label", "event_at": f"2026-01-01T00:00:0{index}Z"}
+                       "event_at": f"2026-01-01T00:00:0{index}Z"}
             # Only state publication is replaced; HA's event processing stays real.
             with patch.object(entity, "async_write_ha_state"):
                 entity._agent_event(SimpleNamespace(data=payload))

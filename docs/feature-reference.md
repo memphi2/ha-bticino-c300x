@@ -228,17 +228,17 @@ assumed.
 
 ### Event Types
 
-| `event_key` | When | Extra data |
+| `event_type` | When | Extra data |
 | --- | --- | --- |
-| `doorbell_pressed` | Someone rang. | `call_id`, `camera_entity_id`, `video_available`, `doorbell` |
-| `call_caller_identified` | The station named the unit that rings. | `call_id`, `unit_id`, `unit_name` |
-| `call_answered`, `call_view_started`, `call_ended` | A call was answered, a view started, a call ended. | `call_id`, `unit_id`, `unit_name` |
+| `doorbell_pressed` | Someone rang. | `camera_entity_id`, `video_available`, `doorbell` |
+| `call_caller_identified` | The station named the unit that rings. | |
+| `call_answered`, `call_view_started`, `call_ended` | A call was answered, a view started, a call ended. | |
 | `outdoor_units_changed` | The station's outdoor units changed. | |
 | `doorbell_view_requested` | A view of the door camera was requested. | as above |
 | `doorbell_media_closed` | The doorbell camera stream ended. | as above |
 | `home_call_started`, `home_call_answered`, `home_call_ended` | Home Call steps. | |
-| `door_unlock_started`, `door_unlock_ended` | Door unlock. | `address`; `unit_id` and `call_id` when the door belongs to an outdoor unit |
-| `stair_light_activated`, `stair_light_released` | Stair light. | `address` |
+| `door_unlock_started`, `door_unlock_ended` | Door unlock, from the station bus: whatever opened it. | |
+| `stair_light_activated`, `stair_light_released` | Stair light. | |
 | `activation_executed` | A device activation ran. | |
 | `ringer_muted`, `ringer_unmuted` | Ringer mute changed. | `muted` |
 | `ringer_volume_changed` | Ringer volume changed. | `volume` |
@@ -285,12 +285,12 @@ actions:
 The integration also fires two Home Assistant events:
 
 - `bticino_c300x_agent_event_received`: every station event. Data:
-  `entry_id`, `event_key`, `event_at`, `event` (label in the HA language),
-  `event_label_de`, `event_label_en`, `event_label_es`, `event_label_fr` and
-  `event_label_it` (the label in each language), `data` (the agent's raw
-  event data), `source_event_id` when the agent sends one, and the extra data
-  from the table above. The Device event entity keeps the labels of the last
-  event as the attributes `last_event_label_<language>`.
+  `event_type` (the key from the table above, never a label), `entry_id`,
+  `device_id` (the outdoor unit's device, else the station's), `unit` and
+  `call_id` (`null` when the event has none), `event_at`, `data` (the agent's
+  raw event data, with `raw` and `address` for door and stair light frames),
+  `source_event_id` when the agent sends one, and the extra data from the
+  table above.
 - `bticino_c300x_action_received`: Home Assistant itself ran an action. Data:
   `entry_id`, `action_id`; for a door the `action_id` is `door_unlock` with
   `unit_id` and `call_id`. Fired by `run_action`, the door buttons and display

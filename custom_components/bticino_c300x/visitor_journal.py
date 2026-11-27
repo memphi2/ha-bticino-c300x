@@ -126,14 +126,14 @@ class VisitorJournal:
             self.records[key] = {
                 "id": key, "at": time.time(), "source": source, "outcome": "unknown",
                 "snapshot": None, "clip": None,
-                "call_id": valid_call_id(data.get("call_id")), "unit": valid_unit_id(data.get("unit_id")),
+                "call_id": valid_call_id(data.get("call_id")), "unit": valid_unit_id(data.get("unit")),
             }
             self.prune()
             self.changed()
         elif kind == "call_caller_identified":
             # Also a later caller frame that moves the call from the default unit.
             call_id = valid_call_id(data.get("call_id"))
-            unit = valid_unit_id(data.get("unit_id"))
+            unit = valid_unit_id(data.get("unit"))
             for item in self.records.values():
                 if call_id is not None and unit is not None and item.get("call_id") == call_id \
                         and item.get("unit") != unit:

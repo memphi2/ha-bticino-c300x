@@ -28,7 +28,6 @@ from .api import (
     normalize_system_metrics,
 )
 from .call_sync import async_apply_call_event
-from .capabilities import event_label
 from .const import (
     CONF_EVENT_WEBHOOK_ID,
     CONF_EVENT_WEBHOOK_TOKEN,
@@ -56,7 +55,6 @@ from .display_settings import async_set_display_setting
 from .doorbell_state import raw_doorbell_state_value
 from .entity import entry_config_value
 from .entry_types import BticinoC300XConfigEntry
-from .event_payload import agent_event_display_data
 from .event_types import normalize_event_type, payload_event_key
 from .executor import (
     async_execute_action,
@@ -72,6 +70,7 @@ from .message_refresh import (
     schedule_memos_refresh,
 )
 from .system_metrics import apply_system_metrics, metrics_are_fresh
+from .unit_entity import event_device_id
 from .value_parsing import (
     DEFAULT_FALSE_VALUES,
     DEFAULT_TRUE_VALUES,
@@ -396,6 +395,7 @@ async def _async_handle_agent_event(
         # The call fields come from the registry: a caller frame may already
         # have named the unit of a call whose event arrives now.
         event_data.update(async_apply_call_event(hass, entry, event_type, data))
+        event_data["device_id"] = event_device_id(hass, entry, event_data["unit"])
         event_state.last_event = event_type
         event_state.last_event_time = event_at
         event_state.event_sequence += 1
@@ -528,26 +528,14 @@ def _clear_video_state(event_state: C300XEventState) -> None:
 
 
 def _event_data(context: _AgentEventContext, event_at: str) -> dict[str, Any]:
-    label = event_label(context.event_type, getattr(context.hass.config, "language", None))
-    label_en = event_label(context.event_type, "en")
-    label_de = event_label(context.event_type, "de")
-    label_it = event_label(context.event_type, "it")
-    label_fr = event_label(context.event_type, "fr")
-    label_es = event_label(context.event_type, "es")
-    event_name = label or label_en or context.event_type
+    # The stable key, never a label: automations compare it, the logbook
+    # translates it. unit, call_id and device_id are set before it is fired.
     event_data: dict[str, Any] = {
-        "entry_id": context.entry.entry_id,
-        "event": event_name,
-        "event_key": context.event_type,
-        "event_name": event_name,
         "event_type": context.event_type,
-        "event_value": event_name,
-        "event_label": label,
-        "event_label_en": label_en,
-        "event_label_de": label_de,
-        "event_label_it": label_it,
-        "event_label_fr": label_fr,
-        "event_label_es": label_es,
+        "entry_id": context.entry.entry_id,
+        "device_id": None,
+        "unit": None,
+        "call_id": None,
         "event_at": event_at,
         "data": context.data,
     }
@@ -571,13 +559,6 @@ def _event_data(context: _AgentEventContext, event_at: str) -> dict[str, Any]:
                 doorbell_state,
             )
         )
-    elif context.event_type in {
-        "door_unlock_started",
-        "door_unlock_ended",
-        "stair_light_activated",
-        "stair_light_released",
-    }:
-        event_data["address"] = context.data.get("address")
     elif context.event_type in {"ringer_muted", "ringer_unmuted"}:
         event_data["muted"] = context.event_state.ringer_muted
     elif context.event_type == "ringer_volume_changed":
@@ -592,10 +573,7 @@ def _event_data(context: _AgentEventContext, event_at: str) -> dict[str, Any]:
         event_data["voicemail"] = _voicemail_event_data(context.event_state)
     elif context.event_type == "memos_changed":
         event_data["memos"] = _memos_event_data(context.event_state)
-    return agent_event_display_data(
-        event_data,
-        getattr(context.hass.config, "language", None),
-    )
+    return event_data
 
 
 def _apply_voicemail_event(event_state: C300XEventState, data: dict[str, Any]) -> None:

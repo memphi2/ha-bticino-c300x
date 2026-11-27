@@ -111,7 +111,7 @@ class C300XStationRingEventEntity(_RingEvent, C300XEntity):
     def _ring_attributes(self, key: str | None, data: Mapping[str, Any]) -> dict[str, Any] | None:
         if key != "doorbell_pressed":
             return None
-        return {"unit": data.get("unit_id")}
+        return {"unit": data.get("unit")}
 
 
 class C300XUnitDoorbellEventEntity(_RingEvent, C300XUnitEntity):

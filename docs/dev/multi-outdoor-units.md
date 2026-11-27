@@ -424,6 +424,13 @@ with an outdated agent the agent update Repair is open and reloads it.
 | `<entry_id>_door_unlock` | `<station_id>_unit_<default>_door`, on the default unit's device |
 | `<entry_id>_doorbell_state`, `<entry_id>_agent_event` | removed from the registry |
 
+At every setup with the station's units, before the platforms load, a unit
+device whose id is a reported unit's full `where` (with `_` for `#`) but no
+reported unit's id is removed with its entities: the default unit behind an
+apartment interface (`20#2`) had the id `20_2` before the agent gave it the
+default address's id (`20`), and `<station_id>:unit:20_2` had a door button
+and ring event of its own (`identity_migration.async_remove_merged_unit_devices`).
+
 Entity ids and history stay. One Repair issue lists what users must redo:
 re-select the outdoor unit in blueprint automations, replace the removed
 services by buttons, replace the notify `mode` by the display switches.

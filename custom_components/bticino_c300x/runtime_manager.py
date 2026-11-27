@@ -388,8 +388,10 @@ class C300XRuntimeManager:
             async_refresh_units,
             load_stored_units,
         )
+        from .identity import station_id_known
         from .identity_migration import (
             async_migrate_entry_identity,
+            async_remove_merged_unit_devices,
             identity_migration_needed,
         )
 
@@ -407,6 +409,9 @@ class C300XRuntimeManager:
             default_unit = registry.unit(registry.default_unit)
             if default_unit is not None:
                 async_migrate_entry_identity(self.hass, self.entry, str(agent_station_id), default_unit)
+        if registry.loaded and station_id_known(self.entry):
+            # Before the platforms: a merged unit's old device must not take entities.
+            async_remove_merged_unit_devices(self.hass, self.entry, registry.units.values())
 
     async def async_sync_activation_state(self) -> None:
         """Synchronize device activations before platform entity creation."""

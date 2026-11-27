@@ -195,3 +195,93 @@ def test_only_an_entry_from_before_3_1_gets_the_breaking_change_repair(tmp_path:
         await hass.async_stop(force=True)
 
     asyncio.run(run())
+
+
+def test_the_device_of_the_merged_unit_20_2_goes_with_its_entities(tmp_path: Path) -> None:
+    """Units 20 and 20#2 are the one unit 20: the device unit:20_2 is removed once."""
+
+    merged = normalize_outdoor_units({"default_unit": "20", "units": [
+        {"id": "20", "where": "20#2", "name": "Gate", "default": True},
+        {"id": "21", "where": "21", "name": "Side door"},
+    ]})
+
+    async def run() -> None:
+        hass = await _hass(tmp_path)
+        entry = _entry(hass, {"host": "door", CONF_STATION_ID: OLD}, identity_migration.ENTRY_VERSION)
+        devices, entities = dr.async_get(hass), er.async_get(hass)
+        station = devices.async_get_or_create(config_entry_id=entry.entry_id, identifiers={(DOMAIN, OLD)})
+        units = {
+            unit_id: devices.async_get_or_create(
+                config_entry_id=entry.entry_id, identifiers={(DOMAIN, f"{OLD}:unit:{unit_id}")},
+                via_device_id=station.id,
+            )
+            for unit_id in ("20", "20_2", "21")
+        }
+        camera = _register(entities, entry, units["20"], "camera", f"{OLD}_unit_20_camera")
+        orphan_door = _register(entities, entry, units["20_2"], "button", f"{OLD}_unit_20_2_door")
+        orphan_ring = _register(entities, entry, units["20_2"], "event", f"{OLD}_unit_20_2_doorbell")
+        entities.async_update_entity(orphan_ring, disabled_by=er.RegistryEntryDisabler.USER)
+        side = _register(entities, entry, units["21"], "button", f"{OLD}_unit_21_door")
+
+        removed = identity_migration.async_remove_merged_unit_devices(hass, entry, merged.units)
+
+        assert removed == [orphan_door, orphan_ring]
+        assert devices.async_get(units["20_2"].id) is None
+        assert entities.async_get(orphan_door) is None and entities.async_get(orphan_ring) is None
+        assert devices.async_get(units["20"].id) is not None and devices.async_get(units["21"].id) is not None
+        assert entities.async_get(camera) is not None and entities.async_get(side) is not None
+        # Once only: nothing is left to remove.
+        assert identity_migration.async_remove_merged_unit_devices(hass, entry, merged.units) == []
+        # A unit the agent itself reports as 20_2 keeps its device.
+        kept = devices.async_get_or_create(
+            config_entry_id=entry.entry_id, identifiers={(DOMAIN, f"{OLD}:unit:20_2")}, via_device_id=station.id,
+        )
+        reported = normalize_outdoor_units({"default_unit": "20_2", "units": [
+            {"id": "20_2", "where": "20#2", "name": "Gate", "default": True},
+        ]})
+        assert identity_migration.async_remove_merged_unit_devices(hass, entry, reported.units) == []
+        assert devices.async_get(kept.id) is not None
+        await hass.async_stop(force=True)
+
+    asyncio.run(run())
+
+
+def test_setup_removes_the_merged_unit_device_before_the_platforms(tmp_path: Path) -> None:
+    from types import SimpleNamespace
+
+    from custom_components.bticino_c300x._api_calls import normalize_calls
+    from custom_components.bticino_c300x.call_registry import C300XCallRegistry
+    from custom_components.bticino_c300x.runtime_manager import C300XRuntimeManager
+
+    class Api:
+        async def async_outdoor_units(self) -> Any:
+            return normalize_outdoor_units({"default_unit": "20", "units": [
+                {"id": "20", "where": "20#2", "name": "Gate", "default": True},
+            ]})
+
+        async def async_calls(self) -> Any:
+            return normalize_calls({"calls": []})
+
+    async def run() -> None:
+        hass = await _hass(tmp_path)
+        entry = _entry(hass, {"host": "door", CONF_STATION_ID: OLD}, identity_migration.ENTRY_VERSION)
+        devices, entities = dr.async_get(hass), er.async_get(hass)
+        station = devices.async_get_or_create(config_entry_id=entry.entry_id, identifiers={(DOMAIN, OLD)})
+        orphan = devices.async_get_or_create(
+            config_entry_id=entry.entry_id, identifiers={(DOMAIN, f"{OLD}:unit:20_2")}, via_device_id=station.id,
+        )
+        door = _register(entities, entry, orphan, "button", f"{OLD}_unit_20_2_door")
+        capabilities = {"calls": True, "outdoor_units": True}
+        entry.runtime_data = SimpleNamespace(calls=C300XCallRegistry(), api=Api(), capabilities=capabilities)
+        manager = SimpleNamespace(
+            hass=hass, entry=entry, capabilities=capabilities,
+            connection_state=SimpleNamespace(available=True), setup_data={"device_id": OLD},
+        )
+
+        await C300XRuntimeManager.async_sync_calls(manager)  # type: ignore[arg-type]
+
+        assert devices.async_get(orphan.id) is None
+        assert entities.async_get(door) is None
+        await hass.async_stop(force=True)
+
+    asyncio.run(run())

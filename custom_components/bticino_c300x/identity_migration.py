@@ -8,6 +8,7 @@ and device links change (docs/dev/multi-outdoor-units.md, Migration).
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -156,3 +157,38 @@ def async_migrate_entry_identity(
 
         async_create_breaking_change_issue(hass, entry)
     return result
+
+
+def async_remove_merged_unit_devices(
+    hass: HomeAssistant, entry: BticinoC300XConfigEntry, units: Iterable[OutdoorUnit],
+) -> list[str]:
+    """Remove the device of a unit id the station no longer has, with its entities.
+
+    A unit behind an apartment interface (where ``20#2``) had the id ``20_2``
+    while the same door without the archive was ``20``; the agent now gives
+    it the default address's id, so ``<station>:unit:20_2`` is left without
+    a unit. Only such ids of a reported unit's full where are removed;
+    running again finds nothing. Returns the removed entity ids.
+    """
+
+    units = list(units)
+    stale = {unit.where.replace("#", "_") for unit in units if "#" in unit.where}
+    stale -= {unit.id for unit in units}
+    if not stale:
+        return []
+    devices = dr.async_get(hass)
+    entities = er.async_get(hass)
+    removed: list[str] = []
+    for unit_id in sorted(stale):
+        device = devices.async_get_device_by_identifier(
+            unit_device_identifier(entry, unit_id), entry.entry_id,
+        )
+        if device is None:
+            continue
+        for entity in er.async_entries_for_device(entities, device.id, include_disabled_entities=True):
+            entities.async_remove(entity.entity_id)
+            removed.append(entity.entity_id)
+        devices.async_remove_device(device.id)
+        _LOGGER.info("C300X entry %s: outdoor unit %s is one unit now; removed its device and %s",
+                     entry.entry_id, unit_id, removed)
+    return removed

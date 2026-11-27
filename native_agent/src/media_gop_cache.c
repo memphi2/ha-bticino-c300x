@@ -175,11 +175,14 @@ static void start_group(uint32_t ts)
 static bool cache_note(const unsigned char *packet, size_t len, const struct rtp_view *view, long long now)
 {
     uint16_t ahead = (uint16_t)(view->seq - gop.next_seq);
+    bool idle = now - gop.last_ms > GOP_IDLE_MS;
+    /* After a pause a packet that does not follow on is a restarted stream,
+     * even with the same SSRC and an earlier sequence number. */
     bool fresh = !gop.stream || view->ssrc != gop.ssrc || view->payload_type != gop.payload_type
-        || (ahead >= GOP_SEQ_WINDOW && ahead < 0x10000u - GOP_SEQ_WINDOW);
+        || (ahead >= GOP_SEQ_WINDOW && ahead < 0x10000u - GOP_SEQ_WINDOW) || (idle && ahead != 0);
     if (!fresh && ahead >= 0x10000u - GOP_SEQ_WINDOW) return false;
     /* After a pause the cached group is not sent to anyone any more. */
-    bool lost = !fresh && (ahead != 0 || now - gop.last_ms > GOP_IDLE_MS);
+    bool lost = !fresh && (ahead != 0 || idle);
     bool new_unit = fresh || view->ts != gop.last_ts;
     unsigned flags = nal_flags(view->payload, view->payload_len);
     if (fresh) {

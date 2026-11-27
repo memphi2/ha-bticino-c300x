@@ -311,6 +311,35 @@ static void restart(void)
     leave(0);
 }
 
+/* The station restarts its stream after a pause with the same SSRC and an
+ * earlier sequence number: that is a new stream, not a run of repeats. */
+static void resume(void)
+{
+    struct station station = {.ssrc = 8, .ts = 5000, .seq = 3000};
+    join(0);
+    send_frame(&station, true, 2);
+    send_frame(&station, false, 2);
+    size_t count = receive(&clients[0], rx, MAX_RX);
+    assert(count == 5 + 3);
+    struct rx last = rx[count - 1];
+    clock_ms += 3000;
+    station.seq = (uint16_t)(station.seq - 500);
+    station.ts += 777777;
+    send_frame(&station, false, 2);
+    assert(receive(&clients[0], rx, MAX_RX) == 0);
+    send_frame(&station, true, 2);
+    send_frame(&station, false, 2);
+    count = receive(&clients[0], rx, MAX_RX);
+    assert(count == 5 + 3 && assert_clean_start(rx, count, 1) == 2);
+    assert(rx[0].seq == (uint16_t)(last.seq + 1) && rx[0].ssrc == last.ssrc);
+    /* A pause without a restart: the stream goes on where it was. */
+    clock_ms += 3000;
+    send_frame(&station, false, 2);
+    count = receive(&clients[0], rx, MAX_RX);
+    assert(count == 3 && rx[0].nal == 9);
+    leave(0);
+}
+
 static void loss(void)
 {
     struct station station = {.ssrc = 5, .ts = 1, .seq = 1};
@@ -423,6 +452,7 @@ int main(int argc, char **argv)
     else if (strcmp(argv[1], "age") == 0) age();
     else if (strcmp(argv[1], "stale") == 0) stale();
     else if (strcmp(argv[1], "restart") == 0) restart();
+    else if (strcmp(argv[1], "resume") == 0) resume();
     else if (strcmp(argv[1], "loss") == 0) loss();
     else if (strcmp(argv[1], "slow") == 0) slow();
     else if (strcmp(argv[1], "malformed") == 0) malformed();

@@ -307,24 +307,16 @@ def test_event_labels_translate_the_attribute_not_the_timestamp_state() -> None:
 
 
 def test_localized_translation_placeholders_match_base_strings() -> None:
+    """Every language uses the placeholders of strings.json, the model included:
+    a text reads the same in every language, not more specific in some."""
+
     base_placeholders = _translation_placeholders(
         _load_json(INTEGRATION / "strings.json")
     )
 
-    for path in (
-        TRANSLATIONS / "en.json",
-        TRANSLATIONS / "de.json",
-        TRANSLATIONS / "it.json",
-        TRANSLATIONS / "fr.json",
-    ):
-        assert _without_model(_translation_placeholders(_load_json(path))) == _without_model(base_placeholders)
-
-
-def _without_model(placeholders: dict[tuple[str, ...], set[str]]) -> dict[tuple[str, ...], set[str]]:
-    """Every form, abort, issue and error gets the model; a language may name it where English does not."""
-
-    trimmed = {path: names - {"model"} for path, names in placeholders.items()}
-    return {path: names for path, names in trimmed.items() if names}
+    for language in ("en", "de", "it", "fr", "es"):
+        localized = _translation_placeholders(_load_json(TRANSLATIONS / f"{language}.json"))
+        assert localized == base_placeholders, language
 
 
 def test_fixable_agent_update_repair_uses_ha_issue_fix_flow_schema() -> None:

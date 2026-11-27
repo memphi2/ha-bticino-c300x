@@ -767,7 +767,7 @@
       "device_install_verify_failed": "L'installation est terminée, mais l'agent natif ne répond pas avec la clé d'accès générée.",
       "invalid_agent_port": "Saisissez un port valide pour l'agent appareil.",
       "invalid_agent_host": "Saisissez l'hôte de l'agent appareil.",
-      "invalid_callback_base_url": "Saisir une URL de base HTTP ou HTTPS de Home Assistant accessible depuis le {model}, ou laisser vide.",
+      "invalid_callback_base_url": "Saisir une URL de base HTTP ou HTTPS de Home Assistant accessible, ou laisser vide.",
       "invalid_device_host": "Saisissez l'adresse du {model}.",
       "installer_dependency_missing": "Home Assistant n’a pas pu installer ou charger le paquet SSH facultatif (asyncssh==2.24.1). Il ne s’agit pas d’un échec de connexion SSH. Home Assistant mémorise l’échec d’installation d’un paquet jusqu’à la prochaine vérification de la configuration ou au redémarrage, même si le paquet est arrivé ensuite : vérifiez la configuration dans Outils de développement > YAML (ou redémarrez Home Assistant), puis réessayez. En cas de nouvel échec, les journaux dans Paramètres > Système indiquent la cause et la version d’asyncssh installée.",
       "invalid_ssh_password": "Saisissez le mot de passe SSH du {model}.",
@@ -1297,7 +1297,7 @@
       "invalid_action_map": "Le JSON de la liste autorisée d'actions est invalide.",
       "invalid_agent_host": "Saisissez l'hôte de l'agent appareil.",
       "invalid_agent_port": "Saisissez un port valide pour l'agent appareil.",
-      "invalid_callback_base_url": "Saisir une URL de base HTTP ou HTTPS de Home Assistant accessible depuis le {model}, ou laisser vide.",
+      "invalid_callback_base_url": "Saisir une URL de base HTTP ou HTTPS de Home Assistant accessible, ou laisser vide.",
       "invalid_alarm_entity": "Sélectionnez une entité alarm_control_panel Alarmo ou laissez vide.",
       "invalid_alarm_page_entity": "Sélectionnez une entité dashboard prise en charge pour la page alarme ou laissez vide.",
       "invalid_weather_entity": "Sélectionnez une entité météo ou laissez vide.",
@@ -1921,7 +1921,7 @@
           }
         },
         "error": {
-          "invalid_callback_base_url": "Saisir une URL de base HTTP ou HTTPS de Home Assistant accessible depuis le {model}."
+          "invalid_callback_base_url": "Saisir une URL de base HTTP ou HTTPS de Home Assistant accessible."
         },
         "abort": {
           "entry_not_loaded": "L'entrée BTicino C300X n'est pas chargée."

@@ -132,13 +132,17 @@ ADDED_SINCE_2_10_0 = frozenset({
 })
 # Texts of 2.10.0 that read differently now: the SSH package message names the
 # package and the way out, the service name lost the model (neutral names), the
-# SSH forms name the optional private key, and the unfinished display write
-# points to the documentation section where the step now is.
+# SSH forms name the optional private key, the unfinished display write
+# points to the documentation section where the step now is, and the callback
+# URL error reads as in English in every language (no model).
 CHANGED_SINCE_2_10_0 = frozenset({
     "config/error/installer_dependency_missing",
+    "config/error/invalid_callback_base_url",
     "config/step/bootstrap_install/description",
     "issues/device_agent_update_required/fix_flow/step/ssh_install/description",
     "issues/device_qml_transaction_stuck/description",
+    "issues/unsupported_callback_url/fix_flow/error/invalid_callback_base_url",
+    "options/error/invalid_callback_base_url",
     "services/capture_doorbell_call/name",
 })
 # sha256 over every text of 2.10.0 (f4f75ea3) but the changed and the removed
@@ -163,11 +167,11 @@ REMOVED_SINCE_2_10_0 = frozenset({
     "options/step/features/data_description/ring_capture_audio_gain_db",
 })
 DIGESTS_2_10_0 = {
-    "base": "3662f6a05fa30373abe3b32f932fa429f7f7f26e7f2fa2cd9e65af39431e5cf1",
-    "en": "3662f6a05fa30373abe3b32f932fa429f7f7f26e7f2fa2cd9e65af39431e5cf1",
-    "de": "fc11f16d1cb8cdc0f0bc32b9ff32b6cc5b7b80488bc4fba2a35533cd13c491a9",
-    "it": "75e85a24c761ca6c8a636db741a396eb93b0e30846d851f84629cec4baad31be",
-    "fr": "dbe54ba3e6ffd37dcb4afabf4f7ffe7a7d4f78184edae99b45527d0c089fb8f3",
+    "base": "0de2ba4b4ba4f8ce874a6386c4cda074a2720de4795486a006c5694421fd389e",
+    "en": "0de2ba4b4ba4f8ce874a6386c4cda074a2720de4795486a006c5694421fd389e",
+    "de": "1f5ebe1456b22af92779a10407af737ab0e40685afe834b3fffee2607c983c14",
+    "it": "d219d458706df49ec306d5c1241e5be58a6f4f553579904e6c62913955603ffd",
+    "fr": "6a0916cfa64b94660dd98727bec94d89449ad7a93fadbec77c6ccfd5cc2879b6",
 }
 
 

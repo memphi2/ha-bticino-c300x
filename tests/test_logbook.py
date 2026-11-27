@@ -8,11 +8,7 @@ from typing import Any
 import pytest
 
 from custom_components.bticino_c300x import logbook
-from custom_components.bticino_c300x.const import (
-    DOMAIN,
-    EVENT_ACTION_RECEIVED,
-    EVENT_AGENT_EVENT_RECEIVED,
-)
+from custom_components.bticino_c300x.const import DOMAIN, EVENT_AGENT_EVENT_RECEIVED
 
 DEVICES = {
     "device-gate": SimpleNamespace(name="Gate", name_by_user=None),
@@ -66,12 +62,6 @@ def test_a_station_event_is_named_by_its_device_in_the_home_assistant_language(
     }
 
 
-def test_an_action_home_assistant_ran_is_logged_on_the_station(monkeypatch: pytest.MonkeyPatch) -> None:
-    for language, message in (
-        ("en", "Action run: garage"), ("de", "Aktion ausgeführt: garage"), ("it", "Azione eseguita: garage"),
-        ("fr", "Action exécutée : garage"), ("es-ES", "Acción ejecutada: garage"), ("pt", "Action run: garage"),
-    ):
-        describe = _describers(monkeypatch, language)[EVENT_ACTION_RECEIVED]
-        assert describe(_event(entry_id="entry-1", device_id="device-station", action_id="garage")) == {
-            "name": "Hallway", "message": message,
-        }
+def test_only_the_station_events_are_described(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Home Assistant's own actions fire no event of this integration.
+    assert list(_describers(monkeypatch, "en")) == [EVENT_AGENT_EVENT_RECEIVED]

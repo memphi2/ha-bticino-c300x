@@ -30,9 +30,9 @@ devices, entities and services; a Repair lists what to redo after the update.
   event on the station (`activated`). They fire with the station's own bus
   message, whatever opened the door or switched on the light: the button, the
   station, the BTicino app. A door opened during a call carries its `call_id`.
-- Opening a door from Home Assistant no longer fires
-  `bticino_c300x_action_received` (the stair light never did); use the
-  **Door** event, which fires however the door was opened.
+- The event `bticino_c300x_action_received` is removed. Automations react to
+  the entity that was switched, or to the **Door** and **Stair light**
+  events, which fire however the door was opened or the light switched on.
 - The card follows the current call: it shows the calling unit's name, and its
   door button opens the unit that rang.
 - **Blueprints** start from the **Doorbell ring event** of the outdoor unit you
@@ -65,8 +65,8 @@ devices, entities and services; a Repair lists what to redo after the update.
   `device_id`, `unit`, `call_id`, `event_at` and `data`. The fields `event`,
   `event_key`, `event_type_key`, `event_name`, `event_value`, `event_label`,
   `event_label_<language>`, `unit_id`, `unit_name` and the top-level `address`
-  (now in `data`) are gone. The logbook shows each station event, and each
-  action Home Assistant ran, on its device in your language.
+  (now in `data`) are gone. The logbook shows each station event on its
+  device in your language.
 - **Notifications:** the `mode` field is gone; a call that still sends it is
   refused. Use the switches instead: `display` -> `display: true`, `speech` ->
   `tts: true`, `both` -> `display: true` and `tts: true`, `led` -> `led: true`.

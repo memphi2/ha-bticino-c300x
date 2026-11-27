@@ -293,13 +293,8 @@ The integration also fires two Home Assistant events:
   raw event data, with `raw` and `address` for door and stair light frames),
   `source_event_id` when the agent sends one, and the extra data from the
   table above.
-- `bticino_c300x_action_received`: Home Assistant itself ran a configured
-  action. Data: `entry_id`, `device_id` (the station's), `action_id`. Fired
-  by `run_action` and display tile commands (`action_id` is then the entity
-  ID); not by the door and stair light buttons, whose opening fires the
-  **Door** and **Stair light** events.
 
-The logbook shows both events on their device (the outdoor unit or the
+The logbook shows each station event on its device (the outdoor unit or the
 station) in the language of Home Assistant.
 
 ## Media Transport

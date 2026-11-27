@@ -528,9 +528,8 @@ def test_async_execute_action_calls_allowlisted_service() -> None:
     assert hass.services.calls == [
         ("light", "toggle", {"entity_id": "light.entry"}, False)
     ]
-    assert hass.bus.events == [
-        ("bticino_c300x_action_received", {"entry_id": "entry-1", "device_id": "device-station", "action_id": "entry_light"})
-    ]
+    # No event of its own: automations react to the switched entity.
+    assert hass.bus.events == []
 
 
 def test_async_execute_action_forwards_target_only_actions() -> None:
@@ -565,6 +564,8 @@ def test_async_execute_dashboard_action_toggles_selected_switch() -> None:
     assert hass.services.calls == [
         ("switch", "toggle", {"entity_id": "switch.entry"}, True)
     ]
+    # A display tile fires no event of its own either.
+    assert hass.bus.events == []
 
 
 def test_async_execute_dashboard_action_toggles_selected_automation_or_siren() -> None:
@@ -2188,12 +2189,11 @@ def test_async_unlock_door_opens_the_calling_outdoor_unit() -> None:
     # "current": the agent opens the unit of the current call and names it.
     assert result == {"ok": True, "action_id": DASHBOARD_ENTITY_DOOR_UNLOCK, "unit_id": "21"}
     assert entry.runtime_data.api.unlock_calls == ["current"]
-    # No action_received: the door, like the stair light, is no action-map
-    # action; the station's frame fires the unit's Door event.
+    # The station's frame fires the unit's Door event.
     assert hass.bus.events == []
 
 
-def test_the_station_buttons_fire_no_action_received() -> None:
+def test_the_station_buttons_fire_no_event_of_their_own() -> None:
     hass = FakeHass()
     entry = FakeEntry(data={})
 

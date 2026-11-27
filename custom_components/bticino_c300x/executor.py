@@ -25,7 +25,6 @@ from .const import (
     DASHBOARD_ENTITY_ANSWERING_MACHINE,
     DASHBOARD_ENTITY_DOOR_UNLOCK,
     DASHBOARD_ENTITY_STAIR_LIGHT,
-    EVENT_ACTION_RECEIVED,
 )
 from .dashboard_config import (
     _DASHBOARD_CHOICE_ACTIONS,
@@ -43,7 +42,6 @@ from .dashboard_config import (
 from .dashboard_controls import async_execute_control
 from .entry_config import entry_config_value
 from .entry_types import BticinoC300XConfigEntry
-from .unit_entity import event_device_id
 
 _ALARMO_FORCE_ARM_MODES = {
     "arm_away": "away",
@@ -89,17 +87,7 @@ async def async_execute_action(
         target=target or None,
         context=context,
     )
-    _async_fire_action_received(hass, entry, normalized_id)
     return {"ok": True, "action_id": normalized_id}
-
-
-def _async_fire_action_received(hass: HomeAssistant, entry: BticinoC300XConfigEntry, action_id: str) -> None:
-    """A configured action ran; the logbook shows it on the station's device."""
-
-    hass.bus.async_fire(
-        EVENT_ACTION_RECEIVED,
-        {"entry_id": entry.entry_id, "device_id": event_device_id(hass, entry, None), "action_id": action_id},
-    )
 
 
 async def async_execute_alarm_command(
@@ -280,8 +268,7 @@ async def async_unlock_door(
     """Open an outdoor unit's lock; ``current`` is the calling unit, else the default one.
 
     With ``call_id`` the agent opens only while that call belongs to the unit.
-    Like the stair light it fires no action_received: the station's own frame
-    fires the unit's Door event, whatever opened the door.
+    The station's own frame fires the unit's Door event, whatever opened the door.
     """
 
     result = await entry.runtime_data.api.async_unlock_outdoor_unit(unit_id, call_id)
@@ -389,7 +376,6 @@ async def _async_execute_dashboard_entity(
     else:
         raise ValueError("read_only_dashboard_entity")
 
-    _async_fire_action_received(hass, entry, entity_id)
     return {"ok": True, "action_id": entity_id}
 
 

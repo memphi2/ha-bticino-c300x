@@ -299,9 +299,9 @@ rings included: the card, the ring preview, captures and the event entities
 listen to it. Its `event_type` is the stable key; `unit` and `call_id` are
 `null` while not known (a door frame names its unit also outside a call),
 `device_id` is the unit's device, else the station's. Automations should
-trigger on the event entities.
-`bticino_c300x_action_received` is fired for configured actions only, not
-for a door or the stair light: their bus frames fire the Door and Stair light
+trigger on the event entities. There is no event for an action Home
+Assistant ran (`run_action`, a display tile): automations react to the entity
+that was switched; a door and the stair light fire the Door and Stair light
 event entities, whatever opened the door.
 
 The media camera's attributes tell the card about the current call:

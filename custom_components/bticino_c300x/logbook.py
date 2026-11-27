@@ -1,4 +1,4 @@
-"""Logbook lines for the integration's bus events, which have no entity.
+"""Logbook lines for the station events on the bus, which have no entity.
 
 Each line names the device the event belongs to (an outdoor unit or the
 station) and says what happened in the language of Home Assistant. The
@@ -15,15 +15,7 @@ from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
 
 from .capabilities import event_label
-from .const import DOMAIN, EVENT_ACTION_RECEIVED, EVENT_AGENT_EVENT_RECEIVED
-
-ACTION_LABELS = {
-    "en": "Action run: {action}",
-    "de": "Aktion ausgeführt: {action}",
-    "it": "Azione eseguita: {action}",
-    "fr": "Action exécutée : {action}",
-    "es": "Acción ejecutada: {action}",
-}
+from .const import DOMAIN, EVENT_AGENT_EVENT_RECEIVED
 
 
 @callback
@@ -31,7 +23,7 @@ def async_describe_events(
     hass: HomeAssistant,
     async_describe_event: Callable[[str, str, Callable[[Event], dict[str, str]]], None],
 ) -> None:
-    """Describe the station events and the actions Home Assistant ran."""
+    """Describe the station events."""
 
     @callback
     def describe_agent_event(event: Event) -> dict[str, str]:
@@ -41,17 +33,7 @@ def async_describe_events(
             LOGBOOK_ENTRY_MESSAGE: event_label(key, hass.config.language) or key,
         }
 
-    @callback
-    def describe_action(event: Event) -> dict[str, str]:
-        language = str(hass.config.language or "").split("-", 1)[0].lower()
-        text = ACTION_LABELS.get(language, ACTION_LABELS["en"])
-        return {
-            LOGBOOK_ENTRY_NAME: _source_name(hass, event.data),
-            LOGBOOK_ENTRY_MESSAGE: text.format(action=event.data.get("action_id")),
-        }
-
     async_describe_event(DOMAIN, EVENT_AGENT_EVENT_RECEIVED, describe_agent_event)
-    async_describe_event(DOMAIN, EVENT_ACTION_RECEIVED, describe_action)
 
 
 def _source_name(hass: HomeAssistant, data: Mapping[str, Any]) -> str:

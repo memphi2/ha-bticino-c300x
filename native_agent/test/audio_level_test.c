@@ -355,8 +355,9 @@ static void test_level(void)
      * the fine adjustment then. */
     assert(c300x_audio_level_set(6, -2));
     assert(strstr(get("Audio_State.sh"), "\nV=13\n") != NULL);
+    /* No call yet: path and both gains say nothing is applied, and agree. */
     assert(c300x_audio_level_json(json, sizeof(json)) > 0);
-    level_json_has(json, "\"door_level_path\":\"chip\",\"chip_lever\":\"ready\"");
+    level_json_has(json, "\"door_level_path\":\"none\",\"chip_lever\":\"ready\",\"chip_gain_db\":0,\"software_gain_db\":0");
     put("mark", "13\n", 0644);
     put("sout", "13\n", 0644);
     assert(pass(1000) == c300x_pcmu_decode(c300x_pcmu_encode(794)));
@@ -371,6 +372,26 @@ static void test_level(void)
     assert(c300x_audio_level_json(json, sizeof(json)) > 0);
     assert(level_json_int(json, "chip_gain_db") == 0 && level_json_int(json, "software_gain_db") == 4);
     level_json_has(json, "\"door_level_path\":\"software\"");
+
+    /* The call ends (session boundary, or a second without packets): idle
+     * again, whatever the chip did last. */
+    put("mark", "13\n", 0644);
+    level.chip_checked_ms = 0;
+    assert(pass(1000) == c300x_pcmu_decode(c300x_pcmu_encode(794)));
+    c300x_audio_level_session_boundary();
+    assert(c300x_audio_level_json(json, sizeof(json)) > 0);
+    level_json_has(json, "\"door_level_path\":\"none\",\"chip_lever\":\"ready\",\"chip_gain_db\":0,\"software_gain_db\":0");
+    assert(pass(1000) == c300x_pcmu_decode(c300x_pcmu_encode(794)));
+    assert(c300x_audio_level_json(json, sizeof(json)) > 0);
+    level_json_has(json, "\"door_level_path\":\"chip\",\"chip_lever\":\"ready\",\"chip_gain_db\":6,\"software_gain_db\":-2");
+    clock_ms += 999;
+    assert(c300x_audio_level_json(json, sizeof(json)) > 0);
+    level_json_has(json, "\"door_level_path\":\"chip\"");
+    clock_ms += 1;
+    assert(c300x_audio_level_json(json, sizeof(json)) > 0);
+    level_json_has(json, "\"door_level_path\":\"none\",\"chip_lever\":\"ready\",\"chip_gain_db\":0,\"software_gain_db\":0");
+    drop("mark");
+    put("sout", "11\n", 0644);
 
     /* A level lowered during a raised call: the software stage takes the
      * difference back until the next state change. */
@@ -416,10 +437,10 @@ static void test_level(void)
     put("IP_PE.cr", "other\n", 0644);
     assert(c300x_audio_level_set(12, 10));
     assert(strcmp(get("Audio_State.sh"), stub) == 0);
-    assert(c300x_audio_level_json(json, sizeof(json)) > 0);
-    level_json_has(json, "\"door_level_path\":\"software\",\"chip_lever\":\"unsupported\"");
     level.chip_checked_ms = 0;
     assert(pass(100) == c300x_pcmu_decode(c300x_pcmu_encode(1259)));
+    assert(c300x_audio_level_json(json, sizeof(json)) > 0);
+    level_json_has(json, "\"door_level_path\":\"software\",\"chip_lever\":\"unsupported\"");
     assert(level_json_int(json, "software_gain_db") == 22);
     put("IP_PE.cr", "profile\n", 0644);
 

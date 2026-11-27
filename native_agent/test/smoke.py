@@ -1580,8 +1580,9 @@ def run_smoke(
                 {"door_level_db": 6, "fine_gain_db": -3},
             )
             assert_json_field(stored, "ok", True)
-            assert_json_field(stored["audio_level"], "door_level_path", "software")
-            assert_json_field(stored["audio_level"], "software_gain_db", 3)
+            # No call runs: nothing is applied anywhere yet.
+            assert_json_field(stored["audio_level"], "door_level_path", "none")
+            assert_json_field(stored["audio_level"], "software_gain_db", 0)
             for invalid in (
                 {"door_level_db": 5, "fine_gain_db": 0},
                 {"door_level_db": 15, "fine_gain_db": 0},
@@ -1607,7 +1608,7 @@ def run_smoke(
             video = api_get(api_port, "/api/v1/video/doorbell/status")
             assert_json_field(video["bridge"]["audio_level"], "door_level_db", 12)
             assert_json_field(video["bridge"]["audio_level"], "fine_gain_db", 10)
-            assert_json_field(video["bridge"]["audio_level"], "software_gain_db", 22)
+            assert_json_field(video["bridge"]["audio_level"], "software_gain_db", 0)
             rtsp_describe(rtsp_port, "/doorbell-video")
             assert_json_field(
                 api_post(api_port, "/api/v1/video/doorbell/actions/activate", {}),

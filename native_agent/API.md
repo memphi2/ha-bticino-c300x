@@ -1112,14 +1112,19 @@ lost backup never blocks a level change or the removal.
   lever: another model, an unknown `IP_PE.cr`, no `amixer` or no readable
   control; the door level is applied in software), `hook_foreign`,
   `hook_missing` or `write_failed`.
-- `door_level_path`: where the door level went in the last audio: `chip`,
+- `door_level_path`, `chip_gain_db`, `software_gain_db` describe the running
+  door call (sound toward Home Assistant within the last second, until the
+  session ends). Without one nothing is applied and they read `none`, `0` and
+  `0`.
+- `door_level_path`: where the door level goes in the running call: `chip`,
   `software`, `chip_and_software` (a level changed during a call), or `none`
-  for a stock door level. Before any audio it names the prepared path.
+  for a stock door level or no running call.
 - `chip_gain_db`: what the chip adds right now, read from the control while
   sound flows: at every packet (at most every 10 ms) for the first 2 s after
   a call starts (a session start or end, or the first packet after 100 ms
-  without one), every 500 ms after that; 0 outside a raised call.
-- `software_gain_db`: what the software stage applies.
+  without one), every 500 ms after that. Before the hook has raised the gain
+  in a call it is 0 and the software stage carries the door level.
+- `software_gain_db`: what the software stage applies in the running call.
 
 ### `POST /api/v1/video/doorbell/actions/activate`
 

@@ -20,6 +20,9 @@
 #define CHIP_START_MS 2000
 #define CHIP_START_CHECK_MS 10
 #define AUDIO_GAP_MS 100
+/* The status counts a call as running until this long after its last packet
+ * or until its session boundary. */
+#define AUDIO_ACTIVE_MS 1000
 
 static pthread_mutex_t level_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t set_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -29,7 +32,6 @@ static struct {
     int door_db;
     int fine_db;
     int hook_ours;
-    int observed;
     int chip_db;
     /* Counts every set() and session boundary: a chip read begun before
      * one is stale. */
@@ -140,13 +142,15 @@ int c300x_audio_level_set(int door_level_db, int fine_gain_db)
     return 1;
 }
 
+static int active_locked(void)
+{
+    return level.last_audio_ms != 0 && c300x_monotonic_ms() - level.last_audio_ms < AUDIO_ACTIVE_MS;
+}
+
 static const char *path_locked(void)
 {
-    if (level.door_db == 0) {
+    if (level.door_db == 0 || !active_locked()) {
         return "none";
-    }
-    if (!level.observed) {
-        return level.hook_ours ? "chip" : "software";
     }
     if (level.chip_db >= level.door_db) {
         return "chip";
@@ -158,12 +162,18 @@ size_t c300x_audio_level_json(char *out, size_t out_len)
 {
     int written;
 
+    int active;
+
     ensure_init();
     pthread_mutex_lock(&level_lock);
+    /* Path and both gains describe the running call; without one nothing is
+     * applied anywhere, so they agree on none and 0. */
+    active = active_locked();
     written = snprintf(out, out_len,
         "{\"door_level_db\":%d,\"fine_gain_db\":%d,\"door_level_path\":\"%s\","
         "\"chip_lever\":\"%s\",\"chip_gain_db\":%d,\"software_gain_db\":%d}",
-        level.door_db, level.fine_db, path_locked(), level.lever, level.chip_db, level.gain.db);
+        level.door_db, level.fine_db, path_locked(), level.lever,
+        active ? level.chip_db : 0, active ? level.gain.db : 0);
     pthread_mutex_unlock(&level_lock);
     return written > 0 && (size_t)written < out_len ? (size_t)written : 0;
 }
@@ -215,7 +225,6 @@ static void refresh_chip(void)
     pthread_mutex_lock(&level_lock);
     if (generation == level.generation) {
         level.chip_db = chip_db;
-        level.observed = 1;
         rebuild_locked();
     }
     pthread_mutex_unlock(&level_lock);

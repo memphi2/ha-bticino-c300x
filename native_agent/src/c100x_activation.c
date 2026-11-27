@@ -2,13 +2,12 @@
 #include "c100x_boot_check.h"
 #include "c100x_payload.h"
 #include "device_detect.h"
+#include "http_maintenance.h"
 #include "json_util.h"
 
-#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 
 /* The display's lease must hold this long in the trial boot before a check. */
 #ifndef C100X_ACTIVATION_SETTLE_MS
@@ -115,6 +114,10 @@ static int start(struct c100x_activation *activation, enum c100x_display_action 
         set_error(activation, action, "job start failed");
         return 0;
     }
+    /* At the deadline and at agent shutdown c100x_display.sh gets SIGTERM and
+     * time for its trap: a half switch undone, its stage removed, the root
+     * read-only again. SIGKILL comes only after that. */
+    activation->job.term_grace_ms = C300X_QML_WRITE_TERM_GRACE_MS;
     activation->running = action;
     return 1;
 }
@@ -326,15 +329,6 @@ int c100x_activation_tick(struct c100x_activation *activation, const struct c100
 
 void c100x_activation_close(struct c100x_activation *activation)
 {
-    if (activation->job.pid > 0) {
-        (void)kill(-activation->job.pid, SIGTERM);
-        for (int round = 0; round < 150 && activation->job.pid > 0; round++) {
-            c300x_command_job_tick(&activation->job);
-            if (activation->job.pid > 0) {
-                (void)usleep(10000);
-            }
-        }
-    }
     c300x_command_job_close(&activation->job);
     c300x_command_job_init(&activation->job);
 }

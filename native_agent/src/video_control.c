@@ -4,7 +4,6 @@
 #include <string.h>
 
 #include "video_rtsp.h"
-#include "picture_worker.h"
 
 static void execute(void *context)
 {
@@ -12,9 +11,6 @@ static void execute(void *context)
 
     job->result = 1;
     switch (job->op) {
-    case C300X_VIDEO_CONTROL_PICTURE:
-        picture_worker_execute(job);
-        break;
     case C300X_VIDEO_CONTROL_ACTIVATE:
         job->result = c300x_video_activate(job->video, job->argument, job->where);
         break;

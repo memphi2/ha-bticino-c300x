@@ -1,4 +1,4 @@
-import { mediaLocalize } from "./c300x-media-translations.js?v=466ac4d70e303efc";
+import { mediaLocalize } from "./c300x-media-translations.js?v=fac1f6225ba318f3";
 
 const keys = ["brightness", "contrast", "saturation"];
 
@@ -84,7 +84,7 @@ export class C300XPictureControls extends HTMLElement {
       if (generation !== this.generation) return;
       // The service error names the agent's code. Not applied or busy: the
       // station kept the last confirmed values, so the sliders stay.
-      const code = /\b(picture_not_applied|media_busy)\b/.exec(String(error?.message || ""))?.[1];
+      const code = /\b(picture_not_applied|openwebnet_busy)\b/.exec(String(error?.message || ""))?.[1];
       this.status.textContent = mediaLocalize(this.hass,
         code === "picture_not_applied" ? "picture_not_applied" : code ? "picture_busy" : "picture_unavailable");
       this.show(code && this.values);

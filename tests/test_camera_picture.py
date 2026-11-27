@@ -34,7 +34,7 @@ def test_picture_reports_gui_values_only(fields):
         asyncio.run(camera_picture(api, fields))
 
 
-@pytest.mark.parametrize("code", ["picture_not_applied", "media_busy", "picture_controls_unavailable"])
+@pytest.mark.parametrize("code", ["picture_not_applied", "openwebnet_busy", "picture_controls_unavailable"])
 def test_picture_errors_keep_the_agent_code_the_card_reads(code):
     # The card tells the errors apart by this code in the service error message.
     api = AsyncMock()

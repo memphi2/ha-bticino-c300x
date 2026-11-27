@@ -482,32 +482,21 @@ def test_every_display_call_follows_the_ui_port_as_the_api_says():
 
 def test_the_api_lists_every_error_the_picture_route_answers_with():
     picture = _c_functions((ROOT / "native_agent/src/picture_control.c").read_text())
-    source = (ROOT / "native_agent/src/ringer_control.c").read_text()
-    ringer = _c_functions(source)
-    assert not picture.keys() & ringer.keys()
-    # picture_request answers itself or hands the client to the GUI path in
-    # ringer_control.c. That path keeps it as control->client_fd and answers
-    # it wherever a function there passes that socket on.
-    blank = _c_blank(source)
-    assert len(re.findall(r"\bclient_fd\b", blank)) == len(re.findall(r"\bcontrol->client_fd\b", blank))
-    roots = [("picture_request", "fd")] + [(name, "control->client_fd") for name in ringer]
-    replies, helpers = _client_answers(picture | ringer, roots, ignore={
-        "apply": "c300x_ringer_control_next sets it only for a ringer ack (completed=), never for a picture command",
-    })
+    replies, helpers = _client_answers(picture, [("picture_request", "fd")])
     assert not helpers
-    ringer_only = {
-        "ringer_gui_busy": "gui_request answers it to a ringer command; a picture command gets picture_gui_busy",
-        "ringer_not_applied": "the ringer branch of c300x_ringer_control_expire",
-        "ringer_gui_timeout": "the ringer branch of c300x_ringer_control_expire",
-        "ringer_gui_not_applied": "the completed= branch of c300x_ringer_control_next, which answers "
-                                  "the ack of a picture command as stale before",
-    }
-    assert set(ringer_only) <= {code for _, code in replies}
-    replies = {(status, code) for status, code in replies if code not in ringer_only}
-    assert {(409, "picture_gui_busy"), (504, "picture_gui_timeout"), (503, "ringer_gui_unavailable")} <= replies
+    # A bus exchange the OpenWebNet worker refuses leaves the answer to
+    # handle_client, which sends the worker's refusal.
+    request = _c_blank(picture["picture_request"])
+    assert request.count("c300x_openwebnet_deferred()") == 2
+    refusals = set(re.findall(r'refuse\(async, call, "([a-z_]+)"\)',
+                              (ROOT / "native_agent/src/openwebnet_async.c").read_text()))
+    assert refusals == {"openwebnet_busy", "client_gone"}
+    http = _c_functions((ROOT / "native_agent/src/http.c").read_text())
+    assert '"{\\"ok\\":false,\\"error\\":\\"%s\\"}\\n"' in http["send_openwebnet_refusal"]
+    assert 'send_json(client_fd, 502, "Bad Gateway", body);' in http["send_openwebnet_refusal"]
+    replies |= {(502, code) for code in refusals}
     # handle_client checks every request before any route runs. A picture body
     # that is not a JSON object gets its invalid_json, never invalid_picture_control.
-    http = _c_functions((ROOT / "native_agent/src/http.c").read_text())
     client = http["handle_client"]
     checks = client[client.index("if (!parse_request("):client.index("if (kind == LISTENER_API)")]
     assert client.index("if (kind == LISTENER_API)") < client.index("handle_api_request(")
@@ -518,19 +507,6 @@ def test_the_api_lists_every_error_the_picture_route_answers_with():
     replies |= {(status, code) for status, code in generic if code not in route_unknown}
     assert (400, "invalid_json") in replies
     assert replies == _api_error_rows("### `GET`, `POST /api/v1/video/picture`")
-    section = (ROOT / "native_agent/API.md").read_text().split("### `GET`, `POST /api/v1/video/picture`", 1)[1]
-    unavailable = section.split("| `picture_controls_unavailable` |", 1)[1].split("\n", 1)[0]
-    # picture_reply answers it when the GUI sends malformed values.
-    assert "the GUI answered with missing or out-of-range values" in unavailable
-    # The tvp5150 driver answers contrast from its cache and ignores I2C write
-    # errors, but the write ioctl, the other re-reads and the deadline still
-    # make picture_source_execute refuse and roll back a contrast write.
-    text = " ".join(section.split("\nErrors:", 1)[0].split())
-    assert "Once a TVP5150 contrast write ioctl succeeds, its read-back always matches" in text
-    assert "a failed I2C contrast write cannot be detected" in text
-    assert "Only brightness and saturation have a genuine read-back there." in text
-    assert "A contrast write is still answered as not applied and rolled back when the write ioctl fails" in text
-    assert "always confirmed" not in text
 
 
 def test_the_api_names_the_unread_refusal_of_display_bridge_events():
@@ -573,14 +549,18 @@ def test_the_display_docs_name_the_notice_for_an_unknown_display():
     assert f"**{title}**" in qt5
 
 
-def test_picture_control_docs_say_tvp5150_may_need_the_ring_call_path():
+def test_picture_control_docs_say_changes_are_kept_per_unit():
+    """The agent writes the station's own picture frames; the station keeps them per outdoor unit."""
     guide = (DOCS / "user-guide.md").read_text(encoding="utf-8")
-    guide = guide.split("### Picture Controls\n", 1)[1].split("\n### ", 1)[0]
+    guide = " ".join(guide.split("### Picture Controls\n", 1)[1].split("\n### ", 1)[0].split())
     readme = next(line for line in (ROOT / "README.md").read_text(encoding="utf-8").splitlines()
                   if line.startswith("| Picture controls |"))
-    for text in (guide.replace("\n  ", " "), readme):
-        assert "checked offline only" in text
-        assert "may only work during a Ring Call" in text
+    assert "Changes are kept, like in the station's own menu." in guide
+    assert "Changes are kept, like in the station's own menu, for each outdoor unit;" in readme
+    for text in (guide, readme):
+        assert "TVP5150" not in text
+        assert "last until" not in text
+        assert "may only work during a Ring Call" not in text
 
 
 def test_announcement_docs_name_each_stations_own_sound_files():

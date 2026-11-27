@@ -232,7 +232,7 @@ for example `config_error`, `api_token_missing`, `api_bind_failed`,
 | `POST` | `/api/v1/video/doorbell/audio` | API | Updates runtime-only doorstation downstream audio gain. |
 | `POST` | `/api/v1/video/doorbell/actions/activate` | API | Starts or renews on-demand doorbell media. |
 | `POST` | `/api/v1/video/doorbell/actions/stop` | API | Stops agent-owned on-demand doorbell media. |
-| `GET`, `POST` | `/api/v1/video/picture` | API | GET reads brightness, contrast and saturation; POST changes one of them on the active video source. |
+| `GET`, `POST` | `/api/v1/video/picture` | API | GET reads brightness, contrast and saturation; POST changes one of them on the running video, and the station keeps it for that unit. |
 | `GET` | `/api/v1/calls/doorbell` | API | None. |
 | `GET` | `/api/v1/calls/doorbell/status` | API | None. |
 | `GET` | `/api/v1/calls` | API | Asks the station for its call state (`*#8**35##`) once, while none was seen since the agent started. |
@@ -1257,72 +1257,48 @@ Side effects: stops agent-owned on-demand doorbell media.
 
 Authentication: normal API token.
 
-Side effects: POST changes one picture control of the active video source.
+Side effects: POST changes one picture setting of the running video; the
+station stores it for the outdoor unit of that call, like a change in its own
+menu.
 
-A connected GUI advertising `picture=1` provides the legacy ring-only path.
-An eligible C300X (firmware 1.7.19; 2.0.2 with a bound ADV7180 video decoder,
-HW rev 2/3, or TVP5150, HW rev 1/4; 3.0.6 with its bound TVP5150, as the 3.0.6
-package requires HW rev 4), or a C100X on firmware 1.5.8 with its bound
-TVP5150 (the HW rev 4 capture path), can also report
-`bridge.picture_controls_scope: "ring_and_on_demand"` with
-`bridge.picture_controls_supported: true`. The model is the station's own
-(the agent detects it at runtime), not the configured one. Model and firmware alone do not
-enable it: an authenticated status or capability request during owned media
-checks the capture source on the bounded media worker. The read result is
-cached for that media session; no source is opened while idle.
-`camera_picture.supported` reports whether either path is available.
-Missing or unknown scope does not extend GUI support beyond ring calls.
+The agent uses the station's own bus frames, as its display does. `GET` sends
+`*#7**20##`; the station's video program answers it only while a video runs
+(a ring, an answered call or a camera view), with
+`*#7**20*<brightness>*<contrast>*<saturation>*<quality>*<sharpness>##`, each
+0 through 100. POST accepts one `control` (`brightness`, `contrast` or
+`saturation`) with a `value` 0 through 100 in steps of 10. It reads first and
+writes nothing when no video runs, then sends `*#7**#5*<value>##`
+(brightness), `*#7**#6*<value>##` (contrast) or `*#7**#7*<value>##`
+(saturation), always with exactly one value, and reads `*#7**20##` again. Both
+answer with the station's values of brightness, contrast and saturation;
+quality and sharpness are not reported or changed.
 
-`GET` returns brightness, contrast and saturation; POST accepts one `control`
-with a percentage `value` (0 through 100 in steps of 10). Direct success returns
-source readback; legacy success returns the GUI object's values. Neither
-measures the rendered picture.
-The source must be character device 81:0 bound to `mxc_v4l2_capture` with
-`VIDIOC_QUERYCAP` driver `mxc_v4l2` and video capture; any other device or
-driver is refused. The stock capture driver has no V4L2 control descriptors
-(`VIDIOC_QUERYCTRL` fails with `EINVAL`). The agent accepts that only by its
-exact signature (version `0x10b`, capabilities `0x05000005`, `device_caps` 0,
-empty card and bus) and uses the stock firmware's fixed raw steps (eleven per
-control, one per 10 %). C300X: brightness 30-180, contrast 59-209, saturation
-64-244, in equal steps. C100X 1.5.8: the station's day ranges, brightness
-30-220, contrast 80-255, saturation 80-255, each step
-`trunc(min + percent * (max - min) / 100)` as in its `stack_open.xml`, so a
-percent in HA is the station's own day percent. Any other `mxc_v4l2` device
-must expose integer descriptors that cover these steps; raw control reads
-alone do not make it supported.
-The decoder is told by its bound I2C driver
-(`/sys/bus/i2c/drivers/adv7180/<bus>-<address>` or `.../tvp5150/...`). The
-stock ADV7180 driver writes brightness XOR `0x80` but reads the register back
-raw, so the agent undoes that XOR on read. The TVP5150 reads back plain; its
-contrast is a driver cache that stays 0 until the first write after boot.
-On the C100X, `bt_av_media` re-applies its night ranges (brightness 30-180,
-contrast 50-120, saturation 80-190) once per session when it detects a dark
-picture, and the station's own menu uses steps off the 10 % grid. A C100X read
-inside the day and night ranges together therefore reads as the nearest day
-step (a tie goes to the lower one), clamped to 0-100 %; a write still writes
-the day step and is verified against that exact raw value.
-On a C300X, a read off the eleven steps, and on both models a read outside
-those ranges (such as that contrast 0), fails the whole read: all three
-controls are unavailable, and the agent refuses direct control for the rest
-of that media session (a Ring Call falls back to the GUI path). Once a
-TVP5150 contrast write ioctl succeeds, its read-back always matches, because
-it comes from that cache and the driver ignores I2C write errors; a failed
-I2C contrast write cannot be detected. Only brightness and saturation have a
-genuine read-back there. A contrast write is still answered as not applied
-and rolled back when the write ioctl fails, when a re-read (in practice of
-brightness or saturation) fails, or when the 750 ms deadline passes during
-verification.
-The TVP5150 driver queues its I2C write and returns at once, so when the
-read-back differs the agent reads again up to five times, 10 ms apart,
-before it reports the setting as not applied.
-Changes last for the current media session; the station applies its own
-values again when the next session starts. 3.0.6, the 2.0.2 path and the
-C100X are checked offline only; 1.7.19 is tested on a device.
-Direct operations check media ownership and session identity during execution.
-A failed direct write returns an error; it is not retried through the GUI.
-When the write or its read-back fails, the agent writes the previous value
-back while the media session is still its own.
-No extra idle poll, recording, configuration write or media restart is needed.
+The station applies a change to the running video at once and announces it on
+the bus. Its answering-machine program then writes it to
+`/home/bticino/cfg/extra/47/tvcc_settings.ini`, section `TVCC <unit>` (for
+example `TVCC 20` for outdoor unit 20), and sends these values with
+`*#7**#20*…##` whenever a later ring or camera view of that unit starts. The
+agent never writes that file. The value is kept for the unit of the running
+call only; after the call has ended there is nothing to keep it for, so the
+request is refused.
+
+The station's own percent steps are used as they are. On a Classe 300X
+(1.7.19, 2.0.2 and 3.0.6) every control has eleven steps, one per 10 %
+(`raw = min + percent / 10 * delta` from its `stack_open.xml`: brightness
+30-180, contrast 59-209, saturation 64-244), so every value HA sends is one of
+them and reads back unchanged. On a Classe 100X (1.5.8) the station maps a
+percent linearly onto its day range (`raw = min + percent * (max - min) /
+100`) and applies its night range to the same percent when the picture is
+dark, as its own menu does; its menu also stores values between the 10 %
+steps, which a read reports as they are (such as 33).
+
+`bridge.picture_controls_supported` and `capabilities.camera_picture.supported`
+are true, and `bridge.picture_controls_scope` is `"ring_and_on_demand"`, on a
+Classe 300X on firmware 1.7.19, 2.0.2 or 3.0.6 and a Classe 100X on 1.5.8;
+otherwise false and `null`, and every request is refused before any frame.
+Model and firmware are the station's own (the agent reads them at runtime),
+not the configured ones. Whether a video runs is not part of this: a request
+without one is refused.
 
 Errors:
 
@@ -1331,14 +1307,10 @@ Errors:
 | `400` | `invalid_picture_control` | A POST without a body, or a JSON object whose `control` is not `brightness`, `contrast` or `saturation`, or whose `value` is not an integer 0 through 100 in steps of 10. |
 | `400` | `invalid_json` | The body is not a JSON object. The agent's request parser answers this for every route before the route runs. |
 | `405` | `method_not_allowed` | The method is neither `GET` nor `POST`. |
-| `409` | `media_busy` | The media worker is busy with another job; nothing was changed. Unlike the media actions, this route answers `409`. |
-| `409` | `picture_controls_unavailable` | Neither the direct nor the GUI path is available for the current media, or the GUI answered with missing or out-of-range values. |
-| `409` | `picture_not_applied` | Direct path: the write failed, a re-read failed, the value read back differs, or the 750 ms verification deadline passed; the previous value is written back while the agent still owns the media. Legacy path: the GUI read back a different value than the one sent. |
-| `409` | `picture_gui_busy` | The GUI is still handling an earlier ringer or picture command. |
-| `500` | `ringer_gui_id_failed` | The agent could not create a command id for the GUI (reading `/dev/urandom` failed). |
-| `503` | `picture_gui_unavailable` | No GUI listener for the legacy path. |
-| `503` | `ringer_gui_unavailable` | The command could not be handed to the GUI listener, or the agent shut down before the GUI answered. |
-| `504` | `picture_gui_timeout` | The GUI did not acknowledge within five seconds. |
+| `409` | `picture_controls_unavailable` | The station is not one of the supported ones, or it did not answer the read with its values: no video runs, or the answer was missing or malformed. Nothing was written. |
+| `409` | `picture_not_applied` | The station refused the write, did not answer it, or read back another value for that control. |
+| `502` | `openwebnet_busy` | The OpenWebNet worker and its queue are full; nothing was sent. |
+| `502` | `client_gone` | The client closed the connection while the request waited for the OpenWebNet worker; nothing more was sent. |
 
 ### `GET /api/v1/calls/doorbell`
 

@@ -153,12 +153,14 @@ ADDED_SINCE_2_10_0 = frozenset({
 # Texts of 2.10.0 that read differently now: the SSH package message names the
 # package and the way out, the service name lost the model (neutral names), the
 # SSH forms name the optional private key and the services ask for a target
-# instead of an entry id (3.1.0).
+# instead of an entry id (3.1.0); a picture change is kept per outdoor unit
+# (3.1.0).
 CHANGED_SINCE_2_10_0 = frozenset({
     "config/error/installer_dependency_missing",
     "config/step/bootstrap_install/description",
     "exceptions/entry_id_required/message",
     "issues/device_agent_update_required/fix_flow/step/ssh_install/description",
+    "services/camera_picture/description",
     "services/capture_doorbell_call/name",
 })
 # Texts of 2.10.0 that are gone: 3.1.0 removed the agent event entity, the
@@ -216,11 +218,11 @@ REMOVED_SINCE_2_10_0 = frozenset({
 # ones, per file:
 #   json.dumps({"a/b/c": text}, sort_keys=True, ensure_ascii=False)
 DIGESTS_2_10_0 = {
-    "base": "2e6c780cad1732c6e4819688eb3ab6175e958f422174308553892f7ab34e0e56",
-    "en": "2e6c780cad1732c6e4819688eb3ab6175e958f422174308553892f7ab34e0e56",
-    "de": "f4272454e56fac9007c25cf5e7a902dca61ca2977e6e4c04403c974addf589db",
-    "it": "99a386a8334361654b1c7266f80606c029a80043f389346ee68b8c2c14a3954a",
-    "fr": "bffb22f19e7451a89a0db219ed58f63f189fe8ab0585287aa6f7c06cceaeb8b2",
+    "base": "e4eed4e68c1112ba8cd6cfc0a56aaa5d9705000ab1202d1455811296fbdf25d5",
+    "en": "e4eed4e68c1112ba8cd6cfc0a56aaa5d9705000ab1202d1455811296fbdf25d5",
+    "de": "507223aeff3bc8dd7aab9ea7b2f37aa453781e0498cb3c2fe85b7f09cc33b1b2",
+    "it": "2cc7c1269504e00bfd9a6a45b929f36c8504a9bd09f87f368bf0ebab32b52479",
+    "fr": "45501fc127600a2428fbefcd3030f58cac24b7b4c3e12605936f49bfa4bbfa52",
 }
 
 

@@ -31,7 +31,7 @@
 #include "http_media_actions.h"
 #include "http_ring_status.h"
 #include "http_calls.h"
-#include "picture_worker.h"
+#include "picture_control.h"
 #include "openwebnet_async.h"
 #include "http_file_transfers.h"
 #include "http_callback.h"
@@ -5066,9 +5066,6 @@ static void api_capabilities(
     if (runtime != NULL && runtime->video != NULL) {
         c300x_video_status(runtime->video, &video_status);
     }
-    enum picture_route picture = runtime ? picture_worker_request(&runtime->video_control,
-        runtime->video, &video_status, config, NULL, NULL) : PICTURE_UNAVAILABLE;
-    if (picture == PICTURE_DEFERRED) { free(body); return; }
     if (runtime != NULL) c100x_display_capability(&runtime->c100x_activation, c100x, sizeof(c100x));
     struct c300x_activation_routes activations = runtime != NULL ? activation_routes(config, runtime)
                                                                  : (struct c300x_activation_routes){0};
@@ -5087,7 +5084,7 @@ static void api_capabilities(
         .memo_led_present = runtime != NULL && runtime->memo_led.claim_dir >= 0,
         /* Firmware 3.0.x has no IPv6 firewall start script to patch. */
         .ipv6_firewall_hook = access(config->maintenance_ipv6_firewall_path, F_OK) == 0,
-        .picture_supported = picture == PICTURE_DIRECT || (runtime && c300x_gui_supports_picture(&runtime->ringer_control)),
+        .picture_supported = picture_controls_supported(),
         .device_firmware = firmware_value,
         .bundle_hash = bundle_hash,
         .maintenance_supported = maintenance_auth_available(config),
@@ -5398,9 +5395,7 @@ static void handle_doorbell_video_get(
             sizeof(last_error_quoted)
         );
     }
-    enum picture_route picture = runtime ? picture_worker_request(&runtime->video_control,
-        runtime->video, &video_status, config, NULL, NULL) : PICTURE_UNAVAILABLE;
-    if (picture == PICTURE_DEFERRED) { free(body); return; }
+    int picture = picture_controls_supported();
     window_available = (
         ring_call_active
         || ring_media_active
@@ -5496,9 +5491,8 @@ static void handle_doorbell_video_get(
         stream_path,
         audio_stream_path,
         recorder_stream_path,
-        picture == PICTURE_DIRECT || (runtime && c300x_gui_supports_picture(&runtime->ringer_control)) ? "true" : "false",
-        picture == PICTURE_DIRECT ? "\"ring_and_on_demand\"" :
-            (runtime && c300x_gui_supports_picture(&runtime->ringer_control) ? "\"ring\"" : "null"),
+        picture ? "true" : "false",
+        picture ? "\"ring_and_on_demand\"" : "null",
         config->video_enabled ? "true" : "false",
         running ? "true" : "false",
         bridge_running ? "true" : "false",
@@ -8361,7 +8355,7 @@ static void handle_api_request(
         return;
     }
     if (strcmp(request->path, "/api/v1/video/picture") == 0) {
-        picture_request(&runtime->ringer_control, &runtime->video_control, runtime->video, config, client_fd, request);
+        picture_request(config, client_fd, request);
         return;
     }
     if (strcmp(request->path, "/api/v1/display/alert") == 0) {
@@ -9012,7 +9006,6 @@ int c300x_run(struct c300x_config *config)
     c300x_announce_init(&runtime->announce);
     (void)c300x_openwebnet_async_init(&runtime->openwebnet, &runtime->request_queue);
     (void)c300x_video_control_init(&runtime->video_control, &runtime->request_queue);
-    runtime->video_control.shutdown = &shutdown_requested;
     runtime->display_client_fd = -1;
     c300x_mdns_init(&mdns);
     c300x_mqtt_init(&runtime->mqtt);

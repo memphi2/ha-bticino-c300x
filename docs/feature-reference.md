@@ -186,7 +186,7 @@ unit of the current call, else the default unit. Areas, floors, labels and
 
 | Action `bticino_c300x.` | Purpose | Main fields |
 | --- | --- | --- |
-| `activate_doorbell_video` | Starts or renews on-demand video. | `audio` (default on) |
+| `activate_doorbell_video` | Starts or renews on-demand video in the default unit's doorbell camera: of the targeted outdoor unit, else of the unit of the current call, else of the default unit. A view of another unit ends the running one first. During a Ring Call the camera shows the unit that rang. A unit the station cannot view is refused with a message. | `audio` (default on) |
 | `answer_call`, `hangup_call` | Answers or hangs up the current Ring Call. Without a ring, `hangup_call` ends a running on-demand view. With `call_id` only that call: for a call that is over or no longer current, or with an outdoor unit as target a call of another unit, the action fails ("That call is over or is not the current call.") and nothing is sent. | `call_id` |
 | `start_home_call`, `stop_home_call` | Audio-only Home Call to the station display. | `duration_seconds` |
 | `camera_picture` | Reads brightness, contrast and saturation of the active live video, or changes one. Returns all three. | `control`, `value` (0-100 in steps of 10) |
@@ -236,7 +236,7 @@ assumed.
 | --- | --- | --- |
 | `doorbell_pressed` | Someone rang. | `camera_entity_id`, `video_available`, `doorbell` |
 | `call_caller_identified` | The station named the unit that rings. | |
-| `call_answered`, `call_view_started`, `call_ended` | A call was answered, a view started, a call ended. | |
+| `call_answered`, `call_view_started`, `call_ended` | A call was answered, a view started, a call ended. | `call_answered`: `data.answered_by` `ha`, `station` (the display or the app) or `answering_machine`. `call_ended`: `data.reason`, for example `hangup`, `timeout`, `media_closed`, `superseded` (a view of another unit), `station_idle` (the station went idle) |
 | `station_call_state` | The station's own call state changed (station device). | `data`: `code` and `state`: `idle`, `setup`, `ringing`, `viewing`, `waiting`, `conversation`, `answering_machine`, `greeting`, `recording`, or `null` for a code without a known meaning |
 | `outdoor_units_changed` | The station's outdoor units changed. | |
 | `door_opened`, `door_closed` | The door contact of an outdoor unit reports its door open or closed (outdoor unit device; only a unit wired with a door contact). | `data`: `unit`, `where`, `raw` |

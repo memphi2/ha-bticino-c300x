@@ -1748,7 +1748,7 @@
       "message": "The station has no such outdoor unit."
     },
     "unit_video_unsupported": {
-      "message": "On-demand video is available for the default outdoor unit only."
+      "message": "The station cannot show on-demand video of this outdoor unit."
     }
   },
   "issues": {

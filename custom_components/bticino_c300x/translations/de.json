@@ -1748,7 +1748,7 @@
       "message": "Die Station hat keine solche Außenstelle."
     },
     "unit_video_unsupported": {
-      "message": "Video auf Anfrage gibt es nur für die Standard-Außenstelle."
+      "message": "Die Station kann von dieser Außenstelle kein Video auf Anfrage zeigen."
     }
   },
   "issues": {

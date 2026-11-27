@@ -112,6 +112,14 @@ devices, entities and services; a Repair lists what to redo after the update.
 - **Station call state.** A new sensor on the station shows what the station
   itself is doing with a call: `idle`, `setup`, `ringing`, `viewing`,
   `waiting`, `conversation`, `answering_machine`, `greeting` or `recording`.
+- **On-demand video of every outdoor unit.** `activate_doorbell_video` with
+  an outdoor unit as target shows that unit in the doorbell camera; without
+  a unit target it shows the unit of the current call, else the default unit.
+  Before, only the default unit had on-demand video.
+- **Calls follow the station.** A call ends when the station goes idle, also
+  when its end message was lost (`call_ended` reason `station_idle`), and a
+  call that the answering machine takes is answered with `answered_by`
+  `answering_machine`.
 - The native agent changed; an agent update is required. Until the agent
   update Repair has run, the integration shows no entities: the devices and
   entities move to the outdoor units with that update.

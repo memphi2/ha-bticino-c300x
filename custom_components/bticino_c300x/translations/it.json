@@ -1748,7 +1748,7 @@
       "message": "La stazione non ha questo posto esterno."
     },
     "unit_video_unsupported": {
-      "message": "Il video su richiesta è disponibile solo per il posto esterno predefinito."
+      "message": "La stazione non può mostrare video su richiesta di questo posto esterno."
     }
   },
   "issues": {

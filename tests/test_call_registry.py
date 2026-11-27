@@ -133,6 +133,27 @@ def test_set_calls_takes_the_agents_list() -> None:
     assert registry.unit_state("20_2") == ("idle", None)
 
 
+def test_the_answering_machine_and_the_station_idle_end_reach_the_calls() -> None:
+    """The agent's 3.1.0 values: answered_by answering_machine, reason station_idle."""
+
+    payload = normalize_calls({
+        "boot_id": "0badc0de", "current_call_id": None,
+        "calls": [
+            {"call_id": "0badc0de-2", "kind": "ring", "state": "answered", "unit": "21",
+             "answered_by": "answering_machine"},
+            {"call_id": "0badc0de-1", "kind": "ring", "state": "ended", "unit": "21",
+             "answered_by": "station", "end_reason": "station_idle"},
+        ],
+    })
+    assert [(call.answered_by, call.end_reason) for call in payload.calls] == [
+        ("answering_machine", None), ("station", "station_idle")]
+    registry = C300XCallRegistry()
+    registry.set_calls(payload)
+    registry.apply_event("call_ended", {"call_id": "0badc0de-2", "reason": "station_idle"})
+    assert (registry.calls["0badc0de-2"].answered_by, registry.calls["0badc0de-2"].end_reason) == (
+        "answering_machine", "station_idle")
+
+
 def test_stored_units_round_trip() -> None:
     payload = normalize_outdoor_units(UNITS)
     stored = units_to_stored(payload)

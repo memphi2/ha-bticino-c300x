@@ -57,8 +57,9 @@ class _ApiMediaMixin(_C300XApiCore):
     ) -> dict[str, Any]:
         """Start or renew the native doorbell video call on demand.
 
-        ``unit`` names the outdoor unit; another than the default one raises
-        C300XUnitVideoUnsupportedError.
+        ``unit`` names the outdoor unit; without it the agent takes the
+        current call's unit, else the default unit. A unit the station cannot
+        view raises C300XUnitVideoUnsupportedError.
         """
 
         body: dict[str, Any] = {"audio": bool(audio)}

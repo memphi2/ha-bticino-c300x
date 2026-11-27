@@ -1748,7 +1748,7 @@
       "message": "La estación no tiene esa placa exterior."
     },
     "unit_video_unsupported": {
-      "message": "El vídeo a petición solo está disponible para la placa exterior predeterminada."
+      "message": "La estación no puede mostrar vídeo a petición de esta placa exterior."
     }
   },
   "issues": {

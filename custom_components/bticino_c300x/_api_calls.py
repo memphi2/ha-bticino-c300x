@@ -108,7 +108,8 @@ def normalize_call(item: Any) -> Call | None:
         state=state,
         unit=valid_unit_id(item.get("unit")),
         attribution=_text(item.get("attribution"), 24) or "pending",
-        answered_by=_text(item.get("answered_by"), 16) or None,
+        # ha, station or answering_machine (the station's answering machine took it).
+        answered_by=_text(item.get("answered_by"), 24) or None,
         end_reason=_text(item.get("end_reason") or item.get("reason"), 24) or None,
     )
 

@@ -1748,7 +1748,7 @@
       "message": "La station n'a pas cette platine de rue."
     },
     "unit_video_unsupported": {
-      "message": "La vidéo à la demande n'est disponible que pour la platine de rue par défaut."
+      "message": "La station ne peut pas afficher de vidéo à la demande de cette platine de rue."
     }
   },
   "issues": {

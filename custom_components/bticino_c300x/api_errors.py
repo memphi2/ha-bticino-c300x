@@ -79,7 +79,7 @@ class C300XUnknownUnitError(C300XAgentApiConnectionError):
 
 
 class C300XUnitVideoUnsupportedError(C300XAgentApiConnectionError):
-    """The agent answered `409 unit_video_unsupported`: only the default unit has on-demand video."""
+    """The agent answered `409 unit_video_unsupported`: the station cannot view that unit's address."""
 
 
 class C300XAgentApiAuthError(C300XAgentApiError):

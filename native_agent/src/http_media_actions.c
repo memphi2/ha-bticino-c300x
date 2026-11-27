@@ -9,11 +9,12 @@
 
 /* Zero: the handler returns; the request runs again or was answered here. */
 static int ran(int client_fd, struct c300x_video_control *control, struct c300x_video *video,
-               enum c300x_video_control_op op, int argument, int *result)
+               enum c300x_video_control_op op, int argument, const char *where, int *result)
 {
     const char *error = "";
     char body[96];
-    enum c300x_video_control_state state = c300x_video_control_run(control, video, op, argument, result, &error);
+    enum c300x_video_control_state state = c300x_video_control_run(control, video, op, argument, where, result,
+                                                                   &error);
 
     if (state == C300X_VIDEO_CONTROL_REFUSED) {
         snprintf(body, sizeof(body), "{\"ok\":false,\"error\":\"%s\"}\n", error);
@@ -25,60 +26,40 @@ static int ran(int client_fd, struct c300x_video_control *control, struct c300x_
 void c300x_http_doorbell_video_activate(
     int client_fd,
     struct c300x_video_control *control, struct c300x_video *video,
-    const struct request *request
+    const struct request *request, const char *devaddr
 )
 {
     int audio = 1;
     int done;
     char body[2048];
     char last_error_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ERROR_LEN)];
+    struct c300x_video_status status;
 
     if (video == NULL) {
         c300x_http_send_json(client_fd, 503, "Service Unavailable", "{\"ok\":false,\"error\":\"video_unavailable\"}\n");
         return;
     }
     (void)c300x_json_bool_field(request->body, "audio", &audio);
-    {
-        struct c300x_video_status status;
-
-        c300x_video_status(video, &status);
-        if (status.ring_call_active || status.ring_media_active) {
-            snprintf(
-                body,
-                sizeof(body),
-                "{\"ok\":true,\"audio\":%s,\"ring_active\":true,\"media_owner\":\"ring\"}\n",
-                audio ? "true" : "false"
-            );
-            c300x_http_send_json(client_fd, 200, "OK", body);
-            return;
-        }
+    c300x_video_status(video, &status);
+    if (status.ring_call_active || status.ring_media_active) {
+        snprintf(body, sizeof(body), "{\"ok\":true,\"audio\":%s,\"ring_active\":true,\"media_owner\":\"ring\"}\n",
+                 audio ? "true" : "false");
+        c300x_http_send_json(client_fd, 200, "OK", body);
+        return;
     }
-    if (!ran(client_fd, control, video, C300X_VIDEO_CONTROL_ACTIVATE, audio, &done)) {
+    if (!ran(client_fd, control, video, C300X_VIDEO_CONTROL_ACTIVATE, audio, devaddr, &done)) {
         return;
     }
     if (!done) {
-        struct c300x_video_status status;
-        int http_status;
-        const char *http_text;
-        const char *error;
         c300x_video_status(video, &status);
-        error = status.last_error[0] != '\0' ? status.last_error : "unknown";
-        http_status = strcmp(error, "external_session_active") == 0 ? 409 : 503;
-        http_text = http_status == 409 ? "Conflict" : "Service Unavailable";
-        c300x_json_string(
-            error,
-            last_error_json,
-            sizeof(last_error_json)
-        );
-        snprintf(
-            body,
-            sizeof(body),
-            "{\"ok\":false,\"error\":\"%s\",\"last_error\":%s,\"external_media_active\":%s}\n",
-            http_status == 409 ? "external_session_active" : "video_activate_failed",
-            last_error_json,
-            status.external_media_active ? "true" : "false"
-        );
-        c300x_http_send_json(client_fd, http_status, http_text, body);
+        const char *error = status.last_error[0] != '\0' ? status.last_error : "unknown";
+        int conflict = strcmp(error, "external_session_active") == 0;
+        snprintf(body, sizeof(body),
+                 "{\"ok\":false,\"error\":\"%s\",\"last_error\":%s,\"external_media_active\":%s}\n",
+                 conflict ? "external_session_active" : "video_activate_failed",
+                 c300x_json_string(error, last_error_json, sizeof(last_error_json)),
+                 status.external_media_active ? "true" : "false");
+        c300x_http_send_json(client_fd, conflict ? 409 : 503, conflict ? "Conflict" : "Service Unavailable", body);
         return;
     }
     snprintf(body, sizeof(body), "{\"ok\":true,\"audio\":%s}\n", audio ? "true" : "false");
@@ -89,7 +70,7 @@ void c300x_http_doorbell_video_stop(int client_fd, struct c300x_video_control *c
 {
     int done;
 
-    if (video != NULL && !ran(client_fd, control, video, C300X_VIDEO_CONTROL_STOP, 0, &done)) {
+    if (video != NULL && !ran(client_fd, control, video, C300X_VIDEO_CONTROL_STOP, 0, NULL, &done)) {
         return;
     }
     c300x_http_send_json(client_fd, 200, "OK", "{\"ok\":true}\n");
@@ -110,7 +91,7 @@ int c300x_http_doorbell_call_answer(
         c300x_http_send_json(client_fd, 503, "Service Unavailable", "{\"ok\":false,\"error\":\"video_unavailable\"}\n");
         return 0;
     }
-    if (!ran(client_fd, control, video, C300X_VIDEO_CONTROL_ANSWER, 0, &done)) {
+    if (!ran(client_fd, control, video, C300X_VIDEO_CONTROL_ANSWER, 0, NULL, &done)) {
         return 0;
     }
     if (!done) {
@@ -138,7 +119,7 @@ int c300x_http_doorbell_call_hangup(int client_fd, struct c300x_video_control *c
 {
     int done;
 
-    if (video != NULL && !ran(client_fd, control, video, C300X_VIDEO_CONTROL_HANGUP, 0, &done)) {
+    if (video != NULL && !ran(client_fd, control, video, C300X_VIDEO_CONTROL_HANGUP, 0, NULL, &done)) {
         return 0;
     }
     c300x_http_send_json(client_fd, 200, "OK", "{\"ok\":true}\n");
@@ -166,7 +147,7 @@ void c300x_http_home_call_start(
         c300x_http_send_json(client_fd, 503, "Service Unavailable", "{\"ok\":false,\"error\":\"video_unavailable\"}\n");
         return;
     }
-    if (!ran(client_fd, control, video, C300X_VIDEO_CONTROL_HOME_START, duration_seconds, &done)) {
+    if (!ran(client_fd, control, video, C300X_VIDEO_CONTROL_HOME_START, duration_seconds, NULL, &done)) {
         return;
     }
     if (!done) {
@@ -201,7 +182,7 @@ void c300x_http_home_call_stop(int client_fd, struct c300x_video_control *contro
 {
     int done;
 
-    if (video != NULL && !ran(client_fd, control, video, C300X_VIDEO_CONTROL_HOME_STOP, 0, &done)) {
+    if (video != NULL && !ran(client_fd, control, video, C300X_VIDEO_CONTROL_HOME_STOP, 0, NULL, &done)) {
         return;
     }
     c300x_http_send_json(client_fd, 200, "OK", "{\"ok\":true}\n");

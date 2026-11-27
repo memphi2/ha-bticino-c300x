@@ -4,6 +4,7 @@
 #include "device_detect.h"
 #include "device_user.h"
 #include "audio_level.h"
+#include "media_unit.h"
 #include "media_audio.h"
 #include "talkback_g711.h"
 #include "media_base64.h"
@@ -121,10 +122,6 @@ static int audio_rtp_port(const struct c300x_config *config) {
     return (int)config->video_rtp_port_start;
 }
 
-static int doorbell_devaddr(const struct c300x_config *config) {
-    int devaddr = atoi(config->video_sip_devaddr);
-    return devaddr > 0 ? devaddr : 20;
-}
 
 typedef struct {
     int fd;
@@ -3524,7 +3521,7 @@ static void *ondemand_media_thread(void *arg) {
     return NULL;
 }
 
-static bool send_sip_setup(media_bridge_t *bridge, unsigned long generation) {
+static bool send_sip_setup(media_bridge_t *bridge, unsigned long generation, const char *devaddr) {
     char domain[128];
     char domain_hint[128] = "";
     char from_user[128];
@@ -3724,7 +3721,7 @@ static bool send_sip_setup(media_bridge_t *bridge, unsigned long generation) {
         "b=AS:380\r\n"
         "t=0 0\r\n"
         "a=rtcp-xr:rcvr-rtt=all:10000 stat-summary=loss,dup,jitt,TTL voip-metrics\r\n"
-        "a=DEVADDR:%d\r\n"
+        "a=DEVADDR:%s\r\n"
         "a=nortpproxy:yes\r\n"
         "m=audio %d RTP/SAVP %s\r\n"
         "%s"
@@ -3744,7 +3741,7 @@ static bool send_sip_setup(media_bridge_t *bridge, unsigned long generation) {
         from_user,
         local_ip,
         local_ip,
-        doorbell_devaddr(bridge->config),
+        devaddr,
         MEDIA_AUDIO_RTP_PORT,
         audio_formats,
         audio_codec_attributes,
@@ -4980,7 +4977,9 @@ static bool start_media_session(media_bridge_t *bridge) {
     pthread_mutex_unlock(&bridge->mutex);
     c300x_video_bridge_media_starting(bridge->video);
 
-    if (!send_sip_setup(bridge, generation)) {
+    char devaddr[C300X_MEDIA_DEVADDR_LEN]; /* the unit to show */
+    c300x_media_unit_begin(bridge->config->video_sip_devaddr, devaddr, sizeof(devaddr));
+    if (!send_sip_setup(bridge, generation, devaddr)) {
         char sip_error[64];
         snprintf(sip_error, sizeof(sip_error), "ondemand_sip_setup_failed:%s",
                  bridge->ondemand_sip_fail);
@@ -5067,6 +5066,7 @@ static void stop_media_session_locked(bool close_client, bool explicit_stop) {
     pthread_t ondemand_media_thread_id;
     pthread_t talkback_thread;
 
+    c300x_media_unit_end();
     from_aor[0] = '\0';
     to_aor[0] = '\0';
     local_ip[0] = '\0';

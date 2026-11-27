@@ -3,12 +3,13 @@
 
 #include "request_worker.h"
 #include "picture_control.h"
+#include "media_unit.h"
 #include <signal.h>
 
 struct c300x_video;
 
 enum c300x_video_control_op {
-    C300X_VIDEO_CONTROL_ACTIVATE = 1, /* argument: with audio */
+    C300X_VIDEO_CONTROL_ACTIVATE = 1, /* argument: with audio; where: the unit's DEVADDR, "" the default */
     C300X_VIDEO_CONTROL_STOP,
     C300X_VIDEO_CONTROL_ANSWER,
     C300X_VIDEO_CONTROL_HANGUP,
@@ -21,6 +22,7 @@ struct c300x_video_control_job {
     struct c300x_video *video;
     enum c300x_video_control_op op;
     int argument;
+    char where[C300X_MEDIA_DEVADDR_LEN];
     int result;
     struct picture_command picture;
     const struct c300x_config *picture_config;
@@ -68,10 +70,10 @@ int c300x_video_control_deferred(const struct c300x_video_control *control);
 /* deferred: the request runs again, here or for the OpenWebNet worker. */
 void c300x_video_control_end(struct c300x_video_control *control, int deferred);
 void c300x_video_control_abandon(struct c300x_video_control *control, int client_fd);
-/* DONE sets *result, REFUSED sets *error. */
+/* DONE sets *result, REFUSED sets *error. where may be NULL (""). */
 enum c300x_video_control_state c300x_video_control_run(
     struct c300x_video_control *control, struct c300x_video *video,
-    enum c300x_video_control_op op, int argument, int *result, const char **error);
+    enum c300x_video_control_op op, int argument, const char *where, int *result, const char **error);
 /* Let a running operation end before the loop itself changes the media state. */
 void c300x_video_control_settle(struct c300x_video_control *control);
 

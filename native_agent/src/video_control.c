@@ -1,5 +1,6 @@
 #include "video_control.h"
 
+#include <stdio.h>
 #include <string.h>
 
 #include "video_rtsp.h"
@@ -15,7 +16,7 @@ static void execute(void *context)
         picture_worker_execute(job);
         break;
     case C300X_VIDEO_CONTROL_ACTIVATE:
-        job->result = c300x_video_activate(job->video, job->argument);
+        job->result = c300x_video_activate(job->video, job->argument, job->where);
         break;
     case C300X_VIDEO_CONTROL_STOP:
         c300x_video_stop(job->video);
@@ -48,23 +49,18 @@ void c300x_video_control_settle(struct c300x_video_control *control)
     }
 }
 
-static int run_here(struct c300x_video *video, enum c300x_video_control_op op, int argument)
-{
-    struct c300x_video_control_job job = {.video = video, .op = op, .argument = argument};
-
-    execute(&job);
-    return job.result;
-}
-
 enum c300x_video_control_state c300x_video_control_run(
     struct c300x_video_control *control, struct c300x_video *video,
-    enum c300x_video_control_op op, int argument, int *result, const char **error)
+    enum c300x_video_control_op op, int argument, const char *where, int *result, const char **error)
 {
     struct c300x_request_worker *worker = &control->worker;
+    struct c300x_video_control_job job = {.video = video, .op = op, .argument = argument};
 
+    snprintf(job.where, sizeof(job.where), "%s", where != NULL ? where : "");
     if (worker->armed_fd < 0) {
         /* No wake pipe: on the loop, as before. */
-        *result = run_here(video, op, argument);
+        execute(&job);
+        *result = job.result;
         return C300X_VIDEO_CONTROL_DONE;
     }
     if (worker->deferred) {
@@ -82,7 +78,8 @@ enum c300x_video_control_state c300x_video_control_run(
     case C300X_REQUEST_WORKER_MINE:
         break;
     }
-    if (control->has_result && control->job.op == op && control->job.argument == argument) {
+    if (control->has_result && control->job.op == op && control->job.argument == argument
+        && strcmp(control->job.where, job.where) == 0) {
         *result = control->job.result;
         return C300X_VIDEO_CONTROL_DONE;
     }
@@ -97,7 +94,7 @@ enum c300x_video_control_state c300x_video_control_run(
         return C300X_VIDEO_CONTROL_REFUSED;
     }
     control->has_result = 0;
-    control->job = (struct c300x_video_control_job){.video = video, .op = op, .argument = argument};
+    control->job = job;
     if (!c300x_request_worker_start(worker)) {
         /* No thread: on the loop, as before. Kept, should the handler run again. */
         execute(&control->job);

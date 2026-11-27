@@ -1383,9 +1383,18 @@ Capabilities report `api_version: "2"`, `capabilities.outdoor_units` and
   `current`; optional body `{"call_id": "..."}`, which must be a call of that
   unit, live or ended less than 60 s ago (else `409 call_not_current`).
   `404 unknown_unit` for an unknown unit.
-- `POST /api/v1/video/doorbell/actions/activate` takes an optional `unit`;
-  on-demand video of a unit other than the default one answers
-  `409 unit_video_unsupported`.
+- `POST /api/v1/video/doorbell/actions/activate` takes an optional `unit`
+  (without it: the current call's unit, else the default unit). During a ring
+  the ring's video is shown whatever unit is asked (`ring_active: true`). On
+  demand, the INVITE's `a=DEVADDR` names the unit: `video.sip.devaddr` for the
+  default unit, as before, the unit's full address (`where`, verbatim, e.g.
+  `21` or `20#2`) for any other. The station's bt_answering_machine sends a
+  view for a DEVADDR that starts with `2` and whose number before `#` is below
+  96 (`*8*4#1<own>*<DEVADDR>##`); another unit gets
+  `409 unit_video_unsupported`. A running view of another unit ends first
+  (BYE, its cached frames dropped, `doorbell.media.closed`, the view call
+  ends); the RTSP clients stay connected and get the new unit's view. The unit
+  stays selected for later streams until the next activation.
 
 Events: `doorbell.pressed` carries `call_id`, `unit` and `attribution`; new are
 `call.caller_identified`, `call.answered`, `call.view_started`, `call.ended`

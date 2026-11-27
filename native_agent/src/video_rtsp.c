@@ -1,4 +1,5 @@
 #include "video_rtsp.h"
+#include "media_unit.h"
 #include "string_util.h"
 
 #include "media_bridge.h"
@@ -299,8 +300,10 @@ void c300x_video_set_ring_receiver_enabled(struct c300x_video *video, int enable
     }
 }
 
-int c300x_video_activate(struct c300x_video *video, int include_audio)
+int c300x_video_activate(struct c300x_video *video, int include_audio, const char *devaddr)
 {
+    char unit[C300X_MEDIA_DEVADDR_LEN];
+
     if (video == NULL || !video->enabled) {
         return 0;
     }
@@ -313,6 +316,12 @@ int c300x_video_activate(struct c300x_video *video, int include_audio)
         return 0;
     }
     pthread_mutex_unlock(&video->mutex);
+    /* Another unit's view ends first (BYE, its clients parked, its frames
+     * dropped from the cache); the parked clients then get this unit's. */
+    c300x_media_unit_request(devaddr, video->config->video_sip_devaddr, unit, sizeof(unit));
+    if (c300x_media_unit_other(unit)) {
+        c300x_media_session_stop(video);
+    }
     c300x_media_session_note_explicit_activate(video);
     if (!c300x_video_ensure_running(video)) {
         return 0;

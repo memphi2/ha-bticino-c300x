@@ -230,12 +230,15 @@ locks that are not outdoor units.
 it the unit is the current call's, else the default unit. A ring call always
 shows the calling unit; the station switches the picture itself.
 
-On-demand video of a unit other than the default one (phase D) is **not yet
-supported**: it answers `409 unit_video_unsupported`. Later, with its own
-concept that includes how the card handles several units' video. Design note: the
-request's `unit` (and an RTSP `?unit=<unit_id>` for a stream started by
-`PLAY`) selects the SDP `a=DEVADDR:<action_where>` of that one session instead
-of `video.sip.devaddr`; a running view of another unit is stopped first.
+On demand, the request's `unit` selects the INVITE's `a=DEVADDR`: the default
+unit keeps `video.sip.devaddr`; any other unit sends its full `where`
+verbatim (`21`, `20#2`), which bt_answering_machine turns into
+`*8*4#1<own>*<DEVADDR>##` when it starts with `2` and its number before `#`
+is below 96 (else `409 unit_video_unsupported`). A running view of another
+unit is stopped first (BYE, on-demand GOP cache dropped), then the parked
+RTSP clients get the new unit's INVITE; the view frame
+`*8*1#5#4#<where>*<own>##` attributes the view call to that unit. The
+selection stays for later streams until the next activation.
 
 ### Errors
 
@@ -243,7 +246,7 @@ of `video.sip.devaddr`; a running view of another unit is stopped first.
 | --- | --- | --- |
 | `409` | `call_not_current` | The `call_id` is unknown (also from an earlier boot), ended, or not the current call; for unlock: not that unit's call or ended more than 60 s ago. The body carries `current_call_id` (or `null`). Nothing is sent to the station. |
 | `404` | `unknown_unit` | No unit with that id. |
-| `409` | `unit_video_unsupported` | On-demand video of a non-default unit. |
+| `409` | `unit_video_unsupported` | On-demand video of a unit whose address the station does not view (not `2…`, or 96 and above before `#`). |
 | `400` | `invalid_call_id` | Empty or longer than 32 characters. |
 
 ### Events

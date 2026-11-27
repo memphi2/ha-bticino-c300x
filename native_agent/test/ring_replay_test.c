@@ -8,6 +8,8 @@
 #include "../src/device_user.h"
 #include "../src/media_sip.h"
 #include "../src/media_sip_io.h"
+#include "../src/media_gop_cache.h"
+#include "../src/media_unit.h"
 
 #define SIP_BUFFER_SIZE 8192
 
@@ -139,6 +141,35 @@ static atomic_int station_busy = 1;
 static atomic_int end_before_486, end_after_486;
 static void bus(const char *frame);
 static pthread_mutex_t codes_mutex = PTHREAD_MUTEX_INITIALIZER;
+/* In order: "I<DEVADDR>" per INVITE the station got, "B" per BYE the agent
+ * sent, "G" per drop of the on-demand view's cached frames. */
+static char station_log[512];
+
+static void log_station(const char *entry) {
+    pthread_mutex_lock(&codes_mutex);
+    size_t used = strlen(station_log);
+    snprintf(station_log + used, sizeof(station_log) - used, "%s%s", used ? " " : "", entry);
+    pthread_mutex_unlock(&codes_mutex);
+}
+
+/* The BYE as the agent sends it: it does not wait for the station's answer,
+ * which comes on another connection than the next INVITE. */
+void __real_c300x_media_sip_send_bye(int fd, const char *from_aor, const char *to_aor, const char *local_ip,
+                                     uint16_t local_port, const char *transport, const char *to_header,
+                                     const char *from_tag, const char *call_id, const char *contact_uri);
+void __wrap_c300x_media_sip_send_bye(int fd, const char *from_aor, const char *to_aor, const char *local_ip,
+                                     uint16_t local_port, const char *transport, const char *to_header,
+                                     const char *from_tag, const char *call_id, const char *contact_uri) {
+    log_station("B");
+    __real_c300x_media_sip_send_bye(fd, from_aor, to_aor, local_ip, local_port, transport, to_header, from_tag,
+                                    call_id, contact_uri);
+}
+
+void __real_c300x_media_gop_reset(enum c300x_media_gop_source source);
+void __wrap_c300x_media_gop_reset(enum c300x_media_gop_source source) {
+    if (source == C300X_MEDIA_GOP_ONDEMAND) log_station("G");
+    __real_c300x_media_gop_reset(source);
+}
 static int ring_codes[64];
 static int ring_code_count;
 
@@ -189,6 +220,10 @@ static void *station_connection(void *arg) {
             }
             reply(fd, message, 200, "Registration successful", NULL);
         } else if (strncmp(message, "INVITE ", 7) == 0) {
+            char devaddr[32], entry[40];
+            header(message, "a=DEVADDR:", devaddr, sizeof(devaddr));
+            snprintf(entry, sizeof(entry), "I%s", devaddr);
+            log_station(entry);
             atomic_fetch_add(&ondemand_invites, 1);
             if (atomic_exchange(&end_before_486, 0)) {
                 bus("*8*3#1#4*411##");
@@ -373,7 +408,7 @@ static void ring_starts(int *preview) {
 /* A Stream press: activate plus one go2rtc PLAY, both refused. */
 static void stream_press_refused(const char *reason) {
     struct c300x_video_status current;
-    assert(!c300x_video_activate(runtime->video, 1));
+    assert(!c300x_video_activate(runtime->video, 1, NULL));
     status(&current);
     assert(strcmp(current.last_error, reason) == 0);
     int fd = rtsp_open();
@@ -407,7 +442,7 @@ static void display_answer(bool end_frame_lost) {
     assert(strcmp(current.media_owner, "external_media") == 0);
 
     /* HA's Stream press during the display call. */
-    assert(!c300x_video_activate(runtime->video, 1));
+    assert(!c300x_video_activate(runtime->video, 1, NULL));
     status(&current);
     assert(strcmp(current.last_error, "external_session_active") == 0);
     assert(atomic_load(&ondemand_invites) == 0);
@@ -439,7 +474,7 @@ static void display_answer(bool end_frame_lost) {
         assert(!current.external_media_active);
         assert(strcmp(current.media_owner, "idle") == 0);
         atomic_store(&station_busy, 0);
-        assert(c300x_video_activate(runtime->video, 1));
+        assert(c300x_video_activate(runtime->video, 1, NULL));
         int fd = rtsp_open();
         assert(rtsp_play(fd, "/doorbell") == 200);
         assert(atomic_load(&ondemand_invites) == 1);
@@ -554,8 +589,9 @@ static void two_units(void) {
     assert(strstr(data, "\"error\":\"call_not_current\"") && strstr(data, id));
     assert(calls_api("GET", "/api/v1/outdoor-units", "", data, sizeof(data)) == 200);
     assert(strstr(data, "\"id\":\"21\",\"where\":\"21\"") && strstr(data, "\"source\":\"seen\""));
-    assert(calls_api("POST", "/api/v1/video/doorbell/actions/activate", "{\"unit\":\"21\"}", data, sizeof(data)) == 409);
-    assert(strstr(data, "unit_video_unsupported"));
+    /* During a ring the ring's video is shown, whatever unit is asked. */
+    assert(calls_api("POST", "/api/v1/video/doorbell/actions/activate", "{\"unit\":\"21\"}", data, sizeof(data)) == 200);
+    assert(strstr(data, "\"ring_active\":true"));
     snprintf(path, sizeof(path), "{\"call_id\":\"%s\"}", id);
     assert(calls_api("POST", "/api/v1/outdoor-units/21/actions/unlock", path, data, sizeof(data)) == 409);
 
@@ -738,7 +774,7 @@ static void lifecycle_ha_answer_station_hangup(void) {
 static void lifecycle_ondemand_view(void) {
     char data[4096], id[32];
     atomic_store(&station_busy, 0);
-    assert(c300x_video_activate(runtime->video, 1));
+    assert(c300x_video_activate(runtime->video, 1, NULL));
     int fd = rtsp_open();
     assert(rtsp_play(fd, "/doorbell") == 200);
     bus("*8*1#5#4#20*11##");
@@ -921,7 +957,7 @@ static void abandoned_answer_then_station(void) {
 static void view_is_current(void) {
     char data[4096], id[32];
     atomic_store(&station_busy, 0);
-    assert(c300x_video_activate(runtime->video, 1));
+    assert(c300x_video_activate(runtime->video, 1, NULL));
     int fd = rtsp_open();
     assert(rtsp_play(fd, "/doorbell") == 200);
     bus("*8*1#5#4#20*11##");
@@ -1048,7 +1084,7 @@ static void station_busy_case(bool freed_by_bus) {
         close(fd);
         wait_clients(0);
     }
-    assert(!c300x_video_activate(runtime->video, 1));
+    assert(!c300x_video_activate(runtime->video, 1, NULL));
     status(&current);
     assert(strcmp(current.last_error, "station_busy") == 0);
     assert(!current.external_media_active && strcmp(current.media_owner, "idle") == 0);
@@ -1064,7 +1100,7 @@ static void station_busy_case(bool freed_by_bus) {
     } else {
         atomic_store(&clock_offset, 66000);
     }
-    assert(c300x_video_activate(runtime->video, 1));
+    assert(c300x_video_activate(runtime->video, 1, NULL));
     fd = rtsp_open();
     assert(rtsp_play(fd, "/doorbell") == 200);
     assert(atomic_load(&ondemand_invites) == 2);
@@ -1089,7 +1125,7 @@ static void station_freed_during_start(bool before_486) {
     usleep(100000);
     assert(count_events("doorbell.media.closed") == 0);
     atomic_store(&station_busy, 0);
-    assert(c300x_video_activate(runtime->video, 1));
+    assert(c300x_video_activate(runtime->video, 1, NULL));
     fd = rtsp_open();
     assert(rtsp_play(fd, "/doorbell") == 200);
     assert(atomic_load(&ondemand_invites) == 2);
@@ -1104,6 +1140,88 @@ static uint16_t bound_port(int fd) {
     socklen_t length = sizeof(address);
     assert(getsockname(fd, (struct sockaddr *)&address, &length) == 0);
     return ntohs(address.sin_port);
+}
+
+static void wait_invites(int count) {
+    long long deadline = __real_c300x_monotonic_ms() + WAIT_MS;
+    while (atomic_load(&ondemand_invites) < count) {
+        assert(__real_c300x_monotonic_ms() < deadline);
+        usleep(5000);
+    }
+}
+
+/* Between two INVITEs only the count of BYEs and cache drops is compared ("B G"). */
+static void expect_log(const char *expected) {
+    char seen[sizeof(station_log)], *save = NULL;
+    size_t used = 0;
+    int byes = 0, drops = 0;
+    pthread_mutex_lock(&codes_mutex);
+    char copy[sizeof(station_log)];
+    snprintf(copy, sizeof(copy), "%s", station_log);
+    pthread_mutex_unlock(&codes_mutex);
+    seen[0] = '\0';
+    for (char *token = strtok_r(copy, " ", &save);; token = strtok_r(NULL, " ", &save)) {
+        if (token == NULL || token[0] == 'I') {
+            for (; byes > 0; byes--) used += (size_t)snprintf(seen + used, sizeof(seen) - used, "%sB", used ? " " : "");
+            for (; drops > 0; drops--) used += (size_t)snprintf(seen + used, sizeof(seen) - used, "%sG", used ? " " : "");
+            if (token == NULL) break;
+            used += (size_t)snprintf(seen + used, sizeof(seen) - used, "%s%s", used ? " " : "", token);
+        } else if (token[0] == 'B') {
+            byes++;
+        } else {
+            drops++;
+        }
+    }
+    if (strcmp(seen, expected) != 0) fprintf(stderr, "station saw \"%s\", expected \"%s\"\n", seen, expected);
+    assert(strcmp(seen, expected) == 0);
+}
+
+/* On-demand views of several units (three-unit installation: 20#2 behind
+ * an apartment interface, 21, 22). Each INVITE names its unit in
+ * a=DEVADDR, verbatim; a view of another unit ends the running one first
+ * (BYE, its cached frames dropped), then the parked client gets the new
+ * unit's view. The view frame names the unit of the view call. */
+static void ondemand_units(void) {
+    char data[4096];
+    atomic_store(&station_busy, 0);
+    assert(c300x_media_devaddr_valid("21") && c300x_media_devaddr_valid("20#2") && c300x_media_devaddr_valid("29#15"));
+    assert(!c300x_media_devaddr_valid("295") && !c300x_media_devaddr_valid("11") && !c300x_media_devaddr_valid("31#2"));
+    assert(!c300x_media_devaddr_valid("") && !c300x_media_devaddr_valid(NULL) && !c300x_media_devaddr_valid("2a"));
+
+    /* The default unit, as before: the configured DEVADDR. */
+    assert(c300x_video_activate(runtime->video, 1, NULL));
+    int fd = rtsp_open();
+    assert(rtsp_play(fd, "/doorbell") == 200);
+    wait_invites(1);
+    expect_log("I20");
+
+    /* Another unit: the running view ends before its INVITE. */
+    assert(c300x_video_activate(runtime->video, 1, "21"));
+    wait_invites(2);
+    expect_log("I20 B G I21");
+    bus("*8*1#5#4#21*11##");
+    wait_event("call.view_started", 1, data, sizeof(data));
+    assert(strstr(data, "\"unit\":\"21\""));
+
+    /* The same unit again, through the route: the view goes on. */
+    assert(calls_api("POST", "/api/v1/video/doorbell/actions/activate", "{\"unit\":\"21\"}", data, sizeof(data)) == 200);
+    usleep(300000);
+    expect_log("I20 B G I21");
+
+    /* A unit behind an apartment interface: its full address. */
+    assert(c300x_video_activate(runtime->video, 1, "20#2"));
+    wait_invites(3);
+    expect_log("I20 B G I21 B G I20#2");
+    wait_event("call.ended", 1, data, sizeof(data));
+    assert(strstr(data, "\"kind\":\"view\",\"reason\":\"media_closed\""));
+
+    /* Back to the default unit through the route, without a unit. */
+    assert(calls_api("POST", "/api/v1/video/doorbell/actions/activate", "{}", data, sizeof(data)) == 200);
+    wait_invites(4);
+    expect_log("I20 B G I21 B G I20#2 B G I20");
+    c300x_video_stop(runtime->video);
+    wait_byes(4);
+    close(fd);
 }
 
 int main(int argc, char **argv) {
@@ -1168,6 +1286,7 @@ int main(int argc, char **argv) {
     else if (strcmp(argv[1], "lifecycle_station_answer_station_hangup") == 0) lifecycle_station_answer_station_hangup();
     else if (strcmp(argv[1], "lifecycle_ha_answer_station_hangup") == 0) lifecycle_ha_answer_station_hangup();
     else if (strcmp(argv[1], "lifecycle_ondemand_view") == 0) lifecycle_ondemand_view();
+    else if (strcmp(argv[1], "ondemand_units") == 0) ondemand_units();
     else if (strcmp(argv[1], "refused_answer_then_station") == 0) refused_answer_then_station();
     else if (strcmp(argv[1], "display_answer_without_preview") == 0) display_answer_without_preview();
     else if (strcmp(argv[1], "app_answer_end_frame_first") == 0) app_answer_end_frame_first();

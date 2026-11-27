@@ -30,6 +30,7 @@ def setup_hass(tmp_path, monkeypatch, *, allowed=(), admin=False):
     api = SimpleNamespace(
         async_answer_doorbell_call=AsyncMock(), async_create_text_memo=AsyncMock(),
         async_doorbell_video_status=AsyncMock(return_value={}),
+        async_set_doorstation_audio_level=AsyncMock(),
     )
     entry = SimpleNamespace(
         entry_id="test",

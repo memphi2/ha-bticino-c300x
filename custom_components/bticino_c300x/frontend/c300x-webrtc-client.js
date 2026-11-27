@@ -1,8 +1,8 @@
-import { C300XMediaAttachment } from "./c300x-media-attach.js?v=93532382eee6e74c";
+import { C300XMediaAttachment } from "./c300x-media-attach.js?v=4c05675aa9f3ef65";
 
 const C300X_WEBRTC_DISCONNECTED_GRACE_MS = 10000;
 const C300X_WEBRTC_DEBUG_STATUS_COMMAND = "bticino_c300x/debug/status";
-const C300X_WEBRTC_DEBUG_MODULE = "./c300x-webrtc-debug.js?v=93532382eee6e74c";
+const C300X_WEBRTC_DEBUG_MODULE = "./c300x-webrtc-debug.js?v=4c05675aa9f3ef65";
 
 export class C300XWebrtcClient {
   constructor({

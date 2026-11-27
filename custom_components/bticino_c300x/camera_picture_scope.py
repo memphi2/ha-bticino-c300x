@@ -1,10 +1,9 @@
 """Learn the on-demand picture control scope once per on-demand session.
 
-The agent answers ``picture_controls_scope: "ring_and_on_demand"`` only from a
-status read while it owns the media: that read runs the session's first direct
-picture READ. The camera does not poll and agent events do not carry the scope,
-so without a status read here the card's tune button came late, never, or from
-an earlier session.
+The agent reports ``picture_controls_scope: "ring_and_on_demand"`` in its video
+status on every supported station. The camera does not poll and agent events do
+not carry the scope, so without a status read here the card's tune button came
+late, never, or from an earlier session.
 """
 
 from __future__ import annotations
@@ -14,9 +13,8 @@ from typing import Any
 
 from .camera_media.state_machine import MediaState
 
-# The station applies its own picture values when the capture starts. Asking
-# right at the state change could READ before that, and a failed READ makes the
-# agent refuse direct control for the rest of the session.
+# The station applies the outdoor unit's stored picture values when the video
+# starts; the tune button appears once that has happened.
 PICTURE_SCOPE_REFRESH_DELAY_SECONDS = 2.0
 _SHARED_SCOPE = "ring_and_on_demand"
 _TASK_KEY = "picture_scope"

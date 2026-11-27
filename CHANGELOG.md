@@ -71,6 +71,11 @@ devices, entities and services; a Repair lists what to redo after the update.
   refused. Use the switches instead: `display` -> `display: true`, `speech` ->
   `tts: true`, `both` -> `display: true` and `tts: true`, `led` -> `led: true`.
   Without switches a notification is shown as before.
+- **Picture controls are kept.** A change of brightness, contrast or colour
+  saturation now stays, like a change in the station's own menu: the station
+  stores it for the outdoor unit you are watching and uses it for every later
+  ring and live view of that unit. They work during a Ring Call and live video
+  on every supported firmware, also on 3.0.6. Checked offline only.
 - The native agent changed; an agent update is required.
 
 ## v3.0.0b3 - 2026-11-27

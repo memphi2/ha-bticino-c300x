@@ -15,7 +15,7 @@ BRIDGE_SOURCES = [
     "device_detect", "device_file_sync", "file_io", "root_mount", "media_gop_cache",
 ]
 CACHE_CASES = [
-    "late_join", "cap", "age", "stale", "restart", "resume", "loss", "slow", "slow_burst", "two_sources", "malformed",
+    "late_join", "cap", "age", "station_group", "stale", "restart", "resume", "loss", "slow", "slow_burst", "two_sources", "malformed",
     "no_memory",
 ]
 

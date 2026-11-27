@@ -225,7 +225,7 @@ static void cap(void)
 {
     struct station station = {.ssrc = 1, .ts = 1, .seq = 65000};
     /* An IDR bigger than the cache never starts a client half-way. */
-    send_frame(&station, true, 420);
+    send_frame(&station, true, (int)(C300X_MEDIA_GOP_CACHE_BYTES / (FRAG + 14)) + 1);
     assert(!gop.group && gop.count == 0);
     join(0);
     send_frame(&station, false, 4);
@@ -234,7 +234,9 @@ static void cap(void)
     size_t count = receive(&clients[0], rx, MAX_RX);
     assert(count == 53 && assert_clean_start(rx, count, 1) == 50);
     /* A group growing past the cap stops caching; a new client waits. */
-    for (int frame = 0; frame < 6; frame++) send_frame(&station, false, 60);
+    for (int frame = 0; frame <= (int)(C300X_MEDIA_GOP_CACHE_BYTES / (60 * (FRAG + 14))); frame++) {
+        send_frame(&station, false, 60);
+    }
     assert(!gop.group);
     join(1);
     send_frame(&station, false, 4);
@@ -256,8 +258,8 @@ static void age(void)
 {
     struct station station = {.ssrc = 2, .ts = 7, .seq = 9};
     send_frame(&station, true, 20);
-    /* 1.5 s of P frames; the group is too old after that. */
-    for (int frame = 0; frame < 22; frame++) send_frame(&station, false, 1);
+    /* As many P frames as the age bound holds; the group is too old after that. */
+    for (int frame = 0; frame < (int)(GOP_MAX_TICKS / 6000u); frame++) send_frame(&station, false, 1);
     assert(gop.group);
     send_frame(&station, false, 1);
     assert(!gop.group);
@@ -267,6 +269,27 @@ static void age(void)
     send_frame(&station, true, 3);
     size_t count = receive(&clients[0], rx, MAX_RX);
     assert(count == 6 && assert_clean_start(rx, count, 1) == 3);
+    leave(0);
+}
+
+/* The largest group and the longest keyframe gap of the station's captures:
+ * 562 KB in 461 packets, the next IDR 1.93 s after the last. A client that
+ * joins at the end of such a group still starts with all of it. */
+static void station_group(void)
+{
+    struct station station = {.ssrc = 0x5007, .ts = 11, .seq = 60000};
+    send_frame(&station, true, 400);
+    for (int frame = 0; frame < 27; frame++) send_frame(&station, false, 2);
+    assert(gop.group && gop.bytes > 561846 && gop.count > 461 - 3);
+    assert((station.ts - 6000u - gop.group_ts) / 90u == 1800u);
+    join(0);
+    send_frame(&station, false, 2);
+    assert(gop.group && (station.ts - 6000u - gop.group_ts) / 90u == 1866u);
+    send_frame(&station, true, 5);
+    assert((station.ts - 6000u - gop.group_ts) == 0 && gop.count == 8);
+    size_t count = receive(&clients[0], rx, MAX_RX);
+    assert(count == 403 + 28 * 3 + 8);
+    assert(assert_clean_start(rx, count, 29) == 400 + 5);
     leave(0);
 }
 
@@ -579,6 +602,7 @@ int main(int argc, char **argv)
     if (strcmp(argv[1], "late_join") == 0) late_join();
     else if (strcmp(argv[1], "cap") == 0) cap();
     else if (strcmp(argv[1], "age") == 0) age();
+    else if (strcmp(argv[1], "station_group") == 0) station_group();
     else if (strcmp(argv[1], "stale") == 0) stale();
     else if (strcmp(argv[1], "restart") == 0) restart();
     else if (strcmp(argv[1], "resume") == 0) resume();

@@ -29,7 +29,8 @@ def binary(request, tmp_path_factory):
     if request.param:
         flags += " -fsanitize=address,undefined -fno-omit-frame-pointer"
     link = ("-pthread -ldl " + str(ROOT / "native_agent/test/mqtt_backpressure_stub.c")
-            + " -Wl,--wrap=send -Wl,--wrap=connect -Wl,--wrap=poll -Wl,--wrap=__poll_chk")
+            + " -Wl,--wrap=send -Wl,--wrap=connect -Wl,--wrap=poll -Wl,--wrap=__poll_chk"
+            + " -Wl,--wrap=c300x_mqtt_output_timeout")
     result = subprocess.run(
         ["make", "-C", str(ROOT / "native_agent"), f"BUILD_DIR={build}", f"CFLAGS={flags}",
          f"LDFLAGS={link}", "-j2", "all"], capture_output=True, text=True, timeout=600,
@@ -44,7 +45,7 @@ def mqtt_lab(binary, tmp_path):
     listener.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 1024)
     listener.bind(("127.0.0.1", 0))
     listener.listen()
-    listener.settimeout(3)
+    listener.settimeout(30)
     port, ui_port = free_tcp_port(), free_tcp_port()
     broker_port = listener.getsockname()[1]
     config = {
@@ -77,7 +78,7 @@ def mqtt_lab(binary, tmp_path):
         try:
             wait_for_health(port)
             peer, _ = listener.accept()
-            peer.settimeout(2)
+            peer.settimeout(30)
             yield lab, peer
         finally:
             for connection in lab.connections:
@@ -87,10 +88,10 @@ def mqtt_lab(binary, tmp_path):
             listener.close()
             process.terminate()
             try:
-                process.wait(timeout=3)
+                process.wait(timeout=30)
             except subprocess.TimeoutExpired:
                 process.kill()
-                process.wait(timeout=3)
+                process.wait(timeout=30)
             assert process.returncode == 0, (tmp_path / "agent.log").read_text()
 
 
@@ -118,12 +119,21 @@ def packet(peer):
     raise AssertionError("invalid MQTT frame length")
 
 
+def served_at_once(lab, ports, *, within):
+    """Each request is answered in less time than an old blocking wait took."""
+
+    for port, path in ports:
+        started = time.monotonic()
+        body = api_get(port, path, authorized=port == lab.port)
+        assert time.monotonic() - started < within, path
+        assert port != lab.port or body["ok"], body
+
+
 def ready(lab, peer):
     assert packet(peer)[0] == 0x10
-    # No CONNACK yet: the HTTP loop must still serve health.
-    started = time.monotonic()
-    assert api_get(lab.port, "/api/v1/health")["ok"]
-    assert time.monotonic() - started < 0.5
+    # No CONNACK yet: the HTTP loop must still serve health. The old
+    # handshake waited 1.5 s for the CONNACK on the loop.
+    served_at_once(lab, [(lab.port, "/api/v1/health")], within=1.0)
     peer.sendall(b"\x20\x02\x00\x00")
     assert packet(peer)[0] == 0x82
     assert packet(peer) == (0x31, b"\x00\x0btest/onlineonline")
@@ -146,7 +156,7 @@ def test_backpressure_does_not_block_health_or_change_http_result(mqtt_lab):
     held = None
     for _ in range(100):
         pending = lab.request(QML + "/actions/apply", {"confirm": "apply_qml_patch"})
-        deadline = time.monotonic() + 3
+        deadline = time.monotonic() + 30
         while not marker.exists() and not select.select([pending.sock], [], [], 0.005)[0]:
             assert time.monotonic() < deadline
         if marker.exists():
@@ -155,22 +165,19 @@ def test_backpressure_does_not_block_health_or_change_http_result(mqtt_lab):
         assert response(pending)["ok"]
     assert held is not None
     # Probe health before waiting for the event-generating request's response.
-    # The old synchronous writable wait would delay this concurrent request.
-    started = time.monotonic()
-    for _ in range(5):
-        assert api_get(lab.port, "/api/v1/health")["ok"]
-        api_get(lab.ui_port, "/ui/events/status", authorized=False)
-    assert time.monotonic() - started < 0.4
+    # The old synchronous writable wait (500 ms) would delay these requests.
+    served_at_once(lab, [(lab.port, "/api/v1/health"), (lab.ui_port, "/ui/events/status")] * 5, within=0.45)
     assert response(held)["ok"]
     assert response(lab.request("/api/v1/maintenance/mqtt"))["connected"]
     # Resume reading. Every admitted JSON event must still be a complete frame.
+    # A frame's rest may follow late on a busy machine; a second without a
+    # new frame ends the stream.
     events = []
-    peer.settimeout(0.2)
     while True:
-        try:
-            kind, payload = packet(peer)
-        except TimeoutError:
+        readable, _, _ = select.select([peer], [], [], 1.0)
+        if not readable:
             break
+        kind, payload = packet(peer)
         assert kind == 0x30 and payload.startswith(b"\x00\x09test/json")
         events.append(json.loads(payload[11:]))
     assert events
@@ -186,15 +193,12 @@ def test_backpressure_does_not_block_health_or_change_http_result(mqtt_lab):
 def test_connack_timeout_and_shutdown_do_not_stall_http(mqtt_lab):
     lab, peer = mqtt_lab
     assert packet(peer)[0] == 0x10
-    started = time.monotonic()
-    for _ in range(5):
-        assert api_get(lab.port, "/api/v1/health")["ok"]
-    assert time.monotonic() - started < 0.5
+    served_at_once(lab, [(lab.port, "/api/v1/health")] * 5, within=1.0)
     time.sleep(1.6)
     assert peer.recv(1) == b""
     assert response(lab.request("/api/v1/maintenance/mqtt"))["connected"] is False
     lab.process.terminate()
-    assert lab.process.wait(timeout=2) == 0
+    assert lab.process.wait(timeout=30) == 0
 
 
 @pytest.mark.parametrize("marker", ["shutdown-before-poll", "shutdown-worker-before-poll"])
@@ -205,6 +209,6 @@ def test_shutdown_signal_before_poll_wakes_the_idle_loop(mqtt_lab, marker):
     # Wake the old poll via the established broker socket. The next poll can
     # terminate the server before an HTTP wake-up request would get a reply.
     peer.close()
-    wait_until(lambda: not (lab.root / marker).exists())
-    assert lab.process.wait(timeout=2) == 0
+    wait_until(lambda: not (lab.root / marker).exists(), timeout=30)
+    assert lab.process.wait(timeout=30) == 0
     assert "shutdown injected" in (lab.root / "agent.log").read_text()

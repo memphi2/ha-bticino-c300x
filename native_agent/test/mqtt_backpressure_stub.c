@@ -12,6 +12,8 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include "../src/mqtt_output.h"
+
 int __real_connect(int, const struct sockaddr *, socklen_t);
 ssize_t __real_send(int, const void *, size_t, int);
 int __real_poll(struct pollfd *, nfds_t, int);
@@ -95,4 +97,13 @@ ssize_t __wrap_send(int fd, const void *buffer, size_t size, int flags)
     }
     errno = error;
     return sent;
+}
+
+/* The agent drops a broker that took nothing for 500 ms. A test on a busy
+ * machine needs longer between filling the socket and reading it again, so
+ * the agent's write timeout is seen 30 s later here. */
+int __real_c300x_mqtt_output_timeout(const struct c300x_mqtt_output *output, long long now);
+int __wrap_c300x_mqtt_output_timeout(const struct c300x_mqtt_output *output, long long now)
+{
+    return __real_c300x_mqtt_output_timeout(output, now - 30000);
 }

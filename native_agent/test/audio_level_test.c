@@ -239,6 +239,24 @@ static void test_chip(void)
     assert(strcmp(get("Audio_State.sh"), stub) == 0);
     assert(!c300x_audio_chip_apply(5, error, sizeof(error)));
 
+    /* A hook of ours from another agent version: known by its marker line,
+     * its level read from V=, rewritten to this version's template and put
+     * back to the stub like any of ours. */
+    reset_device();
+    assert(c300x_audio_chip_apply(2, error, sizeof(error)));
+    put("Audio_State.sh", "#!/bin/sh\n# c300x-agent audio hook v0\nV=13\nexit 1\n", 0775);
+    assert(c300x_audio_chip_hook_state(&steps) == C300X_AUDIO_HOOK_OURS && steps == 2);
+    assert(c300x_audio_chip_apply(2, error, sizeof(error)));
+    assert(c300x_audio_chip_render_hook(2, hook, sizeof(hook)) > 0 && strcmp(get("Audio_State.sh"), hook) == 0);
+    put("Audio_State.sh", "#!/bin/sh\n# c300x-agent audio hook v9\nV=x\nexit 1\n", 0775);
+    assert(c300x_audio_chip_hook_state(&steps) == C300X_AUDIO_HOOK_OURS && steps == 0);
+    assert(c300x_audio_chip_remove_patches(error, sizeof(error)));
+    assert(strcmp(get("Audio_State.sh"), stub) == 0);
+    /* The marker alone in a file that is not a script is not ours. */
+    put("Audio_State.sh", "echo\n# c300x-agent audio hook v1\nV=13\n", 0775);
+    assert(c300x_audio_chip_hook_state(&steps) == C300X_AUDIO_HOOK_FOREIGN);
+    put("Audio_State.sh", stub, 0775);
+
     /* No lever on another model, another profile or without amixer. */
     model = C300X_DEVICE_MODEL_C100X;
     assert(!c300x_audio_chip_supported());

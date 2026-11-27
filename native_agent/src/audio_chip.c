@@ -16,6 +16,9 @@
 #define SOUT_CONTROL "ZL0 Sout Gain Volume"
 #define HOOK_BACKUP_NAME "Audio_State.sh"
 #define HOOK_MAX 2048
+/* Every version of our hook carries this line; the level is its V= line. An
+ * agent recognises an older or newer template by it and rewrites it. */
+#define HOOK_MARKER "# c300x-agent audio hook "
 /* The vendor's empty Audio_State.sh and IP_PE.cr, the same bytes on 1.7.19,
  * 2.0.2 and 3.0.6. */
 #ifndef STOCK_HOOK_SHA256
@@ -33,6 +36,7 @@
  * unknown state) gets the profile's 11 back, so nothing leaves it raised. */
 static const char hook_template[] =
     "#!/bin/sh\n"
+    HOOK_MARKER "v1\n"
     "V=%d\n"
     "A=${C300X_AMIXER:-/usr/bin/amixer}\n"
     "M=${C300X_SOUT_MARK:-/run/c300x-sout-raised}\n"
@@ -81,38 +85,66 @@ static int sha_matches(const char *data, size_t len, const char *expected)
         && strcmp(hex, expected) == 0;
 }
 
-static enum c300x_audio_hook_state classify(const char *data, size_t len, int *steps)
+/* The level a hook of ours carries, 0 when its V= line is not one. */
+static int hook_steps(const char *data)
+{
+    const char *at = strstr(data, "\nV=");
+    char *end = NULL;
+    long value;
+
+    if (at == NULL) {
+        return 0;
+    }
+    value = strtol(at + 3, &end, 10);
+    if (end == at + 3 || *end != '\n' || value <= C300X_AUDIO_CHIP_STOCK_SOUT || value > C300X_AUDIO_CHIP_MAX_SOUT) {
+        return 0;
+    }
+    return (int)value - C300X_AUDIO_CHIP_STOCK_SOUT;
+}
+
+/* data is NUL-terminated (c300x_device_file_read). *current: the bytes are
+ * exactly what this agent renders for that level. */
+static enum c300x_audio_hook_state classify(const char *data, size_t len, int *steps, int *current)
 {
     char ours[HOOK_MAX];
+    size_t ours_len;
 
+    *steps = 0;
+    *current = 0;
     if (sha_matches(data, len, STOCK_HOOK_SHA256)) {
         return C300X_AUDIO_HOOK_STOCK;
     }
-    for (int step = 1; step <= C300X_AUDIO_CHIP_MAX_STEPS; step++) {
-        size_t ours_len = c300x_audio_chip_render_hook(step, ours, sizeof(ours));
-        if (ours_len == len && memcmp(ours, data, len) == 0) {
-            *steps = step;
-            return C300X_AUDIO_HOOK_OURS;
-        }
+    if (strlen(data) != len || strncmp(data, "#!", 2) != 0 || strstr(data, "\n" HOOK_MARKER) == NULL) {
+        return C300X_AUDIO_HOOK_FOREIGN;
     }
-    return C300X_AUDIO_HOOK_FOREIGN;
+    *steps = hook_steps(data);
+    ours_len = *steps > 0 ? c300x_audio_chip_render_hook(*steps, ours, sizeof(ours)) : 0;
+    *current = ours_len == len && memcmp(ours, data, len) == 0;
+    return C300X_AUDIO_HOOK_OURS;
 }
 
-enum c300x_audio_hook_state c300x_audio_chip_hook_state(int *steps)
+static enum c300x_audio_hook_state hook_state(int *steps, int *current)
 {
     char *data = NULL;
     size_t len = 0;
     enum c300x_audio_hook_state state;
-    int found = 0;
 
+    *steps = 0;
+    *current = 0;
     if (!c300x_device_file_read(hook_path(), &data, &len, NULL)) {
-        if (steps != NULL) {
-            *steps = 0;
-        }
         return C300X_AUDIO_HOOK_MISSING;
     }
-    state = classify(data, len, &found);
+    state = classify(data, len, steps, current);
     free(data);
+    return state;
+}
+
+enum c300x_audio_hook_state c300x_audio_chip_hook_state(int *steps)
+{
+    int found = 0;
+    int current = 0;
+    enum c300x_audio_hook_state state = hook_state(&found, &current);
+
     if (steps != NULL) {
         *steps = found;
     }
@@ -310,6 +342,7 @@ int c300x_audio_chip_apply(int steps, char *error, size_t error_len)
     size_t stock_len = 0;
     size_t hook_len;
     int current = 0;
+    int exact = 0;
     enum c300x_audio_hook_state state;
 
     if (steps < 0 || steps > C300X_AUDIO_CHIP_MAX_STEPS) {
@@ -319,8 +352,8 @@ int c300x_audio_chip_apply(int steps, char *error, size_t error_len)
     if (steps == 0) {
         return restore_stub(error, error_len);
     }
-    state = c300x_audio_chip_hook_state(&current);
-    if (state == C300X_AUDIO_HOOK_OURS && current == steps) {
+    state = hook_state(&current, &exact);
+    if (state == C300X_AUDIO_HOOK_OURS && current == steps && exact) {
         return 1;
     }
     if (state != C300X_AUDIO_HOOK_STOCK && state != C300X_AUDIO_HOOK_OURS) {

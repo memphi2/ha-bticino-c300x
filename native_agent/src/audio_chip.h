@@ -24,7 +24,8 @@ enum c300x_audio_hook_state {
     C300X_AUDIO_HOOK_FOREIGN,
 };
 
-/* The hook as it is on the device; *steps is the level of ours, else 0. */
+/* The hook as it is on the device; *steps is the level of ours, else 0.
+ * Ours is any hook with our marker line, also from another agent version. */
 enum c300x_audio_hook_state c300x_audio_chip_hook_state(int *steps);
 /* The station can take the level in its chip: a C300X with the known
  * IP_PE.cr, amixer and a readable gain control. */

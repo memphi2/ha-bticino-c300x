@@ -1090,7 +1090,10 @@ any other state (`FAKE`, an empty or unknown argument), which load no profile
 of their own, set 11 again while the mark is there. The vendor file is backed up once
 under `/home/bticino/cfg/extra/c300x-device-file-backups/original` and only
 replaced while it is the known vendor stub (or already the agent's own); the
-root filesystem is writable only for the write. A level change rewrites the
+root filesystem is writable only for the write. The agent's own hook is a
+`#!` script with a `# c300x-agent audio hook v<n>` line and its level in a
+`V=` line; a hook with that line from any agent version counts as the agent's
+own and is rewritten to the current version on the next level change. A level change rewrites the
 file; `door_level_db: 0` puts the vendor stub back and lowers a gain a running
 call still has. A hook that is neither is never touched. Removing the agent
 puts the vendor stub back; without a valid backup the removal stops.

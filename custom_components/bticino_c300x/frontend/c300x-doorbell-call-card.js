@@ -2,32 +2,32 @@ import {
   C300X_TRANSLATIONS,
   c300xLocalize,
   c300xModelLabel,
-} from "./c300x-translations.js?v=3bc9c19eee114e4b";
+} from "./c300x-translations.js?v=edf8e259c990f730";
 import {
   C300X_CAMERA_OBJECT_ID,
   C300X_CARD_TAG,
   C300X_CARD_TYPE,
   C300X_DEFAULT_CONFIG,
-  C300X_DOCUMENTATION_URL,
   C300X_MEDIA_READINESS_OBJECT_ID,
   c300xDeviceActionEntity,
   c300xDeviceModel,
+  c300xDocumentationUrlOfPage,
   c300xEntryId,
   c300xObjectSuffix,
   c300xRelatedEntity,
   c300xResolveEntity,
-} from "./c300x-entity-resolver.js?v=3bc9c19eee114e4b";
+} from "./c300x-entity-resolver.js?v=edf8e259c990f730";
 import {
   C300X_CARD_EDITOR_TAG,
   c300xDoorbellCardStubConfig,
-} from "./c300x-card-editor.js?v=3bc9c19eee114e4b";
-import { C300XCardActions } from "./c300x-card-actions.js?v=3bc9c19eee114e4b";
+} from "./c300x-card-editor.js?v=edf8e259c990f730";
+import { C300XCardActions } from "./c300x-card-actions.js?v=edf8e259c990f730";
 import {
   C300XCardLifecycleState,
   c300xAnsweredRingKey,
-} from "./c300x-card-lifecycle.js?v=3bc9c19eee114e4b";
-import { c300xRingLifecycleActive } from "./c300x-ring-preview-state.js?v=3bc9c19eee114e4b";
-import { C300X_DOORBELL_CARD_TEMPLATE } from "./c300x-card-template.js?v=3bc9c19eee114e4b";
+} from "./c300x-card-lifecycle.js?v=edf8e259c990f730";
+import { c300xRingLifecycleActive } from "./c300x-ring-preview-state.js?v=edf8e259c990f730";
+import { C300X_DOORBELL_CARD_TEMPLATE } from "./c300x-card-template.js?v=edf8e259c990f730";
 import {
   c300xCardViewModel,
   c300xIsHomeCallActive,
@@ -35,13 +35,13 @@ import {
   c300xMediaReadinessHasRepair,
   c300xMediaReadinessLabelKey,
   c300xMediaState,
-} from "./c300x-state-model.js?v=3bc9c19eee114e4b";
-import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=3bc9c19eee114e4b";
-import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=3bc9c19eee114e4b";
-import { C300XStreamSnapshots } from "./c300x-stream-snapshots.js?v=3bc9c19eee114e4b";
-import { C300XCardMedia } from "./c300x-card-media.js?v=3bc9c19eee114e4b";
-import { c300xFollowPictureSize } from "./c300x-picture-frame.js?v=3bc9c19eee114e4b";
-import { mediaStamp } from "./c300x-media-translations.js?v=3bc9c19eee114e4b";
+} from "./c300x-state-model.js?v=edf8e259c990f730";
+import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=edf8e259c990f730";
+import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=edf8e259c990f730";
+import { C300XStreamSnapshots } from "./c300x-stream-snapshots.js?v=edf8e259c990f730";
+import { C300XCardMedia } from "./c300x-card-media.js?v=edf8e259c990f730";
+import { c300xFollowPictureSize } from "./c300x-picture-frame.js?v=edf8e259c990f730";
+import { mediaStamp } from "./c300x-media-translations.js?v=edf8e259c990f730";
 
 const C300X_NOTICE_TIMEOUT_MS = 2000;
 const C300X_RING_ANSWER_LAUNCH_PARAM = "c300x_ring_answer";
@@ -1555,6 +1555,8 @@ window.customCards.push({
   name: "BTicino Doorbell Call Card",
   preview: false,
   description: "Doorbell video and Home Call controls of the BTicino door station.",
-  documentationURL: C300X_DOCUMENTATION_URL,
+  get documentationURL() {
+    return c300xDocumentationUrlOfPage();
+  },
   getEntitySuggestion: (hass, entityId) => C300XDoorbellCallCard.getEntitySuggestion(hass, entityId),
 });

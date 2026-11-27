@@ -465,7 +465,7 @@ def test_bundled_card_supports_editor_languages_and_multi_device_config() -> Non
     assert "return this._isHomeCallMode() ? 2 : 7;" in source
     assert 'name: "card_height"' not in source
     assert 'getEntitySuggestion: (hass, entityId)' in source
-    assert 'documentationURL: C300X_DOCUMENTATION_URL' in source
+    assert 'get documentationURL() {\n    return c300xDocumentationUrlOfPage();' in source
     assert 'preview: false' in source
     assert "ll-rebuild" not in source
     assert 'formatEntityName' in source

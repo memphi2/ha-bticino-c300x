@@ -33,11 +33,12 @@ REQUIRED_CONTRACT_SNIPPETS = {
         "getGridOptions()",
         "formatEntityName",
         "subscribeEvents",
-        "documentationURL: C300X_DOCUMENTATION_URL",
+        "get documentationURL() {",
         "preview: false",
     ),
     METADATA: (
         "getEntitySuggestion: c300xMetadataEntitySuggestion",
+        "get documentationURL() {",
         'import "./c300x-doorbell-call-card.js?v=',
     ),
     EDITOR: (

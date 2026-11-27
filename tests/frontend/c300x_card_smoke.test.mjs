@@ -463,6 +463,15 @@ test("doorbell card custom element renders with fake Home Assistant state", asyn
   assert.equal(card.shadowRoot.querySelector(".row-action").disabled, false);
   assert.equal(globalThis.window.customCards.length, 1);
   assert.equal(globalThis.window.customCards[0].type, "c300x-doorbell-call-card");
+  // The help link of the picker and the editor follows the model set up.
+  const c100x = {
+    entities: { "camera.door": { platform: "bticino_c300x", device_id: "door" } },
+    devices: { door: { model: "Classe 100X" } },
+  };
+  globalThis.document.querySelector = (selector) => (selector === "home-assistant" ? { hass: c100x } : null);
+  assert.match(globalThis.window.customCards[0].documentationURL, /\/docs\/classe-100x\/2-use\.md#what-works$/);
+  c100x.devices.door.model = "Classe 300X";
+  assert.match(globalThis.window.customCards[0].documentationURL, /\/docs\/classe-300x\/2-use\.md#doorbell-card$/);
 });
 
 test("readiness warnings do not open Repairs while blockers do", async () => {

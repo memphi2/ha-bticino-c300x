@@ -2,11 +2,15 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  C100X_DOCUMENTATION_URL,
   C300X_CAMERA_OBJECT_ID,
   C300X_DEFAULT_CONFIG,
+  C300X_DOCUMENTATION_URL,
   C300X_MEDIA_READINESS_OBJECT_ID,
   C300X_PLATFORM,
   c300xDeviceActionEntity,
+  c300xDocumentationUrl,
+  c300xDocumentationUrlOfPage,
   c300xEntityId,
   c300xEntryId,
   c300xFirstEntity,
@@ -332,4 +336,39 @@ test("a missing manual related entity and conflicting registry roles never trigg
   delete state.states["sensor.front_media_readiness"];
   delete state.states["sensor.other_media_readiness"];
   assert.equal(c300xFirstEntity(state, "sensor", C300X_MEDIA_READINESS_OBJECT_ID), undefined);
+});
+
+function stations(...models) {
+  const entities = {}, devices = {};
+  models.forEach((model, index) => {
+    devices[`device-${index}`] = { model };
+    entities[`camera.door_${index}`] = { platform: C300X_PLATFORM, device_id: `device-${index}` };
+  });
+  // A device of another integration never decides the page.
+  devices.other = { model: "Classe 100X" };
+  entities["camera.other"] = { platform: "other", device_id: "other" };
+  return hass({ entities, devices });
+}
+
+test("the documentation link opens the page of the model set up", () => {
+  assert.match(C100X_DOCUMENTATION_URL, /\/docs\/classe-100x\/2-use\.md#what-works$/);
+  assert.match(C300X_DOCUMENTATION_URL, /\/docs\/classe-300x\/2-use\.md#doorbell-card$/);
+  assert.equal(c300xDocumentationUrl(stations("Classe 100X")), C100X_DOCUMENTATION_URL);
+  assert.equal(c300xDocumentationUrl(stations("Classe 100X", "Classe 100X")), C100X_DOCUMENTATION_URL);
+  assert.equal(c300xDocumentationUrl(stations("Classe 300X")), C300X_DOCUMENTATION_URL);
+  // Both models, or none: the Classe 300X page, which describes the card in full.
+  assert.equal(c300xDocumentationUrl(stations("Classe 300X", "Classe 100X")), C300X_DOCUMENTATION_URL);
+  assert.equal(c300xDocumentationUrl(stations()), C300X_DOCUMENTATION_URL);
+  assert.equal(c300xDocumentationUrl(undefined), C300X_DOCUMENTATION_URL);
+});
+
+test("the card registration reads the stations of the Home Assistant page", (t) => {
+  const previous = globalThis.document;
+  t.after(() => {
+    globalThis.document = previous;
+  });
+  globalThis.document = { querySelector: (selector) => (selector === "home-assistant" ? { hass: stations("Classe 100X") } : null) };
+  assert.equal(c300xDocumentationUrlOfPage(), C100X_DOCUMENTATION_URL);
+  globalThis.document = undefined;
+  assert.equal(c300xDocumentationUrlOfPage(), C300X_DOCUMENTATION_URL);
 });

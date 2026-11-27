@@ -694,18 +694,20 @@ def _heading_anchors(path: Path) -> set[str]:
             for heading in re.findall(r"(?m)^#{1,6} (.+)$", text)}
 
 
-def test_the_card_documentation_link_opens_an_existing_section():
-    """The card picker links the docs; the README anchor it used to name is gone."""
+def test_the_card_documentation_link_opens_an_existing_section_of_its_model():
+    """The card picker links the docs of the model; the README anchor it used to name is gone."""
 
     repository = "https://github.com/memphi2/ha-bticino-c300x"
-    frontend = ROOT / "custom_components/bticino_c300x/frontend"
-    for name in ("c300x-entity-resolver.js", "c300x-doorbell-call-card-metadata.js"):
-        url = re.search(r'C300X_DOCUMENTATION_URL = "([^"]+)"', (frontend / name).read_text())[1]
-        assert url.startswith(repository), name
+    source = (ROOT / "custom_components/bticino_c300x/frontend/c300x-entity-resolver.js").read_text()
+    urls = dict(re.findall(r'export const (C[13]00X)_DOCUMENTATION_URL = "([^"]+)"', source))
+    assert urls.keys() == {"C300X", "C100X"}
+    for model, url in urls.items():
+        assert url.startswith(repository), model
         page, _, anchor = url.removeprefix(repository).partition("#")
         page = page.removeprefix("/blob/main/") or "README.md"
-        assert (ROOT / page).is_file(), (name, page)
-        assert anchor in _heading_anchors(ROOT / page), (name, url)
+        assert page.startswith(f"docs/classe-{model[1:].lower()}/"), (model, page)
+        assert (ROOT / page).is_file(), (model, page)
+        assert anchor in _heading_anchors(ROOT / page), (model, url)
 
 
 GUIDE_STEPS = ("1-setup.md", "2-use.md", "3-display.md", "4-troubleshooting.md",

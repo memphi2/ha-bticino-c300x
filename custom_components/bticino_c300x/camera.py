@@ -243,7 +243,6 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
         )
         self._agent_cpu_watchdog = AgentCpuWatchdog()
         self._closing_webrtc_sessions = 0
-        self._reconcile_in_flight = False
         if not hasattr(self, "stream_options"):
             self.stream_options = {}
         self.stream_options[CONF_RTSP_TRANSPORT] = "tcp"
@@ -1392,6 +1391,10 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
         """
         self._background_tasks = CameraBackgroundTasks()
         self._webrtc_sessions = CameraWebRTCSessions(self._background_tasks)
+        # A reconcile the removal cancelled before its first step never
+        # cleared this mark. The close count needs no reset: each close
+        # counts and uncounts itself in one try/finally.
+        self._reconcile_in_flight = False
         self._last_state_snapshot: tuple[Any, Any, Any] | None = None
         self._picture_scope_state: MediaState | None = None
         # A status during removal may have opened the window without a capture.

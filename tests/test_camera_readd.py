@@ -100,3 +100,50 @@ def test_camera_removed_and_added_again_accepts_webrtc_offers(monkeypatch) -> No
         assert resources.media_session_count() == 0
 
     asyncio.run(run())
+
+
+def test_a_status_reconcile_cut_off_by_the_removal_runs_again_after_the_add() -> None:
+    """Removal cancels a reconcile that has not run a step yet: its finally,
+    which clears the in-flight mark, never runs. The add starts fresh."""
+
+    from custom_components.bticino_c300x.camera_media.state_machine import MediaState
+
+    async def run() -> None:
+        entry = _FakeEntry(data={"agent_host": "127.0.0.1", "video_port": 6554})
+        camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+        started: list[Any] = []
+        camera.hass = SimpleNamespace(  # type: ignore[assignment]
+            data={}, bus=SimpleNamespace(async_listen=lambda *_args: lambda: None),
+            async_create_task=lambda coro: started.append(coro) or asyncio.ensure_future(coro),
+        )
+        removers: list[Any] = []
+        camera.async_on_remove = removers.append  # type: ignore[method-assign]
+        reconciles: list[str] = []
+
+        async def reconcile() -> None:
+            reconciles.append("ran")
+
+        camera._async_reconcile_local_sessions = reconcile  # type: ignore[method-assign]
+        await camera.async_added_to_hass()
+        # A latched busy state: every heartbeat asks the agent for its status.
+        camera._last_media_state = MediaState.RTSP_BUSY
+        camera._handle_system_metrics_changed(entry.entry_id)
+        assert camera._reconcile_in_flight and len(started) == 1
+
+        for remove in removers:
+            remove()
+        removers.clear()
+        await camera.async_will_remove_from_hass()
+        assert reconciles == []
+        await camera.async_added_to_hass()
+        assert camera._reconcile_in_flight is False
+        # No close was in flight across the add: the close count is balanced.
+        assert camera._closing_webrtc_sessions == 0
+
+        camera._last_media_state = MediaState.RTSP_BUSY
+        camera._handle_system_metrics_changed(entry.entry_id)
+        assert len(started) == 2
+        await asyncio.sleep(0)
+        assert reconciles == ["ran"]
+
+    asyncio.run(run())

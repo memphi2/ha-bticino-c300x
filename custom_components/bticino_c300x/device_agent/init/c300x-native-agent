@@ -80,7 +80,7 @@ case "$1" in
         pid="$(pidfile_pid)" || pid=""
         start-stop-daemon --stop --quiet --oknodo \
             --pidfile "$AGENT_PID" --exec "$AGENT_BIN" || exit $?
-        if [ -n "$pid" ] && ! wait_gone "$pid" 50; then
+        if [ -n "$pid" ] && ! wait_gone "$pid" 200; then
             is_agent "$pid" && kill -KILL "$pid" >/dev/null 2>&1
             wait_gone "$pid" 20 || exit 1
         fi

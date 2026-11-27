@@ -59,14 +59,38 @@ def test_the_ssh_installer_gives_a_display_write_the_agents_deadline_and_grace()
         header, "C300X_QML_WRITE_TERM_GRACE_MS") == device_installer._SSH_DISPLAY_WRITE_TERM_GRACE * 1000
 
 
-def test_the_ssh_command_limit_covers_the_init_scripts_restart() -> None:
-    """restart = stop (wait, SIGKILL, wait) + start + status checks, each wait
-    one pause of 100 ms; the limit leaves it three times that."""
-
+def _init_stop_waits() -> tuple[str, int, int]:
     init = (SRC.parents[1] / "custom_components/bticino_c300x/device_agent/init"
             / "c300x-native-agent").read_text(encoding="utf-8")
     assert "usleep 100000" in init
     stop_wait, kill_wait = (int(n) for n in re.findall(r'wait_gone "\$pid" (\d+)', init))
+    return init, stop_wait, kill_wait
+
+
+def test_the_init_scripts_stop_outwaits_the_agents_shutdown_of_a_display_write() -> None:
+    """The agent ends a running display write or C100X activation with SIGTERM
+    and waits its grace; a SIGKILL inside it leaves the job's processes running
+    next to the new agent. The stop waits that and 5 s for the rest of the
+    shutdown, polling every 100 ms."""
+
+    grace_ms = _define((SRC / "http_maintenance.h").read_text(encoding="utf-8"),
+                       "C300X_QML_WRITE_TERM_GRACE_MS")
+    _init, stop_wait, _kill_wait = _init_stop_waits()
+    assert stop_wait * 100 >= grace_ms + 5000
+    activation = (SRC / "c100x_activation.c").read_text(encoding="utf-8")
+    assert "job.term_grace_ms = C300X_QML_WRITE_TERM_GRACE_MS" in activation
+
+
+def test_the_ssh_command_limit_covers_the_init_scripts_restart() -> None:
+    """restart = stop (wait, SIGKILL, wait) + start + status checks, each wait
+    one pause of 100 ms; the limit leaves it three times that. Other commands
+    keep the shorter limit."""
+
+    init, stop_wait, kill_wait = _init_stop_waits()
     status_checks = int(re.search(r"^        tries=(\d+)$", init, re.MULTILINE).group(1))
     longest = (stop_wait + kill_wait + 1 + status_checks) * 0.1
-    assert longest * 3 <= device_installer._SSH_COMMAND_TIMEOUT
+    assert longest * 3 <= device_installer._SSH_AGENT_STOP_TIMEOUT
+    timeout = device_installer._command_timeout
+    assert timeout("/etc/init.d/c300x-native-agent restart") == device_installer._SSH_AGENT_STOP_TIMEOUT
+    assert timeout("sh -s stop || exit 1; rm -f x") == device_installer._SSH_AGENT_STOP_TIMEOUT
+    assert timeout("true") == device_installer._SSH_COMMAND_TIMEOUT == 30.0

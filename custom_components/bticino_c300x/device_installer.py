@@ -83,9 +83,13 @@ REMOTE_FIREWALL_BACKUP = (
 FIREWALL_HOOK_CHANGED = "firewall_hook_changed"
 _FIREWALL_HOOK_CHANGED_STATUS = 3
 _SSH_CONNECT_TIMEOUT = 12.0
-# Probes, uploads of at most the agent binary, the init script and its
-# restart (5 s stop wait, 2 s after SIGKILL, 20 status checks of 100 ms).
+# Probes and uploads of at most the agent binary and the init script.
 _SSH_COMMAND_TIMEOUT = 30.0
+# The init script's stop and restart wait for the agent's shutdown, which a
+# display write in progress extends by its grace (20 s stop wait, 2 s after
+# SIGKILL, and for a restart 20 status checks of 100 ms).
+_SSH_AGENT_STOP_TIMEOUT = 75.0
+_AGENT_STOP_FROM_INPUT = "sh -s stop || exit 1; "
 _SSH_HOST_KEY_ALGS = (
     "ssh-ed25519",
     "ecdsa-sha2-nistp256",
@@ -387,7 +391,7 @@ def _install_device_agent_sync(
                 _install_startup_script_sync(client, bundle.init_script, request.remote_dir)
             )
             stopped = True
-            client.run(f"{_quote(REMOTE_INIT_SCRIPT)} restart")
+            client.run(_agent_restart_command())
         except C300XDeviceInstallError:
             if stopped:
                 _start_agent_after_failure_sync(client)
@@ -764,7 +768,7 @@ def _retire_old_keys_sync(client: _DeviceSshClient, remote_dir: str, init_script
 
     config = _quote(f"{remote_dir}/{REMOTE_CONFIG_NAME}")
     client.run(
-        f"sh -s stop || exit 1; rm -f {config}.tmp.* {config}.c300x-*.new",
+        f"{_AGENT_STOP_FROM_INPUT}rm -f {config}.tmp.* {config}.c300x-*.new",
         init_script,
     )
 
@@ -962,7 +966,7 @@ class _AsyncSshDeviceSshClient(_DeviceSshClient):
 
     async def _run(self, command: str, input_data: bytes | None) -> str:
         # Include channel opening in the deadline and send EOF even without input.
-        async with asyncio.timeout(_SSH_COMMAND_TIMEOUT):
+        async with asyncio.timeout(_command_timeout(command)):
             async with self._client.create_process(
                 command, encoding=None, request_pty=False,
             ) as process:
@@ -1461,6 +1465,18 @@ def _ssh_host(host: str) -> str:
     if clean_host.startswith("[") and clean_host.endswith("]"):
         return clean_host[1:-1]
     return clean_host
+
+
+def _agent_restart_command() -> str:
+    return f"{_quote(REMOTE_INIT_SCRIPT)} restart"
+
+
+def _command_timeout(command: str) -> float:
+    """A command that stops the agent waits for its shutdown."""
+
+    if command == _agent_restart_command() or command.startswith(_AGENT_STOP_FROM_INPUT):
+        return _SSH_AGENT_STOP_TIMEOUT
+    return _SSH_COMMAND_TIMEOUT
 
 
 def _quote(value: str) -> str:

@@ -142,7 +142,8 @@ int main(void) {
     sigdelset(&waiting, SIGTERM);
     fprintf(log, "started %d\n", (int)getpid());
     while (!term) sigsuspend(&waiting);
-    usleep(600000);
+    for (int ms = getenv("STUB_TERM_MS") ? atoi(getenv("STUB_TERM_MS")) : 600; ms > 0; ms -= 100)
+        usleep(100000);
     fprintf(log, "stopped %d\n", (int)getpid());
     return 0;
 }
@@ -330,7 +331,8 @@ def test_stop_kills_an_agent_that_ignores_term_and_spares_a_foreign_pid(tmp_path
         started = time.monotonic()
         assert run("stop").returncode == 0
         assert not _alive(agent) and not pidfile.exists()
-        assert time.monotonic() - started >= 4
+        assert time.monotonic() - started >= 20
+        assert f"stopped {agent}" not in log.read_text()
     finally:
         _reap_all(tmp_path)
     # A stale pidfile whose PID now belongs to another program (on the station
@@ -345,3 +347,23 @@ def test_stop_kills_an_agent_that_ignores_term_and_spares_a_foreign_pid(tmp_path
     finally:
         foreign.kill()
         foreign.wait()
+
+
+@pytest.mark.parametrize("firmware", FIRMWARES)
+def test_stop_lets_an_agent_finish_a_shutdown_within_the_display_write_grace(tmp_path, firmware):
+    """An agent ending a display write or C100X activation needs up to its 15 s
+    grace after TERM; a SIGKILL then would orphan the job's processes. The
+    stand-in needs 12 s: under the emulator the old 50 polls took 6 to 9 s."""
+    import time
+
+    run, log, pidfile, _port = _device_init(tmp_path, firmware=firmware)
+    try:
+        assert run("start", STUB_TERM_MS="12000").returncode == 0
+        agent = _wait_started(pidfile, log)
+        started = time.monotonic()
+        assert run("stop").returncode == 0
+        assert f"stopped {agent}" in log.read_text()
+        assert not _alive(agent) and not pidfile.exists()
+        assert time.monotonic() - started >= 12
+    finally:
+        _reap_all(tmp_path)

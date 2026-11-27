@@ -1180,9 +1180,7 @@ finish_write_action() {
     trap finish_signal HUP INT TERM
     # A publish cut short leaves its note; the rollback below takes a new one.
     gui_writing_end
-    if [ "$write_rc" != "0" ]; then
-        cleanup_staging
-    fi
+    cleanup_staging
     recovery_ok=1
     restart_previous=0
     if [ "${WRITE_TRANSACTION_READY:-0}" = "1" ] && [ "${WRITE_TRANSACTION_COMMITTED:-0}" != "1" ]; then

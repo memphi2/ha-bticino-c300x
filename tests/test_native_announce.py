@@ -384,6 +384,10 @@ def test_a_door_call_takes_the_speaker_at_once_and_the_device_keeps_it(lab: Lab,
     while lab.player_alive():
         assert time.monotonic() - started < 1
         time.sleep(0.01)
+    # The player counts as gone once killed; the agent reports it after collecting it.
+    while lab.call()["playing"]:
+        assert time.monotonic() - started < 1
+        time.sleep(0.01)
     # The device sets its own state for the call; from then on the speaker is its.
     lab.mixer("Zia_Aud_St", "7")
 

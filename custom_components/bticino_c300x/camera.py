@@ -205,12 +205,11 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
         Camera.__init__(self)
         C300XEntity.__init__(self, entry, "doorbell_camera")
         self._runtime_data = entry.runtime_data
-        self._background_tasks = CameraBackgroundTasks()
         self._attr_unique_id = doorbell_camera_unique_id(entry)
-        self._attr_is_streaming = False
         self.content_type = STILL_IMAGE_CONTENT_TYPE
         self._video_window_available = False
         self._snapshot_capture_key: str | None = None
+        self._open_lifecycle()
         self._video_stream_path: str | None = None
         self._audio_stream_path: str | None = None
         self._recorder_stream_path: str | None = None
@@ -243,10 +242,8 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
             ),
         )
         self._agent_cpu_watchdog = AgentCpuWatchdog()
-        self._webrtc_sessions = CameraWebRTCSessions(self._background_tasks)
         self._closing_webrtc_sessions = 0
         self._reconcile_in_flight = False
-        self._last_state_snapshot: tuple[Any, Any, Any] | None = None
         if not hasattr(self, "stream_options"):
             self.stream_options = {}
         self.stream_options[CONF_RTSP_TRANSPORT] = "tcp"
@@ -1387,9 +1384,24 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
             self._attr_camera_entity_capabilities = capabilities
         self._refresh_derived_media_state()
 
+    def _open_lifecycle(self) -> None:
+        """Give the camera fresh task and session owners, as on its first add.
+
+        Removal closes them for good so late work stays rejected; HA adds the
+        same object again after an entity_id change, and that add opens new ones.
+        """
+        self._background_tasks = CameraBackgroundTasks()
+        self._webrtc_sessions = CameraWebRTCSessions(self._background_tasks)
+        self._last_state_snapshot: tuple[Any, Any, Any] | None = None
+        self._picture_scope_state: MediaState | None = None
+        # A status during removal may have opened the window without a capture.
+        self._set_video_window_available(False)
+
     async def async_added_to_hass(self) -> None:
         """Subscribe to runtime event-state updates."""
 
+        if self._background_tasks.closing:
+            self._open_lifecycle()
         await super().async_added_to_hass()
         self.async_on_remove(async_dispatcher_connect(
             self.hass, SIGNAL_SNAPSHOT_CHANGED, self._handle_snapshot_changed

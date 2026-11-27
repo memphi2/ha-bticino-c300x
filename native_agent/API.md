@@ -204,7 +204,7 @@ for example `config_error`, `api_token_missing`, `api_bind_failed`,
 | `GET` | `/api/v1/events/subscriptions` | API | None. |
 | `POST` | `/api/v1/events/subscriptions` | API | Adds or replaces a runtime event subscription. |
 | `DELETE` | `/api/v1/events/subscriptions/{id}` | API | Removes a runtime event subscription. |
-| `POST` | `/api/v1/stair-light/actions/activate` | API | Sends one OpenWebNet stair-light command. |
+| `POST` | `/api/v1/stair-light/actions/activate` | API | Presses the stair light and releases it 100 ms later. |
 | `POST` | `/api/v1/locks/{id}/actions/unlock` | API | Sends one configured lock command. |
 | `GET` | `/api/v1/activations` | API | None. |
 | `POST` | `/api/v1/activations/{id}/actions/run` | API | Runs one configured activation. |
@@ -680,13 +680,21 @@ every device or firmware version.
 
 Authentication: normal API token.
 
-Side effects: sends a stair-light OpenWebNet command.
+Side effects: sends `*8*21*<address>##` and, 100 ms later on the same bus
+session, `*8*22*<address>##`, as the station's display does (its stair-light
+release timer is 100 ms on 1.7.19, 2.0.2, 3.0.6 and the C100X 1.5.8). An agent
+stop during the 100 ms finishes the exchange; nothing is stored, so a restart
+or reboot leaves no state behind.
 
-Request fields:
+Request fields (without `address` the configured `stairLightDefaultAddress`):
 
 ```json
 {"address": "10"}
 ```
+
+Response: `{"ok": true, "address": "10"}`. `400 invalid_stair_light_address`
+for an address that is not digits and `#`; a bus error answers `502` with the
+OpenWebNet error.
 
 ### `POST /api/v1/locks/{id}/actions/unlock`
 

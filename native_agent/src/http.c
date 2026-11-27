@@ -5748,17 +5748,18 @@ static void send_device_error(int client_fd, const char *error)
     send_json(client_fd, 502, "Bad Gateway", body);
 }
 
+/* Press, and release 100 ms later as the display does, on one bus session:
+ * an agent stop finishes it (the release goes out), nothing is kept. */
 static int activate_stair_light(
     const struct c300x_config *config,
     char *address,
     size_t address_len,
-    char *reply,
-    size_t reply_len,
     char *error,
     size_t error_len
 )
 {
-    char command[64];
+    char press[C300X_MAX_FRAME_LEN];
+    char release[C300X_MAX_FRAME_LEN];
 
     if (address[0] == '\0') {
         snprintf(address, address_len, "%s", config->stair_light_default_address);
@@ -5767,11 +5768,8 @@ static int activate_stair_light(
         snprintf(error, error_len, "invalid_stair_light_address");
         return 0;
     }
-    snprintf(command, sizeof(command), "*8*21*%s##", address);
-    if (!c300x_openwebnet_send(config, command, reply, reply_len, error, error_len)) {
-        return 0;
-    }
-    return 1;
+    c300x_stair_light_commands(address, press, sizeof(press), release, sizeof(release));
+    return c300x_openwebnet_sequence(config, press, C300X_STAIR_LIGHT_RELEASE_MS, release, error, error_len);
 }
 
 static void handle_stair_light(
@@ -5781,22 +5779,12 @@ static void handle_stair_light(
 )
 {
     char address[C300X_MAX_ADDRESS_LEN];
-    char reply[C300X_MAX_FRAME_LEN];
     char error[C300X_MAX_ERROR_LEN];
-    char body[2048];
+    char body[512];
     char address_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ADDRESS_LEN)];
-    char reply_json[C300X_JSON_QUOTED_LEN(C300X_MAX_FRAME_LEN)];
 
     c300x_json_string_field(request->body, "address", address, sizeof(address));
-    if (!activate_stair_light(
-        config,
-        address,
-        sizeof(address),
-        reply,
-        sizeof(reply),
-        error,
-        sizeof(error)
-    )) {
+    if (!activate_stair_light(config, address, sizeof(address), error, sizeof(error))) {
         if (strcmp(error, "invalid_stair_light_address") == 0) {
             send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_stair_light_address\"}\n");
             return;
@@ -5805,8 +5793,7 @@ static void handle_stair_light(
         return;
     }
     c300x_json_string(address, address_json, sizeof(address_json));
-    c300x_json_string(reply, reply_json, sizeof(reply_json));
-    snprintf(body, sizeof(body), "{\"ok\":true,\"address\":%s,\"raw\":%s}\n", address_json, reply_json);
+    snprintf(body, sizeof(body), "{\"ok\":true,\"address\":%s}\n", address_json);
     send_json(client_fd, 200, "OK", body);
 }
 
@@ -5980,7 +5967,7 @@ static void handle_activation_run(
         return;
     }
     if (release[0] != '\0') {
-        int delay_ms = activation->hold_ms > 0 ? activation->hold_ms : config->lock_release_delay_ms;
+        int delay_ms = c300x_activation_hold_ms(activation, config->lock_release_delay_ms);
         if (!c300x_openwebnet_sequence(
             config,
             press,

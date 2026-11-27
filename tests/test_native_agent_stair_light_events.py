@@ -16,8 +16,8 @@ def test_stair_light_endpoint_does_not_emit_synthetic_event() -> None:
         maxsplit=1,
     )[0]
 
-    assert 'snprintf(command, sizeof(command), "*8*21*%s##", address);' in body
-    assert "c300x_openwebnet_send(config, command, reply, reply_len, error, error_len)" in body
+    assert "c300x_stair_light_commands(address, press, sizeof(press), release, sizeof(release));" in body
+    assert "c300x_openwebnet_sequence(config, press, C300X_STAIR_LIGHT_RELEASE_MS, release" in body
     assert '"stair_light.activated"' not in body
     assert "dispatch_event(" not in body
 

@@ -3,9 +3,12 @@
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <pthread.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/socket.h>
+#include <time.h>
 
 long long test_clock(void);
 static void *test_malloc(size_t size);
@@ -107,10 +110,11 @@ struct rx {
 
 /* Whole interleaved frames; a frame the writer has only begun stays for the
  * next call. */
+static unsigned char buffers[GOP_CLIENTS][1 << 20];
+static size_t kept[GOP_CLIENTS];
+
 static size_t receive(struct client *client, struct rx *out, size_t max)
 {
-    static unsigned char buffers[GOP_CLIENTS][1 << 20];
-    static size_t kept[GOP_CLIENTS];
     unsigned char *buffer = buffers[client - clients];
     size_t used = kept[client - clients], count = 0, at = 0;
     for (;;) {
@@ -393,6 +397,73 @@ static void slow(void)
     leave(0);
 }
 
+static atomic_bool reader_stop;
+
+/* A client on a slow link: 1 KiB every 2 ms, into what receive() parses. */
+static void *read_slowly(void *arg)
+{
+    struct client *client = arg;
+    size_t slot = (size_t)(client - clients);
+    struct timespec pause = {.tv_nsec = 2000000};
+    while (!atomic_load(&reader_stop)) {
+        size_t room = sizeof(buffers[0]) - kept[slot];
+        ssize_t n = recv(client->fd[1], buffers[slot] + kept[slot], room < 1024 ? room : 1024, MSG_DONTWAIT);
+        if (n > 0) kept[slot] += (size_t)n;
+        nanosleep(&pause, NULL);
+    }
+    return NULL;
+}
+
+static long long real_ms(void)
+{
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    return (long long)now.tv_sec * 1000 + now.tv_nsec / 1000000;
+}
+
+/* A client joining on a slow link holds the relay for the burst budget, not
+ * for its whole group: the live client gets the packet at once, the slow one
+ * starts clean at the next IDR. */
+static void slow_burst(void)
+{
+    struct station station = {.ssrc = 10, .ts = 1, .seq = 1};
+    pthread_t reader;
+    join(0);
+    send_frame(&station, true, 300);
+    assert(receive(&clients[0], rx, MAX_RX) == 303);
+    join(1);
+    int size = 16384;
+    assert(setsockopt(clients[1].fd[0], SOL_SOCKET, SO_SNDBUF, &size, sizeof(size)) == 0);
+    atomic_store(&reader_stop, false);
+    assert(pthread_create(&reader, NULL, read_slowly, &clients[1]) == 0);
+    long long start = real_ms();
+    send_frame(&station, false, 1);
+    long long held = real_ms() - start;
+    atomic_store(&reader_stop, true);
+    assert(pthread_join(reader, NULL) == 0);
+    fprintf(stderr, "a slow client's burst held the relay %lld ms\n", held);
+    assert(held < 450);
+    assert(!gop.clients[1].live);
+    assert(receive(&clients[0], rx, MAX_RX) == 2);
+    size_t count = receive(&clients[1], rx, MAX_RX);
+    assert(count < 303 && assert_clean_start(rx, count, 1) < 300);
+    /* The link recovers: the next IDR starts it, after the frame the writer
+     * had begun. */
+    size = 4 << 20;
+    assert(setsockopt(clients[1].fd[0], SOL_SOCKET, SO_SNDBUF, &size, sizeof(size)) == 0);
+    send_frame(&station, false, 2);
+    assert(receive(&clients[1], rx, MAX_RX) == 0);
+    send_frame(&station, true, 3);
+    send_frame(&station, false, 2);
+    count = receive(&clients[1], rx, MAX_RX);
+    size_t first = count > 0 && rx[0].nal != 9 ? 1 : 0;
+    assert(gop.clients[1].live && count == first + 6 + 3);
+    assert(assert_clean_start(rx + first, count - first, 1) == 3);
+    assert(receive(&clients[0], rx, MAX_RX) == 3 + 6 + 3);
+    leave(0);
+    leave(1);
+}
+
 static int open_fds(void)
 {
     int count = 0;
@@ -455,6 +526,7 @@ int main(int argc, char **argv)
     else if (strcmp(argv[1], "resume") == 0) resume();
     else if (strcmp(argv[1], "loss") == 0) loss();
     else if (strcmp(argv[1], "slow") == 0) slow();
+    else if (strcmp(argv[1], "slow_burst") == 0) slow_burst();
     else if (strcmp(argv[1], "malformed") == 0) malformed();
     else if (strcmp(argv[1], "no_memory") == 0) no_memory();
     else return 2;

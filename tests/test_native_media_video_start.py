@@ -14,7 +14,9 @@ BRIDGE_SOURCES = [
     "media_session_guard", "media_rtsp_auth", "media_rtsp_io", "media_rtsp_reader", "talkback_g711",
     "device_detect", "device_file_sync", "file_io", "root_mount", "media_gop_cache",
 ]
-CACHE_CASES = ["late_join", "cap", "age", "stale", "restart", "resume", "loss", "slow", "malformed", "no_memory"]
+CACHE_CASES = [
+    "late_join", "cap", "age", "stale", "restart", "resume", "loss", "slow", "slow_burst", "malformed", "no_memory",
+]
 
 
 @pytest.fixture(scope="module", params=[False, True], ids=["host", "asan-ubsan"])

@@ -71,7 +71,7 @@
         "data_description": {
           "video_enabled": "Image et son du poste de porte dans Home Assistant : lors d'un appel, à la demande et pour Home Call.",
           "create_homeassistant_user": "La vidéo et le son ont besoin d'un accès propre sur le {model}. Si l'option est active, l'intégration le crée lors de la configuration ou via sa réparation.",
-          "door_audio_level_db": "Augmente le son du poste de porte en direct, pendant un appel et dans les enregistrements d'appel. Là où la station le permet, dans sa puce audio, sinon de la même valeur par logiciel. Par défaut : +6 dB.",
+          "door_audio_level_db": "Augmente le son du poste de porte en direct, pendant un appel et dans les enregistrements d'appel. Là où la station le permet, dans sa puce audio, sinon de la même valeur par logiciel. Par défaut : réglage d'usine.",
           "audio_fine_gain_db": "Ajoute de -10 à +10 dB au niveau du poste de porte, identique sur chaque station et chaque codec audio. Par défaut : 0.",
           "webrtc_ice_policy": "Quelles adresses réseau le navigateur peut utiliser pour l'image en direct. À modifier seulement si l'image en direct ne se connecte pas.",
           "native_two_way_audio": "Facultatif, désactivé par défaut. Nécessite Home Assistant 2026.11 ou plus récent, « Two-way audio » activé dans Paramètres > Système > Labs, l'image en direct via WebRTC, un accès en HTTPS et le microphone autorisé dans le navigateur. Répondez d'abord à un appel dans la carte {model} ; cette option n'y répond pas. Parler dans la carte {model} reste inchangé."
@@ -200,7 +200,7 @@
         "data_description": {
           "video_enabled": "Image et son du poste de porte dans Home Assistant : lors d'un appel, à la demande et pour Home Call.",
           "create_homeassistant_user": "La vidéo et le son ont besoin d'un accès propre sur le {model}. Si l'option est active, l'intégration le crée lors de la configuration ou via sa réparation.",
-          "door_audio_level_db": "Augmente le son du poste de porte en direct, pendant un appel et dans les enregistrements d'appel. Là où la station le permet, dans sa puce audio, sinon de la même valeur par logiciel. Par défaut : +6 dB.",
+          "door_audio_level_db": "Augmente le son du poste de porte en direct, pendant un appel et dans les enregistrements d'appel. Là où la station le permet, dans sa puce audio, sinon de la même valeur par logiciel. Par défaut : réglage d'usine.",
           "audio_fine_gain_db": "Ajoute de -10 à +10 dB au niveau du poste de porte, identique sur chaque station et chaque codec audio. Par défaut : 0.",
           "webrtc_ice_policy": "Quelles adresses réseau le navigateur peut utiliser pour l'image en direct. À modifier seulement si l'image en direct ne se connecte pas.",
           "native_two_way_audio": "Facultatif, désactivé par défaut. Nécessite Home Assistant 2026.11 ou plus récent, « Two-way audio » activé dans Paramètres > Système > Labs, l'image en direct via WebRTC, un accès en HTTPS et le microphone autorisé dans le navigateur. Répondez d'abord à un appel dans la carte {model} ; cette option n'y répond pas. Parler dans la carte {model} reste inchangé."
@@ -843,7 +843,7 @@
         "data_description": {
           "video_enabled": "Image et son du poste de porte dans Home Assistant : lors d'un appel, à la demande et pour Home Call.",
           "create_homeassistant_user": "La vidéo et le son ont besoin d'un accès propre sur le {model}. Si l'option est active, l'intégration le crée lors de la configuration ou via sa réparation.",
-          "door_audio_level_db": "Augmente le son du poste de porte en direct, pendant un appel et dans les enregistrements d'appel. Là où la station le permet, dans sa puce audio, sinon de la même valeur par logiciel. Par défaut : +6 dB.",
+          "door_audio_level_db": "Augmente le son du poste de porte en direct, pendant un appel et dans les enregistrements d'appel. Là où la station le permet, dans sa puce audio, sinon de la même valeur par logiciel. Par défaut : réglage d'usine.",
           "audio_fine_gain_db": "Ajoute de -10 à +10 dB au niveau du poste de porte, identique sur chaque station et chaque codec audio. Par défaut : 0.",
           "webrtc_ice_policy": "Quelles adresses réseau le navigateur peut utiliser pour l'image en direct. À modifier seulement si l'image en direct ne se connecte pas.",
           "native_two_way_audio": "Facultatif, désactivé par défaut. Nécessite Home Assistant 2026.11 ou plus récent, « Two-way audio » activé dans Paramètres > Système > Labs, l'image en direct via WebRTC, un accès en HTTPS et le microphone autorisé dans le navigateur. Répondez d'abord à un appel dans la carte {model} ; cette option n'y répond pas. Parler dans la carte {model} reste inchangé."

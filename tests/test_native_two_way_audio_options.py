@@ -134,8 +134,8 @@ def test_an_entry_with_the_retired_audio_keys_loads_and_saving_drops_them():
         runtime_data=None,
     )
     current = current_feature_options(entry)
-    assert (current[CONF_DOOR_AUDIO_LEVEL_DB], current[CONF_AUDIO_FINE_GAIN_DB]) == (6, 0)
-    assert options_features_schema(entry)({})[CONF_DOOR_AUDIO_LEVEL_DB] == "6"
+    assert (current[CONF_DOOR_AUDIO_LEVEL_DB], current[CONF_AUDIO_FINE_GAIN_DB]) == (0, 0)
+    assert options_features_schema(entry)({})[CONF_DOOR_AUDIO_LEVEL_DB] == "0"
     areas = _OptionsAreas(entry)
     flow = areas._flow()
     flow.async_show_form = lambda **kwargs: kwargs

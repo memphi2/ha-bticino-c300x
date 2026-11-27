@@ -220,7 +220,7 @@ Under **Configure > Video and audio**:
 
 | Option | Default | Choices |
 | --- | --- | --- |
-| **Door level** | `+6 dB` | Stock, `+3`, `+6`, `+9` or `+12 dB`. |
+| **Door level** | Stock | Stock, `+3`, `+6`, `+9` or `+12 dB`. |
 | **Fine adjustment (dB)** | `0 dB` | `-10` to `+10 dB` in 1 dB steps. |
 
 Both set the door station's sound everywhere Home Assistant hears it: the

@@ -154,7 +154,7 @@ Setup then walks through the settings areas one after the other. Later,
 | --- | --- |
 | **Door station video and audio** | On, for camera, Ring Call, Home Call and talkback. |
 | **Set up video and audio access on the C300X** | On. Video and audio need their own access on the station. |
-| **Door level** | The default `+6 dB`. |
+| **Door level** | The default, Stock. |
 | **Fine adjustment (dB)** | The default `0 dB`. |
 | **Connection paths for the live picture** | **IPv4 and local IPv6 (ULA) - recommended** (the default). |
 | **Talk through the Home Assistant camera view** | Off. Talkback in the card does not need it. |

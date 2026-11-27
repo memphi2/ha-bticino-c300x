@@ -10,10 +10,10 @@ on a Classe 300X with firmware 1.7.19; firmware 2.0.2, 3.0.6 and the Classe
   picture in the live view, the ring preview and an answered call, instead of
   a grey or broken image until the next full frame.
 - **Door station sound: two settings instead of two gains.** **Door level**
-  (Stock, +3, +6, +9, +12 dB; default +6) raises the voice at the source: on a
-  Classe 300X in the station's audio chip, before the sound is compressed; on
-  the Classe 100X in the agent. **Fine adjustment** (-10 to +10 dB) adds to
-  it. Both work the same with Speex and PCMU, in the live view, during a call
+  (Stock, +3, +6, +9, +12 dB; default Stock) raises the voice at the source:
+  on a Classe 300X in the station's audio chip, before the sound is
+  compressed; on the Classe 100X in the agent. **Fine adjustment** (-10 to
+  +10 dB) adds to it. Both work the same with Speex and PCMU, in the live view, during a call
   and in ring recordings, which now have the same level as the live sound.
   They replace "Live audio level" and "Volume of ring recordings"; the old
   values are not taken over. The card plays the sound as it comes and no

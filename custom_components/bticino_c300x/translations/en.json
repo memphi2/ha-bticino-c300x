@@ -71,7 +71,7 @@
         "data_description": {
           "video_enabled": "Picture and sound of the door station in Home Assistant: on a ring, on demand and for Home Call.",
           "create_homeassistant_user": "Video and audio need an access of their own on the {model}. With this on, the integration sets it up during setup or through its repair.",
-          "door_audio_level_db": "Raises the door station's sound in the live view, in calls and in ring recordings. Where the station allows it, the level is set in its audio chip, otherwise the same amount is added in software. Default: +6 dB.",
+          "door_audio_level_db": "Raises the door station's sound in the live view, in calls and in ring recordings. Where the station allows it, the level is set in its audio chip, otherwise the same amount is added in software. Default: Stock.",
           "audio_fine_gain_db": "Adds -10 to +10 dB on top of the door level, the same on every station and audio codec. Default: 0.",
           "webrtc_ice_policy": "Which network addresses the browser may use for the live picture. Change this only when the live picture does not connect.",
           "native_two_way_audio": "Optional, off by default. Requires Home Assistant 2026.11 or later, \"Two-way audio\" switched on under Settings > System > Labs, the live picture over WebRTC, access over HTTPS and the browser allowed to use the microphone. Answer a call in the {model} card first; this option does not answer it. Talking in the {model} card stays as it is."
@@ -200,7 +200,7 @@
         "data_description": {
           "video_enabled": "Picture and sound of the door station in Home Assistant: on a ring, on demand and for Home Call.",
           "create_homeassistant_user": "Video and audio need an access of their own on the {model}. With this on, the integration sets it up during setup or through its repair.",
-          "door_audio_level_db": "Raises the door station's sound in the live view, in calls and in ring recordings. Where the station allows it, the level is set in its audio chip, otherwise the same amount is added in software. Default: +6 dB.",
+          "door_audio_level_db": "Raises the door station's sound in the live view, in calls and in ring recordings. Where the station allows it, the level is set in its audio chip, otherwise the same amount is added in software. Default: Stock.",
           "audio_fine_gain_db": "Adds -10 to +10 dB on top of the door level, the same on every station and audio codec. Default: 0.",
           "webrtc_ice_policy": "Which network addresses the browser may use for the live picture. Change this only when the live picture does not connect.",
           "native_two_way_audio": "Optional, off by default. Requires Home Assistant 2026.11 or later, \"Two-way audio\" switched on under Settings > System > Labs, the live picture over WebRTC, access over HTTPS and the browser allowed to use the microphone. Answer a call in the {model} card first; this option does not answer it. Talking in the {model} card stays as it is."
@@ -843,7 +843,7 @@
         "data_description": {
           "video_enabled": "Picture and sound of the door station in Home Assistant: on a ring, on demand and for Home Call.",
           "create_homeassistant_user": "Video and audio need an access of their own on the {model}. With this on, the integration sets it up during setup or through its repair.",
-          "door_audio_level_db": "Raises the door station's sound in the live view, in calls and in ring recordings. Where the station allows it, the level is set in its audio chip, otherwise the same amount is added in software. Default: +6 dB.",
+          "door_audio_level_db": "Raises the door station's sound in the live view, in calls and in ring recordings. Where the station allows it, the level is set in its audio chip, otherwise the same amount is added in software. Default: Stock.",
           "audio_fine_gain_db": "Adds -10 to +10 dB on top of the door level, the same on every station and audio codec. Default: 0.",
           "webrtc_ice_policy": "Which network addresses the browser may use for the live picture. Change this only when the live picture does not connect.",
           "native_two_way_audio": "Optional, off by default. Requires Home Assistant 2026.11 or later, \"Two-way audio\" switched on under Settings > System > Labs, the live picture over WebRTC, access over HTTPS and the browser allowed to use the microphone. Answer a call in the {model} card first; this option does not answer it. Talking in the {model} card stays as it is."

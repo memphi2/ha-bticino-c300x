@@ -71,7 +71,7 @@
         "data_description": {
           "video_enabled": "Bild und Ton der Türstation in Home Assistant: beim Klingeln, auf Abruf und für Home Call.",
           "create_homeassistant_user": "Video und Ton brauchen einen eigenen Zugang auf dem {model}. Ist das an, richtet die Integration ihn bei der Einrichtung oder über ihre Reparatur ein.",
-          "door_audio_level_db": "Hebt den Ton der Türstation in der Live-Ansicht, im Gespräch und in Klingel-Aufnahmen an. Wo die Station es erlaubt, im Audiochip der Station, sonst um denselben Wert in Software. Standard: +6 dB.",
+          "door_audio_level_db": "Hebt den Ton der Türstation in der Live-Ansicht, im Gespräch und in Klingel-Aufnahmen an. Wo die Station es erlaubt, im Audiochip der Station, sonst um denselben Wert in Software. Standard: Werkseinstellung.",
           "audio_fine_gain_db": "-10 bis +10 dB zusätzlich zum Pegel der Türstation, auf jeder Station und mit jedem Audiocodec gleich. Standard: 0.",
           "webrtc_ice_policy": "Welche Netzwerkadressen der Browser für das Livebild nutzen darf. Nur ändern, wenn das Livebild nicht verbindet.",
           "native_two_way_audio": "Optional, standardmäßig aus. Voraussetzungen: Home Assistant 2026.11 oder neuer, „Two-way audio“ unter Einstellungen > System > Labs eingeschaltet, das Livebild über WebRTC, Zugriff über HTTPS und das Mikrofon im Browser erlaubt. Einen Anruf nimmst du zuerst in der {model}-Karte an; diese Option nimmt ihn nicht an. Das Sprechen in der {model}-Karte bleibt, wie es ist."
@@ -200,7 +200,7 @@
         "data_description": {
           "video_enabled": "Bild und Ton der Türstation in Home Assistant: beim Klingeln, auf Abruf und für Home Call.",
           "create_homeassistant_user": "Video und Ton brauchen einen eigenen Zugang auf dem {model}. Ist das an, richtet die Integration ihn bei der Einrichtung oder über ihre Reparatur ein.",
-          "door_audio_level_db": "Hebt den Ton der Türstation in der Live-Ansicht, im Gespräch und in Klingel-Aufnahmen an. Wo die Station es erlaubt, im Audiochip der Station, sonst um denselben Wert in Software. Standard: +6 dB.",
+          "door_audio_level_db": "Hebt den Ton der Türstation in der Live-Ansicht, im Gespräch und in Klingel-Aufnahmen an. Wo die Station es erlaubt, im Audiochip der Station, sonst um denselben Wert in Software. Standard: Werkseinstellung.",
           "audio_fine_gain_db": "-10 bis +10 dB zusätzlich zum Pegel der Türstation, auf jeder Station und mit jedem Audiocodec gleich. Standard: 0.",
           "webrtc_ice_policy": "Welche Netzwerkadressen der Browser für das Livebild nutzen darf. Nur ändern, wenn das Livebild nicht verbindet.",
           "native_two_way_audio": "Optional, standardmäßig aus. Voraussetzungen: Home Assistant 2026.11 oder neuer, „Two-way audio“ unter Einstellungen > System > Labs eingeschaltet, das Livebild über WebRTC, Zugriff über HTTPS und das Mikrofon im Browser erlaubt. Einen Anruf nimmst du zuerst in der {model}-Karte an; diese Option nimmt ihn nicht an. Das Sprechen in der {model}-Karte bleibt, wie es ist."
@@ -843,7 +843,7 @@
         "data_description": {
           "video_enabled": "Bild und Ton der Türstation in Home Assistant: beim Klingeln, auf Abruf und für Home Call.",
           "create_homeassistant_user": "Video und Ton brauchen einen eigenen Zugang auf dem {model}. Ist das an, richtet die Integration ihn bei der Einrichtung oder über ihre Reparatur ein.",
-          "door_audio_level_db": "Hebt den Ton der Türstation in der Live-Ansicht, im Gespräch und in Klingel-Aufnahmen an. Wo die Station es erlaubt, im Audiochip der Station, sonst um denselben Wert in Software. Standard: +6 dB.",
+          "door_audio_level_db": "Hebt den Ton der Türstation in der Live-Ansicht, im Gespräch und in Klingel-Aufnahmen an. Wo die Station es erlaubt, im Audiochip der Station, sonst um denselben Wert in Software. Standard: Werkseinstellung.",
           "audio_fine_gain_db": "-10 bis +10 dB zusätzlich zum Pegel der Türstation, auf jeder Station und mit jedem Audiocodec gleich. Standard: 0.",
           "webrtc_ice_policy": "Welche Netzwerkadressen der Browser für das Livebild nutzen darf. Nur ändern, wenn das Livebild nicht verbindet.",
           "native_two_way_audio": "Optional, standardmäßig aus. Voraussetzungen: Home Assistant 2026.11 oder neuer, „Two-way audio“ unter Einstellungen > System > Labs eingeschaltet, das Livebild über WebRTC, Zugriff über HTTPS und das Mikrofon im Browser erlaubt. Einen Anruf nimmst du zuerst in der {model}-Karte an; diese Option nimmt ihn nicht an. Das Sprechen in der {model}-Karte bleibt, wie es ist."

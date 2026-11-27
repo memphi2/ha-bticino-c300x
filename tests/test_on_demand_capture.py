@@ -26,7 +26,7 @@ def _idle(**bridge_changes):
         "recorder_stream_path": "/doorbell-recorder",
         "bridge": {
             "media_owner": "idle", "clients": 0,
-            "audio_level": {"door_level_db": 6, "fine_gain_db": 0},
+            "audio_level": {"door_level_db": 0, "fine_gain_db": 0},
             **bridge_changes,
         },
     }

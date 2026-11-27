@@ -36,7 +36,7 @@ def capture(monkeypatch):
     status = {
         "media_owner": "ring", "last_media_started_at": "2026-11-14T12:00:00Z",
         "bridge": {"media_owner": "ring", "clients": 0, "ring_call_active": True,
-                   "audio_level": {"door_level_db": 6, "fine_gain_db": 0}},
+                   "audio_level": {"door_level_db": 0, "fine_gain_db": 0}},
     }
     entry = _entry(status)
     api = entry.runtime_data.api

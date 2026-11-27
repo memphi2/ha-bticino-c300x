@@ -47,25 +47,25 @@ def _status(door: object, fine: object) -> dict:
     return {"bridge": {"audio_level": {"door_level_db": door, "fine_gain_db": fine}}}
 
 
-def test_defaults_are_door_level_six_and_no_fine_adjustment() -> None:
+def test_defaults_are_door_level_stock_and_no_fine_adjustment() -> None:
     entry = _entry()
 
-    assert door_audio_level_db(entry) == 6
+    assert door_audio_level_db(entry) == 0
     assert audio_fine_gain_db(entry) == 0
 
 
 def test_an_entry_with_the_retired_keys_reads_the_defaults() -> None:
     entry = _entry(dict.fromkeys(RETIRED_AUDIO_OPTION_KEYS, 15.5))
 
-    assert (door_audio_level_db(entry), audio_fine_gain_db(entry)) == (6, 0)
-    asyncio.run(async_ensure_doorstation_audio_level(entry, status=_status(0, 0)))
-    assert entry.runtime_data.api.level_calls == [(6, 0)]
+    assert (door_audio_level_db(entry), audio_fine_gain_db(entry)) == (0, 0)
+    asyncio.run(async_ensure_doorstation_audio_level(entry, status=_status(6, 0)))
+    assert entry.runtime_data.api.level_calls == [(0, 0)]
 
 
 def test_invalid_stored_values_fall_back_to_the_defaults() -> None:
     entry = _entry({CONF_DOOR_AUDIO_LEVEL_DB: 5, CONF_AUDIO_FINE_GAIN_DB: "loud"})
 
-    assert (door_audio_level_db(entry), audio_fine_gain_db(entry)) == (6, 0)
+    assert (door_audio_level_db(entry), audio_fine_gain_db(entry)) == (0, 0)
 
 
 def test_sends_the_configured_levels_when_the_agent_has_others() -> None:
@@ -90,15 +90,15 @@ def test_sends_when_the_agent_reports_no_level() -> None:
     for status in ({"bridge": {}}, {"bridge": {"audio_level": None}}, _status(6.0, 0), None):
         entry = _entry()
         asyncio.run(async_ensure_doorstation_audio_level(entry, status=status))
-        assert entry.runtime_data.api.level_calls == [(6, 0)]
+        assert entry.runtime_data.api.level_calls == [(0, 0)]
 
 
 def test_a_rejected_write_does_not_block_the_stream() -> None:
-    entry = _entry(status=_status(0, 0), fail=True)
+    entry = _entry(status=_status(6, 0), fail=True)
 
     asyncio.run(async_ensure_doorstation_audio_level(entry))
 
-    assert entry.runtime_data.api.level_calls == [(6, 0)]
+    assert entry.runtime_data.api.level_calls == [(0, 0)]
 
 
 def test_agent_audio_level_reads_only_the_bridge_object() -> None:

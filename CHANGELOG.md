@@ -129,8 +129,6 @@ Fixed:
 - A Display patch write that failed and could not be rolled back, or that had
   to be stopped, left a copy of the display files in the station's memory
   until the next restart.
-- After the camera was removed and added again, its automatic recovery from
-  a stuck "busy" state no longer ran.
 - The SSH password in the agent update Repair is now hidden while you type.
 
 Documentation:

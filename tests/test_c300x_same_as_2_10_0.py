@@ -450,13 +450,19 @@ async def entity_inventory(document: dict) -> dict[str, list[list[str | None]]]:
     return inventory
 
 
-# 3.1.0 (docs/dev/multi-outdoor-units.md): the station's doorbell event and
-# door button moved to the outdoor unit devices (created once the station names
-# its units, so not in this inventory), the station got the ring event, and the
-# doorbell state sensor and the agent event entity are gone.
-ADDED_IN_3_1_0 = {"event": [["C300XStationRingEventEntity", "entry_ring", "ring", None, "True", "doorbell"]]}
+# 3.1.0 (docs/dev/multi-outdoor-units.md): the station's doorbell camera,
+# doorbell event and door button moved to the outdoor unit devices (created
+# once the station names its units, so not in this inventory), the station got
+# the ring and the stair light event, and the doorbell state sensor and the
+# agent event entity are gone.
+ADDED_IN_3_1_0 = {"event": [
+    ["C300XStationRingEventEntity", "entry_ring", "ring", None, "True", "doorbell"],
+    ["C300XStairLightEventEntity", "entry_stair_light_event", "stair_light", None, "True", None],
+]}
 REMOVED_IN_3_1_0 = {
     "button": [["C300XDoorUnlockButton", "entry_door_unlock_front", "door_unlock", None, "True", None]],
+    # Only where the station offers doorbell video (not the last document).
+    "camera": [["C300XDoorbellCamera", "entry_doorbell_camera", "doorbell_camera", None, "True", None]],
     "event": [["C300XDeviceAgentEventEntity", "entry_agent_event", "agent_event", "diagnostic", "True", None],
               ["C300XDoorbellEventEntity", "entry_doorbell_event", "doorbell_event", None, "True", "doorbell"]],
     # Only where the station offers doorbell video (not the last document).
@@ -473,7 +479,7 @@ def as_in_2_10_0(inventory: dict[str, list], had_doorbell_state: bool) -> dict[s
     for platform, rows in REMOVED_IN_3_1_0.items():
         for row in rows:
             assert row not in inventory[platform]
-            if platform != "sensor" or had_doorbell_state:
+            if platform not in {"camera", "sensor"} or had_doorbell_state:
                 inventory[platform].append(row)
         inventory[platform].sort(key=json.dumps)
     return inventory

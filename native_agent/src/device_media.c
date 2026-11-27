@@ -17,7 +17,14 @@
 
 #define DEVICE_MEDIA_PORT 30007
 #define DEVICE_MEDIA_COMMAND_TIMEOUT_MS 2000
-#define DEVICE_MEDIA_TAKEOVER_SETTLE_MS 800
+/* The station streams to a new client about 0.2-0.4 s after it accepted it.
+ * Without a packet by then the client is added again: 0.1 s after a refusal
+ * (no pipeline for the call yet), 0.4 s after an accepted add (the call's
+ * setup may have cleared the station's client list since). After 1.5 s the
+ * takeover ends without the stream. */
+#define DEVICE_MEDIA_VIDEO_TIMEOUT_MS 1500
+#define DEVICE_MEDIA_VIDEO_RETRY_MS 400
+#define DEVICE_MEDIA_REFUSED_RETRY_MS 100
 
 static int video_rtp_port(const struct c300x_config *config) {
     return (int)config->video_rtp_port_start + 2;
@@ -123,17 +130,6 @@ static bool send_device_media_command(const char *command, char *reply, size_t r
     return ok;
 }
 
-static void sleep_ms(long milliseconds) {
-    if (milliseconds <= 0) {
-        return;
-    }
-    struct timespec delay = {
-        .tv_sec = milliseconds / 1000,
-        .tv_nsec = (milliseconds % 1000) * 1000000L,
-    };
-    (void)nanosleep(&delay, NULL);
-}
-
 bool c300x_device_media_start(const struct c300x_config *config) {
     if (config == NULL) {
         return false;
@@ -199,14 +195,41 @@ void c300x_device_media_stop(const struct c300x_config *config) {
     }
 }
 
-bool c300x_device_media_takeover(const struct c300x_config *config) {
-    if (config == NULL) {
+bool c300x_device_media_takeover(const struct c300x_config *config,
+                                 c300x_device_media_video_wait_fn wait_video, void *context) {
+    long long now = monotonic_ms();
+    if (config == NULL || wait_video == NULL || now < 0) {
         return false;
     }
-    bool started = c300x_device_media_start(config);
-    sleep_ms(DEVICE_MEDIA_TAKEOVER_SETTLE_MS);
-    /* SIP setup queues stock media-service fanout ports asynchronously. Do not
-       send a media stop here: it tears down the just-opened media window and
-       makes the following custom-port start return a media-service NACK. */
-    return c300x_device_media_start(config) || started;
+    char command[128];
+    char reply[128];
+    int quality = config->video_av_high_resolution ? 0 : 1;
+    bool accepted = false;
+    int video = 0;
+    long long deadline = now + DEVICE_MEDIA_VIDEO_TIMEOUT_MS;
+    snprintf(command, sizeof(command), "*7*300#127#0#0#1#%d#%d*##", video_rtp_port(config), quality);
+    /* No media stop here: it tears down the media window the station opened
+       for this call, and the next add is refused. */
+    for (;;) {
+        accepted = send_device_media_command(command, reply, sizeof(reply)) || accepted;
+        now = monotonic_ms();
+        if (now < 0 || now >= deadline) break;
+        /* Once accepted, a refused add means the client is still there. */
+        long long slice = accepted ? DEVICE_MEDIA_VIDEO_RETRY_MS : DEVICE_MEDIA_REFUSED_RETRY_MS;
+        video = wait_video(context, (int)(deadline - now < slice ? deadline - now : slice));
+        now = monotonic_ms();
+        if (video != 0 || now < 0 || now >= deadline) break;
+    }
+    if (video < 0) {
+        /* Cancelled: the caller removes what the station accepted. */
+        return accepted;
+    }
+    if (video == 0 && !accepted) {
+        return false;
+    }
+    /* The station builds its audio sink together with the video one, so the
+       audio client goes in once the video stream is here. */
+    snprintf(command, sizeof(command), "*7*300#127#0#0#1#%d#2*##", audio_rtp_port(config));
+    (void)send_device_media_command(command, reply, sizeof(reply));
+    return true;
 }

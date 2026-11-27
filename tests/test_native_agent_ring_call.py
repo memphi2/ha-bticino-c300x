@@ -260,9 +260,9 @@ def test_native_agent_ring_mode_is_separate_from_on_demand_streaming() -> None:
     assert setup_body.count('"a=crypto:3 AEAD_AES_256_GCM inline:%s\\r\\n"') >= 2
     assert setup_body.count('"a=crypto:4 AES_256_CM_HMAC_SHA1_80 inline:%s\\r\\n"') >= 2
     assert "c300x_device_media_start(bridge->config)" in media_bridge
-    assert "c300x_device_media_takeover(bridge->config)" in start_body
+    assert "c300x_device_media_takeover(bridge->config, wait_for_ondemand_video, &video_wait)" in start_body
     assert start_body.index("if (!start_talkback_proxy(bridge))") < start_body.index(
-        "if (!c300x_device_media_takeover(bridge->config))"
+        "if (!c300x_device_media_takeover(bridge->config, wait_for_ondemand_video, &video_wait))"
     )
     ondemand_media_body = media_bridge[
         media_bridge.index("static void *ondemand_media_thread") :
@@ -273,16 +273,13 @@ def test_native_agent_ring_mode_is_separate_from_on_demand_streaming() -> None:
     takeover_body = device_media[
         device_media.index("bool c300x_device_media_takeover") :
     ]
-    assert "#define DEVICE_MEDIA_TAKEOVER_SETTLE_MS 800" in device_media
-    assert "c300x_device_media_stop();" not in takeover_body
-    assert takeover_body.count("c300x_device_media_start(config)") == 2
-    assert takeover_body.index("bool started = c300x_device_media_start(config);") < takeover_body.index(
-        "sleep_ms(DEVICE_MEDIA_TAKEOVER_SETTLE_MS);"
-    )
-    assert takeover_body.index("sleep_ms(DEVICE_MEDIA_TAKEOVER_SETTLE_MS);") < takeover_body.rindex(
-        "c300x_device_media_start(config)"
-    )
-    assert "return c300x_device_media_start(config) || started;" in takeover_body
+    # The takeover waits for the station's stream, never for a fixed time and
+    # never with a media stop; its timing is pinned by
+    # test_native_device_media_deadline.py and test_native_media_takeover.py.
+    assert "SETTLE" not in device_media
+    assert "c300x_device_media_stop" not in takeover_body
+    assert "nanosleep" not in takeover_body
+    assert "wait_video(context," in takeover_body
     assert '#include "media_base64.h"' in media_bridge
     assert '#include "time_util.h"' in media_bridge
     assert "static bool base64_encode(" not in media_bridge
@@ -606,12 +603,12 @@ def test_native_agent_ondemand_relay_prioritizes_video_over_audio_work() -> None
         "set_socket_receive_buffer(video_fd, MEDIA_VIDEO_RTP_RECV_BUFFER_BYTES);"
         in create_socket_body
     )
-    assert "drain_relay_video_packets(bridge, rtp_fd);" in relay_body
+    assert "drain_relay_video_packets(bridge, rtp_fd)" in relay_body
     assert "drain_relay_audio_packet(bridge, audio_rtp_fd);" in relay_body
-    assert relay_body.index("drain_relay_video_packets(bridge, rtp_fd);") < relay_body.index(
+    assert relay_body.index("drain_relay_video_packets(bridge, rtp_fd)") < relay_body.index(
         "drain_relay_audio_packet(bridge, audio_rtp_fd);"
     )
-    assert relay_body.count("drain_relay_video_packets(bridge, rtp_fd);") >= 2
+    assert relay_body.count("drain_relay_video_packets(bridge, rtp_fd)") >= 2
 
 
 def test_native_agent_ondemand_rtsp_client_receives_media_after_play_response() -> None:

@@ -374,15 +374,13 @@ def test_native_agent_sip_uses_media_identity_from_local_flexisip() -> None:
     assert "MEDIA_VIDEO_RTCP_PORT 28773" in media_bridge
     assert "generate_sdes_key(audio_key_raw" in setup_body
     assert "memcpy(bridge->ondemand_audio_srtp_key, audio_key_raw" in setup_body
-    assert "c300x_device_media_takeover(bridge->config)" in media_bridge
+    assert "c300x_device_media_takeover(bridge->config, wait_for_ondemand_video, &video_wait)" in media_bridge
     assert "c300x_device_media_start(bridge->config)" in media_bridge
     assert '"*7*300#127#0#0#1#%d#%d*##"' in device_media
-    assert "DEVICE_MEDIA_TAKEOVER_SETTLE_MS" in device_media
     takeover_body = device_media[
         device_media.index("bool c300x_device_media_takeover") :
     ]
-    assert "c300x_device_media_stop();" not in takeover_body
-    assert "return c300x_device_media_start(config) || started;" in takeover_body
+    assert "c300x_device_media_stop" not in takeover_body
     assert "MEDIA_RENEW_SECONDS" in media_bridge
     assert '"sip:webrtc@' not in media_bridge
     assert "dummykey" not in media_bridge

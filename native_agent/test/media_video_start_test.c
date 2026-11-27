@@ -1,5 +1,5 @@
 /* An on-demand start against a fake station: it streams from the first
- * media command on, through the takeover's waits, with a large first IDR.
+ * media command on, while the takeover waits for it, with a large first IDR.
  * The first client must get that IDR whole, a later one the newest IDR from
  * the cache, both with their own continuous numbering. Real RTSP handlers;
  * SIP and the device media service are faked. */
@@ -170,8 +170,9 @@ static void *station_audio(void *arg) {
 
 static atomic_int takeovers;
 /* The device media service: the stream begins with the first command; the
- * takeover then waits, here shortened, as device_media.c does. */
-bool c300x_device_media_takeover(const struct c300x_config *config) {
+ * takeover then waits for it to arrive, as device_media.c does. */
+bool c300x_device_media_takeover(const struct c300x_config *config,
+                                 c300x_device_media_video_wait_fn wait, void *context) {
     (void)config;
     atomic_fetch_add(&takeovers, 1);
     struct sockaddr_in bound;
@@ -186,9 +187,7 @@ bool c300x_device_media_takeover(const struct c300x_config *config) {
     station_t0 = now_us();
     assert(pthread_create(&video_thread, NULL, station_video, NULL) == 0);
     assert(pthread_create(&audio_thread, NULL, station_audio, NULL) == 0);
-    usleep(150000);
-    usleep(300000);
-    usleep(150000);
+    assert(wait(context, 1500) == 1);
     return true;
 }
 bool c300x_device_media_start(const struct c300x_config *config) { (void)config; return true; }

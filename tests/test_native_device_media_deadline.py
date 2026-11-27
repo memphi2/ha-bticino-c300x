@@ -22,11 +22,13 @@ def deadline_binary(request, tmp_path_factory):
     return binary
 
 
-@pytest.mark.parametrize("case", range(19), ids=[
+@pytest.mark.parametrize("case", range(24), ids=[
     "protocol", "connect-timeout", "connect-error", "send-timeout", "read-timeout",
     "interrupted", "partial-retries", "nack", "clock-error", "socket-error",
     "poll-error", "send-error", "read-error", "socket-option-error",
     "fragmented-ack", "fragmented-nack", "fragmented-timeout", "reply-full", "eof",
+    "takeover-stream-at-once", "takeover-stream-late", "takeover-no-stream",
+    "takeover-refused", "takeover-cancelled",
 ])
 def test_device_media_deadline(deadline_binary, case):
     result = subprocess.run([str(deadline_binary), str(case)], capture_output=True, text=True, timeout=10)

@@ -7,11 +7,11 @@
  * loads IP_PE.cr for the audio toward the app or Home Assistant
  * (EN_AUDIO_IP_EU), sets 'ZL0 Sout Gain Volume' to 11 with it and then runs
  * /home/root/demo/Audio_State.sh, an empty stub on 1.7.19, 2.0.2 and 3.0.6.
- * Our version of that hook raises the gain by 3 dB a step in that state and
- * puts the profile's 11 back when the HAL goes on to a state without a
- * profile of its own (EN_AUDIO_OFF, EN_AUDIO_IP_IU); every other state loads
- * its own profile. The level lives in the hook itself, so a change rewrites
- * that one file; stock puts the vendor stub back. */
+ * Our version of that hook raises the gain by 3 dB a step in that state. The
+ * other states the vendor stub lists load their own profile; any other state
+ * (EN_AUDIO_OFF, EN_AUDIO_IP_IU, FAKE, an unknown one) gets the profile's 11
+ * back. The level lives in the hook itself, so a change rewrites that one
+ * file; stock puts the vendor stub back. */
 #define C300X_AUDIO_CHIP_STOCK_SOUT 11
 #define C300X_AUDIO_CHIP_MAX_SOUT 15
 #define C300X_AUDIO_CHIP_DB_PER_STEP 3

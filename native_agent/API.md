@@ -1081,8 +1081,10 @@ vendor's empty `/home/root/demo/Audio_State.sh`, which the vendor audio driver
 runs at every audio state change. In the state for the app and Home Assistant
 (`EN_AUDIO_IP_EU`) it raises `ZL0 Sout Gain Volume` from the profile's 11 by
 one step (about 3 dB) per 3 dB of door level and marks that in
-`/run/c300x-sout-raised`; in `EN_AUDIO_OFF` and `EN_AUDIO_IP_IU`, which load
-no profile of their own, it sets 11 again. The vendor file is backed up once
+`/run/c300x-sout-raised`. The other states the vendor stub lists load a profile
+with its own gain and only drop the mark; `EN_AUDIO_OFF`, `EN_AUDIO_IP_IU` and
+any other state (`FAKE`, an empty or unknown argument), which load no profile
+of their own, set 11 again while the mark is there. The vendor file is backed up once
 under `/home/bticino/cfg/extra/c300x-device-file-backups/original` and only
 replaced while it is the known vendor stub (or already the agent's own); the
 root filesystem is writable only for the write. A level change rewrites the

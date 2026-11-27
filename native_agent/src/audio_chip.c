@@ -26,7 +26,9 @@
 #endif
 
 /* The HAL runs it as root at every audio state change and expects exit 1,
- * like the stub. */
+ * like the stub. The states the vendor stub lists, apart from OFF, IP_EU and
+ * IP_IU, load a profile with its own gain; anything else (FAKE, an empty or
+ * unknown state) gets the profile's 11 back, so nothing leaves it raised. */
 static const char hook_template[] =
     "#!/bin/sh\n"
     "V=%d\n"
@@ -35,8 +37,9 @@ static const char hook_template[] =
     "put() { \"$A\" -q -c 0 cset \"name='" SOUT_CONTROL "'\" \"$1\" >/dev/null 2>&1; }\n"
     "case \"$1\" in\n"
     "EN_AUDIO_IP_EU) put \"$V\" && echo \"$V\" > \"$M\";;\n"
-    "EN_AUDIO_OFF|EN_AUDIO_IP_IU) [ ! -e \"$M\" ] || put 11; rm -f \"$M\";;\n"
-    "*) rm -f \"$M\";;\n"
+    "EN_AUDIO_BEEP|EN_AUDIO_PASSTHR|EN_AUDIO_PASSTHR_INT|EN_AUDIO_IP|EN_AUDIO_RINGING|EN_AUDIO_RINGING_LOC"
+    "|EN_AUDIO_PLAY_LOC|EN_AUDIO_PLAY_LOC_SCS|EN_AUDIO_REC_SCS|EN_AUDIO_REC_MIC) rm -f \"$M\";;\n"
+    "*) [ ! -e \"$M\" ] || put 11; rm -f \"$M\";;\n"
     "esac\n"
     "exit 1\n";
 

@@ -64,11 +64,20 @@ def _hook(level_binary: Path, steps: int, tmp_path: Path) -> Path:
     return hook
 
 
-@pytest.mark.parametrize("shell", ["sh", "bash"])
+# The states of the vendor stub that load a profile with its own gain.
+PROFILE_STATES = (
+    "EN_AUDIO_BEEP", "EN_AUDIO_PASSTHR", "EN_AUDIO_PASSTHR_INT", "EN_AUDIO_IP", "EN_AUDIO_RINGING",
+    "EN_AUDIO_RINGING_LOC", "EN_AUDIO_PLAY_LOC", "EN_AUDIO_PLAY_LOC_SCS", "EN_AUDIO_REC_SCS",
+    "EN_AUDIO_REC_MIC",
+)
+SHELLS = {"sh": ["sh"], "bash": ["bash"], "busybox-ash": ["busybox", "ash"]}
+
+
+@pytest.mark.parametrize("shell", sorted(SHELLS))
 def test_hook_raises_only_the_app_state_and_puts_the_profile_value_back(
     level_binary: Path, tmp_path: Path, shell: str
 ) -> None:
-    if shutil.which(shell) is None:
+    if shutil.which(SHELLS[shell][0]) is None:
         pytest.skip(f"{shell} missing")
     hook = _hook(level_binary, 3, tmp_path)
     log = tmp_path / "amixer.log"
@@ -80,7 +89,7 @@ def test_hook_raises_only_the_app_state_and_puts_the_profile_value_back(
 
     def run(state: str) -> list[str]:
         log.unlink(missing_ok=True)
-        result = subprocess.run([shell, str(hook), state], env=env, capture_output=True, timeout=10)
+        result = subprocess.run([*SHELLS[shell], str(hook), state], env=env, capture_output=True, timeout=10)
         # The HAL gets the stub's exit status for every state.
         assert result.returncode == 1
         return log.read_text().splitlines() if log.exists() else []
@@ -99,6 +108,17 @@ def test_hook_raises_only_the_app_state_and_puts_the_profile_value_back(
     assert run("EN_AUDIO_RINGING") == []
     assert not mark.exists()
     assert run("EN_AUDIO_IP") == []
+    # Every state the vendor stub lists with a profile of its own.
+    for state in PROFILE_STATES:
+        run("EN_AUDIO_IP_EU")
+        assert run(state) == [], state
+        assert not mark.exists()
+    # Anything else, an empty argument included, never leaves the gain raised.
+    for state in ("EN_AUDIO_FAKE", "EN_AUDIO_STBY", "", "garbage"):
+        run("EN_AUDIO_IP_EU")
+        assert run(state) == ["-q -c 0 cset name='ZL0 Sout Gain Volume' 11"], state
+        assert not mark.exists()
+        assert run(state) == [], state
     # A failed write leaves no mark: nothing counts as raised.
     amixer.write_text("#!/bin/sh\nexit 1\n")
     run("EN_AUDIO_IP_EU")

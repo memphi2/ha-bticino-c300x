@@ -6,8 +6,8 @@
 
 /* The software gain stage for the door station's sound toward Home Assistant,
  * in whole dB. Above 0 dB a soft limiter keeps the sound linear up to
- * -6 dBFS and bends louder peaks toward full scale without ever clipping;
- * at 0 dB the sound passes unchanged. PCMU goes through a 256-entry table
+ * -6 dBFS and bends louder peaks toward full scale without ever clipping and
+ * never below their input; at 0 dB the sound passes unchanged. PCMU goes through a 256-entry table
  * built from the same curve, so every codec gets the same level. */
 #define C300X_AUDIO_GAIN_MIN_DB (-22)
 #define C300X_AUDIO_GAIN_MAX_DB 22

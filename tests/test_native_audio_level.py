@@ -45,8 +45,14 @@ def level_binary(request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPa
     return build_level_binary(tmp_path_factory.mktemp("audio-level") / "audio-level", sanitize=request.param)
 
 
-def test_gain_curve_chip_hook_and_software_share(level_binary: Path, tmp_path: Path) -> None:
-    result = subprocess.run([str(level_binary), str(tmp_path)], capture_output=True, text=True, timeout=60)
+CASES = ["gain", "gain_bounds", "chip", "level"]
+
+
+@pytest.mark.parametrize("case", CASES)
+def test_gain_curve_chip_hook_and_software_share(level_binary: Path, tmp_path: Path, case: str) -> None:
+    result = subprocess.run(
+        [str(level_binary), str(tmp_path), case], capture_output=True, text=True, timeout=120,
+    )
     assert result.returncode == 0, result.stderr
     assert result.stdout == "ok\n"
 

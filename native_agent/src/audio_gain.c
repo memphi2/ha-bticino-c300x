@@ -24,10 +24,13 @@ int c300x_audio_gain_clamp_db(int db)
 }
 
 /* Linear below the knee; above it the rest of the headroom fills
- * asymptotically: slope 1 at the knee, never past the PCMU ceiling. */
-static int32_t soft_limit(int64_t value)
+ * asymptotically: slope 1 at the knee, never past the PCMU ceiling. A gain
+ * never makes a sample quieter: where the bend would fall below the input,
+ * the input passes as it is, so the curve joins 0 dB without a step. */
+static int32_t soft_limit(int64_t value, int16_t input)
 {
     int64_t magnitude = value < 0 ? -value : value;
+    int64_t floor = input < 0 ? -(int64_t)input : input;
     int64_t room = LIMIT_CEILING - LIMIT_KNEE;
     int64_t over;
 
@@ -36,6 +39,9 @@ static int32_t soft_limit(int64_t value)
     }
     over = magnitude - LIMIT_KNEE;
     magnitude = LIMIT_KNEE + (room * over) / (over + room);
+    if (magnitude < floor) {
+        magnitude = floor;
+    }
     return (int32_t)(value < 0 ? -magnitude : magnitude);
 }
 
@@ -51,7 +57,7 @@ int16_t c300x_audio_gain_sample(const struct c300x_audio_gain *gain, int16_t sam
     if (gain->q16 < GAIN_Q16_ONE) {
         return (int16_t)scaled;
     }
-    return (int16_t)soft_limit(scaled);
+    return (int16_t)soft_limit(scaled, sample);
 }
 
 void c300x_audio_gain_init(struct c300x_audio_gain *gain, int db)

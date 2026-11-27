@@ -1072,7 +1072,8 @@ The software stage applies `fine_gain_db + door_level_db - chip_gain_db` once
 per packet before the RTSP fan-out, on every codec (Speex is decoded first,
 PCMU and PCMA go through the same curve). Above 0 dB a soft limiter keeps the
 sound linear up to -6 dBFS and bends louder peaks toward full scale without
-clipping; at 0 dB PCMU passes unchanged.
+clipping; a peak never comes out quieter than it came in, so the curve joins
+0 dB without a step. At 0 dB PCMU passes unchanged.
 
 Side effects on a Classe 300X with the audio chip lever (`chip_lever` is not
 `unsupported`): a door level above stock writes the agent's version of the

@@ -98,25 +98,61 @@ static void test_gain_curve(void)
     /* The limiter: linear to -6 dBFS, monotonic, never past the ceiling,
      * symmetric; the PCMU table is the same curve. */
     for (int db = 1; db <= C300X_AUDIO_GAIN_MAX_DB; db++) {
-        int previous = INT16_MIN;
         c300x_audio_gain_init(&gain, db);
         for (int sample = INT16_MIN; sample <= INT16_MAX; sample++) {
             int out = c300x_audio_gain_sample(&gain, (int16_t)sample);
             long long linear = ((long long)sample * gain.q16 + (sample >= 0 ? 32768 : -32768)) / 65536;
-            assert(out >= previous);
-            assert(out <= LIMIT_CEILING && out >= -LIMIT_CEILING);
             if (linear <= LIMIT_KNEE && linear >= -LIMIT_KNEE) {
                 assert(out == linear);
             }
             if (sample > INT16_MIN) {
                 assert(c300x_audio_gain_sample(&gain, (int16_t)-sample) == -out);
             }
-            previous = out;
         }
         for (int code = 0; code < 256; code++) {
             assert(gain.pcmu[code] == c300x_pcmu_encode(c300x_audio_gain_sample(&gain, c300x_pcmu_decode((unsigned char)code))));
         }
     }
+}
+
+/* Every gain, every sample: monotonic, a gain above 0 dB never makes a sample
+ * quieter and one below never louder, louder gains never give less, nothing
+ * past the ceiling that was not there already, and 0 dB passes unchanged. */
+static void test_gain_bounds(void)
+{
+    static int16_t below[65536];
+    struct c300x_audio_gain gain;
+
+    for (int db = C300X_AUDIO_GAIN_MIN_DB; db <= C300X_AUDIO_GAIN_MAX_DB; db++) {
+        int previous = INT16_MIN;
+        c300x_audio_gain_init(&gain, db);
+        for (int sample = INT16_MIN; sample <= INT16_MAX; sample++) {
+            int out = c300x_audio_gain_sample(&gain, (int16_t)sample);
+            int in_mag = abs(sample);
+            int out_mag = abs(out);
+            int16_t *last = &below[sample - INT16_MIN];
+            assert(out >= previous);
+            assert(out == 0 || sample == 0 || (out < 0) == (sample < 0));
+            if (db == 0) {
+                assert(out == sample);
+            } else if (db > 0) {
+                assert(out_mag >= in_mag);
+                assert(out_mag <= (in_mag > LIMIT_CEILING ? in_mag : LIMIT_CEILING));
+                assert(out_mag >= abs(*last));
+            } else {
+                assert(out_mag <= in_mag);
+            }
+            if (db >= 0) {
+                *last = (int16_t)out;
+            }
+            previous = out;
+        }
+    }
+    /* The loud peaks the old knee bent below their input. */
+    c300x_audio_gain_init(&gain, 3);
+    assert(c300x_audio_gain_sample(&gain, 27004) >= 27004);
+    c300x_audio_gain_init(&gain, 1);
+    assert(c300x_audio_gain_sample(&gain, INT16_MAX) == INT16_MAX);
 }
 
 static const char stub[] = "#!/bin/bash\ncase \"$1\" in\n*) ;;\nesac\nexit 1\n";
@@ -327,7 +363,7 @@ int main(int argc, char **argv)
         fputs(hook, stdout);
         return 0;
     }
-    assert(argc == 2);
+    assert(argc == 3);
     snprintf(dir, sizeof(dir), "%s", argv[1]);
     path_of(path, sizeof(path), "backup");
     assert(mkdir(path, 0700) == 0);
@@ -341,9 +377,17 @@ int main(int argc, char **argv)
     put("IP_PE.cr", "profile\n", 0644);
     put("amixer", "#!/bin/sh\n", 0755);
 
-    test_gain_curve();
-    test_chip();
-    test_level();
+    if (strcmp(argv[2], "gain") == 0) {
+        test_gain_curve();
+    } else if (strcmp(argv[2], "gain_bounds") == 0) {
+        test_gain_bounds();
+    } else if (strcmp(argv[2], "chip") == 0) {
+        test_chip();
+    } else if (strcmp(argv[2], "level") == 0) {
+        test_level();
+    } else {
+        return 2;
+    }
     puts("ok");
     return 0;
 }

@@ -20,7 +20,7 @@ call. A station with its original display is not rebooted.
 
 Only packages made for the Classe 100X update it; Home Assistant and the agent
 refuse any other. Never go back to a release older than the joint Classe
-300X/100X package (`3.0.0b1`), and never use the SSH installer of such a
+300X/100X package (`3.0.0`), and never use the SSH installer of such a
 release on a Classe 100X.
 
 Keys, maintenance switches and the integration removal work as on the Classe

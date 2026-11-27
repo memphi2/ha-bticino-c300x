@@ -2,7 +2,7 @@
 
 [![Validate](https://img.shields.io/badge/checks-local%20%2B%20CI-2ea44f?style=flat-square)](.github/workflows/validate.yml)
 [![Quality](https://img.shields.io/badge/HA%20Quality%20Scale-Self%20assessment-0366d6?style=flat-square)](docs/dev/quality-scale.md)
-[![Release](https://img.shields.io/badge/release-v2.10.0-0366d6?style=flat-square)](CHANGELOG.md)
+[![Release](https://img.shields.io/badge/release-v3.0.0-0366d6?style=flat-square)](CHANGELOG.md)
 [![Marketplace](https://img.shields.io/badge/Home_Assistant-Marketplace-41BDF5?style=flat-square)](https://contributors.home-assistant.io/marketplace/)
 [![License Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
@@ -11,8 +11,8 @@ Assistant over your local network. A small agent on the station talks to Home
 Assistant; nothing goes through a cloud. The integration is called
 **BTicino C300X** for both models.
 
-Stable: **2.10.0**. Beta: **3.0.0b3**, one package for the Classe 300X and the
-Classe 100X.
+Stable: **3.0.0**, one package for the Classe 300X and the Classe 100X
+(Classe 100X experimental).
 
 <p align="center">
   <img src="docs/images/readme/ha-doorbell-card-en.webp" alt="BTicino Doorbell Call Card in Home Assistant with a saved visitor image, play, call, door and light buttons" width="420">

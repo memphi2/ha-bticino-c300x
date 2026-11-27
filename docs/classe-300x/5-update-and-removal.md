@@ -35,8 +35,12 @@ To leave the beta, pick the stable release the same way and run the agent
 update Repair again. A Home Assistant backup does not restore the agent on
 the station.
 
-In beta `3.0.0b3` a **Door level** above Stock also makes calls in the
-BTicino app louder. Set it to Stock before you go back to a stable release.
+### Going Back to 2.10.0 or Older
+
+A **Door level** above Stock replaces the station's audio script and also
+makes calls in the BTicino app louder. Set it to **Stock**, or remove the
+agent, before you pick the older release and run the agent update Repair
+again.
 
 ### Going Back on Firmware 3.0.6
 

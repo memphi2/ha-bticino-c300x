@@ -39,20 +39,18 @@ the station; you do it at your own risk and without warranty.
 
 [![Open your Home Assistant instance and open this repository in the Marketplace](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=memphi2&repository=ha-bticino-c300x&category=integration)
 
-The Classe 100X needs the beta `3.0.0b3` or newer; no stable release supports
-it yet.
+The Classe 100X needs `3.0.0` or newer.
 
 **Home Assistant 2026.11 or newer:**
 
 1. Open the button above, or go to **Settings > Marketplace**.
-2. Find **BTicino C300X**, turn on **Pre-release** and install the beta.
+2. Find **BTicino C300X** and install it.
 3. Restart Home Assistant if it asks you to.
 
 **Home Assistant 2026.10:**
 
 1. Open **HACS** and search for **BTicino C300X**.
-2. Open **Redownload**, enable beta versions, pick the beta and restart Home
-   Assistant.
+2. Download it and restart Home Assistant.
 
 ## Add the Station
 

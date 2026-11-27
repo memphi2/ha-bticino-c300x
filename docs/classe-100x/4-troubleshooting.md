@@ -12,7 +12,7 @@ applies to the Classe 100X as well.
 
 | Message | Meaning | Do this |
 | --- | --- | --- |
-| **This package does not support this station** | The package is not made for a Classe 100X, or the model could not be confirmed. Nothing was changed. | Install the current beta. |
+| **This package does not support this station** | The package is not made for a Classe 100X, or the model could not be confirmed. Nothing was changed. | Install the current release. |
 | `unsupported_active_route` | The station's call routing was changed by another tool, for example BTicino Companion. Nothing was written. | Video and calls cannot be set up on this station. |
 
 ## Display Pages

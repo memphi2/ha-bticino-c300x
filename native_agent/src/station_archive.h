@@ -17,12 +17,22 @@ struct c300x_archive_entry {
 };
 
 /* What archive.xml and conf.xml say, read as the station's display reads
- * them. Only the outdoor-unit object (cid 10050) names outdoor units: each
- * of its <ist> without cid; an <ist> attribute it lacks is its <obj>'s. */
+ * them; an <ist> attribute it lacks is its <obj>'s. Objects by cid:
+ * 10050 outdoor units (each <ist> without cid) and their door locks (<ist
+ * cid="10060">, but dev 5 is a cloud lock, not on the bus), 3008 actuators
+ * (AutomationVDE, the display's "Generic": each <ist>, at 2N), 2009 the
+ * stair light (at the station's own address). Other cids name nothing. */
 struct c300x_station_archive {
     struct c300x_archive_entry units[C300X_ARCHIVE_MAX_ENTRIES];
     int unit_count;
+    struct c300x_archive_entry locks[C300X_ARCHIVE_MAX_ENTRIES];
+    int lock_count;
+    struct c300x_archive_entry actuators[C300X_ARCHIVE_MAX_ENTRIES];
+    int actuator_count;
+    int stair_light;                          /* the archive has the stair light */
+    char stair_light_name[C300X_UNIT_NAME_LEN];
     char default_where[C300X_UNIT_WHERE_LEN]; /* conf.xml p_default, empty when unknown */
+    char own_where[C300X_UNIT_WHERE_LEN];     /* conf.xml communication: the station itself */
 };
 
 int c300x_unit_where_valid(const char *where);

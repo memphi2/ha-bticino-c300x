@@ -1,6 +1,6 @@
 #include "activations.h"
 #include "audio_level.h"
-#include "activation_discovery.h"
+#include "http_activations.h"
 #include "agent_update.h"
 #include "c300x_agent.h"
 #include "device_detect.h"
@@ -262,7 +262,6 @@ struct agent_runtime {
     int network_online;
     time_t network_checked_at;
     struct c300x_mqtt mqtt;
-    int activation_discovery_loaded;
     struct c300x_activation_discovery activation_discovery;
 };
 struct firewall_workspace {
@@ -436,17 +435,6 @@ static void handle_memo_audio_get(
     int client_fd,
     struct agent_runtime *runtime,
     const char *memo_entry_name
-);
-static void handle_activations_get(
-    int client_fd,
-    const struct c300x_config *config,
-    struct agent_runtime *runtime
-);
-static void handle_activation_run(
-    int client_fd,
-    const struct c300x_config *config,
-    struct agent_runtime *runtime,
-    const char *activation_id
 );
 static int find_memo_audio(
     const struct voicemail_runtime *memos,
@@ -3248,7 +3236,7 @@ static void handle_auth_config_post(
             *config = *updated;
         }
         if (!restart_required && activations_changed && runtime != NULL) {
-            runtime->activation_discovery_loaded = 0;
+            runtime->activation_discovery.loaded = 0;
         }
         if (changed) {
             record_agent_write(config, runtime, "config", "auth_config");
@@ -4528,52 +4516,6 @@ static int parse_openwebnet_doorbell_press_event(const char *msg)
     return strcmp(ptr, "##") == 0;
 }
 
-static void dispatch_lock_activation_event(
-    const struct c300x_config *config,
-    struct agent_runtime *runtime,
-    const struct c300x_activation *activation,
-    const char *event_type,
-    const char *raw
-)
-{
-    char raw_json[C300X_JSON_QUOTED_LEN(C300X_MAX_FRAME_LEN)];
-    char address_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ADDRESS_LEN)];
-    char id_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ACTIVATION_ID_LEN)];
-    char event_data[1024];
-
-    if (
-        runtime == NULL
-        || activation == NULL
-        || activation->address[0] == '\0'
-        || raw == NULL
-        || raw[0] == '\0'
-    ) {
-        return;
-    }
-    c300x_json_string(raw, raw_json, sizeof(raw_json));
-    c300x_json_string(activation->address, address_json, sizeof(address_json));
-    c300x_json_string(activation->id, id_json, sizeof(id_json));
-    if (
-        snprintf(
-            event_data,
-            sizeof(event_data),
-            "{\"raw\":%s,\"address\":%s,\"source\":\"activation\",\"activation_id\":%s}",
-            raw_json,
-            address_json,
-            id_json
-        ) >= (int)sizeof(event_data)
-    ) {
-        return;
-    }
-    c300x_local_action_event_remember(
-        &runtime->local_action_events,
-        event_type,
-        activation->address,
-        c300x_monotonic_ms()
-    );
-    dispatch_event(config, runtime, event_type, event_data, 0);
-}
-
 static void dispatch_setting_state(struct agent_runtime *runtime, const char *type,
                                    const char *data, enum c300x_setting_transition transition)
 {
@@ -5082,33 +5024,18 @@ static void send_auth_required(int client_fd)
     );
 }
 
-static const struct c300x_activation_discovery *runtime_activation_discovery(
-    const struct c300x_config *config,
-    struct agent_runtime *runtime
-)
+static void emit_activation_event(void *context, const char *type, const char *data)
 {
-    if (runtime == NULL) {
-        return NULL;
-    }
-    if (!runtime->activation_discovery_loaded) {
-        c300x_activation_discover(config, &runtime->activation_discovery);
-        runtime->activation_discovery_loaded = 1;
-    }
-    return &runtime->activation_discovery;
+    struct agent_runtime *runtime = context;
+    dispatch_event(runtime->config, runtime, type, data, 0);
 }
 
-static int activation_total_count(
-    const struct c300x_config *config,
-    struct agent_runtime *runtime
-)
+static struct c300x_activation_routes activation_routes(const struct c300x_config *config,
+                                                        struct agent_runtime *runtime)
 {
-    const struct c300x_activation_discovery *discovery;
-
-    if (!config->activations_enabled) {
-        return 0;
-    }
-    discovery = runtime_activation_discovery(config, runtime);
-    return config->activations_count + (discovery != NULL ? discovery->count : 0);
+    struct c300x_activation_routes routes = {config, &runtime->activation_discovery, &runtime->calls.units,
+                                             &runtime->local_action_events, emit_activation_event, runtime};
+    return routes;
 }
 
 static void api_capabilities(
@@ -5143,6 +5070,9 @@ static void api_capabilities(
         runtime->video, &video_status, config, NULL, NULL) : PICTURE_UNAVAILABLE;
     if (picture == PICTURE_DEFERRED) { free(body); return; }
     if (runtime != NULL) c100x_display_capability(&runtime->c100x_activation, c100x, sizeof(c100x));
+    struct c300x_activation_routes activations = runtime != NULL ? activation_routes(config, runtime)
+                                                                 : (struct c300x_activation_routes){0};
+    int activations_count = runtime != NULL ? c300x_activations_count(&activations) : 0;
     const struct c300x_device_profile profile = c300x_device_profile();
     char board[C300X_DEVICE_BOARD_LEN], article[C300X_DEVICE_ARTICLE_LEN];
     c300x_device_board(board, sizeof(board));
@@ -5161,7 +5091,7 @@ static void api_capabilities(
         .device_firmware = firmware_value,
         .bundle_hash = bundle_hash,
         .maintenance_supported = maintenance_auth_available(config),
-        .activations_count = activation_total_count(config, runtime),
+        .activations_count = activations_count,
         .device_codec_pcmu = video_status.device_codec_pcmu,
         .camera_resolution_fixed = c300x_device_camera_resolution_fixed(),
         .display_features = c300x_device_display_features(),
@@ -5746,285 +5676,6 @@ static void send_device_error(int client_fd, const char *error)
     c300x_json_string(error, error_json, sizeof(error_json));
     snprintf(body, sizeof(body), "{\"ok\":false,\"error\":%s}\n", error_json);
     send_json(client_fd, 502, "Bad Gateway", body);
-}
-
-/* Press, and release 100 ms later as the display does, on one bus session:
- * an agent stop finishes it (the release goes out), nothing is kept. */
-static int activate_stair_light(
-    const struct c300x_config *config,
-    char *address,
-    size_t address_len,
-    char *error,
-    size_t error_len
-)
-{
-    char press[C300X_MAX_FRAME_LEN];
-    char release[C300X_MAX_FRAME_LEN];
-
-    if (address[0] == '\0') {
-        snprintf(address, address_len, "%s", config->stair_light_default_address);
-    }
-    if (!address_is_valid(address)) {
-        snprintf(error, error_len, "invalid_stair_light_address");
-        return 0;
-    }
-    c300x_stair_light_commands(address, press, sizeof(press), release, sizeof(release));
-    return c300x_openwebnet_sequence(config, press, C300X_STAIR_LIGHT_RELEASE_MS, release, error, error_len);
-}
-
-static void handle_stair_light(
-    int client_fd,
-    const struct c300x_config *config,
-    const struct request *request
-)
-{
-    char address[C300X_MAX_ADDRESS_LEN];
-    char error[C300X_MAX_ERROR_LEN];
-    char body[512];
-    char address_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ADDRESS_LEN)];
-
-    c300x_json_string_field(request->body, "address", address, sizeof(address));
-    if (!activate_stair_light(config, address, sizeof(address), error, sizeof(error))) {
-        if (strcmp(error, "invalid_stair_light_address") == 0) {
-            send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_stair_light_address\"}\n");
-            return;
-        }
-        send_device_error(client_fd, error);
-        return;
-    }
-    c300x_json_string(address, address_json, sizeof(address_json));
-    snprintf(body, sizeof(body), "{\"ok\":true,\"address\":%s}\n", address_json);
-    send_json(client_fd, 200, "OK", body);
-}
-
-static const struct c300x_activation *find_activation(
-    const struct c300x_config *config,
-    struct agent_runtime *runtime,
-    const char *activation_id
-)
-{
-    const struct c300x_activation_discovery *discovery;
-
-    for (int index = 0; index < config->activations_count; index++) {
-        if (strcmp(config->activations[index].id, activation_id) == 0) {
-            return &config->activations[index];
-        }
-    }
-    discovery = runtime_activation_discovery(config, runtime);
-    if (discovery != NULL) {
-        for (int index = 0; index < discovery->count; index++) {
-            if (strcmp(discovery->items[index].id, activation_id) == 0) {
-                return &discovery->items[index];
-            }
-        }
-    }
-    return NULL;
-}
-
-static void append_activation_json(
-    char *body,
-    size_t body_len,
-    size_t *used,
-    const struct c300x_activation *activation,
-    const char *source,
-    const char *suffix
-)
-{
-    char id[C300X_JSON_QUOTED_LEN(C300X_MAX_ACTIVATION_ID_LEN)];
-    char name[C300X_JSON_QUOTED_LEN(C300X_MAX_ACTIVATION_NAME_LEN)];
-    char type[C300X_JSON_QUOTED_LEN(C300X_MAX_ACTIVATION_TYPE_LEN)];
-    char address_mode[C300X_JSON_QUOTED_LEN(C300X_MAX_ACTIVATION_ADDRESS_MODE_LEN)];
-    char address[C300X_JSON_QUOTED_LEN(C300X_MAX_ADDRESS_LEN)];
-    int executable = c300x_activation_is_executable(activation);
-
-    c300x_json_string(activation->id, id, sizeof(id));
-    c300x_json_string(activation->name, name, sizeof(name));
-    c300x_json_string(activation->type, type, sizeof(type));
-    c300x_json_string(activation->address_mode, address_mode, sizeof(address_mode));
-    c300x_json_string(activation->address, address, sizeof(address));
-    if (*used < body_len) {
-        if (!c300x_appendf(
-            body,
-            body_len,
-            used,
-            "{\"id\":%s,\"name\":%s,\"type\":%s,\"addressMode\":%s,\"address\":%s,\"source\":\"%s\",\"executable\":%s}%s",
-            id,
-            name,
-            type,
-            address_mode,
-            address,
-            source,
-            executable ? "true" : "false",
-            suffix
-        )) {
-            return;
-        }
-    }
-}
-
-static void handle_activations_get(
-    int client_fd,
-    const struct c300x_config *config,
-    struct agent_runtime *runtime
-)
-{
-    char *body = allocate_response_buffer(client_fd, C300X_LARGE_RESPONSE_SIZE);
-    size_t used = 0;
-    const struct c300x_activation_discovery *discovery = runtime_activation_discovery(config, runtime);
-    int count = activation_total_count(config, runtime);
-    int emitted = 0;
-
-    if (body == NULL) {
-        return;
-    }
-    used += (size_t)snprintf(
-        body + used,
-        C300X_LARGE_RESPONSE_SIZE - used,
-        "{\"ok\":true,\"supported\":%s,\"count\":%d,\"auto_discover\":%s,\"items\":[",
-        (config->activations_enabled && count > 0) ? "true" : "false",
-        count,
-        (config->activations_enabled && config->activations_auto_discover) ? "true" : "false"
-    );
-    if (config->activations_enabled) {
-        for (int index = 0; index < config->activations_count; index++) {
-            emitted++;
-            append_activation_json(
-                body,
-                C300X_LARGE_RESPONSE_SIZE,
-                &used,
-                &config->activations[index],
-                "config",
-                emitted < count ? "," : ""
-            );
-        }
-        if (discovery != NULL) {
-            for (int index = 0; index < discovery->count; index++) {
-                emitted++;
-                append_activation_json(
-                    body,
-                    C300X_LARGE_RESPONSE_SIZE,
-                    &used,
-                    &discovery->items[index],
-                    "device",
-                    emitted < count ? "," : ""
-                );
-            }
-        }
-    }
-    if (used >= C300X_LARGE_RESPONSE_SIZE) {
-        send_response_too_large(client_fd);
-        free(body);
-        return;
-    }
-    if (!c300x_appendf(body, C300X_LARGE_RESPONSE_SIZE, &used, "]}\n")) {
-        send_response_too_large(client_fd);
-        free(body);
-        return;
-    }
-    send_json(client_fd, 200, "OK", body);
-    free(body);
-}
-
-static void handle_activation_run(
-    int client_fd,
-    const struct c300x_config *config,
-    struct agent_runtime *runtime,
-    const char *activation_id
-)
-{
-    const struct c300x_activation *activation = find_activation(config, runtime, activation_id);
-    char press[C300X_MAX_FRAME_LEN];
-    char release[C300X_MAX_FRAME_LEN];
-    char reply[C300X_MAX_FRAME_LEN];
-    char error[C300X_MAX_ERROR_LEN];
-    char body[1024];
-    char id_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ACTIVATION_ID_LEN)];
-    char name_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ACTIVATION_NAME_LEN)];
-    char type_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ACTIVATION_TYPE_LEN)];
-    char event_data[1024];
-
-    if (!config->activations_enabled) {
-        send_json(client_fd, 404, "Not Found", "{\"ok\":false,\"error\":\"activations_disabled\"}\n");
-        return;
-    }
-    if (activation == NULL) {
-        send_json(client_fd, 404, "Not Found", "{\"ok\":false,\"error\":\"unknown_activation\"}\n");
-        return;
-    }
-    if (!c300x_activation_is_executable(activation)) {
-        send_json(client_fd, 405, "Method Not Allowed", "{\"ok\":false,\"error\":\"activation_not_executable\"}\n");
-        return;
-    }
-    c300x_activation_press_release_commands(
-        activation,
-        press,
-        sizeof(press),
-        release,
-        sizeof(release)
-    );
-    if (press[0] == '\0') {
-        send_json(client_fd, 405, "Method Not Allowed", "{\"ok\":false,\"error\":\"activation_not_executable\"}\n");
-        return;
-    }
-    if (release[0] != '\0') {
-        int delay_ms = c300x_activation_hold_ms(activation, config->lock_release_delay_ms);
-        if (!c300x_openwebnet_sequence(
-            config,
-            press,
-            delay_ms,
-            release,
-            error,
-            sizeof(error)
-        )) {
-            send_device_error(client_fd, error);
-            return;
-        }
-    } else if (!c300x_openwebnet_send(config, press, reply, sizeof(reply), error, sizeof(error))) {
-        send_device_error(client_fd, error);
-        return;
-    }
-    if (strcmp(activation->type, "lock") == 0 && activation->address[0] != '\0') {
-        dispatch_lock_activation_event(
-            config,
-            runtime,
-            activation,
-            "door_unlock.started",
-            press
-        );
-        if (release[0] != '\0') {
-            dispatch_lock_activation_event(
-                config,
-                runtime,
-                activation,
-                "door_unlock.ended",
-                release
-            );
-        }
-    }
-    c300x_json_string(activation->id, id_json, sizeof(id_json));
-    c300x_json_string(activation->name, name_json, sizeof(name_json));
-    c300x_json_string(activation->type, type_json, sizeof(type_json));
-    snprintf(
-        body,
-        sizeof(body),
-        "{\"ok\":true,\"id\":%s,\"name\":%s,\"type\":%s}\n",
-        id_json,
-        name_json,
-        type_json
-    );
-    if (runtime != NULL) {
-        if (snprintf(
-            event_data,
-            sizeof(event_data),
-            "{\"id\":%s,\"name\":%s,\"type\":%s}",
-            id_json,
-            name_json,
-            type_json
-        ) < (int)sizeof(event_data)) {
-            dispatch_event(config, runtime, "activation.executed", event_data, 0);
-        }
-    }
-    send_json(client_fd, 200, "OK", body);
 }
 
 static void handle_unlock(
@@ -8693,33 +8344,9 @@ static void handle_api_request(
         handle_diagnostics_get(client_fd, runtime);
         return;
     }
-    if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/stair-light/actions/activate") == 0) {
-        handle_stair_light(client_fd, config, request);
+    struct c300x_activation_routes activations = activation_routes(config, runtime);
+    if (c300x_http_activations_route(client_fd, &activations, request)) {
         return;
-    }
-    if (strcmp(request->method, "GET") == 0 && strcmp(request->path, "/api/v1/activations") == 0) {
-        handle_activations_get(client_fd, config, runtime);
-        return;
-    }
-    if (strncmp(request->path, "/api/v1/activations/", strlen("/api/v1/activations/")) == 0) {
-        const char *activation_id = request->path + strlen("/api/v1/activations/");
-        const char *suffix = strstr(activation_id, "/actions/run");
-        if (strcmp(request->method, "POST") == 0 && suffix != NULL && suffix[12] == '\0') {
-            char decoded_activation_id[C300X_MAX_ACTIVATION_ID_LEN];
-            size_t id_len = (size_t)(suffix - activation_id);
-            if (id_len >= sizeof(decoded_activation_id)) {
-                send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_activation_id\"}\n");
-                return;
-            }
-            percent_decode_query_value(
-                activation_id,
-                activation_id + id_len,
-                decoded_activation_id,
-                sizeof(decoded_activation_id)
-            );
-            handle_activation_run(client_fd, config, runtime, decoded_activation_id);
-            return;
-        }
     }
     if (strcmp(request->method, "GET") == 0 && strcmp(request->path, "/api/v1/smartphone-forwarding") == 0) {
         handle_smartphone_get(client_fd, config, runtime);

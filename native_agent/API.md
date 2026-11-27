@@ -711,10 +711,60 @@ Authentication: normal API token.
 
 Side effects: none.
 
-Returns configured activation items. Activation items use `addressMode:
-"manual"` when the configured `address` contains the OpenWebNet `where` value.
-`addressMode: "auto"` is reserved for read-only device discovery; auto items
-without a discovered address or explicit command are returned as non-executable.
+Returns the configured activation items and the ones the station itself
+knows. The station's files are read again on every request.
+
+```json
+{
+  "ok": true,
+  "enabled": true,
+  "supported": true,
+  "auto_discover": true,
+  "station": "ok",
+  "count": 3,
+  "items": [
+    {"id": "gate", "name": "Gate", "type": "actuator", "addressMode": "manual",
+     "address": "25", "source": "config", "executable": true, "unit": null},
+    {"id": "station_lock_21", "name": "Garden lock", "type": "lock", "addressMode": "manual",
+     "address": "21", "source": "station", "executable": true, "unit": "21"},
+    {"id": "station_stair_light", "name": "Stairs", "type": "stair_light", "addressMode": "manual",
+     "address": "11", "source": "station", "executable": true, "unit": null}
+  ]
+}
+```
+
+- `enabled`: `activations.enabled`. Off: no items, `count` 0, and running one
+  answers `404 activations_disabled`.
+- `auto_discover`: `activations.autoDiscover`, whether the station's items are
+  listed. `station` is the state of the station's `archive.xml`: `ok`, `empty`
+  (no outdoor unit, lock, actuator or stair light in it), `missing` or
+  `unreadable`; `null` while station items are off.
+- `supported`: at least one item. `count`: the number of items.
+- Items: the configured ones first (`source: "config"`, in their configured
+  order), then the station's (`source: "station"`). Every item has `id`,
+  `name`, `type` (`lock`, `actuator`, `stair_light`, `generic`, `scenario`,
+  or an unknown type of a configured item), `addressMode` (`manual` with the
+  OpenWebNet `where` in `address`; `auto` items without an address or command
+  are not executable), `address`, `executable` and `unit`: the id of the
+  outdoor unit (`GET /api/v1/outdoor-units`) whose door lock a `lock` item is,
+  `null` for any other item or a lock no unit has.
+
+The station's items, from `archive.xml` and `conf.xml`, as its display reads
+them (an `<ist>` attribute it lacks is its `<obj>`'s; the address is `dev` +
+`where`, `dev` 2 when empty):
+
+| Archive object | Item | `id` |
+| --- | --- | --- |
+| `<obj cid="10050">`, `<ist cid="10060">` with `dev` not 5 | `lock` of that outdoor unit; `dev` 5 is a cloud lock, not on the bus, and is left out | `station_lock_<address>` |
+| `<obj cid="3008">`, each `<ist>` | `actuator` | `station_actuator_<address>` |
+| `<obj cid="2009">` | `stair_light`, at the station's own address (`conf.xml` `vdes/communication` `dev` + `address`, `11` for 1 and 1), else at `device.stairLightDefaultAddress`; without either it is left out | `station_stair_light` |
+
+In an id, `#` of the address becomes `_`; an item whose id would be longer than
+32 characters is left out. Other objects (10051 cameras, 10052 and 10053
+intercoms, 10061, unknown ones) give no item. A configured item with the same
+id, or of the same type at the same address, hides the station's. The station's
+items are run like configured ones, by their id. Names are the archive's
+`descr`, else the object's, else a type name and the address.
 
 ### `POST /api/v1/activations/{id}/actions/run`
 

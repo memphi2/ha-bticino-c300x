@@ -524,7 +524,6 @@ def run_smoke(
         messages_root = temp_path / "messages"
         text_memos_root = temp_path / "memos_text"
         voice_memos_root = temp_path / "memos_voice"
-        activation_root = temp_path / "device_activations"
         qml_patch_script = temp_path / "qml_patch.sh"
         qml_patch_log = temp_path / "qml_patch_actions.txt"
         remove_agent_script = temp_path / "remove_agent.sh"
@@ -555,7 +554,6 @@ def run_smoke(
         records_dir.mkdir()
         openwebnet.text_memos_root = text_memos_root
         openwebnet.records_dir = records_dir
-        activation_root.mkdir()
         firewall_runtime_bin.mkdir()
         for tool_name in ("iptables", "ip6tables"):
             tool = firewall_runtime_bin / tool_name
@@ -575,28 +573,6 @@ def run_smoke(
                 encoding="utf-8",
             )
             tool.chmod(0o700)
-        (activation_root / "quick_actions.json").write_text(
-            json.dumps(
-                {
-                    "actions": [
-                        {
-                            "name": "Garden gate",
-                            "command": "*8*19*40##",
-                            "release": "*8*20*40##",
-                        },
-                        {
-                            "label": "Path light",
-                            "openwebnet": "*8*21*42##",
-                        },
-                        {
-                            "name": "Unsafe delete must not be imported",
-                            "openwebnet": "*8*94#1#0##",
-                        },
-                    ]
-                }
-            ),
-            encoding="utf-8",
-        )
         firewall_path.write_text("#!/bin/sh\n# stock firewall\n", encoding="utf-8")
         ipv6_firewall_path.write_text(
             "#!/bin/sh\n# stock ipv6 firewall\n",
@@ -660,7 +636,6 @@ def run_smoke(
                     "activations": {
                         "enabled": True,
                         "autoDiscover": True,
-                        "discoveryRoots": [str(activation_root)],
                         "items": [
                             {
                                 "id": "front_gate",
@@ -1014,7 +989,7 @@ def run_smoke(
             assert_json_field(capabilities["capabilities"]["memos"], "supported", True)
             assert_json_field(capabilities["capabilities"]["memos"], "delete", True)
             assert_json_field(capabilities["capabilities"]["activations"], "supported", True)
-            assert_json_field(capabilities["capabilities"]["activations"], "count", 5)
+            assert_json_field(capabilities["capabilities"]["activations"], "count", 3)
             assert_json_field(capabilities["capabilities"]["maintenance"], "qml_status", True)
             assert_json_field(capabilities["capabilities"]["maintenance"], "qml_patch", True)
             assert_json_field(capabilities["capabilities"]["maintenance"], "qml_core_patch", True)
@@ -1685,10 +1660,13 @@ def run_smoke(
             )
             activations = api_get(api_port, "/api/v1/activations")
             assert_json_field(activations, "supported", True)
-            if len(activations.get("items", [])) != 5:
-                raise AssertionError("activation discovery did not return configured and device items")
+            # The host has no station archive: the configured items only.
+            assert_json_field(activations, "station", "missing")
+            if len(activations.get("items", [])) != 3:
+                raise AssertionError("activations did not return the configured items")
             assert_json_field(activations["items"][0], "id", "front_gate")
             assert_json_field(activations["items"][0], "addressMode", "manual")
+            assert_json_field(activations["items"][0], "source", "config")
             assert_json_field(activations["items"][0], "executable", True)
             assert_json_field(activations["items"][1], "id", "activation_id_0123456789abcdef01")
             assert_json_field(activations["items"][1], "addressMode", "manual")
@@ -1696,19 +1674,6 @@ def run_smoke(
             assert_json_field(activations["items"][2], "id", "unknown_only")
             assert_json_field(activations["items"][2], "addressMode", "auto")
             assert_json_field(activations["items"][2], "executable", False)
-            assert_json_field(activations["items"][3], "id", "device_lock_40")
-            assert_json_field(activations["items"][3], "name", "Garden gate")
-            assert_json_field(activations["items"][3], "source", "device")
-            assert_json_field(activations["items"][3], "executable", True)
-            assert_json_field(activations["items"][4], "id", "device_stair_42")
-            assert_json_field(activations["items"][4], "name", "Path light")
-            assert_json_field(activations["items"][4], "source", "device")
-            assert_json_field(activations["items"][4], "executable", True)
-            if any(
-                item.get("name") == "Unsafe delete must not be imported"
-                for item in activations.get("items", [])
-            ):
-                raise AssertionError("unsafe discovered OpenWebNet frame was imported")
             callback_seen = len(callback.requests)
             subscription = api_post(
                 api_port,
@@ -1760,24 +1725,6 @@ def run_smoke(
                 ),
                 "id",
                 "activation_id_0123456789abcdef01",
-            )
-            assert_json_field(
-                api_post(
-                    api_port,
-                    "/api/v1/activations/device_lock_40/actions/run",
-                    {},
-                ),
-                "id",
-                "device_lock_40",
-            )
-            assert_json_field(
-                api_post(
-                    api_port,
-                    "/api/v1/activations/device_stair_42/actions/run",
-                    {},
-                ),
-                "id",
-                "device_stair_42",
             )
             callback_seen = len(callback.requests)
             assert_json_field(
@@ -1957,10 +1904,6 @@ def run_smoke(
                 raise AssertionError("device activation command sequence was not sent")
             if "*8*19*31##" not in openwebnet.frames or "*8*20*31##" not in openwebnet.frames:
                 raise AssertionError("long-id activation command sequence was not sent")
-            if "*8*19*40##" not in openwebnet.frames or "*8*20*40##" not in openwebnet.frames:
-                raise AssertionError("discovered lock activation command sequence was not sent")
-            if "*8*21*42##" not in openwebnet.frames:
-                raise AssertionError("discovered stair-light activation command was not sent")
             if "*8*94#1#0##" not in openwebnet.frames:
                 raise AssertionError("video message delete command was not sent")
             callback_seen = len(callback.requests)

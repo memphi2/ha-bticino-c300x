@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#include "../src/activation_discovery.h"
 #include "../src/call_table.h"
 #include "../src/outdoor_units.h"
 
@@ -540,10 +541,104 @@ static void default_unit_keeps_its_id(void)
     assert(strcmp(units.items[0].id, "20_2") == 0);
 }
 
+/* The activations the station knows: the bus locks of its outdoor units
+ * with their unit, its actuators (3008) and its stair light (2009) at the
+ * station's own address; configured items first, a configured item of the
+ * same type and address hides the station's. */
+static void station_activations(void)
+{
+    static const char *const others =
+        "<archive><obj cid=\"3008\" dev=\"2\" where=\"0\" descr=\"Generic\"><ist where=\"5\" descr=\"Gate \\ opener\" uii=\"1\"/>"
+        "<ist where=\"6\" uii=\"2\"/></obj>"
+        "<obj cid=\"10052\" dev=\"1\" where=\"0\" descr=\"Intercom\"><ist where=\"3\" descr=\"Kitchen\" uii=\"3\"/></obj>"
+        "<obj cid=\"2009\" dev=\"2\"><ist descr=\"Stairs\" uii=\"4\"/></obj>"
+        "<obj cid=\"10050\" dev=\"2\" where=\"7\" descr=\"Panel\"><ist cid=\"10060\" dev=\"5\" where=\"1\" lkid=\"a\"/>"
+        "<ist cid=\"10060\" where=\"7\" descr=\"Panel lock\"/><ist uii=\"5\"/></obj></archive>";
+    static const char *const owner_conf =
+        "<setup><vdes><communication><vde_enabled>1</vde_enabled><dev>1</dev><address>1</address>"
+        "<p_default><dev>2</dev><address>0</address></p_default></communication></vdes></setup>";
+    static struct c300x_config config;
+    static struct c300x_activation_discovery discovery;
+    struct c300x_station_archive station;
+    char json[8192];
+
+    memset(&config, 0, sizeof(config));
+    config.activations_enabled = 1;
+    config.activations_auto_discover = 1;
+    reset(ARCHIVE_SAMPLE);
+    c300x_station_archive_parse(&station, ARCHIVE_SAMPLE, CONF);
+    c300x_activation_discovery_build(&discovery, &station, "ok", &config);
+    assert(c300x_activations_json(&config, &discovery, &units, json, sizeof(json)));
+    expect(json, "{\"ok\":true,\"enabled\":true,\"supported\":true,\"auto_discover\":true,\"station\":\"ok\",\"count\":3,\"items\":["
+        "{\"id\":\"station_lock_20\",\"name\":\"L0\",\"type\":\"lock\",\"addressMode\":\"manual\",\"address\":\"20\","
+        "\"source\":\"station\",\"executable\":true,\"unit\":\"20\"},"
+        "{\"id\":\"station_lock_21\",\"name\":\"L1\",\"type\":\"lock\",\"addressMode\":\"manual\",\"address\":\"21\","
+        "\"source\":\"station\",\"executable\":true,\"unit\":\"21\"},"
+        "{\"id\":\"station_lock_22\",\"name\":\"L2\",\"type\":\"lock\",\"addressMode\":\"manual\",\"address\":\"22\","
+        "\"source\":\"station\",\"executable\":true,\"unit\":\"22\"}]}\n");
+
+    /* A configured actuator at 25 hides the station's; the cloud lock (dev 5) is no bus lock. */
+    reset(others);
+    config.activations_count = 1;
+    snprintf(config.activations[0].id, sizeof(config.activations[0].id), "gate");
+    snprintf(config.activations[0].name, sizeof(config.activations[0].name), "Gate");
+    snprintf(config.activations[0].type, sizeof(config.activations[0].type), "actuator");
+    snprintf(config.activations[0].address_mode, sizeof(config.activations[0].address_mode), "manual");
+    snprintf(config.activations[0].address, sizeof(config.activations[0].address), "25");
+    c300x_station_archive_parse(&station, others, CONF);
+    assert(station.lock_count == 1 && station.actuator_count == 2 && station.stair_light);
+    assert(strcmp(station.own_where, "10") == 0 && strcmp(station.default_where, "20") == 0);
+    c300x_activation_discovery_build(&discovery, &station, "ok", &config);
+    assert(c300x_activations_json(&config, &discovery, &units, json, sizeof(json)));
+    expect(json, "{\"ok\":true,\"enabled\":true,\"supported\":true,\"auto_discover\":true,\"station\":\"ok\",\"count\":4,\"items\":["
+        "{\"id\":\"gate\",\"name\":\"Gate\",\"type\":\"actuator\",\"addressMode\":\"manual\",\"address\":\"25\","
+        "\"source\":\"config\",\"executable\":true,\"unit\":null},"
+        "{\"id\":\"station_lock_27\",\"name\":\"Panel lock\",\"type\":\"lock\",\"addressMode\":\"manual\",\"address\":\"27\","
+        "\"source\":\"station\",\"executable\":true,\"unit\":\"27\"},"
+        "{\"id\":\"station_actuator_26\",\"name\":\"Generic\",\"type\":\"actuator\",\"addressMode\":\"manual\",\"address\":\"26\","
+        "\"source\":\"station\",\"executable\":true,\"unit\":null},"
+        "{\"id\":\"station_stair_light\",\"name\":\"Stairs\",\"type\":\"stair_light\",\"addressMode\":\"manual\",\"address\":\"10\","
+        "\"source\":\"station\",\"executable\":true,\"unit\":null}]}\n");
+    assert(discovery.count == 3);
+    assert(strcmp(discovery.items[0].id, "station_lock_27") == 0);
+
+    /* The stair light is at the station's own address (the owner's station: 11),
+     * else at the configured default; without either it is not listed. */
+    config.activations_count = 0;
+    c300x_station_archive_parse(&station, others, owner_conf);
+    assert(strcmp(station.own_where, "11") == 0 && strcmp(station.default_where, "20") == 0);
+    c300x_activation_discovery_build(&discovery, &station, "ok", &config);
+    assert(discovery.count == 4 && strcmp(discovery.items[3].address, "11") == 0);
+    snprintf(config.stair_light_default_address, sizeof(config.stair_light_default_address), "15");
+    c300x_station_archive_parse(&station, others, NULL);
+    c300x_activation_discovery_build(&discovery, &station, "ok", &config);
+    assert(discovery.count == 4 && strcmp(discovery.items[3].address, "15") == 0);
+    config.stair_light_default_address[0] = '\0';
+    c300x_station_archive_parse(&station, others, NULL);
+    c300x_activation_discovery_build(&discovery, &station, "ok", &config);
+    assert(discovery.count == 3 && strcmp(discovery.items[2].type, "actuator") == 0);
+    /* Names are escaped. */
+    assert(c300x_activations_json(&config, &discovery, NULL, json, sizeof(json)));
+    assert(strstr(json, "\"name\":\"Gate \\\\ opener\"") != NULL);
+    assert(strstr(json, "\"unit\":\"27\"") == NULL);
+    assert(!c300x_activations_json(&config, &discovery, NULL, json, 200));
+
+    /* An empty archive says so; station items switched off list none. */
+    c300x_station_archive_parse(&station, "<archive/>", CONF);
+    c300x_activation_discovery_build(&discovery, &station, "ok", &config);
+    assert(discovery.count == 0 && strcmp(discovery.archive, "empty") == 0);
+    config.activations_auto_discover = 0;
+    c300x_station_archive_parse(&station, others, CONF);
+    c300x_activation_discovery_build(&discovery, &station, "ok", &config);
+    assert(c300x_activations_json(&config, &discovery, &units, json, sizeof(json)));
+    expect(json, "{\"ok\":true,\"enabled\":true,\"supported\":false,\"auto_discover\":false,\"station\":null,\"count\":0,\"items\":[]}\n");
+}
+
 int main(int argc, char **argv)
 {
     static const struct { const char *name; void (*run)(void); } cases[] = {
         {"single_unit_capture", single_unit_capture},
+        {"station_activations", station_activations},
         {"unanswered_capture", unanswered_capture},
         {"station_answer", station_answer},
         {"app_answer_end_frame_first", app_answer_end_frame_first},

@@ -12,6 +12,10 @@
 #define ARCHIVE_MAX_BYTES (128 * 1024)
 #define CONF_MAX_BYTES (128 * 1024)
 #define OUTDOOR_UNITS_CID "10050"
+#define DOOR_LOCK_CID "10060"
+#define CLOUD_LOCK_DEV "5"
+#define ACTUATORS_CID "3008"
+#define STAIR_LIGHT_CID "2009"
 
 int c300x_unit_where_valid(const char *where)
 {
@@ -173,6 +177,10 @@ static void add_entry(struct c300x_archive_entry *entries, int *count, const cha
 static void parse_object(struct c300x_station_archive *archive, const struct place *object,
                          const char *body, const char *close)
 {
+    int units = strcmp(object->cid, OUTDOOR_UNITS_CID) == 0;
+    int actuators = strcmp(object->cid, ACTUATORS_CID) == 0;
+    int stair_light = strcmp(object->cid, STAIR_LIGHT_CID) == 0;
+
     for (const char *ist = find_tag(body, "ist"); ist != NULL && ist < close; ist = find_tag(ist + 1, "ist")) {
         const char *ist_end = strchr(ist, '>');
         struct place place = *object;
@@ -182,8 +190,19 @@ static void parse_object(struct c300x_station_archive *archive, const struct pla
             return;
         }
         read_place(ist, ist_end, &place);
-        if (!place.has_cid && place_address(&place, address, sizeof(address))) {
+        if (stair_light && !archive->stair_light) {
+            archive->stair_light = 1;
+            c300x_copy_string(archive->stair_light_name, sizeof(archive->stair_light_name), place.name);
+        }
+        if (!place_address(&place, address, sizeof(address))) {
+            continue;
+        }
+        if (units && !place.has_cid) {
             add_entry(archive->units, &archive->unit_count, address, place.name);
+        } else if (units && strcmp(place.cid, DOOR_LOCK_CID) == 0 && strcmp(place.dev, CLOUD_LOCK_DEV) != 0) {
+            add_entry(archive->locks, &archive->lock_count, address, place.name);
+        } else if (actuators) {
+            add_entry(archive->actuators, &archive->actuator_count, address, place.name);
         }
     }
 }
@@ -204,8 +223,8 @@ static void parse_archive(struct c300x_station_archive *archive, const char *xml
         memset(&object, 0, sizeof(object));
         object.valid = 1;
         read_place(obj, obj_end, &object);
-        /* Other objects (cameras, intercoms, actuators, ...) are no outdoor units. */
-        if (object.has_cid && strcmp(object.cid, OUTDOOR_UNITS_CID) == 0) {
+        /* Other objects (cameras, intercoms, TVCC, unknown ones) name nothing here. */
+        if (object.has_cid) {
             parse_object(archive, &object, obj_end + 1, close);
         }
         obj = find_tag(close, "obj");
@@ -235,19 +254,41 @@ static int join_address(char *out, size_t out_len, const char *dev, const char *
     return snprintf(out, out_len, "%s%s", dev, where) < (int)out_len && c300x_unit_where_valid(out);
 }
 
-/* setup/vdes/communication/p_default: dev + address (2, 0 -> 20). */
-static void parse_conf(struct c300x_station_archive *archive, const char *xml)
+/* dev + address of the block [start, end) into out (1, 1 -> 11). */
+static void block_address(const char *start, const char *end, char *out, size_t out_len)
 {
     char dev[8], address[16];
+
+    if (start == NULL || end == NULL
+        || !element_text(start, end, "dev", dev, sizeof(dev))
+        || !element_text(start, end, "address", address, sizeof(address))
+        || !join_address(out, out_len, dev, address)) {
+        out[0] = '\0';
+    }
+}
+
+/* setup/vdes/communication: its own dev + address, outside p_default, is
+ * the station (1, 1 -> 11). */
+static void conf_own_where(const char *xml, char *out, size_t out_len)
+{
+    const char *communication = strstr(xml, "<communication>");
+    const char *end = communication != NULL ? strstr(communication, "</communication>") : NULL;
+    const char *block = communication != NULL ? strstr(communication, "<p_default>") : NULL;
+
+    if (end != NULL && block != NULL && block < end) {
+        end = block;
+    }
+    block_address(communication, end, out, out_len);
+}
+
+/* p_default: dev + address of the default outdoor unit (2, 0 -> 20). */
+static void parse_conf(struct c300x_station_archive *archive, const char *xml)
+{
     const char *block = strstr(xml, "<p_default>");
     const char *block_end = block != NULL ? strstr(block, "</p_default>") : NULL;
 
-    if (block_end != NULL
-        && element_text(block, block_end, "dev", dev, sizeof(dev))
-        && element_text(block, block_end, "address", address, sizeof(address))
-        && !join_address(archive->default_where, sizeof(archive->default_where), dev, address)) {
-        archive->default_where[0] = '\0';
-    }
+    block_address(block, block_end, archive->default_where, sizeof(archive->default_where));
+    conf_own_where(xml, archive->own_where, sizeof(archive->own_where));
 }
 
 void c300x_station_archive_parse(struct c300x_station_archive *archive, const char *archive_xml,

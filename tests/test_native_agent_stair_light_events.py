@@ -10,14 +10,15 @@ def _native_http_source() -> str:
 
 
 def test_stair_light_endpoint_does_not_emit_synthetic_event() -> None:
-    text = _native_http_source()
-    body = text.split("static int activate_stair_light(", maxsplit=1)[1].split(
-        "static void handle_stair_light(",
+    text = (ROOT / "native_agent" / "src" / "http_activations.c").read_text(encoding="utf-8")
+    body = text.split("static void stair_light(", maxsplit=1)[1].split(
+        "int c300x_http_activations_route(",
         maxsplit=1,
     )[0]
 
     assert "c300x_stair_light_commands(address, press, sizeof(press), release, sizeof(release));" in body
-    assert "c300x_openwebnet_sequence(config, press, C300X_STAIR_LIGHT_RELEASE_MS, release" in body
+    assert "c300x_openwebnet_sequence(routes->config, press, C300X_STAIR_LIGHT_RELEASE_MS, release" in body
+    assert "emit(" not in body
     assert '"stair_light.activated"' not in body
     assert "dispatch_event(" not in body
 

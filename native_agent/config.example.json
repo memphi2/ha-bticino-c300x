@@ -22,11 +22,6 @@
   "activations": {
     "enabled": true,
     "autoDiscover": true,
-    "discoveryRoots": [
-      "/home/bticino/cfg/extra/47",
-      "/home/bticino/cfg/extra",
-      "/home/bticino/cfg"
-    ],
     "items": []
   },
   "locks": {

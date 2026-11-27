@@ -35,7 +35,7 @@ caller frame, but its lock and video use the plain `20`
 | Object | Identity |
 | --- | --- |
 | Station | `station_id` = the agent's `device.id` (`c300x-<mac>`), the config entry's `unique_id`. |
-| Outdoor unit | `unit_id` = the full `where` with `#` replaced by `_`: `20#2` -> `20_2`, `21` -> `21`. |
+| Outdoor unit | `unit_id` = the full `where` with `#` replaced by `_`: `20#2` -> `20_2`, `21` -> `21`. The default unit's id is its default address's (`20`), also when `archive.xml` names it `20#2`. |
 | Call | `call_id` = `<boot_id>-<seq>`: `boot_id` is 8 hex characters drawn at agent start, `seq` counts from 1. Never reused within a boot; a new boot never repeats an old `boot_id` in practice. |
 
 - `where` is a string, never a number: `20#2` and `20` are different units.
@@ -69,8 +69,12 @@ Sources, in this order:
 2. The default unit from `conf.xml` (`/var/tmp/conf.xml`,
    `setup/vdes/communication/p_default`: `dev` + `address`, `2` + `0` -> `20`).
    Without `conf.xml` the agent's `video.sip.devaddr` (default `20`) is used.
-   If no archive unit has that `action_where`, a unit with that `where` is
-   added (source `default`). The default unit's lock is the agent's
+   The archive unit with that `where`, else the first one with that
+   `action_where` (`20#2` for `20`, a unit behind an apartment interface), is
+   the default unit: one unit with the archive's name and `where` and the id
+   of the default address (`20`), the same id it has without an archive, so
+   Home Assistant keeps one device for that door. If no archive unit matches,
+   a unit with that `where` is added (source `default`). The default unit's lock is the agent's
    configured lock address (`lock.address`, default `20`).
 3. Units first named by a caller or view frame (source `seen`). The agent
    keeps them in `outdoor-units-seen` next to its configuration, so they
@@ -168,10 +172,10 @@ Capabilities report `api_version: "2"` and `capabilities.outdoor_units: true`,
 ```json
 {
   "ok": true,
-  "default_unit": "20_2",
+  "default_unit": "20",
   "archive": "ok",
   "units": [
-    {"id": "20_2", "where": "20#2", "action_where": "20", "lock_where": "20",
+    {"id": "20", "where": "20#2", "action_where": "20", "lock_where": "20",
      "name": "Gate", "source": "archive", "default": true},
     {"id": "21", "where": "21", "action_where": "21", "lock_where": "21",
      "name": "", "source": "seen", "default": false}

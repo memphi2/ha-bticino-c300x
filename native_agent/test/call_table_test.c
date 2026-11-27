@@ -232,10 +232,11 @@ static void unit_behind_interface(void)
 {
     reset(ARCHIVE_THREE);
     assert(units.count == 3);
-    assert(strcmp(c300x_outdoor_units_default(&units)->id, "20_2") == 0);
+    /* The archive's 20#2 is conf.xml's default unit 20: one unit, id 20. */
+    assert(strcmp(c300x_outdoor_units_default(&units)->id, "20") == 0);
     assert(strcmp(units.items[0].name, "Gate & street") == 0);
     ring_with_caller(0, "*8*9#1#4*20#2##");
-    expect(nth("call.caller_identified", 1), "\"unit\":\"20_2\",\"where\":\"20#2\",\"action_where\":\"20\"");
+    expect(nth("call.caller_identified", 1), "\"unit\":\"20\",\"where\":\"20#2\",\"action_where\":\"20\"");
     assert(count("outdoor_units.changed") == 0);
     c300x_calls_end(&calls, &sink, "8f3a1c2e-1", "hangup", 20000);
     ring_with_caller(60000, "*8*9#1#4*22##");
@@ -277,7 +278,7 @@ static void caller_missing(void)
     tick(999);
     assert(count("call.caller_identified") == 0);
     tick(1000);
-    expect(nth("call.caller_identified", 1), "\"unit\":\"20_2\",\"where\":\"20#2\",\"action_where\":\"20\",\"attribution\":\"default_fallback\",\"raw\":null");
+    expect(nth("call.caller_identified", 1), "\"unit\":\"20\",\"where\":\"20#2\",\"action_where\":\"20\",\"attribution\":\"default_fallback\",\"raw\":null");
     assert(c300x_calls_timeout_ms(&calls, 1000) == C300X_CALL_RINGING_TIMEOUT_MS - 1000);
 }
 
@@ -424,11 +425,11 @@ static void plain_address_is_the_qualified_unit(void)
 {
     int changed;
     reset(ARCHIVE_THREE);
-    int gate = c300x_outdoor_units_find_id(&units, "20_2");
+    int gate = c300x_outdoor_units_find_id(&units, "20");
     assert(gate >= 0);
     assert(c300x_outdoor_units_note_caller(&units, "20", &changed) == gate && !changed && units.count == 3);
     frame("*8*1#5#4#20*11##", 0);
-    expect(nth("call.view_started", 1), "\"unit\":\"20_2\"");
+    expect(nth("call.view_started", 1), "\"unit\":\"20\"");
     assert(units.count == 3 && count("outdoor_units.changed") == 0);
     reset(NULL);
     assert(c300x_outdoor_units_note_caller(&units, "20#2", &changed) == 0 && changed);
@@ -509,6 +510,36 @@ static void archive_objects_by_cid(void)
     assert(units.count == 3 && strcmp(units.items[2].source, "default") == 0);
 }
 
+/* conf.xml's default unit 20 and the archive's 20#2 (behind an apartment
+ * interface) are one door: one unit with the archive's name and where and
+ * the default unit's id, the same with and without the archive. */
+static void default_unit_keeps_its_id(void)
+{
+    char json[2048];
+    int changed;
+
+    reset(ARCHIVE_SAMPLE);
+    assert(units.count == 3 && units.default_index == 0);
+    assert(strcmp(units.items[0].id, "20") == 0 && strcmp(units.items[0].where, "20#2") == 0);
+    assert(strcmp(units.items[0].source, "archive") == 0 && strcmp(units.items[0].action_where, "20") == 0);
+    assert(c300x_outdoor_units_json(&units, json, sizeof(json)));
+    expect(json, "\"default_unit\":\"20\",\"archive\":\"ok\",\"units\":[{\"id\":\"20\",\"where\":\"20#2\","
+                 "\"action_where\":\"20\",\"lock_where\":\"20\",\"name\":\"Haust\xc3\xbcr\",\"source\":\"archive\",\"default\":true},"
+                 "{\"id\":\"21\"");
+    assert(strstr(json, "20_2") == NULL);
+    /* Caller and view frames of the door name that unit, never a second one. */
+    assert(c300x_outdoor_units_note_caller(&units, "20#2", &changed) == 0 && !changed);
+    assert(c300x_outdoor_units_note_caller(&units, "20", &changed) == 0 && !changed && units.count == 3);
+    /* Without the archive the same door has the same id. */
+    reset(NULL);
+    assert(units.count == 1 && strcmp(units.items[0].id, "20") == 0);
+    /* An archive unit at the plain default address is the default; 20#2 stays its own unit. */
+    reset("<archive><obj cid=\"10050\" dev=\"2\"><ist where=\"0#2\" descr=\"Behind\"/>"
+          "<ist where=\"0\" descr=\"Front\"/></obj></archive>");
+    assert(units.count == 2 && units.default_index == 1 && strcmp(units.items[1].id, "20") == 0);
+    assert(strcmp(units.items[0].id, "20_2") == 0);
+}
+
 int main(int argc, char **argv)
 {
     static const struct { const char *name; void (*run)(void); } cases[] = {
@@ -529,6 +560,7 @@ int main(int argc, char **argv)
         {"plain_address_is_the_qualified_unit", plain_address_is_the_qualified_unit},
         {"seen_units_survive_restart", seen_units_survive_restart},
         {"archive_objects_by_cid", archive_objects_by_cid},
+        {"default_unit_keeps_its_id", default_unit_keeps_its_id},
     };
     for (size_t index = 0; index < sizeof(cases) / sizeof(cases[0]); index++) {
         if (argc < 2 || strcmp(argv[1], cases[index].name) == 0) {

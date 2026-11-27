@@ -77,13 +77,21 @@ void c300x_outdoor_units_build(struct c300x_outdoor_units *units, const struct c
     }
     c300x_copy_string(default_where, sizeof(default_where), station->default_where[0] != '\0'
         ? station->default_where : c300x_unit_where_valid(fallback_devaddr) ? fallback_devaddr : "20");
-    for (int index = 0; index < units->count && units->default_index < 0; index++) {
-        if (strcmp(units->items[index].action_where, default_where) == 0
-            || strcmp(units->items[index].where, default_where) == 0) {
-            units->default_index = index;
+    /* The archive's unit at the default address, else the one behind an
+     * apartment interface there (20#2 for 20), is the default unit: one
+     * unit with the archive's name and where. Its id is the default
+     * address's, as without an archive, so the unit keeps its identity. */
+    for (int pass = 0; pass < 2 && units->default_index < 0; pass++) {
+        for (int index = 0; index < units->count && units->default_index < 0; index++) {
+            const struct c300x_outdoor_unit *unit = &units->items[index];
+            if (strcmp(pass == 0 ? unit->where : unit->action_where, default_where) == 0) {
+                units->default_index = index;
+            }
         }
     }
-    if (units->default_index < 0) {
+    if (units->default_index >= 0) {
+        c300x_unit_id_from_where(default_where, units->items[units->default_index].id, sizeof(units->items[0].id));
+    } else {
         char action[C300X_UNIT_WHERE_LEN];
         c300x_unit_action_where(learned, action, sizeof(action));
         /* A qualifier the default unit learned from a caller frame stays. */

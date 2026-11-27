@@ -70,7 +70,7 @@ static int activation_id_is_valid(const char *value)
 static int activation_type_is_valid(const char *value)
 {
     return strcmp(value, "lock") == 0
-        || strcmp(value, "light") == 0
+        || strcmp(value, "actuator") == 0
         || strcmp(value, "stair_light") == 0
         || strcmp(value, "generic") == 0
         || strcmp(value, "scenario") == 0
@@ -515,10 +515,13 @@ static const char *next_array_value(
     return after;
 }
 
+/* stored: the agent's own configuration file, whose "light" items (an
+ * actuator that sent the stair-light frame) become "actuator" once. */
 static int parse_activation_item(
     const char *item,
     const char *document_end,
     struct c300x_activation *activation,
+    int *migrated,
     char *error,
     size_t error_len
 )
@@ -548,8 +551,12 @@ static int parse_activation_item(
         return 0;
     }
     if (find_member(item, item_end, "type", &value)) {
-        if (!string_value(value, document_end, activation->type, sizeof(activation->type))
-            || !activation_type_is_valid(activation->type)) {
+        int read = string_value(value, document_end, activation->type, sizeof(activation->type));
+        if (read && migrated != NULL && strcmp(activation->type, "light") == 0) {
+            safe_copy(activation->type, sizeof(activation->type), "actuator");
+            *migrated = 1;
+        }
+        if (!read || !activation_type_is_valid(activation->type)) {
             set_error(error, error_len, "activations item type is invalid");
             return 0;
         }
@@ -638,6 +645,7 @@ static int parse_activation_items_value(
     const char *value,
     const char *document_end,
     struct c300x_config *config,
+    int stored,
     char *error,
     size_t error_len
 )
@@ -666,6 +674,7 @@ static int parse_activation_items_value(
             item,
             document_end,
             &config->activations[config->activations_count],
+            stored ? &config->activations_migrated : NULL,
             error,
             error_len
         )) {
@@ -699,11 +708,11 @@ static int activation_items_valid(const struct c300x_config *config, char *error
             set_error(error, error_len, "lock activations need address, addressMode=auto or pressCommand");
             return 0;
         }
-        if ((strcmp(activation->type, "light") == 0 || strcmp(activation->type, "stair_light") == 0)
+        if ((strcmp(activation->type, "actuator") == 0 || strcmp(activation->type, "stair_light") == 0)
             && !has_address
             && !has_command
             && !auto_address) {
-            set_error(error, error_len, "light activations need address, addressMode=auto or pressCommand");
+            set_error(error, error_len, "actuator and stair_light activations need address, addressMode=auto or pressCommand");
             return 0;
         }
         if ((strcmp(activation->type, "generic") == 0 || strcmp(activation->type, "scenario") == 0)
@@ -739,6 +748,7 @@ int c300x_config_set_activation_items_json(
         items_json,
         document_end,
         config,
+        0,
         error,
         error_len
     )) {
@@ -954,6 +964,7 @@ int c300x_load_config(
             value,
             document_end,
             config,
+            1,
             error,
             error_len
         )) {

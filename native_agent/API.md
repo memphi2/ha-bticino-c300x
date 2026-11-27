@@ -724,6 +724,26 @@ Side effects: runs one configured activation.
 
 The id is percent-decoded and bounded by `C300X_MAX_ACTIVATION_ID_LEN`.
 
+Activation types and their frames (an item's own `pressCommand` and
+`releaseCommand` take precedence):
+
+| `type` | Press | Release |
+| --- | --- | --- |
+| `lock` | `*8*19*<address>##` | `*8*20*<address>##` after `holdMs`, else `locks.releaseDelayMs` |
+| `actuator` | `*8*19*<address>##` | `*8*20*<address>##` after `holdMs`, else `locks.releaseDelayMs` |
+| `stair_light` | `*8*21*<address>##` | `*8*22*<address>##` after `holdMs`, else 100 ms |
+| `generic`, `scenario` | `pressCommand` | `releaseCommand`, if any |
+
+`actuator` is the station's generic actuator (AutomationVDE, shown as
+"Generic" on the display, archive object 3008): the display presses and
+releases it with the lock frames at its address `2N`. The type `light` no
+longer exists: the agent's configuration file's `light` items (which sent the
+stair-light frame) become `actuator` at the first start of this agent and the
+file is saved once; id, name and address stay as configured (an address `25`
+stays `25`). Requests that set activation items with `type: "light"` are
+refused (`invalid_activation_items`, detail `activations item type is
+invalid`).
+
 ## Device Feature State
 
 ### `GET /api/v1/smartphone-forwarding`

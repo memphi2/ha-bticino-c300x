@@ -69,6 +69,7 @@ struct c300x_config {
     int activation_discovery_root_count;
     char activation_discovery_roots[C300X_MAX_ACTIVATION_DISCOVERY_ROOTS][C300X_MAX_PATH_LEN];
     int activations_count;
+    int activations_migrated; /* the loaded file named an actuator "light": save it once */
     struct c300x_activation activations[C300X_MAX_ACTIVATIONS];
     int maintenance_enabled;
     int maintenance_ssh_start_enabled;

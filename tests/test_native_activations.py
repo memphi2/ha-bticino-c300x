@@ -133,3 +133,33 @@ def test_a_stair_light_activation_releases_the_light_as_the_display_does(lab: La
 
     assert status == 200 and body["type"] == "stair_light"
     assert_released_after_display_delay(lab.bus, "11")
+
+
+STORED_LIGHT = [
+    {"id": "gate", "name": "Gate opener", "type": "light", "addressMode": "manual", "address": "25"},
+]
+
+
+@pytest.mark.parametrize("lab", [STORED_LIGHT], indirect=True)
+def test_a_stored_light_item_becomes_an_actuator_once(lab: Lab) -> None:
+    text = lab.config_path.read_text()
+    stored = json.loads(text)["activations"]["items"]
+    status, body = lab.request("GET", "/api/v1/activations")
+
+    assert [(item["id"], item["name"], item["type"], item["address"]) for item in stored] == [
+        ("gate", "Gate opener", "actuator", "25"),
+    ]
+    assert '"light"' not in text
+    assert status == 200
+    assert [(item["id"], item["name"], item["type"], item["address"]) for item in body["items"]] == [
+        ("gate", "Gate opener", "actuator", "25"),
+    ]
+
+
+@pytest.mark.parametrize("lab", [STORED_LIGHT], indirect=True)
+def test_an_actuator_is_pressed_and_released_with_the_lock_frames(lab: Lab) -> None:
+    status, body = lab.request("POST", "/api/v1/activations/gate/actions/run", {})
+
+    assert (status, body["type"]) == (200, "actuator")
+    assert lab.bus.sent() == ["*8*19*25##", "*8*20*25##"]
+    assert lab.bus.frames[1][0] - lab.bus.frames[0][0] >= 0.045

@@ -252,8 +252,12 @@ def test_home_button_layout_is_offered_only_where_the_display_patch_uses_it(mode
     from test_executor import run
 
     device = entry()
-    device.runtime_data.agent_info = {"model": model, "capabilities": CONFIRMED}
-    device.runtime_data.capabilities = CONFIRMED
+    # The agent of a C300X offers the Display patch; that of a C100X does not.
+    capabilities = CONFIRMED if model == "C100X" else {
+        **CONFIRMED, "maintenance": {"supported": True, "qml_patch": True, "qml_restore": True},
+    }
+    device.runtime_data.agent_info = {"model": model, "capabilities": capabilities}
+    device.runtime_data.capabilities = capabilities
     device.runtime_data.qml_patch_status = {}
     device.options = MappingProxyType({**device.options, "dashboard_dynamic_homepage": False})
     areas = _OptionsAreas(device)

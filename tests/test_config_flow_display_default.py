@@ -23,9 +23,13 @@ from custom_components.bticino_c300x.device_profile import (
     QT5_ONDISK,
     QT5_RCC,
 )
+from custom_components.bticino_c300x.display_support import entry_display_supported
 from tests.test_config_flow_helpers import _options_flow
 
 _BRIDGE = {"display_bridge": {"supported": True}}
+# A C300X whose own model name and display program disagree: the agent keeps
+# the bridge but offers no Display patch (native_agent/src/config.c).
+_NO_DISPLAY_PATCH = {**_BRIDGE, "maintenance": {"supported": True, "qml_patch": False}}
 _C100X_CONFIRMED = {
     **_BRIDGE,
     "c100x_display": {"confirmed": True, "status_known": True},
@@ -71,6 +75,7 @@ def test_a_new_c300x_with_a_display_offers_the_pages_switched_on(agent_info) -> 
         # A display the agent does not confirm stays as shipped.
         pytest.param({"capabilities": {}}, id="unknown-display"),
         pytest.param({"capabilities": {"display_bridge": {"supported": False}}}, id="no-display"),
+        pytest.param({"display_kind": QT4_ONDISK, "capabilities": _NO_DISPLAY_PATCH}, id="no-display-patch"),
         pytest.param({}, id="no-agent-answer"),
     ],
 )
@@ -103,3 +108,27 @@ def test_an_entry_that_never_stored_the_setting_keeps_it_off_in_the_settings() -
     assert _default(form, CONF_DEVICE_UI_ENABLED) is False
     assert CONF_DEVICE_UI_ENABLED not in entry.options
     assert CONF_DEVICE_UI_ENABLED not in entry.data
+
+
+@pytest.mark.parametrize("qml_patch", [True, False])
+def test_the_settings_offer_the_pages_only_with_the_display_patch(qml_patch) -> None:
+    capabilities = {**_BRIDGE, "maintenance": {"supported": True, "qml_patch": qml_patch}}
+    entry = SimpleNamespace(
+        entry_id="entry", data={CONF_AGENT_HOST: "agent.local", CONF_AGENT_TOKEN: "token"},
+        options={CONF_DEVICE_UI_ENABLED: True},
+        runtime_data=SimpleNamespace(
+            agent_info={"model": "C300X", "display_kind": QT4_ONDISK}, capabilities=capabilities,
+            qml_patch_status={}, qml_patch_status_updated_at=None, api=None,
+        ),
+    )
+
+    assert entry_display_supported(entry) is qml_patch
+    form = asyncio.run(_options_flow(entry).async_step_dashboard(None))
+    assert (form.get("reason") == "unsupported_display") is not qml_patch
+    assert (form.get("step_id") == "dashboard") is qml_patch
+
+
+def test_an_agent_without_maintenance_leaves_the_display_to_its_bridge() -> None:
+    capabilities = {**_BRIDGE, "maintenance": {"supported": False, "qml_patch": False}}
+
+    assert _default(_setup_form({"capabilities": capabilities}), CONF_DEVICE_UI_ENABLED) is True

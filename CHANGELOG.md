@@ -22,6 +22,8 @@ offline.
   remove the agent) before leaving the beta. The card plays the sound as it
   comes and no longer adds its own gain. The camera attribute
   `doorstation_audio_gain_db` is removed.
+- The quick start also links davemajor's USB root for firmware 3.0.6, which
+  sets up SSH key login.
 - The native agent is rebuilt as **3.0.0b3**; an agent update is required.
 
 ## v3.0.0b2 - 2026-11-26

@@ -27,7 +27,9 @@ images, firmware extraction output, APKs, exploits, rooting instructions or
 vendor files. SSH can be enabled with the third-party projects
 [fquinto/bticinoClasse300x](https://github.com/fquinto/bticinoClasse300x)
 (C300X `1.7.x`), [davemajor/c300x-root](https://github.com/davemajor/c300x-root)
-(C300X `2.0.2` and `3.0.6`) and
+(C300X `2.0.2` and `3.0.6`),
+[davemajor/bticino-c300x-usb-root](https://github.com/davemajor/bticino-c300x-usb-root)
+(C300X `3.0.6` over USB, with SSH key login) and
 [daniel-sc/bticino-c100x-firmware-tools](https://github.com/daniel-sc/bticino-c100x-firmware-tools)
 (C100X `1.5.8`), at your own risk and without warranty; flashing can brick the
 station. The integration assumes a clean firmware: enable only SSH, no camera,

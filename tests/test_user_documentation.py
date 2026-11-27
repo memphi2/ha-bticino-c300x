@@ -102,11 +102,12 @@ def test_setup_docs_link_policy_and_removal_guides(document):
 SSH_PROJECTS = {
     "fquinto": "(C300X `1.7.x`)",
     "davemajor/c300x-root": "(C300X `2.0.2` and `3.0.6`)",
+    "davemajor/bticino-c300x-usb-root": "(C300X `3.0.6` over USB, with SSH key login)",
     "daniel-sc/bticino-c100x-firmware-tools": "(C100X `1.5.8`)",
 }
 
 
-def test_quickstart_requirements_name_the_three_ssh_projects_and_a_clean_firmware():
+def test_quickstart_requirements_name_the_ssh_projects_and_a_clean_firmware():
     requirements = " ".join(section("quickstart.md", "Requirements").split("\n### ", 1)[0].split())
     for phrase in ("The integration cannot root a stock station.",
                    "This project provides no firmware images", "rooting instructions",
@@ -114,7 +115,7 @@ def test_quickstart_requirements_name_the_three_ssh_projects_and_a_clean_firmwar
                    "The integration assumes a clean firmware: enable only SSH, no camera, MQTT "
                    "or other extras."):
         assert phrase in requirements, phrase
-    # Exactly these three projects, each a repository front page with its
+    # Exactly these projects, each a repository front page with its
     # station and firmware; the C100X line links this project's own test issue.
     links = [link for link in re.findall(r"\]\((https?://[^)]+)\)", requirements)
              if "/ha-bticino-c300x/" not in link]

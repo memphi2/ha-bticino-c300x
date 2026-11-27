@@ -13,7 +13,8 @@ the original firmware, but not yet confirmed on a Classe 100X. Testing runs in
 [issue #51](https://github.com/memphi2/ha-bticino-c300x/issues/51). Use a
 station you can do without for a while, ideally with a separate Home
 Assistant test instance. What works and what does not:
-[2. Use](2-use.md#what-works).
+[2. Use](2-use.md#what-works). Testers make a private backup first:
+[C100X device test](../dev/c100x-device-test.md#make-a-private-backup).
 
 ## Requirements
 
@@ -33,70 +34,6 @@ images and no rooting instructions. Use this tool:
 
 Enable nothing but SSH: no camera, MQTT or other extras. Flashing can brick
 the station; you do it at your own risk and without warranty.
-
-## Make a Private Backup
-
-Do this once, before the first installation, while no call is active. The
-commands only read from the station; the files land on your computer. They
-contain passwords and your configuration: **never attach them to GitHub.**
-
-Replace `C100X_HOST` with the station's address and check its SSH host key.
-
-1. Record which files exist:
-
-   ```sh
-   umask 077
-   mkdir c100x-51-private
-   cd c100x-51-private
-   ssh root@C100X_HOST 'set -e
-     for p in \
-     /home/bticino/cfg/extra/c300x-native-agent \
-     /home/bticino/cfg/extra/c300x-device-file-backups \
-     /etc/init.d/c300x-native-agent /etc/rc5.d/S40c300x-native-agent \
-     /etc/network/if-pre-up.d/iptables /etc/network/if-pre-up.d/iptables6 \
-     /etc/flexisip; do
-       if [ -e "$p" ] || [ -L "$p" ]; then
-         printf "present %s\n" "$p"
-         stat -c "metadata %a %u %g %h %F %n" "$p"
-         if [ -L "$p" ]; then readlink "$p"; fi
-       else
-         printf "absent %s\n" "$p"
-       fi
-     done' > presence.txt
-   ```
-
-   Stop if SSH fails. If `/etc/flexisip` points outside `/home/bticino/cfg`,
-   ask in issue #51 first.
-
-2. Archive the configuration and the files the integration may change:
-
-   ```sh
-   ssh root@C100X_HOST 'set --
-     for p in home/bticino/cfg \
-       etc/init.d/c300x-native-agent etc/rc5.d/S40c300x-native-agent \
-       etc/network/if-pre-up.d/iptables etc/network/if-pre-up.d/iptables6 \
-       etc/flexisip \
-       home/bticino/bin/gui/BtClass100 home/bticino/bin/BtClass100_qws \
-       home/bticino/bin/gui/skins/default/main.qml \
-       home/bticino/bin/gui/skins/default/MainPage.qml \
-       home/bticino/bin/gui/skins/default/EventManager.qml \
-       home/bticino/bin/bt_answering_machine; do
-         if [ -e "/$p" ] || [ -L "/$p" ]; then set -- "$@" "$p"; fi
-       done
-     exec tar -C / -cpf - "$@"' > pretest.tar.partial
-   ```
-
-   Rename it to `pretest.tar` only if the command ended without an error.
-   Check it with `tar -tvf pretest.tar`. Do not install after a tar warning.
-
-3. Save the firewall rules:
-
-   ```sh
-   ssh root@C100X_HOST '/usr/sbin/iptables-save' > iptables-before.txt
-   ```
-
-Check that `iptables-before.txt` is not empty. Keep the three files outside
-Home Assistant and outside the station.
 
 ## Install the Integration
 

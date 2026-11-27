@@ -738,3 +738,25 @@ def test_the_readme_lists_the_five_steps_of_each_model():
     for model in ("classe-300x", "classe-100x"):
         for name in GUIDE_STEPS:
             assert f"](docs/{model}/{name})" in start, (model, name)
+
+
+USER_PAGES = ("README.md", "docs/reference.md", *(f"docs/{model}/{name}"
+              for model in ("classe-300x", "classe-100x") for name in GUIDE_STEPS))
+
+
+def test_the_private_c100x_backup_is_tester_material_not_a_setup_step():
+    """The shell backup made readers of the setup page stop; testers find it in the device test."""
+
+    device_test = section("dev/c100x-device-test.md", "Make a Private Backup")
+    for fact in ("never attach them to GitHub", "presence.txt", "pretest.tar.partial",
+                 "iptables-before.txt", "Do not install after a tar warning",
+                 "home/bticino/bin/bt_answering_machine"):
+        assert fact in device_test, fact
+    assert "make-a-private-backup" in _heading_anchors(DOCS / "dev/c100x-device-test.md")
+    for page in USER_PAGES:
+        text = (ROOT / page).read_text(encoding="utf-8")
+        assert "```sh" not in text, page
+        assert "1-setup.md#make-a-private-backup" not in text, page
+        assert "pretest.tar" not in text, page
+    setup = (DOCS / "classe-100x/1-setup.md").read_text(encoding="utf-8")
+    assert "](../dev/c100x-device-test.md#make-a-private-backup)" in setup

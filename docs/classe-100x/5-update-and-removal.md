@@ -41,10 +41,9 @@ the originals, or restores them from their backups. If that fails, it stops
 before deleting anything and does not reboot. Removal is not a factory reset
 and does not unroot the station. Removal on a Classe 100X is in test.
 
-If removal fails and you have to put files back by hand, follow the
-[C100X device test](../dev/c100x-device-test.md#manual-recovery) and use your
-[private backup](1-setup.md#make-a-private-backup). Never unpack the whole
-backup over `/`.
+If removal fails and you have to put files back by hand, follow
+[Manual recovery](../dev/c100x-device-test.md#manual-recovery) in the C100X
+device test.
 
 To remove the entry and the package from Home Assistant, follow
 [Remove the integration](../classe-300x/5-update-and-removal.md#remove-the-integration).

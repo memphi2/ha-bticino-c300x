@@ -755,6 +755,7 @@
       "cannot_connect": "Impossibile raggiungere il device agent. Controlla l'indirizzo e che l'agent sia in esecuzione.",
       "unique_id_mismatch": "Questo è un dispositivo diverso da quello configurato. Riconfigura la voce corrispondente oppure aggiungi il dispositivo come nuova voce.",
       "reauth_wrong_device": "L'agente ha un'identità diversa. La voce salvata non è stata modificata.",
+      "reauth_another_station": "Questo indirizzo ora porta a un'altra stazione. Non è stato modificato nulla, né su di essa né nella voce salvata.",
       "reauth_successful": "Le credenziali sono state aggiornate.",
       "reinstall_entry_updated": "L'agente è stato reinstallato su una stazione già configurata come {name}. Questa voce ora usa le nuove chiavi e questo indirizzo; non è stata creata una seconda voce.",
       "station_entry_updated": "Questa stazione è già configurata come {name}. Questa voce ora usa queste chiavi e questo indirizzo; non è stata creata una seconda voce.",

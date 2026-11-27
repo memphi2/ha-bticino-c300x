@@ -109,7 +109,7 @@ class ReinstallSteps:
             except C300XDeviceInstallError as err:
                 if err.reason == WRONG_STATION:
                     # The address leads to another station now; nothing was written on it.
-                    return cast(ConfigFlowResult, self.async_abort(reason="reauth_wrong_device"))
+                    return cast(ConfigFlowResult, self.async_abort(reason="reauth_another_station"))
                 _LOGGER.warning("Reinstalling the device agent failed: %s", err.reason)
                 errors["base"] = err.reason
                 if err.keys_written and current_connection_options(entry) == connection:

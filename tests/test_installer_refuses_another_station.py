@@ -168,7 +168,7 @@ def test_the_reauth_reinstall_leaves_another_station_alone(monkeypatch):
     result, _ = _reinstall(
         monkeypatch, flow, AsyncMock(side_effect=installer.C300XDeviceInstallError(WRONG_STATION)),
     )
-    assert result == flow.async_abort(reason="reauth_wrong_device")
+    assert result == flow.async_abort(reason="reauth_another_station")
     flow.async_update_and_abort.assert_not_called()
     flow.hass.config_entries.async_schedule_reload.assert_not_called()
 
@@ -197,3 +197,9 @@ def test_every_language_names_the_refusal(name):
     texts = json.loads((TEXTS / name).read_text(encoding="utf-8"))
     assert texts["issues"]["device_agent_update_required"]["fix_flow"]["error"][WRONG_STATION]
     assert texts["config"]["abort"]["reauth_wrong_device"]
+    # The reinstall reaches the station without its agent: the abort names the
+    # station, as the Repair's refusal does, and no agent identity.
+    refusal = texts["config"]["abort"]["reauth_another_station"]
+    repair = texts["issues"]["device_agent_update_required"]["fix_flow"]["error"][WRONG_STATION]
+    assert refusal.split(".")[0] == repair.split(".")[0]
+    assert "agent" not in refusal.lower()

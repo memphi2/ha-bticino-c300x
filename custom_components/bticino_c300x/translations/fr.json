@@ -755,6 +755,7 @@
       "cannot_connect": "L'agent appareil est injoignable. Verifiez l'adresse et que l'agent fonctionne.",
       "unique_id_mismatch": "Ce n'est pas l'appareil configure. Reconfigurez l'entree correspondante ou ajoutez l'appareil comme nouvelle entree.",
       "reauth_wrong_device": "L'agent a une identité différente. L'entrée enregistrée n'a pas été modifiée.",
+      "reauth_another_station": "Cette adresse mène désormais à une autre station. Rien n'a été modifié, ni sur elle ni dans l'entrée enregistrée.",
       "reauth_successful": "Les identifiants ont été mis à jour.",
       "reinstall_entry_updated": "L'agent a été réinstallé sur une station déjà configurée sous le nom {name}. Cette entrée utilise désormais les nouvelles clés et cette adresse ; aucune deuxième entrée n'a été créée.",
       "station_entry_updated": "Cette station est déjà configurée sous le nom {name}. Cette entrée utilise désormais ces clés et cette adresse ; aucune deuxième entrée n'a été créée.",

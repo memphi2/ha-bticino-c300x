@@ -35,7 +35,7 @@ caller frame, but its lock and video use the plain `20`
 | Object | Identity |
 | --- | --- |
 | Station | `station_id` = the agent's `device.id` (`c300x-<mac>`), the config entry's `unique_id`. |
-| Outdoor unit | `unit_id` = the full `where` with `#` replaced by `_`: `20#2` -> `20_2`, `21` -> `21`. |
+| Outdoor unit | `unit_id` = the full `where` with `#` replaced by `_`: `20#2` -> `20_2`, `21` -> `21`. The default unit's id is its default address's (`20`), also when `archive.xml` names it `20#2`. |
 | Call | `call_id` = `<boot_id>-<seq>`: `boot_id` is 8 hex characters drawn at agent start, `seq` counts from 1. Never reused within a boot; a new boot never repeats an old `boot_id` in practice. |
 
 - `where` is a string, never a number: `20#2` and `20` are different units.
@@ -57,17 +57,24 @@ caller frame, but its lock and video use the plain `20`
 
 Sources, in this order:
 
-1. `archive.xml` (`/home/bticino/cfg/extra/0/archive.xml`): inside an `<obj>`,
-   every `<ist>` without `cid` is an outdoor unit, every `<ist cid="10060">`
-   is a lock. The bus address is the `<obj>`'s `dev` (default `2`) followed by
-   the `where` of the `<ist>` (`0#2` -> `20#2`, `1` -> `21`). The name is
-   `descr`. A unit's lock is the lock with the same `action_where`; without
-   one the unit's own `action_where` is its lock.
+1. `archive.xml` (`/home/bticino/cfg/extra/0/archive.xml`): only the
+   outdoor-unit object `<obj cid="10050">` names outdoor units: every `<ist>`
+   in it without `cid`. Its `<ist cid="10060">` are locks; other objects
+   (cameras 10051, intercoms 10052/10053, actuators 3008, the stair light
+   2009, TVCC 10061, unknown ones) name no unit. The bus address is `dev`
+   (default `2`) followed by `where` (`0#2` -> `20#2`, `1` -> `21`), the name
+   is `descr`; an attribute the `<ist>` lacks is its `<obj>`'s, as the
+   station's display reads it. A unit's lock is the lock with the same
+   `action_where`; without one the unit's own `action_where` is its lock.
 2. The default unit from `conf.xml` (`/var/tmp/conf.xml`,
    `setup/vdes/communication/p_default`: `dev` + `address`, `2` + `0` -> `20`).
    Without `conf.xml` the agent's `video.sip.devaddr` (default `20`) is used.
-   If no archive unit has that `action_where`, a unit with that `where` is
-   added (source `default`). The default unit's lock is the agent's
+   The archive unit with that `where`, else the first one with that
+   `action_where` (`20#2` for `20`, a unit behind an apartment interface), is
+   the default unit: one unit with the archive's name and `where` and the id
+   of the default address (`20`), the same id it has without an archive, so
+   Home Assistant keeps one device for that door. If no archive unit matches,
+   a unit with that `where` is added (source `default`). The default unit's lock is the agent's
    configured lock address (`lock.address`, default `20`).
 3. Units first named by a caller or view frame (source `seen`). The agent
    keeps them in `outdoor-units-seen` next to its configuration, so they
@@ -92,7 +99,7 @@ A call has `call_id`, `kind` (`ring` or `view`), `state`, `unit`
 | `state` | Meaning |
 | --- | --- |
 | `ringing` | A ring is in progress. |
-| `answered` | Answered by Home Assistant (`answered_by: "ha"`) or on the station (`"station"`). |
+| `answered` | Answered by Home Assistant (`answered_by: "ha"`), on the station (`"station"`: display or app) or by the station's answering machine (`"answering_machine"`). |
 | `viewing` | On-demand view of a unit (`kind: "view"`). |
 | `ended` | Over; kept for 60 s for late requests, then dropped. |
 
@@ -104,8 +111,8 @@ A call has `call_id`, `kind` (`ring` or `view`), `state`, `unit`
 
 ### Ring timing
 
-A call mirrors the agent's ring session of 3.0.0; it adds no state machine of
-its own.
+A call mirrors the agent's ring session of 3.0.0 and the station's own call
+state (see Station call state).
 
 1. A ring frame or the ring's SIP INVITE that the 3.0.0 duplicate filter lets
    through (the first ring, then none for 1000 ms) is `doorbell.pressed`, as
@@ -124,6 +131,31 @@ its own.
 The station has one ring session at a time: two units pressed in the same
 session are one call, named by the last caller frame.
 
+### Station call state
+
+bt_answering_machine sends `*#8**35*<code>*<x>*<y>##` to the station's
+monitor channel (the multicast the agent reads) on every change of its call
+state, and answers the query `*#8**35##` with it. The frame and its sender
+are the same on C300X 1.7.19, 2.0.2, 3.0.6 and C100X 1.5.8. `x` and `y` are
+two fields of the answering machine's call record; they were `0` in every
+capture and live log and the agent does not use them. The meanings come from
+the captures and from the vendor functions that send each value:
+
+| `code` | `state` | Seen |
+| --- | --- | --- |
+| `0` | `idle` | after the end frame of every call |
+| `1` | `setup` | with the ring frame, and when a view is set up |
+| `2` | `ringing` | with the caller frame, while the ringtone plays |
+| `3` | `viewing` | a view without a ring |
+| `4` | `waiting` | about 2.5 s after `2` with the ringtone's end (`*7*59#8…`), or when the ringer is muted; the call still waits |
+| `6` | `conversation` | the display, the app or Home Assistant answered (`*8*2#…`) |
+| `7` | `answering_machine` | it took the unanswered call (`*8*67*<unit>##`) |
+| `8` | `greeting` | it plays the greeting (`*7*58#…` audio path) |
+| `9` | `recording` | it records the visitor; a saved message follows the end (`*8*96#1#0*##`) |
+
+Other codes (the vendor code also sends `10`, `11` and `12`) have no proven
+meaning: `state: null`, they change no call.
+
 ### Current call
 
 Only the current call can be answered or hung up: the live ring call, else
@@ -132,15 +164,19 @@ the stop button does.
 
 ### End of a call
 
-Start, answer and end come from the agent's ring and media events, the same
-as in 3.0.0; the bus frames only name the unit (caller frame) or open a view
-(view frame).
+Start comes from the agent's ring events, as in 3.0.0. Answer and end come
+from the agent's media events and from the station's call state; the other
+bus frames only name the unit (caller frame) or open a view (view frame).
+The display's own channel (`*8*80#6#2*…`, `*8*3#6#2*…` at wake and off) is
+not a call.
 
 | Event | Call |
 | --- | --- |
 | `doorbell.pressed` | Opens the ring call, or belongs to the live one (see Ring timing). |
 | `doorbell.view_requested` of the ring (`*8*2#1#…`, or the agent's own answer) | The ring call is `answered`: `answered_by: "ha"` while the agent's ring leg is answered by Home Assistant, else `"station"` (display or app). In which order the display's frames and the ring leg's close come does not matter. |
 | `doorbell.media.closed` whose payload still reports the station's own media | A ringing call is `answered` by the station. |
+| Station state `6` (conversation) | The ringing call is `answered`: `"ha"` while Home Assistant answered the ring leg, else `"station"`. |
+| Station state `7` (answering machine) | The ringing call is `answered` (`"answering_machine"`). |
 | View frame `*8*1#5#4#<where>*…##` | Opens a `viewing` call of that unit; a view of another unit ends the one before (`reason: "superseded"`). |
 
 | Source | Ends |
@@ -149,7 +185,8 @@ as in 3.0.0; the bus frames only name the unit (caller frame) or open a view
 | `doorbell.media.closed` while answered by Home Assistant, or of a view | That call. |
 | The bus end frame of a call answered on the station | That call. The close of the agent's own leg does not end it: the display call goes on. |
 | Hang-up through the API | That call (`reason: "hangup"`, also when the hang-up's own media close comes first). |
-| The agent's media state, checked 66 s after the answer and every 5 s after that (a view: every 5 s) | An answered call whose leg is gone, or whose display call is over (the station's conversation limit is 60 s, the agent's display guard 65 s), ends with `reason: "media_closed"`: a lost end frame keeps no call. |
+| Station state `0` (idle) | A call that was live then and that nothing else ended within 1.5 s (`reason: "station_idle"`, or the reason of a media close that was waiting): a lost end frame keeps no call. |
+| The agent's media state, checked 66 s after the answer and every 5 s after that (a view: every 5 s) | An answered call whose leg is gone, or that the station holds while neither its media nor a non-idle station state is seen, ends with `reason: "media_closed"`. |
 | No change for 90 s while `ringing` | That call (`reason: "timeout"`). |
 
 The timer exists only while a call is live or ended less than 60 s ago; an
@@ -165,19 +202,33 @@ Capabilities report `api_version: "2"` and `capabilities.outdoor_units: true`,
 ```json
 {
   "ok": true,
-  "default_unit": "20_2",
+  "default_unit": "20",
   "archive": "ok",
   "units": [
-    {"id": "20_2", "where": "20#2", "action_where": "20", "lock_where": "20",
-     "name": "Gate", "source": "archive", "default": true},
+    {"id": "20", "where": "20#2", "action_where": "20", "lock_where": "20",
+     "name": "Gate", "source": "archive", "default": true,
+     "door": {"state": "closed", "age_ms": 5300}},
     {"id": "21", "where": "21", "action_where": "21", "lock_where": "21",
-     "name": "", "source": "seen", "default": false}
+     "name": "", "source": "seen", "default": false, "door": null}
   ]
 }
 ```
 
 `archive`: `ok`, `empty`, `missing` or `unreadable`. `name` is empty when the
 station has none.
+
+`door`: `null` for a unit without a door contact, else its state (`open`,
+`closed`, `null` while no door frame came since the agent started) and
+`age_ms` since its last change (`null` with it). bt_vct sends
+`*8*66*<where>##` when a unit's door opens and `*8*65*<where>##` when it
+closes, only from a unit wired with a contact; `<where>` is the plain
+address, built like the caller frame's (`20`, `21`). A frame maps to its unit
+like a caller frame: the default unit by its plain or its qualified address,
+an unknown address adds a `seen` unit. Once a door frame of a unit was seen
+the unit has a contact, kept across agent restarts in `outdoor-units-doors`
+next to the agent's configuration; the station has no query for the state,
+so it is unknown after a restart until the next frame. Same frame and sender
+(bt_vct) on 1.7.19, 2.0.2, 3.0.6 and C100X 1.5.8.
 
 ### `GET /api/v1/calls`
 
@@ -186,6 +237,8 @@ station has none.
   "ok": true,
   "boot_id": "8f3a1c2e",
   "current_call_id": "8f3a1c2e-7",
+  "caller_frames_ignored": 0,
+  "station_state": {"code": 2, "state": "ringing", "age_ms": 1150},
   "calls": [
     {"call_id": "8f3a1c2e-7", "kind": "ring", "state": "ringing",
      "unit": "21", "attribution": "caller_frame", "answered_by": null,
@@ -195,6 +248,8 @@ station has none.
 ```
 
 Lists live calls and calls ended in the last 60 s, newest first, at most 8.
+`station_state`: see Station call state; `null` until the station sent or
+answered one.
 
 ### `POST /api/v1/calls/{call_id}/actions/answer`, `.../hangup`
 
@@ -223,12 +278,15 @@ locks that are not outdoor units.
 it the unit is the current call's, else the default unit. A ring call always
 shows the calling unit; the station switches the picture itself.
 
-On-demand video of a unit other than the default one (phase D) is **not yet
-supported**: it answers `409 unit_video_unsupported`. Later, with its own
-concept that includes how the card handles several units' video. Design note: the
-request's `unit` (and an RTSP `?unit=<unit_id>` for a stream started by
-`PLAY`) selects the SDP `a=DEVADDR:<action_where>` of that one session instead
-of `video.sip.devaddr`; a running view of another unit is stopped first.
+On demand, the request's `unit` selects the INVITE's `a=DEVADDR`: the default
+unit keeps `video.sip.devaddr`; any other unit sends its full `where`
+verbatim (`21`, `20#2`), which bt_answering_machine turns into
+`*8*4#1<own>*<DEVADDR>##` when it starts with `2` and its number before `#`
+is below 96 (else `409 unit_video_unsupported`). A running view of another
+unit is stopped first (BYE, on-demand GOP cache dropped), then the parked
+RTSP clients get the new unit's INVITE; the view frame
+`*8*1#5#4#<where>*<own>##` attributes the view call to that unit. The
+selection stays for later streams until the next activation.
 
 ### Errors
 
@@ -236,7 +294,7 @@ of `video.sip.devaddr`; a running view of another unit is stopped first.
 | --- | --- | --- |
 | `409` | `call_not_current` | The `call_id` is unknown (also from an earlier boot), ended, or not the current call; for unlock: not that unit's call or ended more than 60 s ago. The body carries `current_call_id` (or `null`). Nothing is sent to the station. |
 | `404` | `unknown_unit` | No unit with that id. |
-| `409` | `unit_video_unsupported` | On-demand video of a non-default unit. |
+| `409` | `unit_video_unsupported` | On-demand video of a unit whose address the station does not view (not `2…`, or 96 and above before `#`). |
 | `400` | `invalid_call_id` | Empty or longer than 32 characters. |
 
 ### Events
@@ -250,6 +308,8 @@ All carry the 2.x envelope (`event_id`, `type`, `occurred_at`, `data`).
 | `call.answered` | `call_id`, `unit`, `answered_by` |
 | `call.view_started` | `call_id`, `unit` (a view frame `*8*1#5#4#<where>*…##` opened a view) |
 | `call.ended` | `call_id`, `unit`, `kind`, `reason` |
+| `station.call_state` | `code`, `state` (see Station call state; `null` for a code without a proven meaning), on every change |
+| `door.opened`, `door.closed` | `unit`, `where`, `raw`; on a change of the unit's door state. The first door frame of a unit also sends `outdoor_units.changed`. |
 | `doorbell.view_requested` | adds `call_id` and `unit` when the frame names the unit |
 | `door_unlock.started`, `door_unlock.ended` | add `unit` when the address is a unit's lock, and `call_id` of its live call |
 | `outdoor_units.changed` | `count`; Home Assistant reads `GET /api/v1/outdoor-units` again |

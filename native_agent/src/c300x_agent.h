@@ -20,8 +20,8 @@
 #define C300X_MAX_ACTIVATION_TYPE_LEN 24
 #define C300X_MAX_ACTIVATION_ADDRESS_MODE_LEN 8
 #define C300X_MAX_ACTIVATIONS 16
-#define C300X_MAX_ACTIVATION_DISCOVERY_ROOTS 4
-#define C300X_MAX_DISCOVERED_ACTIVATIONS 16
+/* The station's locks and actuators (16 each) and its stair light. */
+#define C300X_MAX_DISCOVERED_ACTIVATIONS 33
 #define C300X_MAX_FRAME_LEN 256
 #define C300X_MAX_ERROR_LEN 256
 #define C300X_MAX_PATH_LEN 256
@@ -66,9 +66,8 @@ struct c300x_config {
     int lock_release_delay_ms;
     int activations_enabled;
     int activations_auto_discover;
-    int activation_discovery_root_count;
-    char activation_discovery_roots[C300X_MAX_ACTIVATION_DISCOVERY_ROOTS][C300X_MAX_PATH_LEN];
     int activations_count;
+    int activations_migrated; /* the loaded file named an actuator "light": save it once */
     struct c300x_activation activations[C300X_MAX_ACTIVATIONS];
     int maintenance_enabled;
     int maintenance_ssh_start_enabled;

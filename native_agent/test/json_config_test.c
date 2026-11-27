@@ -176,12 +176,25 @@ int main(int argc, char **argv)
         assert(c300x_config_set_activation_items_json(config,
             "[{\"id\":\"a\",\"name\":\"A\",\"type\":\"lock\",\"pressCommand\":\"*1*1*11##\"}]",
             set_error_text, sizeof(set_error_text)));
+        /* The API takes the actuator type only; "light" is migrated in the
+         * agent's own file, never accepted from a request. */
+        assert(!c300x_config_set_activation_items_json(config,
+            "[{\"id\":\"gate\",\"name\":\"Gate\",\"type\":\"light\",\"address\":\"25\"}]",
+            set_error_text, sizeof(set_error_text)));
+        assert(strcmp(set_error_text, "activations item type is invalid") == 0);
+        assert(c300x_config_set_activation_items_json(config,
+            "[{\"id\":\"gate\",\"name\":\"Gate\",\"type\":\"actuator\",\"address\":\"25\"}]",
+            set_error_text, sizeof(set_error_text)));
+        assert(strcmp(config->activations[0].type, "actuator") == 0 && !config->activations_migrated);
+        assert(!c300x_config_set_activation_items_json(config,
+            "[{\"id\":\"gate\",\"name\":\"Gate\",\"type\":\"actuator\"}]",
+            set_error_text, sizeof(set_error_text)));
         c300x_default_config(config);
     }
     const char *activation = "{\"id\":\"command-only\",\"name\":\"Custom\",\"pressCommand\":\"*1*1*11##\"}";
     char activation_error[256];
     assert(parse_activation_item(activation, activation + strlen(activation),
-                                &config->activations[0], activation_error, sizeof(activation_error)));
+                                &config->activations[0], NULL, activation_error, sizeof(activation_error)));
     config->activations_count = 1;
     snprintf(config->config_path, sizeof(config->config_path), "%s/config.json", argv[1]);
     snprintf(config->api_token, sizeof(config->api_token), "synthetic-api");

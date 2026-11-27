@@ -4,6 +4,7 @@
 #include <stddef.h>
 
 #include "call_table.h"
+#include "door_contact.h"
 #include "http_request.h"
 #include "outdoor_units.h"
 
@@ -33,7 +34,10 @@ struct c300x_call_hub {
     struct c300x_unlock_resolved unlock;
     int stopping; /* HA's hang-up or stop runs in its handler right now */
     char seen_path[C300X_UNIT_PATH_LEN]; /* empty: seen units are not kept */
+    struct c300x_door_contacts doors;
+    char doors_path[C300X_UNIT_PATH_LEN]; /* empty: door contacts are not kept */
     int seen_loaded;
+    int station_asked; /* the station was asked for its call state */
 };
 
 void c300x_call_hub_init(struct c300x_call_hub *hub, const struct c300x_config *config,

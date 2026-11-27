@@ -247,6 +247,14 @@ int main(int argc, char **argv)
         return 0;
     }
 
+    /* Actuators the file still names "light" are written as "actuator", once. */
+    if (config.activations_migrated) {
+        int changed = 0;
+        if (!c300x_save_config_if_changed(&config, error, sizeof(error), &changed)) {
+            fprintf(stderr, "warning: config_migration_not_saved: %s\n", error);
+        }
+    }
+
     /* Patch subprocesses must use this listener, including custom --config paths. */
     char ui_port[6];
     snprintf(ui_port, sizeof(ui_port), "%u", (unsigned)config.ui_port);

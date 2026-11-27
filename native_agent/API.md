@@ -204,7 +204,7 @@ for example `config_error`, `api_token_missing`, `api_bind_failed`,
 | `GET` | `/api/v1/events/subscriptions` | API | None. |
 | `POST` | `/api/v1/events/subscriptions` | API | Adds or replaces a runtime event subscription. |
 | `DELETE` | `/api/v1/events/subscriptions/{id}` | API | Removes a runtime event subscription. |
-| `POST` | `/api/v1/stair-light/actions/activate` | API | Sends one OpenWebNet stair-light command. |
+| `POST` | `/api/v1/stair-light/actions/activate` | API | Presses the stair light and releases it 100 ms later. |
 | `POST` | `/api/v1/locks/{id}/actions/unlock` | API | Sends one configured lock command. |
 | `GET` | `/api/v1/activations` | API | None. |
 | `POST` | `/api/v1/activations/{id}/actions/run` | API | Runs one configured activation. |
@@ -235,7 +235,7 @@ for example `config_error`, `api_token_missing`, `api_bind_failed`,
 | `GET`, `POST` | `/api/v1/video/picture` | API | GET reads brightness, contrast and saturation; POST changes one of them on the active video source. |
 | `GET` | `/api/v1/calls/doorbell` | API | None. |
 | `GET` | `/api/v1/calls/doorbell/status` | API | None. |
-| `GET` | `/api/v1/calls` | API | None. |
+| `GET` | `/api/v1/calls` | API | Asks the station for its call state (`*#8**35##`) once, while none was seen since the agent started. |
 | `POST` | `/api/v1/calls/{call_id}/actions/answer` | API | Answers the current ring call locally. |
 | `POST` | `/api/v1/calls/{call_id}/actions/hangup` | API | Hangs up the current ring call or stops the current view. |
 | `GET` | `/api/v1/outdoor-units` | API | None (reads the station's archive on every request). |
@@ -680,13 +680,28 @@ every device or firmware version.
 
 Authentication: normal API token.
 
-Side effects: sends a stair-light OpenWebNet command.
+Side effects: sends `*8*21*<address>##` and, 100 ms later on the same bus
+session, `*8*22*<address>##`, as the station's display does (its stair-light
+release timer is 100 ms on 1.7.19, 2.0.2, 3.0.6 and the C100X 1.5.8). An agent
+stop during the 100 ms finishes the exchange; nothing is stored, so a restart
+or reboot leaves no state behind.
 
-Request fields:
+Request fields: `address`, optional. Without it the light is at
+`device.stairLightDefaultAddress` when that is set, else at the station's own
+address from `conf.xml` (`vdes/communication` `dev` + `address`, outside
+`p_default`): `11` on a station with dev 1 and address 1, where its display
+sends `*8*21*11##`. That file has this block on 1.7.19, 2.0.2, 3.0.6 and the
+C100X 1.5.8.
 
 ```json
-{"address": "10"}
+{"address": "11"}
 ```
+
+Response: `{"ok": true, "address": "11"}`. `400 invalid_stair_light_address`
+for an address that is not digits and `#` (or not a string);
+`503 stair_light_address_unknown` without an address, a configured default and
+a readable own address in `conf.xml`; a bus error answers `502` with the
+OpenWebNet error.
 
 ### `POST /api/v1/locks/{id}/actions/unlock`
 
@@ -703,10 +718,60 @@ Authentication: normal API token.
 
 Side effects: none.
 
-Returns configured activation items. Activation items use `addressMode:
-"manual"` when the configured `address` contains the OpenWebNet `where` value.
-`addressMode: "auto"` is reserved for read-only device discovery; auto items
-without a discovered address or explicit command are returned as non-executable.
+Returns the configured activation items and the ones the station itself
+knows. The station's files are read again on every request.
+
+```json
+{
+  "ok": true,
+  "enabled": true,
+  "supported": true,
+  "auto_discover": true,
+  "station": "ok",
+  "count": 3,
+  "items": [
+    {"id": "gate", "name": "Gate", "type": "actuator", "addressMode": "manual",
+     "address": "25", "source": "config", "executable": true, "unit": null},
+    {"id": "station_lock_21", "name": "Garden lock", "type": "lock", "addressMode": "manual",
+     "address": "21", "source": "station", "executable": true, "unit": "21"},
+    {"id": "station_stair_light", "name": "Stairs", "type": "stair_light", "addressMode": "manual",
+     "address": "11", "source": "station", "executable": true, "unit": null}
+  ]
+}
+```
+
+- `enabled`: `activations.enabled`. Off: no items, `count` 0, and running one
+  answers `404 activations_disabled`.
+- `auto_discover`: `activations.autoDiscover`, whether the station's items are
+  listed. `station` is the state of the station's `archive.xml`: `ok`, `empty`
+  (no outdoor unit, lock, actuator or stair light in it), `missing` or
+  `unreadable`; `null` while station items are off.
+- `supported`: at least one item. `count`: the number of items.
+- Items: the configured ones first (`source: "config"`, in their configured
+  order), then the station's (`source: "station"`). Every item has `id`,
+  `name`, `type` (`lock`, `actuator`, `stair_light`, `generic`, `scenario`,
+  or an unknown type of a configured item), `addressMode` (`manual` with the
+  OpenWebNet `where` in `address`; `auto` items without an address or command
+  are not executable), `address`, `executable` and `unit`: the id of the
+  outdoor unit (`GET /api/v1/outdoor-units`) whose door lock a `lock` item is,
+  `null` for any other item or a lock no unit has.
+
+The station's items, from `archive.xml` and `conf.xml`, as its display reads
+them (an `<ist>` attribute it lacks is its `<obj>`'s; the address is `dev` +
+`where`, `dev` 2 when empty):
+
+| Archive object | Item | `id` |
+| --- | --- | --- |
+| `<obj cid="10050">`, `<ist cid="10060">` with `dev` not 5 | `lock` of that outdoor unit; `dev` 5 is a cloud lock, not on the bus, and is left out | `station_lock_<address>` |
+| `<obj cid="3008">`, each `<ist>` | `actuator` | `station_actuator_<address>` |
+| `<obj cid="2009">` | `stair_light`, at `device.stairLightDefaultAddress` when set, else at the station's own address (`conf.xml` `vdes/communication` `dev` + `address`, `11` for 1 and 1); without either it is left out | `station_stair_light` |
+
+In an id, `#` of the address becomes `_`; an item whose id would be longer than
+32 characters is left out. Other objects (10051 cameras, 10052 and 10053
+intercoms, 10061, unknown ones) give no item. A configured item with the same
+id, or of the same type at the same address, hides the station's. The station's
+items are run like configured ones, by their id. Names are the archive's
+`descr`, else the object's, else a type name and the address.
 
 ### `POST /api/v1/activations/{id}/actions/run`
 
@@ -715,6 +780,26 @@ Authentication: normal API token.
 Side effects: runs one configured activation.
 
 The id is percent-decoded and bounded by `C300X_MAX_ACTIVATION_ID_LEN`.
+
+Activation types and their frames (an item's own `pressCommand` and
+`releaseCommand` take precedence):
+
+| `type` | Press | Release |
+| --- | --- | --- |
+| `lock` | `*8*19*<address>##` | `*8*20*<address>##` after `holdMs`, else `locks.releaseDelayMs` |
+| `actuator` | `*8*19*<address>##` | `*8*20*<address>##` after `holdMs`, else `locks.releaseDelayMs` |
+| `stair_light` | `*8*21*<address>##` | `*8*22*<address>##` after `holdMs`, else 100 ms |
+| `generic`, `scenario` | `pressCommand` | `releaseCommand`, if any |
+
+`actuator` is the station's generic actuator (AutomationVDE, shown as
+"Generic" on the display, archive object 3008): the display presses and
+releases it with the lock frames at its address `2N`. The type `light` no
+longer exists: the agent's configuration file's `light` items (which sent the
+stair-light frame) become `actuator` at the first start of this agent and the
+file is saved once; id, name and address stay as configured (an address `25`
+stays `25`). Requests that set activation items with `type: "light"` are
+refused (`invalid_activation_items`, detail `activations item type is
+invalid`).
 
 ## Device Feature State
 
@@ -1285,9 +1370,32 @@ Capabilities report `api_version: "2"`, `capabilities.outdoor_units` and
 `capabilities.calls`.
 
 - `GET /api/v1/outdoor-units`: the units (`id`, `where`, `action_where`,
-  `lock_where`, `name`, `source`, `default`), `default_unit` and `archive`.
+  `lock_where`, `name`, `source`, `default`, `door`), `default_unit` and
+  `archive`. `door` is `null` for a unit without a door contact, else
+  `{"state": "open"|"closed"|null, "age_ms": N|null}`: the state and the
+  time since its last change, `null` while no frame came since the agent
+  started. A unit has a door contact once a door frame of it was seen
+  (bt_vct: `*8*66*<where>##` opened, `*8*65*<where>##` closed, `<where>`
+  the plain unit address such as `20`; a frame of a unit not known yet adds
+  it as `seen`); the agent keeps that in `outdoor-units-doors` next to its
+  configuration. The station has no query for the state. `500
+  out_of_memory` when the agent cannot allocate the answer.
 - `GET /api/v1/calls`: `boot_id` (drawn at agent start), `current_call_id`,
-  `caller_frames_ignored` and live calls plus calls ended in the last 60 s.
+  `caller_frames_ignored`, `station_state` and live calls plus calls ended in
+  the last 60 s. `station_state` is the station's own call state from its
+  frame `*#8**35*<code>*0*0##` (`{"code", "state", "age_ms"}`), `null` until
+  one was seen; while none was seen the first request asks the station
+  (`*#8**35##`) once. `state` by `code`: `0` `idle`, `1` `setup` (a ring or
+  view is set up), `2` `ringing` (the ringtone plays), `3` `viewing` (a view
+  without a ring), `4` `waiting` (the ringtone is over, timed out or muted,
+  and the call still waits), `6` `conversation`, `7` `answering_machine`
+  (it took the call), `8` `greeting`, `9` `recording`; any other code has
+  `state: null`. A ringing call is answered when the station reports `6`
+  (`answered_by` `ha` while Home Assistant answered the ring leg, else
+  `station`) or `7` (`answering_machine`). A call the station holds stays
+  live while its state is not `idle`; once it is `idle`, a call that was live
+  then and that nothing else ended within 1.5 s ends with
+  `reason: "station_idle"`.
 - `POST /api/v1/calls/{call_id}/actions/answer`, `.../hangup`: answer or hang
   up the current call: the live ring call, else the live on-demand view, which
   a hang-up stops (an answer of a view gets `409 call_not_ringing`). A call id
@@ -1298,13 +1406,25 @@ Capabilities report `api_version: "2"`, `capabilities.outdoor_units` and
   `current`; optional body `{"call_id": "..."}`, which must be a call of that
   unit, live or ended less than 60 s ago (else `409 call_not_current`).
   `404 unknown_unit` for an unknown unit.
-- `POST /api/v1/video/doorbell/actions/activate` takes an optional `unit`;
-  on-demand video of a unit other than the default one answers
-  `409 unit_video_unsupported`.
+- `POST /api/v1/video/doorbell/actions/activate` takes an optional `unit`
+  (without it: the current call's unit, else the default unit). During a ring
+  the ring's video is shown whatever unit is asked (`ring_active: true`). On
+  demand, the INVITE's `a=DEVADDR` names the unit: `video.sip.devaddr` for the
+  default unit, as before, the unit's full address (`where`, verbatim, e.g.
+  `21` or `20#2`) for any other. The station's bt_answering_machine sends a
+  view for a DEVADDR that starts with `2` and whose number before `#` is below
+  96 (`*8*4#1<own>*<DEVADDR>##`); another unit gets
+  `409 unit_video_unsupported`. A running view of another unit ends first
+  (BYE, its cached frames dropped, `doorbell.media.closed`, the view call
+  ends); the RTSP clients stay connected and get the new unit's view. The unit
+  stays selected for later streams until the next activation.
 
 Events: `doorbell.pressed` carries `call_id`, `unit` and `attribution`; new are
-`call.caller_identified`, `call.answered`, `call.view_started`, `call.ended`
-and `outdoor_units.changed`; `door_unlock.*` and `doorbell.view_requested`
+`call.caller_identified`, `call.answered`, `call.view_started`, `call.ended`,
+`station.call_state` (`code`, `state` as above, on every change),
+`door.opened` and `door.closed` (`unit`, `where`, `raw`; on a change of the
+unit's door state, the first frame of a unit also sends
+`outdoor_units.changed`) and `outdoor_units.changed`; `door_unlock.*` and `doorbell.view_requested`
 carry `unit` and `call_id` when they belong to a unit.
 
 ### `POST /api/v1/calls/doorbell/actions/capture`
@@ -1508,7 +1628,7 @@ Common request fields:
   "mdnsEnabled": true,
   "firewallEnabled": true,
   "ipv6FirewallEnabled": true,
-  "stairLightDefaultAddress": "10"
+  "stairLightDefaultAddress": "11"
 }
 ```
 

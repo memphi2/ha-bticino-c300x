@@ -17,19 +17,20 @@ WRAPPED = (
     "c300x_device_media_start", "c300x_device_media_stop",
     "c300x_audio_codec_device_is_pcmu", "c300x_monotonic_ms",
     "dlopen", "dlsym", "dlclose", "bind", "c300x_mqtt_publish_event",
-    "c300x_video_bridge_station_busy",
+    "c300x_video_bridge_station_busy", "c300x_media_gop_reset", "c300x_media_sip_send_bye",
 )
 CASES = {
     "display_answer": 0, "display_answer_end_lost": 1, "unanswered": 0, "ha_answer": 0, "two_units": 0,
     "lifecycle_unanswered": 0, "lifecycle_ha_answer_ha_hangup": 0,
     "lifecycle_station_answer_station_hangup": 0, "lifecycle_ha_answer_station_hangup": 0,
-    "lifecycle_ondemand_view": 1, "refused_answer_then_station": 0,
+    "lifecycle_ondemand_view": 1, "ondemand_units": 4, "refused_answer_then_station": 0,
     "call_id_lengths": 0, "boot_id_at_start": 0,
     "display_answer_without_preview": 0, "app_answer_end_frame_first": 0,
     "display_answer_end_lost_call": 0, "answer_before_caller": 0,
     "abandoned_answer_then_station": 0, "view_is_current": 1,
     "station_busy_bus_end": 2, "station_busy_timeout": 2,
     "station_freed_before_486": 2, "station_freed_after_486": 2,
+    "door_contacts": 0,
 }
 
 

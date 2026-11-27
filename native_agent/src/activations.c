@@ -12,8 +12,26 @@ int c300x_activation_is_executable(const struct c300x_activation *activation)
         return 0;
     }
     return strcmp(activation->type, "lock") == 0
-        || strcmp(activation->type, "light") == 0
+        || strcmp(activation->type, "actuator") == 0
         || strcmp(activation->type, "stair_light") == 0;
+}
+
+void c300x_stair_light_commands(const char *where, char *press, size_t press_len, char *release,
+                                size_t release_len)
+{
+    snprintf(press, press_len, "*8*21*%s##", where);
+    snprintf(release, release_len, "*8*22*%s##", where);
+}
+
+int c300x_activation_hold_ms(const struct c300x_activation *activation, int lock_release_delay_ms)
+{
+    if (activation->hold_ms > 0) {
+        return activation->hold_ms;
+    }
+    if (strcmp(activation->type, "stair_light") == 0) {
+        return C300X_STAIR_LIGHT_RELEASE_MS;
+    }
+    return lock_release_delay_ms;
 }
 
 void c300x_activation_press_release_commands(
@@ -36,10 +54,12 @@ void c300x_activation_press_release_commands(
     if (activation->address[0] == '\0') {
         return;
     }
-    if (strcmp(activation->type, "lock") == 0) {
+    /* An actuator (AutomationVDE, the display's "Generic") is pressed and
+     * released with the lock frames at its address 2N. */
+    if (strcmp(activation->type, "lock") == 0 || strcmp(activation->type, "actuator") == 0) {
         snprintf(press, press_len, "*8*19*%s##", activation->address);
         snprintf(release, release_len, "*8*20*%s##", activation->address);
-    } else if (strcmp(activation->type, "light") == 0 || strcmp(activation->type, "stair_light") == 0) {
-        snprintf(press, press_len, "*8*21*%s##", activation->address);
+    } else if (strcmp(activation->type, "stair_light") == 0) {
+        c300x_stair_light_commands(activation->address, press, press_len, release, release_len);
     }
 }

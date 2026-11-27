@@ -128,7 +128,8 @@ def test_native_agent_blocks_ha_video_when_external_media_is_active() -> None:
     )
     # The media actions of API requests run beside the HTTP loop.
     media_actions = (ROOT / "native_agent" / "src" / "http_media_actions.c").read_text(encoding="utf-8")
-    assert 'http_status = strcmp(error, "external_session_active") == 0 ? 409 : 503' in media_actions
+    assert 'int conflict = strcmp(error, "external_session_active") == 0;' in media_actions
+    assert 'conflict ? 409 : 503' in media_actions
     assert 'strcmp(request->path, "/ui/media-closed") == 0' in http
     # The GUI call-end hook only wakes display pages; HA media ends come from
     # the bus, SIP and stream stops (it also fires when HA answers a ring).

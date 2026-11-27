@@ -1,6 +1,7 @@
 #include "http_calls.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "c300x_agent.h"
@@ -19,15 +20,15 @@
 #define REQUEST_CALL_ID_LEN ((int)sizeof(((struct c300x_unlock_resolved *)0)->call_id))
 #define UNITS_PREFIX "/api/v1/outdoor-units/"
 
-/* Units the agent saw are written where its configuration is. */
-static void seen_path(struct c300x_call_hub *hub, const struct c300x_config *config)
+/* The units the agent saw, and those with a door contact, are written
+ * where its configuration is. */
+static void state_path(const struct c300x_config *config, const char *name, char *out, size_t out_len)
 {
     const char *slash = config != NULL ? strrchr(config->config_path, '/') : NULL;
 
-    hub->seen_path[0] = '\0';
-    if (slash != NULL && (size_t)(slash - config->config_path) + sizeof("/outdoor-units-seen") < sizeof(hub->seen_path)) {
-        snprintf(hub->seen_path, sizeof(hub->seen_path), "%.*s/outdoor-units-seen",
-                 (int)(slash - config->config_path), config->config_path);
+    out[0] = '\0';
+    if (slash != NULL && (size_t)(slash - config->config_path) + strlen(name) + 2 <= out_len) {
+        snprintf(out, out_len, "%.*s/%s", (int)(slash - config->config_path), config->config_path, name);
     }
 }
 
@@ -52,7 +53,8 @@ void c300x_call_hub_init(struct c300x_call_hub *hub, const struct c300x_config *
     hub->emit = emit;
     hub->context = context;
     hub->sink = (struct c300x_call_sink){hub_emit, hub, &hub->units};
-    seen_path(hub, config);
+    state_path(config, "outdoor-units-seen", hub->seen_path, sizeof(hub->seen_path));
+    state_path(config, "outdoor-units-doors", hub->doors_path, sizeof(hub->doors_path));
 }
 
 void c300x_call_hub_bind(struct c300x_call_hub *hub, struct c300x_video *const *video,
@@ -69,11 +71,13 @@ static void load_units(struct c300x_call_hub *hub)
         c300x_outdoor_units_load(&hub->units, C300X_ARCHIVE_XML_PATH, C300X_CONF_XML_PATH,
                                  hub->config->video_sip_devaddr, hub->config->lock_address);
     } else if (!hub->units.loaded) {
-        c300x_outdoor_units_build(&hub->units, NULL, "missing", NULL, "20", "20");
+        static const struct c300x_station_archive nothing;
+        c300x_outdoor_units_build(&hub->units, &nothing, "missing", "20", "20");
     }
     if (!hub->seen_loaded) {
         hub->seen_loaded = 1;
         c300x_outdoor_units_load_seen(&hub->units, hub->seen_path);
+        c300x_door_contacts_load(&hub->doors, hub->doors_path);
     }
 }
 
@@ -98,8 +102,45 @@ static void media_state(const struct c300x_call_hub *hub, struct c300x_call_medi
     }
 }
 
+/* *8*65/66*<where>##: the door of that unit closed or opened. */
+static void door_frame(struct c300x_call_hub *hub, const char *frame, const char *where, int open)
+{
+    int changed = 0;
+    int index = c300x_outdoor_units_note_caller(&hub->units, where, &changed);
+    const struct c300x_outdoor_unit *unit = index >= 0 ? &hub->units.items[index] : NULL;
+    int result = unit != NULL ? c300x_door_contacts_note(&hub->doors, unit->id, open, c300x_monotonic_ms()) : -1;
+    char data[160];
+
+    if (result == 2) {
+        (void)c300x_door_contacts_save(&hub->doors, hub->doors_path);
+    }
+    if (changed || result == 2) {
+        snprintf(data, sizeof(data), "{\"count\":%d}", hub->units.count);
+        hub_emit(hub, "outdoor_units.changed", data);
+    }
+    if (result > 0) {
+        /* frame and where are bus digits, '#' and '*' only. */
+        snprintf(data, sizeof(data), "{\"unit\":\"%s\",\"where\":\"%s\",\"raw\":\"%s\"}", unit->id, where, frame);
+        hub_emit(hub, open ? "door.opened" : "door.closed", data);
+    }
+}
+
 void c300x_call_hub_frame(struct c300x_call_hub *hub, const char *frame)
 {
+    struct c300x_call_media media;
+    char where[C300X_UNIT_WHERE_LEN];
+    int code, open;
+
+    if (hub != NULL && c300x_door_frame_parse(frame, &open, where, sizeof(where))) {
+        if (!hub->units.loaded) load_units(hub);
+        door_frame(hub, frame, where, open);
+        return;
+    }
+    if (hub != NULL && c300x_station_state_parse(frame, &code)) {
+        media_state(hub, &media);
+        c300x_calls_station(&hub->calls, &hub->sink, &media, code, c300x_monotonic_ms());
+        return;
+    }
     if (hub == NULL || frame == NULL || strncmp(frame, "*8*", 3) != 0) {
         return;
     }
@@ -250,7 +291,7 @@ static int stop_view(int client_fd, const struct c300x_call_routes *routes)
         c300x_video_stop(routes->video);
     } else {
         enum c300x_video_control_state state = c300x_video_control_run(
-            routes->control, routes->video, C300X_VIDEO_CONTROL_STOP, 0, &result, &error);
+            routes->control, routes->video, C300X_VIDEO_CONTROL_STOP, 0, NULL, &result, &error);
         if (state == C300X_VIDEO_CONTROL_DEFERRED) {
             return 0;
         }
@@ -373,6 +414,32 @@ static void unlock(int client_fd, const struct c300x_call_routes *routes, const 
     c300x_http_send_json(client_fd, 200, "OK", body);
 }
 
+/* The station's call state is sent on changes only: once, while none was
+ * seen since the agent started, the station is asked. Zero: the request
+ * runs again with the answer. */
+static int ask_station_state(const struct c300x_call_routes *routes)
+{
+    struct c300x_call_hub *hub = routes->hub;
+    int owns = routes->openwebnet != NULL && c300x_openwebnet_async_owns(routes->openwebnet);
+    char reply[64], error[C300X_MAX_ERROR_LEN];
+    struct c300x_call_media media;
+    int code;
+
+    /* Once its query is out, only its answer ends the request. */
+    if (!owns && (hub->station_asked || hub->config == NULL
+                  || hub->calls.station_state != C300X_STATION_STATE_UNKNOWN)) {
+        return 1;
+    }
+    if (!c300x_openwebnet_send(hub->config, "*#8**35##", reply, sizeof(reply), error, sizeof(error))) {
+        if (c300x_openwebnet_deferred()) return 0;
+    } else if (c300x_station_state_parse(reply, &code) && hub->calls.station_state == C300X_STATION_STATE_UNKNOWN) {
+        media_state(hub, &media);
+        c300x_calls_station(&hub->calls, &hub->sink, &media, code, c300x_monotonic_ms());
+    }
+    hub->station_asked = 1;
+    return 1;
+}
+
 /* The segment of path after prefix up to suffix, which ends the path. */
 static int path_segment(const char *path, const char *prefix, const char *suffix, char *out, size_t out_len)
 {
@@ -399,20 +466,24 @@ static void video_activate(int client_fd, const struct c300x_call_routes *routes
     char unit_id[C300X_UNIT_WHERE_LEN] = "";
     struct c300x_call_hub *hub = routes->hub;
     int checked = c300x_json_string_field_checked(request->body, "unit", unit_id, sizeof(unit_id));
-    int index = checked > 0 ? unit_index(hub, unit_id) : hub->units.default_index;
+    /* Without a unit: the current call's, else the default. */
+    int index = unit_index(hub, checked > 0 ? unit_id : "current");
     const struct c300x_call *call = c300x_calls_current(&hub->calls);
 
     if (checked < 0 || index < 0) {
         c300x_http_send_json(client_fd, 404, "Not Found", "{\"ok\":false,\"error\":\"unknown_unit\"}\n");
         return;
     }
-    /* A ring always shows its caller; on demand only the default unit (phase D). */
-    if (index != hub->units.default_index
-        && (call == NULL || strcmp(call->unit, hub->units.items[index].id) != 0)) {
+    /* A ring shows its caller whatever unit is asked. On demand the default
+     * unit is the configured DEVADDR, as before; another unit's DEVADDR is
+     * its full address, which the station takes verbatim. */
+    const char *where = hub->units.items[index].where;
+    if (index != hub->units.default_index && call == NULL && !c300x_media_devaddr_valid(where)) {
         c300x_http_send_json(client_fd, 409, "Conflict", "{\"ok\":false,\"error\":\"unit_video_unsupported\"}\n");
         return;
     }
-    c300x_http_doorbell_video_activate(client_fd, routes->control, routes->video, request);
+    c300x_http_doorbell_video_activate(client_fd, routes->control, routes->video, request,
+                                       index != hub->units.default_index ? where : NULL);
 }
 
 int c300x_http_calls_route(int client_fd, const struct c300x_call_routes *routes, const struct request *request)
@@ -424,15 +495,21 @@ int c300x_http_calls_route(int client_fd, const struct c300x_call_routes *routes
     int post = strcmp(request->method, "POST") == 0;
 
     if (strcmp(request->path, "/api/v1/outdoor-units") == 0 && get) {
+        char *units = malloc(C300X_OUTDOOR_UNITS_JSON_SIZE);
         load_units(hub);
-        if (!c300x_outdoor_units_json(&hub->units, body, sizeof(body))) {
-            c300x_copy_string(body, sizeof(body), "{\"ok\":false,\"error\":\"response_too_large\"}\n");
+        /* Sized for the worst case: a unit list that does not fit is a bug. */
+        if (units == NULL || !c300x_outdoor_units_json(&hub->units, &hub->doors, c300x_monotonic_ms(), units,
+                                                       C300X_OUTDOOR_UNITS_JSON_SIZE)) {
+            c300x_http_send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"out_of_memory\"}\n");
+        } else {
+            c300x_http_send_json(client_fd, 200, "OK", units);
         }
-        c300x_http_send_json(client_fd, 200, "OK", body);
+        free(units);
         return 1;
     }
     if (strcmp(request->path, "/api/v1/calls") == 0 && get) {
         if (!hub->units.loaded) load_units(hub);
+        if (!ask_station_state(routes)) return 1;
         tick(hub);
         if (!c300x_calls_json(&hub->calls, c300x_monotonic_ms(), body, sizeof(body))) {
             c300x_copy_string(body, sizeof(body), "{\"ok\":false,\"error\":\"response_too_large\"}\n");

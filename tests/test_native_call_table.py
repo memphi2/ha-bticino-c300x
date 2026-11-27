@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 NATIVE = Path(__file__).resolve().parents[1] / "native_agent"
-SOURCES = ("call_table.c", "outdoor_units.c", "json_util.c", "json_parse.c", "string_util.c", "file_io.c", "sha256.c")
+SOURCES = ("call_table.c", "outdoor_units.c", "station_archive.c", "activation_discovery.c", "activations.c", "station_state.c", "door_contact.c", "json_util.c", "json_parse.c", "string_util.c", "file_io.c", "sha256.c")
 CASES = (
     "single_unit_capture",
     "unanswered_capture",
@@ -28,6 +28,11 @@ CASES = (
     "timeouts_and_json",
     "plain_address_is_the_qualified_unit",
     "seen_units_survive_restart",
+    "archive_objects_by_cid",
+    "default_unit_keeps_its_id",
+    "station_activations",
+    "station_states",
+    "door_contacts",
 )
 
 

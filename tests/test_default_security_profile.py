@@ -36,11 +36,8 @@ def test_sample_config_is_bootstrap_only_and_does_not_enable_heavy_paths() -> No
     assert config["maintenance"]["ipv6Firewall"]["enabled"] is False
     assert config["activations"]["enabled"] is True
     assert config["activations"]["autoDiscover"] is True
-    assert config["activations"]["discoveryRoots"] == [
-        "/home/bticino/cfg/extra/47",
-        "/home/bticino/cfg/extra",
-        "/home/bticino/cfg",
-    ]
+    assert "discoveryRoots" not in config["activations"]
+    assert config["device"]["stairLightDefaultAddress"] == ""
     assert config["activations"]["items"] == []
     assert config["video"]["enabled"] is False
     assert config["video"]["sip"]["from"] == "webrtc"

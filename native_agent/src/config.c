@@ -70,7 +70,7 @@ static int activation_id_is_valid(const char *value)
 static int activation_type_is_valid(const char *value)
 {
     return strcmp(value, "lock") == 0
-        || strcmp(value, "light") == 0
+        || strcmp(value, "actuator") == 0
         || strcmp(value, "stair_light") == 0
         || strcmp(value, "generic") == 0
         || strcmp(value, "scenario") == 0
@@ -119,32 +119,13 @@ void c300x_default_config(struct c300x_config *config)
     safe_copy(config->openwebnet_host, sizeof(config->openwebnet_host), "127.0.0.1");
     config->openwebnet_port = 20000;
     config->openwebnet_timeout_ms = 3000;
-    safe_copy(
-        config->stair_light_default_address,
-        sizeof(config->stair_light_default_address),
-        "10"
-    );
+    /* Empty: the stair light is at the station's own address (conf.xml). */
+    config->stair_light_default_address[0] = '\0';
     safe_copy(config->lock_id, sizeof(config->lock_id), "default");
     safe_copy(config->lock_name, sizeof(config->lock_name), "Main door");
     safe_copy(config->lock_address, sizeof(config->lock_address), "20");
     config->lock_release_delay_ms = 2000;
     config->activations_auto_discover = 1;
-    config->activation_discovery_root_count = 3;
-    safe_copy(
-        config->activation_discovery_roots[0],
-        sizeof(config->activation_discovery_roots[0]),
-        "/home/bticino/cfg/extra/47"
-    );
-    safe_copy(
-        config->activation_discovery_roots[1],
-        sizeof(config->activation_discovery_roots[1]),
-        "/home/bticino/cfg/extra"
-    );
-    safe_copy(
-        config->activation_discovery_roots[2],
-        sizeof(config->activation_discovery_roots[2]),
-        "/home/bticino/cfg"
-    );
     config->maintenance_reboot_delay_ms = 500;
     config->maintenance_agent_remove_script[0] = '\0';
     config->maintenance_gui_reload_script[0] = '\0';
@@ -515,10 +496,13 @@ static const char *next_array_value(
     return after;
 }
 
+/* stored: the agent's own configuration file, whose "light" items (an
+ * actuator that sent the stair-light frame) become "actuator" once. */
 static int parse_activation_item(
     const char *item,
     const char *document_end,
     struct c300x_activation *activation,
+    int *migrated,
     char *error,
     size_t error_len
 )
@@ -548,8 +532,12 @@ static int parse_activation_item(
         return 0;
     }
     if (find_member(item, item_end, "type", &value)) {
-        if (!string_value(value, document_end, activation->type, sizeof(activation->type))
-            || !activation_type_is_valid(activation->type)) {
+        int read = string_value(value, document_end, activation->type, sizeof(activation->type));
+        if (read && migrated != NULL && strcmp(activation->type, "light") == 0) {
+            safe_copy(activation->type, sizeof(activation->type), "actuator");
+            *migrated = 1;
+        }
+        if (!read || !activation_type_is_valid(activation->type)) {
             set_error(error, error_len, "activations item type is invalid");
             return 0;
         }
@@ -590,54 +578,11 @@ static int parse_activation_item(
     return 1;
 }
 
-static int parse_activation_discovery_roots(
-    const char *value,
-    const char *document_end,
-    struct c300x_config *config,
-    char *error,
-    size_t error_len
-)
-{
-    const char *array_end;
-    const char *ptr;
-    const char *item;
-    const char *item_end;
-
-    if (!array_bounds(value, document_end, &array_end)) {
-        set_error(error, error_len, "activations.discoveryRoots must be an array");
-        return 0;
-    }
-    config->activation_discovery_root_count = 0;
-    ptr = skip_ws(value, array_end);
-    if (ptr < array_end && *ptr == '[') {
-        ptr++;
-    }
-    while ((ptr = next_array_value(ptr, array_end, &item, &item_end)) != NULL) {
-        char root[C300X_MAX_PATH_LEN];
-
-        (void)item_end;
-        if (config->activation_discovery_root_count >= C300X_MAX_ACTIVATION_DISCOVERY_ROOTS) {
-            set_error(error, error_len, "too many activation discovery roots configured");
-            return 0;
-        }
-        if (!string_value(item, document_end, root, sizeof(root)) || root[0] == '\0') {
-            set_error(error, error_len, "activations.discoveryRoots entries must be strings");
-            return 0;
-        }
-        safe_copy(
-            config->activation_discovery_roots[config->activation_discovery_root_count],
-            sizeof(config->activation_discovery_roots[config->activation_discovery_root_count]),
-            root
-        );
-        config->activation_discovery_root_count++;
-    }
-    return 1;
-}
-
 static int parse_activation_items_value(
     const char *value,
     const char *document_end,
     struct c300x_config *config,
+    int stored,
     char *error,
     size_t error_len
 )
@@ -666,6 +611,7 @@ static int parse_activation_items_value(
             item,
             document_end,
             &config->activations[config->activations_count],
+            stored ? &config->activations_migrated : NULL,
             error,
             error_len
         )) {
@@ -699,11 +645,11 @@ static int activation_items_valid(const struct c300x_config *config, char *error
             set_error(error, error_len, "lock activations need address, addressMode=auto or pressCommand");
             return 0;
         }
-        if ((strcmp(activation->type, "light") == 0 || strcmp(activation->type, "stair_light") == 0)
+        if ((strcmp(activation->type, "actuator") == 0 || strcmp(activation->type, "stair_light") == 0)
             && !has_address
             && !has_command
             && !auto_address) {
-            set_error(error, error_len, "light activations need address, addressMode=auto or pressCommand");
+            set_error(error, error_len, "actuator and stair_light activations need address, addressMode=auto or pressCommand");
             return 0;
         }
         if ((strcmp(activation->type, "generic") == 0 || strcmp(activation->type, "scenario") == 0)
@@ -739,6 +685,7 @@ int c300x_config_set_activation_items_json(
         items_json,
         document_end,
         config,
+        0,
         error,
         error_len
     )) {
@@ -943,17 +890,12 @@ int c300x_load_config(
             return 0;
         }
     }
-    if (nested_member(document, document_end, "activations", "discoveryRoots", &value)) {
-        if (!parse_activation_discovery_roots(value, document_end, config, error, error_len)) {
-            free(document);
-            return 0;
-        }
-    }
     if (nested_member(document, document_end, "activations", "items", &value)) {
         if (!parse_activation_items_value(
             value,
             document_end,
             config,
+            1,
             error,
             error_len
         )) {
@@ -1635,7 +1577,7 @@ int c300x_load_config(
     if (!c300x_config_listen_valid(config, error, error_len)) {
         return 0;
     }
-    if (!address_is_valid(config->stair_light_default_address)) {
+    if (config->stair_light_default_address[0] != '\0' && !address_is_valid(config->stair_light_default_address)) {
         set_error(error, error_len, "invalid default stair-light address");
         return 0;
     }
@@ -1757,19 +1699,6 @@ int c300x_load_config(
     if (config->activations_count < 0 || config->activations_count > C300X_MAX_ACTIVATIONS) {
         set_error(error, error_len, "activations.items exceeds native limit");
         return 0;
-    }
-    if (config->activation_discovery_root_count < 0
-        || config->activation_discovery_root_count > C300X_MAX_ACTIVATION_DISCOVERY_ROOTS) {
-        set_error(error, error_len, "activations.discoveryRoots exceeds native limit");
-        return 0;
-    }
-    if (config->activations_auto_discover) {
-        for (int index = 0; index < config->activation_discovery_root_count; index++) {
-            if (config->activation_discovery_roots[index][0] != '/') {
-                set_error(error, error_len, "activations.discoveryRoots entries must be absolute paths");
-                return 0;
-            }
-        }
     }
     if (!activation_items_valid(config, error, error_len)) {
         return 0;
@@ -1904,23 +1833,6 @@ static int activation_lists_equal(
     return 1;
 }
 
-static int activation_discovery_roots_equal(
-    const struct c300x_config *left,
-    const struct c300x_config *right
-)
-{
-    if (left->activations_auto_discover != right->activations_auto_discover
-        || left->activation_discovery_root_count != right->activation_discovery_root_count) {
-        return 0;
-    }
-    for (int index = 0; index < left->activation_discovery_root_count; index++) {
-        if (strcmp(left->activation_discovery_roots[index], right->activation_discovery_roots[index]) != 0) {
-            return 0;
-        }
-    }
-    return 1;
-}
-
 int c300x_config_persisted_equal(
     const struct c300x_config *left,
     const struct c300x_config *right
@@ -1947,7 +1859,7 @@ int c300x_config_persisted_equal(
         && C300X_EQ_STR(lock_address)
         && C300X_EQ_INT(lock_release_delay_ms)
         && activation_lists_equal(left, right)
-        && activation_discovery_roots_equal(left, right)
+        && C300X_EQ_INT(activations_auto_discover)
         && C300X_EQ_INT(maintenance_enabled)
         && C300X_EQ_INT(maintenance_ssh_start_enabled)
         && C300X_EQ_INT(maintenance_reboot_enabled)
@@ -2231,12 +2143,6 @@ static int save_config_internal(
     fprintf(file, "  \"activations\": {\n");
     fprintf(file, "    \"enabled\": %s,\n", config->activations_enabled ? "true" : "false");
     fprintf(file, "    \"autoDiscover\": %s,\n", config->activations_auto_discover ? "true" : "false");
-    fprintf(file, "    \"discoveryRoots\": [");
-    for (int index = 0; index < config->activation_discovery_root_count; index++) {
-        fprintf(file, "%s", index == 0 ? "" : ",");
-        write_json_string(file, config->activation_discovery_roots[index]);
-    }
-    fprintf(file, "],\n");
     fprintf(file, "    \"items\": [\n");
     for (int index = 0; index < config->activations_count; index++) {
         write_activation_item(

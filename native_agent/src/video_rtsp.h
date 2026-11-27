@@ -84,7 +84,9 @@ struct c300x_video *c300x_video_create(
 );
 void c300x_video_destroy(struct c300x_video *video);
 void c300x_video_set_ring_receiver_enabled(struct c300x_video *video, int enabled);
-int c300x_video_activate(struct c300x_video *video, int include_audio);
+/* devaddr: the outdoor unit to show (a=DEVADDR), NULL or "" for the
+ * configured default unit; a view of another unit ends first. */
+int c300x_video_activate(struct c300x_video *video, int include_audio, const char *devaddr);
 void c300x_video_stop(struct c300x_video *video);
 int c300x_video_doorbell_call_answer(struct c300x_video *video);
 void c300x_video_doorbell_call_hangup(struct c300x_video *video);

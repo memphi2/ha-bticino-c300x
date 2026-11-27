@@ -4,6 +4,7 @@
 #include <stddef.h>
 
 #include "outdoor_units.h"
+#include "station_state.h"
 
 #define C300X_MAX_CALLS 8
 #define C300X_CALL_ID_LEN 24
@@ -51,6 +52,9 @@ struct c300x_calls {
     unsigned long seq;
     struct c300x_call items[C300X_MAX_CALLS];
     unsigned long caller_frames_ignored;
+    int station_state;   /* *#8**35, C300X_STATION_STATE_UNKNOWN until one is seen */
+    long long station_ms;
+    long long idle_ms;   /* the station went idle then; -1 while it is not */
 };
 
 /* What the agent's media state says now. */
@@ -79,6 +83,12 @@ const struct c300x_call *c300x_calls_ring(struct c300x_calls *calls, const struc
 /* Caller and view frames: they name the unit of a call. */
 void c300x_calls_frame(struct c300x_calls *calls, const struct c300x_call_sink *sink,
                        const char *frame, long long now);
+/* The station's call state (*#8**35, repeats ignored): its conversation or
+ * its answering machine answers the ringing call; once it is idle, a call
+ * that was live then and that no media close ended within the settle time
+ * ends with station_idle. */
+void c300x_calls_station(struct c300x_calls *calls, const struct c300x_call_sink *sink,
+                         const struct c300x_call_media *media, int code, long long now);
 /* The ring was answered (doorbell.view_requested of the ring). */
 void c300x_calls_answer_seen(struct c300x_calls *calls, const struct c300x_call_sink *sink,
                              const struct c300x_call_media *media, long long now);

@@ -1,11 +1,11 @@
-import "./c300x-doorbell-call-card.js?v=2cf4087c2531195b";
+import "./c300x-doorbell-call-card.js?v=3bc9c19eee114e4b";
 
 const C300X_CARD_TAG = "c300x-doorbell-call-card";
 const C300X_CARD_TYPE = `custom:${C300X_CARD_TAG}`;
 const C300X_PLATFORM = "bticino_c300x";
 const C300X_CAMERA_OBJECT_ID = "bticino_c300x_doorbell_camera";
 const C300X_CAMERA_TRANSLATION_KEY = "doorbell_camera";
-const C300X_DOCUMENTATION_URL = "https://github.com/memphi2/ha-bticino-c300x#doorbell-video-ring-calls-and-talkback";
+const C300X_DOCUMENTATION_URL = "https://github.com/memphi2/ha-bticino-c300x/blob/main/docs/classe-300x/2-use.md#doorbell-card";
 
 const C300X_METADATA_TRANSLATIONS = {
   en: {

@@ -684,3 +684,25 @@ def test_the_quarantine_texts_name_the_controls_that_retry_the_pages():
         assert "pplying the Display patch" not in flat, name
         assert "the **Display patch** switch on" in flat, name
         assert "saving the display settings does not" in flat, name
+
+
+def _heading_anchors(path: Path) -> set[str]:
+    """The GitHub anchors of the headings of the Markdown file ``path``."""
+
+    text = re.sub(r"(?ms)^```.*?^```", "", path.read_text(encoding="utf-8"))
+    return {re.sub(r"[^\w\- ]", "", heading.strip().lower()).replace(" ", "-")
+            for heading in re.findall(r"(?m)^#{1,6} (.+)$", text)}
+
+
+def test_the_card_documentation_link_opens_an_existing_section():
+    """The card picker links the docs; the README anchor it used to name is gone."""
+
+    repository = "https://github.com/memphi2/ha-bticino-c300x"
+    frontend = ROOT / "custom_components/bticino_c300x/frontend"
+    for name in ("c300x-entity-resolver.js", "c300x-doorbell-call-card-metadata.js"):
+        url = re.search(r'C300X_DOCUMENTATION_URL = "([^"]+)"', (frontend / name).read_text())[1]
+        assert url.startswith(repository), name
+        page, _, anchor = url.removeprefix(repository).partition("#")
+        page = page.removeprefix("/blob/main/") or "README.md"
+        assert (ROOT / page).is_file(), (name, page)
+        assert anchor in _heading_anchors(ROOT / page), (name, url)

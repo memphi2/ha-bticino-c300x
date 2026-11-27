@@ -42,7 +42,8 @@ Sound and picture:
 Setup and installation over SSH:
 
 - A new Classe 300X setup offers **Home Assistant pages on the display**
-  switched on, so the station gets the display pages right away. Existing
+  switched on where its display can take them, so the station gets the
+  display pages right away. Existing
   entries keep their setting; on a Classe 100X it stays off, because its
   pages are activated separately.
 - **Reinstall when the keys are lost.** When Home Assistant no longer has the
@@ -52,7 +53,9 @@ Setup and installation over SSH:
   the agent again over SSH with new keys and keeps them; the display pages
   stay. An existing entry of the station gets the new keys, no second entry is
   created. Once the keys are on the station, Home Assistant keeps them even
-  when a later step fails, and a retry finishes cleanly.
+  when a later step fails, and a retry finishes cleanly. A reinstall from
+  the re-authentication or the agent update Repair stops before changing
+  anything when the address leads to a different station.
 - Adding a station again with its keys while an entry from an older release
   still points at it updates that entry instead of creating a second one.
 - Setup can log in with an SSH key (OpenSSH or PEM, optional passphrase)
@@ -126,6 +129,9 @@ Fixed:
 - A Display patch write that failed and could not be rolled back, or that had
   to be stopped, left a copy of the display files in the station's memory
   until the next restart.
+- After the camera was removed and added again, its automatic recovery from
+  a stuck "busy" state no longer ran.
+- The SSH password in the agent update Repair is now hidden while you type.
 
 Documentation:
 

@@ -71,6 +71,9 @@ devices, entities and services; a Repair lists what to redo after the update.
   refused. Use the switches instead: `display` -> `display: true`, `speech` ->
   `tts: true`, `both` -> `display: true` and `tts: true`, `led` -> `led: true`.
   Without switches a notification is shown as before.
+- **Live video starts about a second sooner** when you open the camera: the
+  agent hands the picture on as soon as the station sends it instead of
+  waiting a fixed time first.
 - The native agent changed; an agent update is required.
 
 ## v3.0.0b3 - 2026-11-27

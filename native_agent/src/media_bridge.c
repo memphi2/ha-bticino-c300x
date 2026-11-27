@@ -187,6 +187,8 @@ typedef struct {
     bool home_call_rtp_proxy;
     bool media_active;
     bool media_starting;
+    /* The on-demand relay has read the station's first video packet. */
+    bool ondemand_video_seen;
     bool stop_in_progress;
     unsigned long media_generation;
     unsigned long picture_session;
@@ -4621,11 +4623,12 @@ cleanup:
     return NULL;
 }
 
-static void drain_relay_video_packets(media_bridge_t *bridge, int rtp_fd) {
+static bool drain_relay_video_packets(media_bridge_t *bridge, int rtp_fd) {
     unsigned char packet[2048];
+    bool received = false;
 
     if (bridge == NULL || rtp_fd < 0) {
-        return;
+        return false;
     }
 
     for (size_t drained = 0; drained < MEDIA_VIDEO_RELAY_DRAIN_BURST; drained++) {
@@ -4634,10 +4637,12 @@ static void drain_relay_video_packets(media_bridge_t *bridge, int rtp_fd) {
             continue;
         }
         if (n <= 0) {
-            return;
+            break;
         }
+        received = true;
         forward_rtsp_video_packet(bridge, C300X_MEDIA_GOP_ONDEMAND, packet, (int)n);
     }
+    return received;
 }
 
 static void drain_relay_audio_packet(media_bridge_t *bridge, int audio_rtp_fd) {
@@ -4662,6 +4667,7 @@ static void drain_relay_audio_packet(media_bridge_t *bridge, int audio_rtp_fd) {
 
 static void *rtp_relay_thread(void *arg) {
     media_bridge_t *bridge = arg;
+    bool video_seen = false;
 
     while (true) {
         pthread_mutex_lock(&bridge->mutex);
@@ -4690,12 +4696,16 @@ static void *rtp_relay_thread(void *arg) {
             continue;
         }
 
-        if (FD_ISSET(rtp_fd, &readfds)) {
-            drain_relay_video_packets(bridge, rtp_fd);
-        }
+        bool video = FD_ISSET(rtp_fd, &readfds) && drain_relay_video_packets(bridge, rtp_fd);
         if (audio_rtp_fd >= 0 && FD_ISSET(audio_rtp_fd, &readfds)) {
             drain_relay_audio_packet(bridge, audio_rtp_fd);
-            drain_relay_video_packets(bridge, rtp_fd);
+            video = drain_relay_video_packets(bridge, rtp_fd) || video;
+        }
+        if (video && !video_seen) {
+            video_seen = true;
+            pthread_mutex_lock(&bridge->mutex);
+            bridge->ondemand_video_seen = true;
+            pthread_mutex_unlock(&bridge->mutex);
         }
     }
 
@@ -4944,6 +4954,28 @@ static bool media_start_cancelled(media_bridge_t *bridge, unsigned long generati
     return cancelled;
 }
 
+typedef struct {
+    media_bridge_t *bridge;
+    unsigned long generation;
+} ondemand_video_wait_t;
+
+/* The takeover's condition: the station's stream reached the agent's video
+ * port. Polled on the monotonic clock like the other bridge waits. */
+static int wait_for_ondemand_video(void *context, int timeout_ms) {
+    const ondemand_video_wait_t *start = context;
+    long long deadline = c300x_monotonic_ms() + timeout_ms;
+    for (;;) {
+        pthread_mutex_lock(&start->bridge->mutex);
+        bool seen = start->bridge->ondemand_video_seen;
+        bool cancelled = start->bridge->media_generation != start->generation || start->bridge->relay_stop;
+        pthread_mutex_unlock(&start->bridge->mutex);
+        if (seen) return 1;
+        if (cancelled) return -1;
+        if (c300x_monotonic_ms() >= deadline) return 0;
+        usleep(5000);
+    }
+}
+
 static bool start_media_session(media_bridge_t *bridge) {
     pthread_mutex_lock(&media_lifecycle_mutex);
     /* No SIP while the station is known busy: it answers 486 to each try. */
@@ -4996,10 +5028,11 @@ static bool start_media_session(media_bridge_t *bridge) {
         goto failed;
     }
     if (media_start_cancelled(bridge, generation)) goto failed;
-    /* The station streams from the first media command on, through the
-     * takeover's waits: read it from then on, so the cache holds the newest
-     * IDR when the client plays and nothing piles up in the socket. */
+    /* The station streams from the first media command on: read it from then
+     * on, so the cache holds the whole first IDR, the takeover sees the stream
+     * arrive and nothing piles up in the socket. */
     pthread_mutex_lock(&bridge->mutex);
+    bridge->ondemand_video_seen = false;
     bridge->relay_started = pthread_create(&bridge->relay_thread, NULL, rtp_relay_thread, bridge) == 0;
     bool started = bridge->relay_started;
     pthread_mutex_unlock(&bridge->mutex);
@@ -5007,8 +5040,11 @@ static bool start_media_session(media_bridge_t *bridge) {
         c300x_video_bridge_set_error(bridge->video, "rtp_relay_start_failed");
         goto failed;
     }
-    if (!c300x_device_media_takeover(bridge->config)) {
-        c300x_video_bridge_set_error(bridge->video, "media_takeover_failed");
+    ondemand_video_wait_t video_wait = {bridge, generation};
+    if (!c300x_device_media_takeover(bridge->config, wait_for_ondemand_video, &video_wait)) {
+        if (!media_start_cancelled(bridge, generation)) {
+            c300x_video_bridge_set_error(bridge->video, "media_takeover_failed");
+        }
         goto failed;
     }
 

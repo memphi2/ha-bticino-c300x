@@ -64,8 +64,8 @@ static int test_connect(int fd, const struct sockaddr *address, socklen_t size) 
     assert(send(peer, response, strlen(response), 0) == (ssize_t)strlen(response));
     return 0;
 }
-bool c300x_device_media_takeover(const struct c300x_config *config) {
-    (void)config; assert(!"cancelled setup must not take over device"); return false;
+bool c300x_device_media_takeover(const struct c300x_config *config, c300x_device_media_video_wait_fn wait, void *context) {
+    (void)config; (void)wait; (void)context; assert(!"cancelled setup must not take over device"); return false;
 }
 void c300x_device_media_stop(const struct c300x_config *config) { (void)config; }
 bool c300x_device_media_start(const struct c300x_config *config) {

@@ -71,8 +71,8 @@ static atomic_bool wait_for_stop;
 static atomic_bool fail_create;
 
 /* Keep device dependencies out of this executable, even on a failing test. */
-bool c300x_device_media_takeover(const struct c300x_config *config) {
-    (void)config;
+bool c300x_device_media_takeover(const struct c300x_config *config, c300x_device_media_video_wait_fn wait, void *context) {
+    (void)config; (void)wait; (void)context;
     assert(!"unexpected device media start");
     return false;
 }

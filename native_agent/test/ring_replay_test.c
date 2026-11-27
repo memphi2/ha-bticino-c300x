@@ -5,6 +5,7 @@
 #include <assert.h>
 #include <stdatomic.h>
 #include "../src/http.c"
+#include "../src/device_media.h"
 #include "../src/device_user.h"
 #include "../src/media_sip.h"
 #include "../src/media_sip_io.h"
@@ -24,7 +25,7 @@ int __wrap_c300x_device_user_media_identity(const char *hint, struct c300x_devic
     snprintf(identity->to_aor, sizeof(identity->to_aor), "c300x@test.local");
     return 1;
 }
-bool __wrap_c300x_device_media_takeover(const struct c300x_config *config) { (void)config; return true; }
+bool __wrap_c300x_device_media_takeover(const struct c300x_config *config, c300x_device_media_video_wait_fn wait, void *context) { (void)config; (void)wait; (void)context; return true; }
 bool __wrap_c300x_device_media_start(const struct c300x_config *config) { (void)config; return true; }
 void __wrap_c300x_device_media_stop(const struct c300x_config *config) { (void)config; }
 int __wrap_c300x_audio_codec_device_is_pcmu(void) { return 1; }

@@ -16,7 +16,7 @@ static int test_clock_gettime(clockid_t clock, struct timespec *now) {
     return result;
 }
 
-bool c300x_device_media_takeover(const struct c300x_config *config) { (void)config; return false; }
+bool c300x_device_media_takeover(const struct c300x_config *config, c300x_device_media_video_wait_fn wait, void *context) { (void)config; (void)wait; (void)context; return false; }
 void c300x_device_media_stop(const struct c300x_config *config) { (void)config; }
 bool c300x_device_media_start(const struct c300x_config *config) { (void)config; return true; }
 int c300x_device_user_media_identity(const char *hint, struct c300x_device_user_identity *identity) {

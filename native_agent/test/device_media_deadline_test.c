@@ -42,7 +42,8 @@ static int fake_sleep(const struct timespec *, struct timespec *);
 enum scenario {SUCCESS, CONNECT_TIMEOUT, CONNECT_ERROR, SEND_TIMEOUT, READ_TIMEOUT,
                INTERRUPTED, RETRIES, NACK, CLOCK_ERROR, SOCKET_ERROR, POLL_ERROR,
                SEND_ERROR, READ_ERROR, OPTION_ERROR, FRAGMENT_ACK, FRAGMENT_NACK,
-               FRAGMENT_TIMEOUT, REPLY_FULL, READ_EOF};
+               FRAGMENT_TIMEOUT, REPLY_FULL, READ_EOF, TAKEOVER_EARLY, TAKEOVER_LATE,
+               TAKEOVER_NEVER, TAKEOVER_REFUSED, TAKEOVER_CANCELLED};
 static enum scenario scenario;
 static long long elapsed, opened_at;
 static int opened, closed, polls, phase, sends, reads, command_count;
@@ -126,7 +127,10 @@ static ssize_t fake_recv(int fd, void *data, size_t len, int flags) {
     }
     assert(command_count < 8);
     strcpy(commands[command_count++], command);
-    memcpy(data, scenario == NACK ? "*#*0##" : "*#*1##", 6);
+    /* No stream: the station refuses the client it already has. */
+    bool refused = scenario == NACK || scenario == TAKEOVER_REFUSED
+        || (scenario == TAKEOVER_NEVER && command_count > 1 && strstr(command, "#2*##") == NULL);
+    memcpy(data, refused ? "*#*0##" : "*#*1##", 6);
     return 6;
 }
 static int fake_close(int fd) {
@@ -146,10 +150,67 @@ static int fake_sleep(const struct timespec *delay, struct timespec *remaining) 
     elapsed += delay->tv_sec * 1000 + delay->tv_nsec / 1000000;
     return 0;
 }
+/* The station's stream on the agent's port, by scenario: there at the first
+ * look, at the second, never, or the start is cancelled. Each command takes
+ * 300 ms of simulated time (three polls). */
+static int waits, wait_timeouts[8];
+static int fake_wait(void *context, int timeout_ms) {
+    assert(context == &waits && timeout_ms > 0 && waits < 8);
+    wait_timeouts[waits++] = timeout_ms;
+    if (scenario == TAKEOVER_EARLY || (scenario == TAKEOVER_LATE && waits == 2)) return 1;
+    if (scenario == TAKEOVER_CANCELLED) return -1;
+    elapsed += timeout_ms;
+    return 0;
+}
+
+static void takeover(void) {
+    static const char video[] = "*7*300#127#0#0#1#5002#1*##";
+    static const char audio[] = "*7*300#127#0#0#1#5000#2*##";
+    struct c300x_config config = {0};
+    config.video_rtp_port_start = 5000;
+    bool started = c300x_device_media_takeover(&config, fake_wait, &waits);
+    assert(opened == command_count && closed == opened);
+    for (int index = 0; index < command_count - 1; index++) assert(strcmp(commands[index], video) == 0);
+    switch (scenario) {
+    case TAKEOVER_EARLY:
+        /* No fixed wait: the audio client follows the stream at once. */
+        assert(started && command_count == 2 && strcmp(commands[1], audio) == 0);
+        assert(waits == 1 && wait_timeouts[0] == 400 && elapsed == 600);
+        break;
+    case TAKEOVER_LATE:
+        /* No stream 0.4 s after an accepted add: the client is added again. */
+        assert(started && command_count == 3 && strcmp(commands[2], audio) == 0);
+        assert(waits == 2 && wait_timeouts[0] == 400 && wait_timeouts[1] == 400 && elapsed == 1300);
+        break;
+    case TAKEOVER_NEVER:
+        /* The stream never comes: the accepted client is refused as already
+         * there, re-added every 0.4 s, and after 1.5 s it stands. */
+        assert(started && command_count == 4 && strcmp(commands[3], audio) == 0);
+        assert(waits == 2 && wait_timeouts[0] == 400 && wait_timeouts[1] == 400 && elapsed == 2000);
+        break;
+    case TAKEOVER_REFUSED:
+        /* Refused adds are retried after 0.1 s, never followed by audio. */
+        assert(!started && command_count == 4 && strcmp(commands[3], video) == 0);
+        assert(waits == 3 && wait_timeouts[0] == 100 && wait_timeouts[2] == 100 && elapsed == 1500);
+        break;
+    case TAKEOVER_CANCELLED:
+        /* The accepted client is reported so the caller removes it. */
+        assert(started && command_count == 1 && waits == 1 && elapsed == 300);
+        break;
+    default:
+        assert(!"unknown takeover scenario");
+    }
+    assert(c300x_device_media_takeover(&config, NULL, &waits) == false);
+}
+
 int main(int argc, char **argv) {
     assert(argc == 2);
     scenario = (enum scenario)atoi(argv[1]);
     char reply[128];
+    if (scenario >= TAKEOVER_EARLY) {
+        takeover();
+        return 0;
+    }
     if (scenario != SUCCESS) {
         bool ok = send_device_media_command("*7*300#127#0#0#1#5002#0*##", reply, sizeof(reply));
         assert(ok == (scenario == RETRIES || scenario == FRAGMENT_ACK));
@@ -167,15 +228,12 @@ int main(int argc, char **argv) {
     config.video_av_high_resolution = 1;
     assert(c300x_device_media_start(&config));
     c300x_device_media_stop(&config);
-    assert(c300x_device_media_takeover(&config));
-    assert(command_count == 8 && opened == 8 && closed == 8);
+    assert(command_count == 4 && opened == 4 && closed == 4);
     assert(strcmp(commands[0], "*7*300#127#0#0#1#5002#0*##") == 0);
     assert(strcmp(commands[1], "*7*300#127#0#0#1#5000#2*##") == 0);
     assert(strcmp(commands[2], "*7*301#127#0#0#1#5000#2*##") == 0);
     assert(strcmp(commands[3], "*7*301#127#0#0#1#5002#0*##") == 0);
-    assert(strcmp(commands[4], commands[0]) == 0 && strcmp(commands[5], commands[1]) == 0);
-    assert(strcmp(commands[6], commands[0]) == 0 && strcmp(commands[7], commands[1]) == 0);
-    assert(elapsed == 8 * 300 + 3 * 300 + 800);
+    assert(elapsed == 4 * 300 + 300);
     /* C300X 3.0.x and C100X: the low stream (#1) is the one bt_av_media sends on. */
     command_count = 0;
     config.video_av_high_resolution = 0;

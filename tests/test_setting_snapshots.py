@@ -25,11 +25,6 @@ from custom_components.bticino_c300x.data import C300XEventState
 
 pytestmark = pytest.mark.usefixtures("entity_ha_boundary")
 
-
-@pytest.fixture(autouse=True)
-def no_device_registry(monkeypatch):
-    monkeypatch.setattr(webhook, "event_device_id", lambda *_: None)
-
 CASES = [
     (switch.C300XRingerMuteSwitch, "ringer_muted", {"muted": True}, "is_on", True, "async_ringer_status", {"muted": False}),
     (number.C300XRingerVolumeNumber, "ringer_volume_changed", {"volume": 5}, "native_value", 5, "async_ringer_status", {"volume": 2}),

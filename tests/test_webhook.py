@@ -128,11 +128,6 @@ def webhook_ha_boundary(monkeypatch):
     monkeypatch.setattr(event, "async_call_later", lambda *_: lambda: None)
     monkeypatch.setattr(repair_issues.ir, "async_create_issue", lambda *args, **kwargs: None)
     monkeypatch.setattr(repair_issues.ir, "async_delete_issue", lambda *args, **kwargs: None)
-    # The device registry: a unit's device, else the station's.
-    monkeypatch.setattr(
-        webhook_module, "event_device_id",
-        lambda _hass, _entry, unit: f"device-unit-{unit}" if unit else "device-station",
-    )
     monkeypatch.setattr(webhook_module.dt_util, "utcnow", _utcnow)
 
 

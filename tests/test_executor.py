@@ -529,7 +529,7 @@ def test_async_execute_action_calls_allowlisted_service() -> None:
         ("light", "toggle", {"entity_id": "light.entry"}, False)
     ]
     assert hass.bus.events == [
-        ("bticino_c300x_action_received", {"entry_id": "entry-1", "action_id": "entry_light"})
+        ("bticino_c300x_action_received", {"entry_id": "entry-1", "device_id": "device-station", "action_id": "entry_light"})
     ]
 
 

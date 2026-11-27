@@ -43,6 +43,7 @@ from .dashboard_config import (
 from .dashboard_controls import async_execute_control
 from .entry_config import entry_config_value
 from .entry_types import BticinoC300XConfigEntry
+from .unit_entity import event_device_id
 
 _ALARMO_FORCE_ARM_MODES = {
     "arm_away": "away",
@@ -88,11 +89,17 @@ async def async_execute_action(
         target=target or None,
         context=context,
     )
+    _async_fire_action_received(hass, entry, normalized_id)
+    return {"ok": True, "action_id": normalized_id}
+
+
+def _async_fire_action_received(hass: HomeAssistant, entry: BticinoC300XConfigEntry, action_id: str) -> None:
+    """A configured action ran; the logbook shows it on the station's device."""
+
     hass.bus.async_fire(
         EVENT_ACTION_RECEIVED,
-        {"entry_id": entry.entry_id, "action_id": normalized_id},
+        {"entry_id": entry.entry_id, "device_id": event_device_id(hass, entry, None), "action_id": action_id},
     )
-    return {"ok": True, "action_id": normalized_id}
 
 
 async def async_execute_alarm_command(
@@ -382,10 +389,7 @@ async def _async_execute_dashboard_entity(
     else:
         raise ValueError("read_only_dashboard_entity")
 
-    hass.bus.async_fire(
-        EVENT_ACTION_RECEIVED,
-        {"entry_id": entry.entry_id, "action_id": entity_id},
-    )
+    _async_fire_action_received(hass, entry, entity_id)
     return {"ok": True, "action_id": entity_id}
 
 

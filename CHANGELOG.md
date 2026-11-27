@@ -61,7 +61,8 @@ devices, entities and services; a Repair lists what to redo after the update.
   `device_id`, `unit`, `call_id`, `event_at` and `data`. The fields `event`,
   `event_key`, `event_type_key`, `event_name`, `event_value`, `event_label`,
   `event_label_<language>`, `unit_id`, `unit_name` and the top-level `address`
-  (now in `data`) are gone.
+  (now in `data`) are gone. The logbook shows each station event, and each
+  action Home Assistant ran, on its device in your language.
 - **Notifications:** the `mode` field is gone; a call that still sends it is
   refused. Use the switches instead: `display` -> `display: true`, `speech` ->
   `tts: true`, `both` -> `display: true` and `tts: true`, `led` -> `led: true`.

@@ -122,6 +122,19 @@ def entity_ha_boundary(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def event_device_registry_boundary(monkeypatch):
+    """Stand-in for the device lookup of fired bus events: most tests run on a
+    fake hass without registries. unit_entity.event_device_id itself stays real."""
+    from custom_components.bticino_c300x import executor, webhook
+
+    for module in (executor, webhook):
+        monkeypatch.setattr(
+            module, "event_device_id",
+            lambda _hass, _entry, unit: f"device-unit-{unit}" if unit else "device-station",
+        )
+
+
+@pytest.fixture(autouse=True)
 def stable_home_assistant_exceptions():
     """Legacy entity stubs must not replace shared exception classes."""
     _check_exception_types()

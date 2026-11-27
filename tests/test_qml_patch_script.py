@@ -2337,8 +2337,11 @@ def _blocking_commands(tmp_path: Path, name: str, failing_mv: bool = False) -> d
             f'exec "{shutil.which("mv")}" "$@"\n'
         )
         (commands / "mv").chmod(0o700)
+    (tmp_path / "temp").mkdir(exist_ok=True)
     return {
         "PATH": _without_host_display_tools(tmp_path, str(commands) + os.pathsep + os.environ["PATH"]),
+        # A script killed here cannot remove its staged files: they stay in the test's folder.
+        "TMPDIR": str(tmp_path / "temp"),
         "C300X_QML_RELOAD_GUI": "1",
         "C300X_QML_GUI_RELOAD_DELAY_SECONDS": "0",
         "C300X_QML_GUI_WRAPPER": str(tmp_path / "missing-wrapper"),

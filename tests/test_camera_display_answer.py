@@ -23,7 +23,7 @@ from custom_components.bticino_c300x.camera_media.state_machine import MediaStat
 def _event(camera, event_key, *, owner, external, **bridge):
     return SimpleNamespace(data={
         "entry_id": camera._entry.entry_id,
-        "event_key": event_key,
+        "event_type": event_key,
         "video_available": False,
         "video_window_available": False,
         "media_owner": owner,
@@ -93,7 +93,7 @@ def test_ring_close_without_display_still_returns_to_idle() -> None:
             ring_call_active=True, unanswered_ring_call=True,
         ))
         camera._handle_agent_event(SimpleNamespace(data={
-            "entry_id": camera._entry.entry_id, "event_key": "doorbell_media_closed",
+            "entry_id": camera._entry.entry_id, "event_type": "doorbell_media_closed",
         }))
         assert camera._last_media_state is MediaState.IDLE
         assert camera._external_media_active is False

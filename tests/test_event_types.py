@@ -38,18 +38,19 @@ def test_normalize_event_type_handles_canonical_agent_events() -> None:
     )
 
 
-def test_agent_event_key_prefers_machine_fields() -> None:
-    payload = {
-        "event": "Türöffner gestartet",
-        "event_type": "Türöffner gestartet",
-        "event_key": "door_unlock_started",
-    }
-    assert agent_event_key(payload) == "door_unlock_started"
+def test_agent_event_key_reads_only_the_bus_event_type() -> None:
+    assert agent_event_key({"event_type": "door_unlock_started"}) == "door_unlock_started"
+    # No other field, no label, no agent notation: the 3.1 bus payload only.
+    for data in (
+        {"event_key": "door_unlock_started"}, {"event_type_key": "door_unlock_started"},
+        {"event_value": "door_unlock_started"}, {"event": "door_unlock_started"},
+        {"event_type": "Türöffner gestartet"}, {"event_type": "door_unlock.started"},
+    ):
+        assert agent_event_key(data) is None, data
 
 
-def test_payload_event_key_reads_nested_data() -> None:
-    payload = {"data": {"event_type": "stair_light.released"}}
-    assert payload_event_key(payload) == "stair_light_released"
+def test_payload_event_key_reads_the_agents_type() -> None:
+    assert payload_event_key({"type": "stair_light.released"}) == "stair_light_released"
 
 
 def test_native_agent_event_literals_are_mapped_to_ha_event_types() -> None:

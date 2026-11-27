@@ -20,7 +20,7 @@ from custom_components.bticino_c300x.visitor_journal_media import (
 
 def event(kind="doorbell_pressed", sequence=1, *, entry="one", instance="boot", **payload):
     return SimpleNamespace(data={
-        "entry_id": entry, "event_key": kind, "source_event_id": f"native-{instance}-{sequence}",
+        "entry_id": entry, "event_type": kind, "source_event_id": f"native-{instance}-{sequence}",
         "data": payload,
     })
 

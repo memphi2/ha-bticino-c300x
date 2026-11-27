@@ -55,6 +55,7 @@ HA_EVENT_TYPES: dict[str, str] = {
 }
 SUPPORTED_HA_EVENT_TYPES = frozenset(HA_EVENT_TYPES.values())
 
+# The fields the agent's push may name its event in (inbound only).
 _PAYLOAD_EVENT_KEYS = (
     "event_key",
     "event_type_key",
@@ -90,24 +91,29 @@ def normalize_event_type(value: Any) -> str | None:
 
 
 def agent_event_key(data: Mapping[str, Any]) -> str | None:
-    """Extract and normalize a agent event key from an event payload mapping."""
+    """The key of a bticino_c300x_agent_event_received event: its event_type."""
 
-    for key in _PAYLOAD_EVENT_KEYS:
-        normalized = normalize_event_type(data.get(key))
-        if normalized is not None:
-            return normalized
-    return None
+    value = data.get("event_type")
+    return value if isinstance(value, str) and value in SUPPORTED_HA_EVENT_TYPES else None
 
 
 def payload_event_key(payload: Mapping[str, Any]) -> str | None:
-    """Extract and normalize a agent event key from root or nested payload keys."""
+    """The key of the agent's push, from its root or nested payload."""
 
-    normalized = agent_event_key(payload)
+    normalized = _payload_key(payload)
     if normalized is not None:
         return normalized
     nested = payload.get("data")
     if isinstance(nested, Mapping):
-        return agent_event_key(nested)
+        return _payload_key(nested)
+    return None
+
+
+def _payload_key(data: Mapping[str, Any]) -> str | None:
+    for key in _PAYLOAD_EVENT_KEYS:
+        normalized = normalize_event_type(data.get(key))
+        if normalized is not None:
+            return normalized
     return None
 
 

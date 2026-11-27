@@ -1740,7 +1740,7 @@ def test_delete_latest_memo_button_refreshes_from_agent_event_without_sensor() -
 
         entity._handle_agent_event(
             types.SimpleNamespace(
-                data={"entry_id": entry.entry_id, "event_key": "memos_changed"}
+                data={"entry_id": entry.entry_id, "event_type": "memos_changed"}
             )
         )
         task = entry.runtime_data.resources.memos_refresh_task
@@ -1784,7 +1784,7 @@ def test_delete_latest_video_button_refreshes_from_agent_event_without_sensor() 
             types.SimpleNamespace(
                 data={
                     "entry_id": entry.entry_id,
-                    "event_key": "answering_machine_messages_changed",
+                    "event_type": "answering_machine_messages_changed",
                 }
             )
         )
@@ -1817,7 +1817,7 @@ def test_delete_button_callbacks_ignore_other_entries_and_refresh_on_own_entry()
 
     entity._handle_agent_event(
         types.SimpleNamespace(
-            data={"entry_id": "other-entry", "event_key": "memos_changed"}
+            data={"entry_id": "other-entry", "event_type": "memos_changed"}
         )
     )
     assert entry.runtime_data.resources.memos_refresh_task is None
@@ -1852,7 +1852,7 @@ def test_delete_video_button_callbacks_ignore_other_entries_and_refresh_on_own_e
         types.SimpleNamespace(
             data={
                 "entry_id": "other-entry",
-                "event_key": "answering_machine_messages_changed",
+                "event_type": "answering_machine_messages_changed",
             }
         )
     )

@@ -396,7 +396,7 @@ def test_snapshot_capture_follows_video_window_edges(snapshot_camera, start, end
     status = {"available": True, "window_available": True, "media_owner": "home_call"}
     event = SimpleNamespace(data={
         "entry_id": camera._entry.entry_id,
-        "event_key": "doorbell_view_requested",
+        "event_type": "doorbell_view_requested",
         "video_window_available": True,
         "video_available": True,
         "media_owner": "home_call",
@@ -425,7 +425,7 @@ def test_snapshot_capture_follows_video_window_edges(snapshot_camera, start, end
         }))
     elif end == "closed":
         camera._handle_agent_event(SimpleNamespace(data={
-            "entry_id": camera._entry.entry_id, "event_key": "doorbell_media_closed",
+            "entry_id": camera._entry.entry_id, "event_type": "doorbell_media_closed",
         }))
     elif end == "clear":
         camera._clear_video_window()
@@ -453,11 +453,11 @@ def test_snapshot_capture_ignores_nonvideo_events_and_still_requests(snapshot_ca
     camera._apply_status({"available": True, "window_available": False})
     for event_key in ["doorbell_pressed", "doorbell_view_requested", "home_call_answered"]:
         camera._handle_agent_event(SimpleNamespace(data={
-            "entry_id": camera._entry.entry_id, "event_key": event_key,
+            "entry_id": camera._entry.entry_id, "event_type": event_key,
             "video_available": True,
         }))
     camera._handle_agent_event(SimpleNamespace(data={
-        "entry_id": "other-entry", "event_key": "doorbell_view_requested",
+        "entry_id": "other-entry", "event_type": "doorbell_view_requested",
         "video_window_available": True,
     }))
     camera._apply_home_call_status({"active": True, "running": True, "answered": True})
@@ -493,7 +493,7 @@ def test_snapshot_capture_removal_ends_before_cleanup_and_rejects_late_status(sn
             await close()
             camera._apply_status({"window_available": True})
             camera._handle_agent_event(SimpleNamespace(data={
-                "entry_id": camera._entry.entry_id, "event_key": "doorbell_view_requested",
+                "entry_id": camera._entry.entry_id, "event_type": "doorbell_view_requested",
                 "video_window_available": True,
             }))
 
@@ -1592,7 +1592,7 @@ def test_remove_cancels_reconcile_without_touching_replacement_runtime() -> None
         assert replacement.diagnostics.agent_media_facts == {}
         task_count = len(tasks)
         camera._handle_system_metrics_changed(entry.entry_id)
-        camera._handle_agent_event(SimpleNamespace(data={"entry_id": entry.entry_id, "event": "doorbell.media.closed"}))
+        camera._handle_agent_event(SimpleNamespace(data={"entry_id": entry.entry_id, "event_type": "doorbell_media_closed"}))
         camera.close_webrtc_session("late")
         await camera.async_on_webrtc_candidate("late", {})
         assert len(tasks) == task_count
@@ -3573,7 +3573,7 @@ def test_doorbell_camera_wakes_rtsp_waiters_on_media_event() -> None:
             SimpleNamespace(
                 data={
                     "entry_id": entry.entry_id,
-                    "event_key": "doorbell_view_requested",
+                    "event_type": "doorbell_view_requested",
                     "video_window_available": True,
                     "video_available": True,
                     "stream_path": "/doorbell-video",
@@ -3623,7 +3623,7 @@ def test_doorbell_camera_updates_state_on_doorbell_view_event() -> None:
     event = SimpleNamespace(
         data={
             "entry_id": entry.entry_id,
-            "event_key": "doorbell_view_requested",
+            "event_type": "doorbell_view_requested",
             "video_window_available": True,
             "video_available": True,
             "stream_path": "/doorbell-video",
@@ -3644,7 +3644,7 @@ def test_doorbell_camera_does_not_mark_external_view_as_ha_available() -> None:
     event = SimpleNamespace(
         data={
             "entry_id": entry.entry_id,
-            "event_key": "doorbell_view_requested",
+            "event_type": "doorbell_view_requested",
         }
     )
 
@@ -4101,7 +4101,7 @@ def test_doorbell_camera_updates_derived_media_state_from_ring_event() -> None:
     event = SimpleNamespace(
         data={
             "entry_id": entry.entry_id,
-            "event_key": "doorbell_view_requested",
+            "event_type": "doorbell_view_requested",
             "video_window_available": True,
             "video_available": True,
             "stream_path": "/doorbell-video",
@@ -4128,7 +4128,7 @@ def test_doorbell_camera_ring_event_sequence_reaches_preview_then_idle() -> None
         SimpleNamespace(
             data={
                 "entry_id": entry.entry_id,
-                "event_key": "doorbell_pressed",
+                "event_type": "doorbell_pressed",
                 "media_owner": "ring",
                 "bridge": {
                     "media_owner": "ring",
@@ -4147,7 +4147,7 @@ def test_doorbell_camera_ring_event_sequence_reaches_preview_then_idle() -> None
         SimpleNamespace(
             data={
                 "entry_id": entry.entry_id,
-                "event_key": "doorbell_view_requested",
+                "event_type": "doorbell_view_requested",
                 "media_owner": "ring",
                 "video_window_available": True,
                 "video_available": True,
@@ -4170,7 +4170,7 @@ def test_doorbell_camera_ring_event_sequence_reaches_preview_then_idle() -> None
         SimpleNamespace(
             data={
                 "entry_id": entry.entry_id,
-                "event_key": "doorbell_media_closed",
+                "event_type": "doorbell_media_closed",
             }
         )
     )
@@ -4211,7 +4211,7 @@ def test_doorbell_camera_clears_state_on_video_closed_event() -> None:
     }
 
     event = SimpleNamespace(
-        data={"entry_id": entry.entry_id, "event_key": "doorbell_media_closed"}
+        data={"entry_id": entry.entry_id, "event_type": "doorbell_media_closed"}
     )
     camera._handle_agent_event(event)
 
@@ -4268,7 +4268,7 @@ def test_doorbell_media_closed_closes_local_doorbell_webrtc_without_agent_stop()
             SimpleNamespace(
                 data={
                     "entry_id": entry.entry_id,
-                    "event_key": "doorbell_media_closed",
+                    "event_type": "doorbell_media_closed",
                 }
             )
         )
@@ -4326,7 +4326,7 @@ def test_ring_answer_event_keeps_passive_preview_webrtc_sessions() -> None:
             SimpleNamespace(
                 data={
                     "entry_id": entry.entry_id,
-                    "event_key": "doorbell_view_requested",
+                    "event_type": "doorbell_view_requested",
                     "media_owner": "ring",
                     "video_window_available": True,
                     "video_available": True,
@@ -4388,7 +4388,7 @@ def test_ring_answer_event_keeps_preview_until_answer_session_exists() -> None:
             SimpleNamespace(
                 data={
                     "entry_id": entry.entry_id,
-                    "event_key": "doorbell_view_requested",
+                    "event_type": "doorbell_view_requested",
                     "media_owner": "ring",
                     "video_window_available": True,
                     "video_available": True,
@@ -4421,7 +4421,7 @@ def test_doorbell_camera_applies_home_call_answered_event_without_polling() -> N
     event = SimpleNamespace(
         data={
             "entry_id": entry.entry_id,
-            "event_key": "home_call_answered",
+            "event_type": "home_call_answered",
             "home_call": {
                 "running": True,
                 "active": True,
@@ -4465,7 +4465,7 @@ def test_doorbell_camera_applies_home_call_ended_event_without_polling() -> None
     event = SimpleNamespace(
         data={
             "entry_id": entry.entry_id,
-            "event_key": "home_call_ended",
+            "event_type": "home_call_ended",
             "home_call": {
                 "rtp_packets": 69,
                 "rtcp_packets": 2,
@@ -4498,7 +4498,7 @@ def test_doorbell_camera_home_call_answered_then_ended_event_sequence() -> None:
         SimpleNamespace(
             data={
                 "entry_id": entry.entry_id,
-                "event_key": "home_call_answered",
+                "event_type": "home_call_answered",
                 "home_call": {
                     "running": True,
                     "active": True,
@@ -4517,7 +4517,7 @@ def test_doorbell_camera_home_call_answered_then_ended_event_sequence() -> None:
         SimpleNamespace(
             data={
                 "entry_id": entry.entry_id,
-                "event_key": "home_call_ended",
+                "event_type": "home_call_ended",
                 "home_call": {"rtp_packets": 12, "rtcp_packets": 3},
             }
         )
@@ -4565,7 +4565,7 @@ def test_doorbell_camera_home_call_ended_clears_stale_busy_state() -> None:
         SimpleNamespace(
             data={
                 "entry_id": entry.entry_id,
-                "event_key": "home_call_ended",
+                "event_type": "home_call_ended",
                 "home_call": {"rtp_packets": 377, "rtcp_packets": 1},
             }
         )
@@ -4597,7 +4597,7 @@ def test_doorbell_camera_home_call_ended_keeps_other_video_owner() -> None:
     event = SimpleNamespace(
         data={
             "entry_id": entry.entry_id,
-            "event_key": "home_call_ended",
+            "event_type": "home_call_ended",
             "home_call": {
                 "rtp_packets": 1,
                 "rtcp_packets": 0,
@@ -4625,7 +4625,7 @@ def test_doorbell_camera_deduplicates_unchanged_agent_event_state_writes() -> No
     camera.async_write_ha_state = lambda: writes.append("write")  # type: ignore[method-assign]
     event_data = {
         "entry_id": entry.entry_id,
-        "event_key": "doorbell_view_requested",
+        "event_type": "doorbell_view_requested",
         "video_window_available": True,
         "video_available": True,
         "stream_path": "/doorbell-video",
@@ -4656,7 +4656,7 @@ def test_doorbell_camera_records_safe_media_timeline_from_agent_events() -> None
     camera.async_write_ha_state = lambda: None  # type: ignore[method-assign]
     event_data = {
         "entry_id": entry.entry_id,
-        "event_key": "doorbell_view_requested",
+        "event_type": "doorbell_view_requested",
         "video_window_available": True,
         "video_available": True,
         "media_owner": "doorbell",

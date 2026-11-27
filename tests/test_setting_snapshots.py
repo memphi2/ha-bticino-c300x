@@ -22,8 +22,12 @@ from custom_components.bticino_c300x.const import (
     SIGNAL_SETTING_STATE,
 )
 from custom_components.bticino_c300x.data import C300XEventState
+from custom_components.bticino_c300x.event_types import HA_EVENT_TYPES
 
 pytestmark = pytest.mark.usefixtures("entity_ha_boundary")
+
+# The agent pushes its own notation: smartphone_forwarding.changed, ...
+AGENT_TYPES = {key: agent for agent, key in HA_EVENT_TYPES.items()}
 
 CASES = [
     (switch.C300XRingerMuteSwitch, "ringer_muted", {"muted": True}, "is_on", True, "async_ringer_status", {"muted": False}),
@@ -74,7 +78,7 @@ def test_snapshot_webhook_reaches_subscribed_entity_without_public_event_or_io(
         payload = {**data, "available": available}
         response = asyncio.run(webhook._async_handle_agent_event(
             hass, entry, entry.runtime_data.event_state,
-            _FakeRequest("event-token", {"event_key": kind, "snapshot": True, "data": payload}),
+            _FakeRequest("event-token", {"type": AGENT_TYPES[kind], "snapshot": True, "data": payload}),
         ))
         assert response.status == 200
         assert entity.available is available
@@ -139,7 +143,7 @@ def test_invalid_volume_cannot_diverge_shared_and_entity_state(monkeypatch, snap
                         lambda _hass, _signal, *args: entity._handle_setting_state(*args))
     response = asyncio.run(webhook._async_handle_agent_event(
         hass, entry, entry.runtime_data.event_state,
-        _FakeRequest("event-token", {"event_key": "ringer_volume_changed", "snapshot": snapshot,
+        _FakeRequest("event-token", {"type": "ringer.volume_changed", "snapshot": snapshot,
                                     "data": {"volume": invalid}}),
     ))
     assert response.status == 200

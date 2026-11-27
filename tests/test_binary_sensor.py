@@ -37,7 +37,7 @@ def test_home_call_active_tracks_agent_state_events() -> None:
         SimpleNamespace(
             data={
                 "entry_id": "entry-1",
-                "event_key": "home_call_started",
+                "event_type": "home_call_started",
                 "data": {
                     "home_call": {
                         "running": True,
@@ -57,7 +57,7 @@ def test_home_call_active_tracks_agent_state_events() -> None:
         SimpleNamespace(
             data={
                 "entry_id": "entry-1",
-                "event_key": "home_call_answered",
+                "event_type": "home_call_answered",
                 "data": {
                     "home_call": {
                         "running": True,
@@ -81,7 +81,7 @@ def test_home_call_active_tracks_agent_state_events() -> None:
         SimpleNamespace(
             data={
                 "entry_id": "entry-1",
-                "event_key": "home_call_ended",
+                "event_type": "home_call_ended",
                 "data": {"home_call": {"rtp_packets": 3, "rtcp_packets": 1}},
             }
         )
@@ -105,7 +105,7 @@ def test_home_call_active_ignores_unrelated_events_and_reports_errors() -> None:
         SimpleNamespace(
             data={
                 "entry_id": "other-entry",
-                "event_key": "home_call_started",
+                "event_type": "home_call_started",
                 "data": {"home_call": {"running": True}},
             }
         )
@@ -114,7 +114,7 @@ def test_home_call_active_ignores_unrelated_events_and_reports_errors() -> None:
         SimpleNamespace(
             data={
                 "entry_id": "entry-1",
-                "event_key": "doorbell_pressed",
+                "event_type": "doorbell_pressed",
                 "data": {"home_call": {"running": True}},
             }
         )

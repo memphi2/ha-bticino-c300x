@@ -43,7 +43,7 @@ def setup(tmp_path, monkeypatch, delay=0):
 
 
 def event(manager, key, stamp="one", entry="one"):
-    manager.capture._event(SimpleNamespace(data={"entry_id": entry, "type": key, "event_at": stamp}))
+    manager.capture._event(SimpleNamespace(data={"entry_id": entry, "event_type": key, "event_at": stamp}))
 
 
 async def drain(manager):
@@ -95,7 +95,7 @@ def test_the_agent_is_asked_for_the_configured_size_and_the_stamp_follows_the_op
             capture, "framebuffer_jpeg",
             lambda content, kind, stamp=None: seen.append(stamp) or real(content, kind, stamp),
         )
-        event(manager, "doorbell.pressed")
+        event(manager, "doorbell_pressed")
         await drain(manager)
         manager.entry.runtime_data.api.async_doorbell_snapshot.assert_awaited_once_with(400, 288)
         return seen
@@ -157,12 +157,12 @@ def test_ring_then_stream_deduplicates_without_frontend(tmp_path, monkeypatch):
     async def run():
         manager = setup(tmp_path, monkeypatch)
         api = manager.entry.runtime_data.api.async_doorbell_snapshot
-        event(manager, "doorbell.pressed", entry="other")
+        event(manager, "doorbell_pressed", entry="other")
         assert manager.capture.task is None
-        event(manager, "doorbell.pressed")
+        event(manager, "doorbell_pressed")
         event(manager, "doorbell_pressed")
         manager.capture_requested("physical-session")
-        event(manager, "doorbell.view_requested")
+        event(manager, "doorbell_view_requested")
         await drain(manager)
         assert manager.preview
         manager.capture_requested("physical-session")
@@ -190,7 +190,7 @@ def test_quick_close_and_disable_reenable_never_restart_old_capture(tmp_path, mo
         if close == "stream":
             manager.capture_ended("stream")
         elif close == "ring":
-            event(manager, "doorbell.media.closed")
+            event(manager, "doorbell_media_closed")
         elif close == "unload":
             manager.close()
             manager.hass.bus.async_listen.return_value.assert_called_once()

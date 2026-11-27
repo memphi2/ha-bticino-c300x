@@ -618,7 +618,7 @@ def test_smartphone_forwarding_push_without_a_reading_keeps_the_known_state() ->
         types.SimpleNamespace(
             data={
                 "entry_id": entry.entry_id,
-                "event_key": "smartphone_forwarding_changed",
+                "event_type": "smartphone_forwarding_changed",
                 "mode": None,
             }
         )

@@ -2098,7 +2098,7 @@ def test_video_message_event_updates_cached_counts_and_schedules_refresh() -> No
         event = types.SimpleNamespace(
             data={
                 "entry_id": entry.entry_id,
-                "event_key": "answering_machine_messages_changed",
+                "event_type": "answering_machine_messages_changed",
                 "voicemail": {"available": True, "total": 2, "unread": 2},
             }
         )
@@ -2160,7 +2160,7 @@ def test_invalid_agent_event_payload_keeps_family_specific_refresh_behavior() ->
             types.SimpleNamespace(
                 data={
                     "entry_id": entry.entry_id,
-                    "event_key": "answering_machine_messages_changed",
+                    "event_type": "answering_machine_messages_changed",
                     "voicemail": "not-a-dict",
                 }
             )
@@ -2169,7 +2169,7 @@ def test_invalid_agent_event_payload_keeps_family_specific_refresh_behavior() ->
             types.SimpleNamespace(
                 data={
                     "entry_id": entry.entry_id,
-                    "event_key": "memos_changed",
+                    "event_type": "memos_changed",
                     "memos": "not-a-dict",
                 }
             )
@@ -2194,7 +2194,7 @@ def test_memo_event_refresh_is_deduplicated_between_memo_sensors() -> None:
         event = types.SimpleNamespace(
             data={
                 "entry_id": entry.entry_id,
-                "event_key": "memos_changed",
+                "event_type": "memos_changed",
                 "memos": {
                     "available": True,
                     "total": 2,

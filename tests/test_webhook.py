@@ -212,7 +212,7 @@ def test_event_payload_rejects_oversized_body_via_read_limit(
 
 
 def test_event_type_value_prefers_payload_aliases() -> None:
-    payload = {"event": "doorbell.pressed"}
+    payload = {"type": "doorbell.pressed"}
 
     assert _event_type_value(payload) == "doorbell_pressed"
 
@@ -686,7 +686,7 @@ def test_agent_event_webhook_rejects_unauthorized_or_unsupported_events() -> Non
             hass,  # type: ignore[arg-type]
             entry,  # type: ignore[arg-type]
             event_state,
-            _FakeRequest("bad-token", {"event": "ringer.muted"}),  # type: ignore[arg-type]
+            _FakeRequest("bad-token", {"type": "ringer.muted"}),  # type: ignore[arg-type]
         )
     )
     unsupported = asyncio.run(
@@ -718,7 +718,7 @@ def test_doorbell_media_closed_clears_runtime_video_state() -> None:
     request = _FakeRequest(
         "event-token",
         {
-            "event": "doorbell.media.closed",
+            "type": "doorbell.media.closed",
             "data": {
                 "doorbell": "idle",
                 "video": {"available": False, "window_available": False},
@@ -761,7 +761,7 @@ def test_real_doorbell_event_fires_public_event() -> None:
     )
     request = _FakeRequest(
         "event-token",
-        {"event": "doorbell.pressed", "event_id": "native-boot-42", "data": {"doorbell": "ringing"}},
+        {"type": "doorbell.pressed", "event_id": "native-boot-42", "data": {"doorbell": "ringing"}},
     )
 
     original_resolve_camera = webhook_module.resolve_doorbell_camera_entity_id
@@ -798,7 +798,7 @@ def test_ringer_event_updates_state_and_public_event_data() -> None:
         options={},
         runtime_data=SimpleNamespace(event_state=event_state),
     )
-    request = _FakeRequest("event-token", {"event": "ringer.muted"})
+    request = _FakeRequest("event-token", {"type": "ringer.muted"})
 
     response = asyncio.run(
         _async_handle_agent_event(
@@ -832,7 +832,7 @@ def test_ringer_volume_event_updates_state_and_public_event_data() -> None:
     )
     request = _FakeRequest(
         "event-token",
-        {"event": "ringer.volume_changed", "data": {"volume": 7}},
+        {"type": "ringer.volume_changed", "data": {"volume": 7}},
     )
 
     response = asyncio.run(
@@ -862,7 +862,7 @@ def test_smartphone_forwarding_event_updates_state_and_public_event_data() -> No
     )
     request = _FakeRequest(
         "event-token",
-        {"event": "smartphone_forwarding.changed", "data": {"mode": 2}},
+        {"type": "smartphone_forwarding.changed", "data": {"mode": 2}},
     )
 
     response = asyncio.run(
@@ -891,7 +891,7 @@ def test_smartphone_forwarding_event_preserves_unprovisioned_state() -> None:
     )
     request = _FakeRequest(
         "event-token",
-        {"event": "smartphone_forwarding.changed", "data": {"mode": 3}},
+        {"type": "smartphone_forwarding.changed", "data": {"mode": 3}},
     )
 
     response = asyncio.run(
@@ -920,7 +920,7 @@ def test_door_unlock_event_keeps_address_in_public_event_data() -> None:
     )
     request = _FakeRequest(
         "event-token",
-        {"event": "door_unlock.started", "data": {"address": "20"}},
+        {"type": "door_unlock.started", "data": {"address": "20"}},
     )
 
     response = asyncio.run(
@@ -950,7 +950,7 @@ def test_stair_light_release_event_keeps_address_in_public_event_data() -> None:
     )
     request = _FakeRequest(
         "event-token",
-        {"event": "stair_light.released", "data": {"address": "21"}},
+        {"type": "stair_light.released", "data": {"address": "21"}},
     )
 
     response = asyncio.run(
@@ -995,7 +995,7 @@ def test_call_events_feed_the_call_registry_and_name_the_unit(monkeypatch: pytes
                 hass,  # type: ignore[arg-type]
                 entry,  # type: ignore[arg-type]
                 event_state,
-                _FakeRequest("event-token", {"event": event, "data": data}),  # type: ignore[arg-type]
+                _FakeRequest("event-token", {"type": event, "data": data}),  # type: ignore[arg-type]
             )
         )
         assert response.status == 200
@@ -1032,7 +1032,7 @@ def test_external_doorbell_view_does_not_advertise_ha_video_available() -> None:
     request = _FakeRequest(
         "event-token",
         {
-            "event": "doorbell.view_requested",
+            "type": "doorbell.view_requested",
             "data": {
                 "doorbell": "view_requested",
                 "video": {"available": False, "window_available": False},
@@ -1078,7 +1078,7 @@ def test_doorbell_view_uses_explicit_ha_video_availability() -> None:
     request = _FakeRequest(
         "event-token",
         {
-            "event": "doorbell.view_requested",
+            "type": "doorbell.view_requested",
             "data": {
                 "doorbell": "view_requested",
                 "video": {
@@ -1140,7 +1140,7 @@ def test_doorbell_view_keeps_agent_video_available_without_camera_entity_id() ->
     request = _FakeRequest(
         "event-token",
         {
-            "event": "doorbell.view_requested",
+            "type": "doorbell.view_requested",
             "data": {
                 "doorbell": "view_requested",
                 "video": {
@@ -1185,7 +1185,7 @@ def test_external_media_active_overrides_doorbell_video_availability() -> None:
     request = _FakeRequest(
         "event-token",
         {
-            "event": "doorbell.view_requested",
+            "type": "doorbell.view_requested",
             "data": {
                 "video": {
                     "available": True,
@@ -1231,7 +1231,7 @@ def test_snapshot_doorbell_event_updates_state_without_public_event() -> None:
     request = _FakeRequest(
         "event-token",
         {
-            "event": "doorbell.pressed",
+            "type": "doorbell.pressed",
             "snapshot": True,
             "data": {"doorbell": "ringing"},
         },
@@ -1318,7 +1318,7 @@ def test_snapshot_memo_event_refreshes_memo_entities_without_public_event() -> N
     request = _FakeRequest(
         "event-token",
         {
-            "event": "memos.changed",
+            "type": "memos.changed",
             "snapshot": True,
             "data": {
                 "memos": {
@@ -1384,7 +1384,7 @@ def test_snapshot_voicemail_event_refreshes_message_entities_without_public_even
     request = _FakeRequest(
         "event-token",
         {
-            "event": "answering_machine.messages_changed",
+            "type": "answering_machine.messages_changed",
             "source": "snapshot",
             "data": {
                 "voicemail": {
@@ -1441,7 +1441,7 @@ def test_system_metrics_event_updates_cache_without_public_event() -> None:
     request = _FakeRequest(
         "event-token",
         {
-            "event": "system.metrics_changed",
+            "type": "system.metrics_changed",
             "data": {
                 "system_metrics": {
                     "cpu_count": 1,
@@ -1560,7 +1560,7 @@ def test_system_metrics_event_runtime_watchdog_stops_home_call(
             request = _FakeRequest(
                 "event-token",
                 {
-                    "event": "system.metrics_changed",
+                    "type": "system.metrics_changed",
                     "data": {"system_metrics": {"cpu_usage_percent": cpu_percent}},
                 },
             )
@@ -1682,7 +1682,7 @@ def test_agent_diagnostics_event_refreshes_cache_without_public_event() -> None:
     request = _FakeRequest(
         "event-token",
         {
-            "event": "agent.diagnostics_changed",
+            "type": "agent.diagnostics_changed",
             "data": {"agent_write_count": 3},
         },
     )

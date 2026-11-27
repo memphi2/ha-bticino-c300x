@@ -52,7 +52,7 @@ def _camera(api: _FakeApi) -> tuple[C300XDoorbellCamera, list[Any]]:
 
 
 def _event(camera: C300XDoorbellCamera, key: str, **data: Any) -> None:
-    camera._handle_agent_event(SimpleNamespace(data={"entry_id": "entry-1", "event_key": key, **data}))
+    camera._handle_agent_event(SimpleNamespace(data={"entry_id": "entry-1", "event_type": key, **data}))
 
 
 def _view_started(camera: C300XDoorbellCamera) -> None:

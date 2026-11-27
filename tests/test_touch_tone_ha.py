@@ -85,7 +85,7 @@ def test_push_uses_confirmed_state_for_this_entry_only():
     _, switch = make_switch()
     asyncio.run(switch.async_update())
     def event(entry_id="entry-1", kind="display_touch_tone_changed", data=None):
-        return SimpleNamespace(data={"entry_id": entry_id, "event_key": kind,
+        return SimpleNamespace(data={"entry_id": entry_id, "event_type": kind,
                                      "data": data if data is not None else {"enabled": False, "available": True}})
     switch._handle_event(event(entry_id="elsewhere"))
     switch._handle_event(event(kind="ringer_muted"))
@@ -112,7 +112,7 @@ def test_setup_adds_switch_and_its_event_only_for_capable_agent():
 def test_legacy_first_change_is_applied_without_an_initial_read():
     entry, switch = make_switch()
     switch._handle_event(SimpleNamespace(data={
-        "entry_id": entry.entry_id, "event_key": "display_touch_tone_changed",
+        "entry_id": entry.entry_id, "event_type": "display_touch_tone_changed",
         "data": {"enabled": False, "available": True},
     }))
     assert switch.available and switch.is_on is False
@@ -159,7 +159,7 @@ class _EventBus:
     def push(self, entry, *, enabled, available=True):
         event = SimpleNamespace(data={
             "entry_id": entry.entry_id,
-            "event_key": "display_touch_tone_changed",
+            "event_type": "display_touch_tone_changed",
             "data": {"enabled": enabled, "available": available},
         })
         for handler in tuple(self.listeners):

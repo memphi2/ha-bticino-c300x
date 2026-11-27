@@ -266,9 +266,9 @@ def test_with_several_units_the_unit_rings_when_the_caller_is_known() -> None:
     }
     # Another entry's events and events without a call change nothing.
     for entity in entities:
-        entity._agent_event(SimpleNamespace(data={"entry_id": "other", "event_key": "doorbell_pressed",
+        entity._agent_event(SimpleNamespace(data={"entry_id": "other", "event_type": "doorbell_pressed",
                                                   "call_id": "0badc0de-3"}))
-        entity._agent_event(SimpleNamespace(data={"entry_id": "entry-1", "event_key": "doorbell_pressed"}))
+        entity._agent_event(SimpleNamespace(data={"entry_id": "entry-1", "event_type": "doorbell_pressed"}))
     assert len(station.fired) == 2
 
 

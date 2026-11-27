@@ -51,6 +51,17 @@ You need:
 
 What each model can do: [Models and features](docs/reference.md#models-and-features).
 
+### On the Station Display
+
+<p align="center">
+  <img src="docs/images/readme/display-energy-flow-en.webp" alt="Classe 300X display, Energy page: power flow between grid, solar, battery and home" width="260">
+  <img src="docs/images/readme/display-alarmo-en.webp" alt="Classe 300X display, Alarm page: Alarmo with Away and Night modes and a PIN keypad" width="260">
+  <img src="docs/images/readme/display-lights-en.webp" alt="Classe 300X display, Lights page: eight lights with on/off switches and brightness" width="260">
+</p>
+
+All display pages: [Classe 300X](docs/classe-300x/3-display.md) |
+[Classe 100X](docs/classe-100x/3-display.md).
+
 ## More
 
 [Reference](docs/reference.md) | [Support](SUPPORT.md) |

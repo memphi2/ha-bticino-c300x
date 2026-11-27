@@ -272,11 +272,25 @@ def test_event_label_returns_localized_event_names() -> None:
     )
     assert event_label("door_unlock_started", "de-DE") == "Türöffner gestartet"
     assert event_label("door_unlock_started", "it-IT") == "Apertura porta avviata"
-    assert event_label("door_unlock_started", "fr") == "Ouverture porte demarree"
+    assert event_label("door_unlock_started", "fr") == "Ouverture de la porte démarrée"
     assert event_label("door_unlock_started", "es") == "Apertura de puerta iniciada"
     assert event_label("door_unlock_started", "es-ES") == "Apertura de puerta iniciada"
     assert event_label("door_unlock_started", "pt") == "Door unlock started"
     assert event_label("unknown_vendor_event", "de") is None
+
+
+def test_french_event_labels_are_written_with_their_accents() -> None:
+    import re
+
+    from custom_components.bticino_c300x.capabilities import EVENT_LABELS
+
+    # Words the labels used without accents: demarree, terminee, Lumiere, ...
+    unaccented = re.compile(
+        r"\b(\w*(?<![ée])ee|demarr\w*|termine|activee|appuyee|camera|video|memos?|lumiere|relachee"
+        r"|executee|decroche|repondu|coupee|modifiee?s?|metriques|systeme|ecritures|mis a|mises a|redemarre)\b",
+        re.IGNORECASE,
+    )
+    assert [label for label in EVENT_LABELS["fr"].values() if unaccented.search(label)] == []
 
 
 def test_gate_capabilities_disables_doorbell_video_when_ha_option_is_off() -> None:

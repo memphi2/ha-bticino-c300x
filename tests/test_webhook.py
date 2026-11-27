@@ -1015,6 +1015,46 @@ def test_call_events_feed_the_call_registry_and_name_the_unit(monkeypatch: pytes
     assert registry.unit_state("21") == ("idle", None)
     assert registry.current_call_id == "0badc0de-2"
 
+def test_station_call_state_and_door_contact_events_reach_the_bus(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The agent's new call hub events are station events like any other."""
+
+    hass = _FakeHass()
+    event_state = C300XEventState()
+    registry = C300XCallRegistry()
+    registry.set_units(normalize_outdoor_units({"default_unit": "20", "units": [
+        {"id": "20", "where": "20", "name": "Gate", "default": True, "door": {"state": None, "age_ms": None}},
+    ]}))
+    entry = SimpleNamespace(
+        entry_id="entry-1", title="C300X", data={CONF_EVENT_WEBHOOK_TOKEN: "event-token"}, options={},
+        runtime_data=SimpleNamespace(event_state=event_state, calls=registry),
+    )
+    hass.async_create_background_task = lambda coro, name: coro.close()  # type: ignore[attr-defined]
+    monkeypatch.setattr(call_sync, "async_dispatcher_send", lambda *args: None)
+    fired: list[tuple[str, dict]] = []
+    hass.bus.async_fire = lambda event_type, data: fired.append((event_type, data))  # type: ignore[method-assign]
+
+    def send(event: str, data: dict) -> None:
+        response = asyncio.run(
+            _async_handle_agent_event(
+                hass,  # type: ignore[arg-type]
+                entry,  # type: ignore[arg-type]
+                event_state,
+                _FakeRequest("event-token", {"type": event, "data": data}),  # type: ignore[arg-type]
+            )
+        )
+        assert response.status == 200, event
+
+    send("station.call_state", {"code": 2, "state": "ringing"})
+    name, data = fired[-1]
+    assert name == "bticino_c300x_agent_event_received"
+    assert (data["event_type"], data["unit"], data["data"]) == ("station_call_state", None, {"code": 2, "state": "ringing"})
+    send("door.opened", {"unit": "20", "where": "20", "raw": "*8*66*20##"})
+    assert (fired[-1][1]["event_type"], fired[-1][1]["unit"], fired[-1][1]["device_id"]) == (
+        "door_opened", "20", "device-unit-20")
+    send("door.closed", {"unit": "20", "where": "20", "raw": "*8*65*20##"})
+    assert (fired[-1][1]["event_type"], fired[-1][1]["unit"]) == ("door_closed", "20")
+
+
 def test_external_doorbell_view_does_not_advertise_ha_video_available() -> None:
     hass = _FakeHass()
     event_state = C300XEventState()

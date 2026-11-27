@@ -14,6 +14,8 @@ EVENT_LITERAL_RE = re.compile(r'"([a-z_]+\.[a-z_]+)"')
 EVENT_CALL_RE = re.compile(
     r"(?P<call>dispatch_event(?:_internal|_snapshot)?|"
     r"c300x_video_dispatch_event|dispatch_home_call_state_event|"
+    # The call hub's events: calls, the station's call state, door contacts.
+    r"\bhub_emit|\bemit|"
     r"c300x_copy_string)\s*\((?P<args>.*?)\);",
     re.DOTALL,
 )
@@ -58,3 +60,16 @@ def test_native_agent_event_literals_are_mapped_to_ha_event_types() -> None:
 
     assert native_events
     assert native_events <= set(HA_EVENT_TYPES)
+
+
+def test_the_call_hub_events_reach_home_assistant() -> None:
+    """Subscribed with the calls and outdoor unit capabilities, else HA never gets them."""
+
+    from custom_components.bticino_c300x.capabilities import events_for_capabilities
+
+    events = events_for_capabilities({"calls": True, "outdoor_units": True})
+    for event in ("station.call_state", "door.opened", "door.closed"):
+        assert event in events, event
+        assert event in HA_EVENT_TYPES, event
+    assert HA_EVENT_TYPES["station.call_state"] == "station_call_state"
+    assert (HA_EVENT_TYPES["door.opened"], HA_EVENT_TYPES["door.closed"]) == ("door_opened", "door_closed")

@@ -99,6 +99,11 @@ devices, entities and services; a Repair lists what to redo after the update.
   100 ms later. Before, Home Assistant sent the fixed address `10`, which
   switched nothing on a station at another address. An address set in the Manual mode (P and N) is
   used as before.
+- **New station events** on `bticino_c300x_agent_event_received`:
+  `station_call_state` whenever the station's own call state changes (for
+  example `ringing`, `conversation`, `answering_machine`, `idle`), and
+  `door_opened` and `door_closed` from the door contact of an outdoor unit,
+  on that unit's device.
 - The native agent changed; an agent update is required. Until the agent
   update Repair has run, the integration shows no entities: the devices and
   entities move to the outdoor units with that update.

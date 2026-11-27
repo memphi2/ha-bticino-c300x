@@ -235,7 +235,9 @@ assumed.
 | `doorbell_pressed` | Someone rang. | `camera_entity_id`, `video_available`, `doorbell` |
 | `call_caller_identified` | The station named the unit that rings. | |
 | `call_answered`, `call_view_started`, `call_ended` | A call was answered, a view started, a call ended. | |
+| `station_call_state` | The station's own call state changed (station device). | `data`: `code` and `state`: `idle`, `setup`, `ringing`, `viewing`, `waiting`, `conversation`, `answering_machine`, `greeting`, `recording`, or `null` for a code without a known meaning |
 | `outdoor_units_changed` | The station's outdoor units changed. | |
+| `door_opened`, `door_closed` | The door contact of an outdoor unit reports its door open or closed (outdoor unit device; only a unit wired with a door contact). | `data`: `unit`, `where`, `raw` |
 | `doorbell_view_requested` | A view of the door camera was requested. | as above |
 | `doorbell_media_closed` | The doorbell camera stream ended. | as above |
 | `home_call_started`, `home_call_answered`, `home_call_ended` | Home Call steps. | |

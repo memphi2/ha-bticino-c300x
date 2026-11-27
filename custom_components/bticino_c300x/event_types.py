@@ -14,7 +14,11 @@ ACTIVATION_EVENTS = ("activation.executed",)
 CALL_EVENTS = (
     "call.caller_identified", "call.answered", "call.view_started", "call.ended",
 )
+# The station's own call state (bt_answering_machine, *#8**35*<code>##).
+STATION_CALL_STATE_EVENTS = ("station.call_state",)
 OUTDOOR_UNIT_EVENTS = ("outdoor_units.changed",)
+# A unit's door contact (bt_vct, *8*66/65*<where>##).
+DOOR_CONTACT_EVENTS = ("door.opened", "door.closed")
 HOME_CALL_EVENTS = ("home_call.started", "home_call.answered", "home_call.ended")
 RINGER_EVENTS = ("ringer.muted", "ringer.unmuted", "ringer.volume_changed")
 TOUCH_TONE_EVENTS = ("display.touch_tone_changed",)
@@ -38,7 +42,10 @@ HA_EVENT_TYPES: dict[str, str] = {
     "call.answered": "call_answered",
     "call.view_started": "call_view_started",
     "call.ended": "call_ended",
+    "station.call_state": "station_call_state",
     "outdoor_units.changed": "outdoor_units_changed",
+    "door.opened": "door_opened",
+    "door.closed": "door_closed",
     "home_call.started": "home_call_started",
     "home_call.answered": "home_call_answered",
     "home_call.ended": "home_call_ended",

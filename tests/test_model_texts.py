@@ -130,12 +130,14 @@ ADDED_SINCE_2_10_0 = frozenset({
     "selector/door_audio_level/options/9",
 })
 # Texts of 2.10.0 that read differently now: the SSH package message names the
-# package and the way out, the service name lost the model (neutral names), and
-# the SSH forms name the optional private key.
+# package and the way out, the service name lost the model (neutral names), the
+# SSH forms name the optional private key, and the unfinished display write
+# points to the documentation section where the step now is.
 CHANGED_SINCE_2_10_0 = frozenset({
     "config/error/installer_dependency_missing",
     "config/step/bootstrap_install/description",
     "issues/device_agent_update_required/fix_flow/step/ssh_install/description",
+    "issues/device_qml_transaction_stuck/description",
     "services/capture_doorbell_call/name",
 })
 # sha256 over every text of 2.10.0 (f4f75ea3) but the changed and the removed
@@ -160,11 +162,11 @@ REMOVED_SINCE_2_10_0 = frozenset({
     "options/step/features/data_description/ring_capture_audio_gain_db",
 })
 DIGESTS_2_10_0 = {
-    "base": "00167eb895dc8d0fed946205a6c2883048f9e0a94ace3dcb612cb97b0cfa9a50",
-    "en": "00167eb895dc8d0fed946205a6c2883048f9e0a94ace3dcb612cb97b0cfa9a50",
-    "de": "0b38b814ed93f85491c6359913309df49bed74a5f5691c2f9273c88a5ec9e18b",
-    "it": "09aee7e76bd6ce804a86eb44578e4c44692a88ce782c32c8aeacf1de73e33200",
-    "fr": "5c8142fb3b5f9ad2a74f42778bdd6e2fc8875969e21351d481beda13027a5555",
+    "base": "3662f6a05fa30373abe3b32f932fa429f7f7f26e7f2fa2cd9e65af39431e5cf1",
+    "en": "3662f6a05fa30373abe3b32f932fa429f7f7f26e7f2fa2cd9e65af39431e5cf1",
+    "de": "fc11f16d1cb8cdc0f0bc32b9ff32b6cc5b7b80488bc4fba2a35533cd13c491a9",
+    "it": "75e85a24c761ca6c8a636db741a396eb93b0e30846d851f84629cec4baad31be",
+    "fr": "dbe54ba3e6ffd37dcb4afabf4f7ffe7a7d4f78184edae99b45527d0c089fb8f3",
 }
 
 

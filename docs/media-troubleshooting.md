@@ -180,8 +180,8 @@ and audio** before changing automations. They apply to the live view, Ring
 Calls and Ring Capture recordings alike. Too quiet: raise the door level
 first. Too loud or harsh: lower the door level or set a negative fine
 adjustment. Home Call has its own audio path; these options do not change it.
-The diagnostics show under `audio_level` whether the station's audio chip or
-the agent's software applied the door level in the last audio.
+Diagnostics downloaded during a running call show under `audio_level` whether
+the station's audio chip or the agent's software applies the door level.
 For clearer sound use the PCMU codec. See
 [Codec and Audio Levels](user-guide.md#codec-and-audio-levels).
 

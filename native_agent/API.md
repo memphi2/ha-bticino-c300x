@@ -1098,9 +1098,9 @@ file; `door_level_db: 0` puts the vendor stub back and lowers a gain a running
 call still has. A hook that is neither is never touched. Removing the agent
 puts the vendor stub back. When the backup is missing or is not a stub, the
 agent writes a neutral stub instead (`#!/bin/sh` and `exit 1`, the vendor
-stub's behaviour without its text) with the file's mode kept (0775 on the
-stock firmware); the neutral stub counts as the vendor stub from then on, so a
-lost backup never blocks a level change or the removal.
+stub's behaviour without its text) with the file's mode kept; the neutral
+stub counts as the vendor stub from then on, so a lost backup never blocks a
+level change or the removal.
 
 `audio_level` fields:
 

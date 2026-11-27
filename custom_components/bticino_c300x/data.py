@@ -348,6 +348,8 @@ class BticinoC300XRuntimeData:
     display_notifications: DisplayNotifications | None = None
     media_timeline: C300XMediaTimeline = field(default_factory=C300XMediaTimeline)
     agent_update_state: AgentUpdateState | None = None
+    # A failed door-level write was logged as a warning; repeats log at debug.
+    doorstation_audio_level_failed: bool = False
     resources: C300XRuntimeResources = field(default_factory=C300XRuntimeResources)
     diagnostics: C300XRuntimeDiagnostics = field(
         default_factory=C300XRuntimeDiagnostics

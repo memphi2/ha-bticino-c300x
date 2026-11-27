@@ -307,10 +307,15 @@ class C300XRuntimeManager:
     async def async_sync_device_state(self) -> None:
         """Synchronize startup-only runtime state with the device agent."""
 
+        from .doorstation_audio import async_sync_doorstation_audio_level
+
         api = self._api()
         await self._async_refresh_display_registration(api, startup=True)
         if not self.connection_state.available:
             return
+        # Before the slower steps, and it never raises: a failed later step
+        # must not keep a lowered door level from the station.
+        await async_sync_doorstation_audio_level(self.entry)
         await _async_sync_device_user(self.hass, self.entry)
         await _async_refresh_self_test(self.entry)
         if display_setting_pending(self.entry):

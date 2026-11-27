@@ -117,6 +117,21 @@ def test_prepare_doorbell_rtsp_stream_skips_audio_level_when_current_matches() -
     assert owner.api.activate_audio == [True]
 
 
+def test_prepare_doorbell_rtsp_stream_adds_no_level_request_for_an_unread_status() -> None:
+    """An agent whose status read failed gets no further request under the lock."""
+
+    owner = _FakeOwner(status_queue=[None])
+    owner._entry.options[CONF_DOOR_AUDIO_LEVEL_DB] = 9
+    orchestrator = _orchestrator(owner)
+    orchestrator.async_wait_for_rtsp_ready = _record_ready([])  # type: ignore[method-assign]
+
+    asyncio.run(orchestrator.async_prepare_rtsp_stream(audio=True))
+
+    assert owner.api.status_reads == 0
+    assert owner.api.doorstation_audio_level_calls == []
+    assert owner.api.activate_audio == [True]
+
+
 def test_prepare_doorbell_rtsp_stream_blocks_home_call_owner() -> None:
     owner = _FakeOwner(
         status_queue=[{"media_owner": "home_call", "bridge": {"media_owner": "home_call"}}],
@@ -408,7 +423,12 @@ class _FakeApi:
     home_call_statuses: list[dict[str, Any]] = field(default_factory=list)
     activate_audio: list[bool] = field(default_factory=list)
     doorstation_audio_level_calls: list[tuple[int, int]] = field(default_factory=list)
+    status_reads: int = 0
     stop_calls: int = 0
+
+    async def async_doorbell_video_status(self) -> dict[str, Any]:
+        self.status_reads += 1
+        return {"media_owner": "idle", "bridge": {}}
 
     async def async_activate_doorbell_video(self, *, audio: bool) -> None:
         self.activate_audio.append(audio)

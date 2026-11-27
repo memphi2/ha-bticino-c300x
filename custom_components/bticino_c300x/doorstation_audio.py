@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Mapping
 from contextlib import suppress
@@ -66,6 +67,8 @@ async def async_ensure_doorstation_audio_level(
     Best effort: a failed write must not block answering or starting the
     stream. The command that follows reaches the same agent and reports an
     unreachable agent or a rejected key itself, including the reauth flow.
+    A failure is logged as a warning once per entry setup until a write or a
+    matching agent level succeeds again; repeats go to the debug log.
     """
 
     runtime = entry.runtime_data
@@ -78,8 +81,38 @@ async def async_ensure_doorstation_audio_level(
         ensure_current_runtime(entry, runtime)
 
     if _agent_levels(status) == desired:
+        _set_failed(runtime, False)
         return
     try:
         await runtime.api.async_set_doorstation_audio_level(*desired)
     except C300XAgentApiError as err:
-        _LOGGER.warning("Setting the C300X door audio level failed: %s", err)
+        log = _LOGGER.debug if _failed(runtime) else _LOGGER.warning
+        log("Setting the C300X door audio level failed: %s", err)
+        _set_failed(runtime, True)
+    else:
+        _set_failed(runtime, False)
+
+
+async def async_sync_doorstation_audio_level(entry: Any) -> None:
+    """Send the levels once the entry is set up, without a stream waiting.
+
+    Saving the options reloads the entry, so this also carries a lowered door
+    level to the station right away instead of at the next stream or answer.
+    Never raises but for cancellation: it runs in the startup background sync.
+    """
+
+    try:
+        await async_ensure_doorstation_audio_level(entry)
+    except asyncio.CancelledError:
+        raise
+    except Exception as err:  # noqa: BLE001 - a reload or a failed status read ends it
+        _LOGGER.debug("C300X door audio level was not sent after setup: %s", err)
+
+
+def _failed(runtime: Any) -> bool:
+    return getattr(runtime, "doorstation_audio_level_failed", False) is True
+
+
+def _set_failed(runtime: Any, failed: bool) -> None:
+    with suppress(AttributeError):
+        runtime.doorstation_audio_level_failed = failed

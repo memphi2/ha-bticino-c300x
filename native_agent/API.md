@@ -686,14 +686,21 @@ release timer is 100 ms on 1.7.19, 2.0.2, 3.0.6 and the C100X 1.5.8). An agent
 stop during the 100 ms finishes the exchange; nothing is stored, so a restart
 or reboot leaves no state behind.
 
-Request fields (without `address` the configured `stairLightDefaultAddress`):
+Request fields: `address`, optional. Without it the light is at
+`device.stairLightDefaultAddress` when that is set, else at the station's own
+address from `conf.xml` (`vdes/communication` `dev` + `address`, outside
+`p_default`): `11` on a station with dev 1 and address 1, where its display
+sends `*8*21*11##`. That file has this block on 1.7.19, 2.0.2, 3.0.6 and the
+C100X 1.5.8.
 
 ```json
-{"address": "10"}
+{"address": "11"}
 ```
 
-Response: `{"ok": true, "address": "10"}`. `400 invalid_stair_light_address`
-for an address that is not digits and `#`; a bus error answers `502` with the
+Response: `{"ok": true, "address": "11"}`. `400 invalid_stair_light_address`
+for an address that is not digits and `#` (or not a string);
+`503 stair_light_address_unknown` without an address, a configured default and
+a readable own address in `conf.xml`; a bus error answers `502` with the
 OpenWebNet error.
 
 ### `POST /api/v1/locks/{id}/actions/unlock`
@@ -757,7 +764,7 @@ them (an `<ist>` attribute it lacks is its `<obj>`'s; the address is `dev` +
 | --- | --- | --- |
 | `<obj cid="10050">`, `<ist cid="10060">` with `dev` not 5 | `lock` of that outdoor unit; `dev` 5 is a cloud lock, not on the bus, and is left out | `station_lock_<address>` |
 | `<obj cid="3008">`, each `<ist>` | `actuator` | `station_actuator_<address>` |
-| `<obj cid="2009">` | `stair_light`, at the station's own address (`conf.xml` `vdes/communication` `dev` + `address`, `11` for 1 and 1), else at `device.stairLightDefaultAddress`; without either it is left out | `station_stair_light` |
+| `<obj cid="2009">` | `stair_light`, at `device.stairLightDefaultAddress` when set, else at the station's own address (`conf.xml` `vdes/communication` `dev` + `address`, `11` for 1 and 1); without either it is left out | `station_stair_light` |
 
 In an id, `#` of the address becomes `_`; an item whose id would be longer than
 32 characters is left out. Other objects (10051 cameras, 10052 and 10053
@@ -1586,7 +1593,7 @@ Common request fields:
   "mdnsEnabled": true,
   "firewallEnabled": true,
   "ipv6FirewallEnabled": true,
-  "stairLightDefaultAddress": "10"
+  "stairLightDefaultAddress": "11"
 }
 ```
 

@@ -119,11 +119,8 @@ void c300x_default_config(struct c300x_config *config)
     safe_copy(config->openwebnet_host, sizeof(config->openwebnet_host), "127.0.0.1");
     config->openwebnet_port = 20000;
     config->openwebnet_timeout_ms = 3000;
-    safe_copy(
-        config->stair_light_default_address,
-        sizeof(config->stair_light_default_address),
-        "10"
-    );
+    /* Empty: the stair light is at the station's own address (conf.xml). */
+    config->stair_light_default_address[0] = '\0';
     safe_copy(config->lock_id, sizeof(config->lock_id), "default");
     safe_copy(config->lock_name, sizeof(config->lock_name), "Main door");
     safe_copy(config->lock_address, sizeof(config->lock_address), "20");
@@ -1580,7 +1577,7 @@ int c300x_load_config(
     if (!c300x_config_listen_valid(config, error, error_len)) {
         return 0;
     }
-    if (!address_is_valid(config->stair_light_default_address)) {
+    if (config->stair_light_default_address[0] != '\0' && !address_is_valid(config->stair_light_default_address)) {
         set_error(error, error_len, "invalid default stair-light address");
         return 0;
     }

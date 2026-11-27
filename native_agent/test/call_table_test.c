@@ -602,21 +602,32 @@ static void station_activations(void)
     assert(discovery.count == 3);
     assert(strcmp(discovery.items[0].id, "station_lock_27") == 0);
 
-    /* The stair light is at the station's own address (the owner's station: 11),
-     * else at the configured default; without either it is not listed. */
+    /* The stair light is at the station's own address (the owner's station: 11);
+     * a configured address wins; without either it is not listed. */
     config.activations_count = 0;
     c300x_station_archive_parse(&station, others, owner_conf);
     assert(strcmp(station.own_where, "11") == 0 && strcmp(station.default_where, "20") == 0);
     c300x_activation_discovery_build(&discovery, &station, "ok", &config);
     assert(discovery.count == 4 && strcmp(discovery.items[3].address, "11") == 0);
     snprintf(config.stair_light_default_address, sizeof(config.stair_light_default_address), "15");
-    c300x_station_archive_parse(&station, others, NULL);
     c300x_activation_discovery_build(&discovery, &station, "ok", &config);
     assert(discovery.count == 4 && strcmp(discovery.items[3].address, "15") == 0);
     config.stair_light_default_address[0] = '\0';
     c300x_station_archive_parse(&station, others, NULL);
     c300x_activation_discovery_build(&discovery, &station, "ok", &config);
     assert(discovery.count == 3 && strcmp(discovery.items[2].type, "actuator") == 0);
+    /* The stair-light route reads the same address from the file. */
+    {
+        const char *tmp = getenv("TMPDIR");
+        char path[256], where[24];
+        snprintf(path, sizeof(path), "%s/conf-XXXXXX", tmp != NULL && tmp[0] != '\0' ? tmp : "/var/tmp");
+        int fd = mkstemp(path);
+        assert(fd >= 0 && write(fd, owner_conf, strlen(owner_conf)) == (ssize_t)strlen(owner_conf));
+        close(fd);
+        assert(c300x_station_own_where(path, where, sizeof(where)) && strcmp(where, "11") == 0);
+        unlink(path);
+        assert(!c300x_station_own_where(path, where, sizeof(where)) && where[0] == '\0');
+    }
     /* Names are escaped. */
     assert(c300x_activations_json(&config, &discovery, NULL, json, sizeof(json)));
     assert(strstr(json, "\"name\":\"Gate \\\\ opener\"") != NULL);

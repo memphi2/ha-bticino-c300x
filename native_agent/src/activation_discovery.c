@@ -74,7 +74,9 @@ void c300x_activation_discovery_build(struct c300x_activation_discovery *discove
                  station->actuators[index].name, "Actuator");
     }
     if (station->stair_light) {
-        const char *where = station->own_where[0] != '\0' ? station->own_where : config->stair_light_default_address;
+        /* A configured address wins; else the light is at the station's own address. */
+        const char *where = config->stair_light_default_address[0] != '\0' ? config->stair_light_default_address
+                                                                            : station->own_where;
         add_item(discovery, config, "stair_light", "station_stair_light", where, station->stair_light_name,
                  "Stair light");
     }

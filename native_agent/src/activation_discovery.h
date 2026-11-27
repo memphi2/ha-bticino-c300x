@@ -19,9 +19,9 @@ struct c300x_activation_discovery {
     struct c300x_activation items[C300X_MAX_DISCOVERED_ACTIVATIONS];
 };
 
-/* Pure: the items of the parsed station files. The stair light is at the
- * station's own address from conf.xml, else at stairLightDefaultAddress;
- * without either it is not listed. */
+/* Pure: the items of the parsed station files. The stair light is at a
+ * configured stairLightDefaultAddress, else at the station's own address
+ * from conf.xml; without either it is not listed. */
 void c300x_activation_discovery_build(struct c300x_activation_discovery *discovery,
                                       const struct c300x_station_archive *station, const char *archive_state,
                                       const struct c300x_config *config);

@@ -12,7 +12,7 @@
   "device": {
     "model": "C300X",
     "firmware": "",
-    "stairLightDefaultAddress": "10"
+    "stairLightDefaultAddress": ""
   },
   "openwebnet": {
     "host": "127.0.0.1",

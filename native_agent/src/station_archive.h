@@ -42,6 +42,9 @@ void c300x_station_archive_parse(struct c300x_station_archive *archive, const ch
 /* Reads and parses both files; *archive_state is ok, missing or unreadable. */
 void c300x_station_archive_load(struct c300x_station_archive *archive, const char *archive_path,
                                 const char *conf_path, const char **archive_state);
+/* The station's own address from conf.xml (communication dev + address,
+ * 11 for dev 1, address 1); zero when it is unknown. */
+int c300x_station_own_where(const char *conf_path, char *out, size_t out_len);
 /* A whole bounded text file, NULL with *state missing or unreadable. */
 char *c300x_station_file_read(const char *path, size_t limit, const char **state);
 

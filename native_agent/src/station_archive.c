@@ -330,3 +330,16 @@ void c300x_station_archive_load(struct c300x_station_archive *archive, const cha
     free(archive_xml);
     free(conf_xml);
 }
+
+int c300x_station_own_where(const char *conf_path, char *out, size_t out_len)
+{
+    const char *state = "missing";
+    char *conf_xml = c300x_station_file_read(conf_path, CONF_MAX_BYTES, &state);
+
+    out[0] = '\0';
+    if (conf_xml != NULL) {
+        conf_own_where(conf_xml, out, out_len);
+    }
+    free(conf_xml);
+    return out[0] != '\0';
+}

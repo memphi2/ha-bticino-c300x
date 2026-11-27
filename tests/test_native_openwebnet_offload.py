@@ -119,6 +119,7 @@ def lab(binary: Path, tmp_path: Path, request: pytest.FixtureRequest) -> Iterato
             "api": {"token": TOKEN},
             "openwebnet": {"host": "127.0.0.1", "port": bus.server_address[1], "timeoutMs": 9000},
             "locks": {"releaseDelayMs": 1, "items": {"default": {"name": "Door", "address": "20"}}},
+            "device": {"stairLightDefaultAddress": "10"},
             "maintenance": {"enabled": False},
             "activations": {"enabled": False, "autoDiscover": False},
             "events": {"udp": {"enabled": False}},

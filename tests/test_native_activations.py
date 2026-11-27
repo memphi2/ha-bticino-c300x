@@ -76,8 +76,10 @@ def binary(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return default_host_agent(tmp_path_factory)
 
 
-def agent_config(bus_port: int, api: int, ui: int, items: list[dict[str, Any]]) -> dict[str, Any]:
+def agent_config(bus_port: int, api: int, ui: int, items: list[dict[str, Any]],
+                 stair_light: str = "15") -> dict[str, Any]:
     return {
+        "device": {"stairLightDefaultAddress": stair_light},
         "listen": {"host": "127.0.0.1", "apiPort": api, "uiPort": ui},
         "api": {"token": TOKEN},
         "openwebnet": {"host": "127.0.0.1", "port": bus_port, "timeoutMs": 5000},
@@ -95,10 +97,11 @@ def agent_config(bus_port: int, api: int, ui: int, items: list[dict[str, Any]]) 
 @pytest.fixture
 def lab(binary: Path, tmp_path: Path, request: pytest.FixtureRequest) -> Iterator[Lab]:
     items = getattr(request, "param", ITEMS)
+    stair_light = "" if items == [] else "15"
     with managed_tcp_server(Bus()) as bus:
         api, ui = free_tcp_ports(2)
         config_path = tmp_path / "config.json"
-        config_path.write_text(json.dumps(agent_config(bus.server_address[1], api, ui, items)))
+        config_path.write_text(json.dumps(agent_config(bus.server_address[1], api, ui, items, stair_light)))
         with (tmp_path / "agent.log").open("w") as log:
             process = subprocess.Popen([str(binary), "--config", str(config_path)],
                                        stdout=log, stderr=log, cwd=tmp_path)
@@ -126,6 +129,25 @@ def test_the_stair_light_route_releases_the_light_as_the_display_does(lab: Lab) 
 
     assert (status, body) == (200, {"ok": True, "address": "11"})
     assert_released_after_display_delay(lab.bus, "11")
+
+
+def test_the_stair_light_route_uses_the_configured_address(lab: Lab) -> None:
+    status, body = lab.request("POST", "/api/v1/stair-light/actions/activate", {})
+
+    assert (status, body) == (200, {"ok": True, "address": "15"})
+    assert_released_after_display_delay(lab.bus, "15")
+
+
+@pytest.mark.parametrize("lab", [[]], indirect=True)
+def test_without_a_configured_address_the_stair_light_is_not_at_a_fixed_one(lab: Lab) -> None:
+    # The light is at the station's own address from /var/tmp/conf.xml; a
+    # host has none, so there is no address, and never a made-up "10".
+    if Path("/var/tmp/conf.xml").exists():
+        pytest.skip("this host has a station conf.xml")
+    status, body = lab.request("POST", "/api/v1/stair-light/actions/activate", {})
+
+    assert (status, body) == (503, {"ok": False, "error": "stair_light_address_unknown"})
+    assert lab.bus.sent() == []
 
 
 def test_a_stair_light_activation_releases_the_light_as_the_display_does(lab: Lab) -> None:

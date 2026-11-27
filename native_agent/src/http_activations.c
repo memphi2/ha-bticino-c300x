@@ -200,6 +200,11 @@ static void stair_light(int client_fd, const struct c300x_activation_routes *rou
     if (address[0] == '\0') {
         c300x_copy_string(address, sizeof(address), routes->config->stair_light_default_address);
     }
+    /* Not configured: the station's own address, as its display does. */
+    if (address[0] == '\0' && !c300x_station_own_where(C300X_CONF_XML_PATH, address, sizeof(address))) {
+        reply(client_fd, 503, "Service Unavailable", "{\"ok\":false,\"error\":\"stair_light_address_unknown\"}\n");
+        return;
+    }
     if (!address_valid(address)) {
         reply(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_stair_light_address\"}\n");
         return;

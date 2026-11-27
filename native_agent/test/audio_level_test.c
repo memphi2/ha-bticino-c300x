@@ -19,6 +19,7 @@ static long long clock_ms = 1000000;
 long long test_clock(void) { return clock_ms; }
 
 #include <sys/stat.h>
+#include <sys/wait.h>
 
 static int race_door_db = -1;
 
@@ -568,6 +569,84 @@ static void test_timing(void)
     put("sout", "11\n", 0644);
 }
 
+static ino_t hook_inode(void)
+{
+    char path[640];
+    struct stat st;
+    path_of(path, sizeof(path), "Audio_State.sh");
+    assert(stat(path, &st) == 0);
+    return st.st_ino;
+}
+
+/* An agent start in its own process: the level as the status reads it. */
+static int start_level(void)
+{
+    int status = 0;
+    pid_t pid = fork();
+    assert(pid >= 0);
+    if (pid == 0) {
+        char json[C300X_AUDIO_LEVEL_JSON_MAX];
+        _exit(c300x_audio_level_json(json, sizeof(json)) > 0 ? level_json_int(json, "door_level_db") : 99);
+    }
+    assert(waitpid(pid, &status, 0) == pid && WIFEXITED(status));
+    return WEXITSTATUS(status);
+}
+
+/* A hook of ours from an older template is this agent's again after a start,
+ * at its level and once; nothing else is written. */
+static void test_refresh(void)
+{
+    static const char old_hook[] = "#!/bin/sh\n# c300x-agent audio hook v0\nV=14\nexit 1\n";
+    char error[64] = "";
+    char hook[HOOK_MAX];
+    struct stat st;
+    char path[640];
+    ino_t inode;
+
+    reset_device();
+    assert(c300x_audio_chip_apply(3, error, sizeof(error)));
+    put("Audio_State.sh", old_hook, 0775);
+    assert(start_level() == 9);
+    assert(c300x_audio_chip_render_hook(3, hook, sizeof(hook)) > 0 && strcmp(get("Audio_State.sh"), hook) == 0);
+    path_of(path, sizeof(path), "Audio_State.sh");
+    assert(stat(path, &st) == 0 && (st.st_mode & 0777) == 0775);
+    assert(strcmp(get("backup/Audio_State.sh"), stub) == 0);
+    /* Current already: not written again. */
+    inode = hook_inode();
+    assert(start_level() == 9 && hook_inode() == inode);
+
+    /* A call has the chip raised: the hook that raised it lowers it. */
+    put("Audio_State.sh", old_hook, 0775);
+    put("mark", "14\n", 0644);
+    inode = hook_inode();
+    assert(start_level() == 9 && hook_inode() == inode && strcmp(get("Audio_State.sh"), old_hook) == 0);
+    drop("mark");
+    assert(start_level() == 9 && strcmp(get("Audio_State.sh"), hook) == 0);
+
+    /* Without the lever on this station: left for the next level change. */
+    put("Audio_State.sh", old_hook, 0775);
+    put("IP_PE.cr", "other\n", 0644);
+    inode = hook_inode();
+    assert(start_level() == 9 && hook_inode() == inode);
+    put("IP_PE.cr", "profile\n", 0644);
+
+    /* Ours without a level, stock, the neutral stub and a foreign hook. */
+    put("Audio_State.sh", "#!/bin/sh\n# c300x-agent audio hook v0\nV=x\nexit 1\n", 0775);
+    inode = hook_inode();
+    assert(start_level() == 0 && hook_inode() == inode);
+    put("Audio_State.sh", stub, 0775);
+    inode = hook_inode();
+    assert(start_level() == 0 && hook_inode() == inode);
+    put("Audio_State.sh", neutral, 0775);
+    inode = hook_inode();
+    assert(start_level() == 0 && hook_inode() == inode);
+    put("Audio_State.sh", "#!/bin/sh\necho mine\n# c300x-agent audio hook\nV=14\n", 0755);
+    inode = hook_inode();
+    assert(start_level() == 0 && hook_inode() == inode);
+    drop("Audio_State.sh");
+    assert(start_level() == 0 && !exists("Audio_State.sh"));
+}
+
 int main(int argc, char **argv)
 {
     char path[640];
@@ -602,6 +681,8 @@ int main(int argc, char **argv)
         test_level();
     } else if (strcmp(argv[2], "timing") == 0) {
         test_timing();
+    } else if (strcmp(argv[2], "refresh") == 0) {
+        test_refresh();
     } else {
         return 2;
     }

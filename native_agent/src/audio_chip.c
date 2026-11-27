@@ -17,7 +17,8 @@
 #define HOOK_BACKUP_NAME "Audio_State.sh"
 #define HOOK_MAX 2048
 /* Every version of our hook carries this line; the level is its V= line. An
- * agent recognises an older or newer template by it and rewrites it. */
+ * agent recognises an older or newer template by it and rewrites it at its
+ * start (c300x_audio_chip_refresh) or at the next level change. */
 #define HOOK_MARKER "# c300x-agent audio hook "
 /* The vendor's empty Audio_State.sh and IP_PE.cr, the same bytes on 1.7.19,
  * 2.0.2 and 3.0.6. */
@@ -377,6 +378,30 @@ int c300x_audio_chip_apply(int steps, char *error, size_t error_len)
         return 0;
     }
     return write_hook(hook, hook_len, state == C300X_AUDIO_HOOK_STOCK ? backup : NULL, error, error_len);
+}
+
+/* A template fix reaches an installed hook without a level change. Never
+ * while a call has the chip raised: the mark is the one thing the hook that
+ * raised the gain and the hook that lowers it again must agree on, and a
+ * newer template may keep it elsewhere. The hook that wrote the mark lowers
+ * the gain itself; the next start or level change brings the new template. */
+int c300x_audio_chip_refresh(char *error, size_t error_len)
+{
+    char hook[HOOK_MAX];
+    size_t hook_len;
+    int steps = 0;
+    int exact = 0;
+
+    if (hook_state(&steps, &exact) != C300X_AUDIO_HOOK_OURS || steps == 0 || exact
+        || access(mark_path(), F_OK) == 0 || !c300x_audio_chip_supported()) {
+        return 1;
+    }
+    hook_len = c300x_audio_chip_render_hook(steps, hook, sizeof(hook));
+    if (hook_len == 0) {
+        set_err(error, error_len, "render_failed");
+        return 0;
+    }
+    return write_hook(hook, hook_len, NULL, error, error_len);
 }
 
 int c300x_audio_chip_remove_patches(char *error, size_t error_len)

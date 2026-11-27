@@ -255,5 +255,6 @@ int main(int argc, char **argv)
     /* The device libcurl must initialize before workers, and only on opt-in. */
     c300x_https_init(config.https_callbacks_enabled);
     (void)signal(SIGPIPE, SIG_IGN);
+    c300x_audio_level_start();
     return c300x_run(&config);
 }

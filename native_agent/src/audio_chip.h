@@ -33,6 +33,11 @@ int c300x_audio_chip_supported(void);
 /* steps 1..4 writes our hook (the stock stub backed up once), 0 restores
  * the stub and the gain a raised call may have left. */
 int c300x_audio_chip_apply(int steps, char *error, size_t error_len);
+/* Our hook with another template than this agent's becomes this agent's at
+ * its level, with the write and remount of a level change; nothing is written
+ * for a current, stock, foreign or missing hook, a hook with no level, a
+ * station without the lever, or while the raised mark is there. */
+int c300x_audio_chip_refresh(char *error, size_t error_len);
 int c300x_audio_chip_remove_patches(char *error, size_t error_len);
 /* How many dB the chip adds right now: only while our hook has raised it in
  * the current audio state (its tmpfs mark), from the control's live value. */

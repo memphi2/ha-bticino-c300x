@@ -17,6 +17,10 @@
 #define C300X_FINE_GAIN_MAX_DB 10
 #define C300X_AUDIO_LEVEL_JSON_MAX 192
 
+/* At agent start, before the media threads: reads the level back from the
+ * hook and brings a hook of an older template to this agent's, so the
+ * packet path never writes. */
+void c300x_audio_level_start(void);
 int c300x_audio_level_valid(int door_level_db, int fine_gain_db);
 /* Stores both and moves the door level into the chip or out of it. A chip
  * that cannot take it is no error: the software stage carries it then. */

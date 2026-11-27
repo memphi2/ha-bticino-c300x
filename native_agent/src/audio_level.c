@@ -63,12 +63,17 @@ static const char *lever_for(int door_db, int supported, int hook_ours)
     return hook_ours ? "ready" : "not_installed";
 }
 
-/* After a restart the hook still holds the door level that was set. */
+/* After a restart the hook still holds the door level that was set; one of
+ * an older template is brought to this agent's first. */
 static void level_init(void)
 {
     int steps = 0;
-    int ours = c300x_audio_chip_hook_state(&steps) == C300X_AUDIO_HOOK_OURS;
-    int supported = c300x_audio_chip_supported();
+    int ours;
+    int supported;
+
+    (void)c300x_audio_chip_refresh(NULL, 0);
+    ours = c300x_audio_chip_hook_state(&steps) == C300X_AUDIO_HOOK_OURS;
+    supported = c300x_audio_chip_supported();
 
     pthread_mutex_lock(&level_lock);
     level.door_db = ours ? steps * C300X_AUDIO_CHIP_DB_PER_STEP : 0;
@@ -81,6 +86,11 @@ static void level_init(void)
 static void ensure_init(void)
 {
     pthread_once(&level_once, level_init);
+}
+
+void c300x_audio_level_start(void)
+{
+    ensure_init();
 }
 
 int c300x_audio_level_valid(int door_level_db, int fine_gain_db)

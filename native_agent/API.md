@@ -1093,7 +1093,10 @@ replaced while it is the known vendor stub (or already the agent's own); the
 root filesystem is writable only for the write. The agent's own hook is a
 `#!` script with a `# c300x-agent audio hook v<n>` line and its level in a
 `V=` line; a hook with that line from any agent version counts as the agent's
-own and is rewritten to the current version on the next level change. A level change rewrites the
+own. One whose bytes differ from what the running agent writes for its level
+is rewritten to the current version when the agent starts (on a station with
+the lever, and not while the raised mark is there: the hook that raised the
+gain lowers it) or on the next level change. A level change rewrites the
 file; `door_level_db: 0` puts the vendor stub back and lowers a gain a running
 call still has. A hook that is neither is never touched. Removing the agent
 puts the vendor stub back. When the backup is missing or is not a stub, the

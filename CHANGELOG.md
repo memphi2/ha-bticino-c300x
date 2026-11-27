@@ -104,6 +104,11 @@ devices, entities and services; a Repair lists what to redo after the update.
   example `ringing`, `conversation`, `answering_machine`, `idle`), and
   `door_opened` and `door_closed` from the door contact of an outdoor unit,
   on that unit's device.
+- **Door contact.** An outdoor unit wired with a door contact gets a **Door
+  contact** sensor, on while its door is open. It appears with the unit's
+  first door message. The station reports a change of the door only: after a
+  restart of the agent the state is unknown until the door opens or closes
+  again.
 - The native agent changed; an agent update is required. Until the agent
   update Repair has run, the integration shows no entities: the devices and
   entities move to the outdoor units with that update.

@@ -151,6 +151,8 @@ ADDED_SINCE_2_10_0 = frozenset({
     "selector/door_audio_level/options/9",
     # The activation type "light" is now "actuator" (3.1.0).
     "selector/device_activation_item_type/options/actuator",
+    # The door contact of an outdoor unit (3.1.0).
+    "entity/binary_sensor/door_contact/name",
 })
 # Texts of 2.10.0 that read differently now: the SSH package message names the
 # package and the way out, the service name lost the model (neutral names), the

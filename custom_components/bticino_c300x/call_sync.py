@@ -8,9 +8,11 @@ from typing import Any
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
+from ._api_calls import valid_unit_id
 from .api_errors import C300XAgentApiError
 from .call_registry import (
     SIGNAL_CALLS_CHANGED,
+    SIGNAL_DOORS_CHANGED,
     SIGNAL_OUTDOOR_UNITS_CHANGED,
     C300XCallRegistry,
     units_from_stored,
@@ -30,6 +32,7 @@ CALL_EVENT_TYPES = frozenset({
     "call_ended",
 })
 _UNIT_BINDING_EVENTS = frozenset({"doorbell_pressed", "call_caller_identified", "call_view_started"})
+DOOR_EVENT_STATES = {"door_opened": "open", "door_closed": "closed"}
 
 
 def entry_call_registry(entry: BticinoC300XConfigEntry) -> C300XCallRegistry | None:
@@ -65,7 +68,10 @@ async def async_refresh_units(
         return False
     if getattr(entry, "runtime_data", None) is not runtime:
         return False
+    doors = registry.door_states()
     changed = registry.set_units(payload)
+    if registry.door_states() != doors:
+        async_dispatcher_send(hass, SIGNAL_DOORS_CHANGED, entry.entry_id)
     if not during_setup and _identity_migration_pending(entry, runtime, registry):
         _LOGGER.info("C300X entry %s reloads to take the station's identity", entry.entry_id)
         hass.config_entries.async_schedule_reload(entry.entry_id)
@@ -132,11 +138,15 @@ def async_apply_call_event(
     if event_type == "agent_restarted":
         registry.clear_calls()
         async_dispatcher_send(hass, SIGNAL_CALLS_CHANGED, entry.entry_id)
+        if registry.clear_door_states():
+            async_dispatcher_send(hass, SIGNAL_DOORS_CHANGED, entry.entry_id)
         _schedule(hass, entry, async_resync(hass, entry), "units_calls")
         return {}
     if event_type == "outdoor_units_changed":
         _schedule(hass, entry, async_refresh_units(hass, entry), "units")
         return {}
+    if event_type in DOOR_EVENT_STATES:
+        _apply_door_event(hass, entry, registry, valid_unit_id(data.get("unit")), DOOR_EVENT_STATES[event_type])
     call = registry.apply_event(event_type, data) if event_type in CALL_EVENT_TYPES else None
     ring_unit = None
     if call is not None:
@@ -161,6 +171,22 @@ def async_apply_call_event(
         # The unit whose doorbell event entity fires for this event.
         fields["ring_unit_id"] = ring_unit
     return fields
+
+
+def _apply_door_event(
+    hass: HomeAssistant, entry: BticinoC300XConfigEntry, registry: C300XCallRegistry,
+    unit_id: str | None, state: str,
+) -> None:
+    """A unit's door contact opened or closed."""
+
+    if registry.set_door(unit_id, state):
+        async_dispatcher_send(hass, SIGNAL_DOORS_CHANGED, entry.entry_id)
+        return
+    unit = registry.unit(unit_id)
+    if unit is None or unit.door is None:
+        # The unit's first door frame: the agent lists the contact now, and
+        # its outdoor_units.changed may be lost.
+        _schedule(hass, entry, async_refresh_units(hass, entry), "units")
 
 
 def _schedule(hass: HomeAssistant, entry: BticinoC300XConfigEntry, work: Any, name: str) -> None:

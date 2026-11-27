@@ -130,6 +130,7 @@ reports can be deleted on its device page.
 | `camera` | The default unit has the doorbell camera (live picture, Ring Call and Home Call media; the latest visitor image when idle). Another unit's camera shows the latest visitor image of its calls. |
 | `button` Door | Opens this unit's door. |
 | `sensor` Call | `idle`, `ringing`, `answered` or `viewing`; attribute `call_id`. |
+| `binary_sensor` Door contact | Only on a unit wired with a door contact: on while its door is open (device class door). The station reports a change of the door, not its state: after a restart of the agent the state is unknown until the door opens or closes again. The sensor appears with the unit's first door message. |
 | `image` Last visitor | The latest visitor image of a call of this unit. |
 
 Station entities:

@@ -140,8 +140,13 @@ def async_track_outdoor_units(
     entry: BticinoC300XConfigEntry,
     add_entities: Callable[[Iterable[Entity]], None],
     build: Callable[[OutdoorUnit], Iterable[Entity]],
+    wants: Callable[[OutdoorUnit], bool] | None = None,
 ) -> None:
-    """Add the entities of every unit the station has, and of units it learns later."""
+    """Add the entities of every unit the station has, and of units it learns later.
+
+    With ``wants`` only units it accepts get their entities, also a known
+    unit once it is accepted (a door contact seen for the first time).
+    """
 
     added: set[str] = set()
 
@@ -156,7 +161,7 @@ def async_track_outdoor_units(
         for unit in registry.units.values():
             # A unit the station renamed: its device takes the new name.
             async_register_unit_device(hass, entry, unit)
-            if unit.id not in added:
+            if unit.id not in added and (wants is None or wants(unit)):
                 added.add(unit.id)
                 entities.extend(build(unit))
         if entities:

@@ -1330,6 +1330,9 @@
     "binary_sensor": {
       "home_call_active": {
         "name": "Zuhause-Anruf aktiv"
+      },
+      "door_contact": {
+        "name": "Türkontakt"
       }
     },
     "button": {

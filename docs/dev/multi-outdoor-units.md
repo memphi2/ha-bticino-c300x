@@ -335,6 +335,7 @@ Every outdoor unit, also the only one:
 | `button` | `door` | Unlocks this unit (`outdoor-units/{unit_id}/actions/unlock`); attributes `lock_address` (the unit's `lock_where`) and `lock_name` (the name the agent reports for that address, else the unit's name), the same for every unit. |
 | `event` | `door_event` | Event type `opened` on this unit's `door_unlock.started` (the agent names the unit of the lock address); attribute `call_id` while the unit has a call. |
 | `sensor` | `call` | `idle`, `ringing`, `answered`, `viewing`; attribute `call_id`. |
+| `binary_sensor` | `door_contact` | Only for a unit whose `door` is not `null`, added when `outdoor_units.changed` first reports its contact. Device class `door`, on while `open`; seeded from `GET /api/v1/outdoor-units`, then `door.opened` / `door.closed`. Unknown after `agent.restarted` until the next frame (the station has no query for it). |
 | `image` | `last_visitor` | The latest retained image of a call of this unit. |
 
 The unit event fires when the agent has named the call's unit, with the same

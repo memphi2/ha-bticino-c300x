@@ -11,11 +11,19 @@ from dataclasses import dataclass, field, replace
 from typing import Any
 
 from ._api_calls import valid_call_id, valid_unit_id
-from .agent_contracts import Call, CallsPayload, OutdoorUnit, OutdoorUnitsPayload
+from .agent_contracts import (
+    Call,
+    CallsPayload,
+    DoorContact,
+    OutdoorUnit,
+    OutdoorUnitsPayload,
+)
 from .const import DOMAIN
 
 SIGNAL_CALLS_CHANGED = f"{DOMAIN}_calls_changed"
 SIGNAL_OUTDOOR_UNITS_CHANGED = f"{DOMAIN}_outdoor_units_changed"
+# A unit's door contact state changed (open, closed, unknown).
+SIGNAL_DOORS_CHANGED = f"{DOMAIN}_doors_changed"
 
 # Calls the registry keeps: the agent keeps at most eight, ended ones 60 s.
 _MAX_CALLS = 8
@@ -52,6 +60,28 @@ class C300XCallRegistry:
 
     def unit(self, unit_id: str | None) -> OutdoorUnit | None:
         return self.units.get(unit_id) if unit_id is not None else None
+
+    def door_states(self) -> dict[str, str | None]:
+        """The door state of every unit with a door contact."""
+
+        return {unit.id: unit.door.state for unit in self.units.values() if unit.door is not None}
+
+    def set_door(self, unit_id: str | None, state: str) -> bool:
+        """A door frame of a unit with a contact: true when the state changed."""
+
+        unit = self.unit(unit_id)
+        if unit is None or unit.door is None or unit.door.state == state:
+            return False
+        self.units[unit.id] = replace(unit, door=DoorContact(state=state, age_ms=0))
+        return True
+
+    def clear_door_states(self) -> bool:
+        """The agent restarted: no door state is known until its next frame."""
+
+        known = [unit for unit in self.units.values() if unit.door is not None and unit.door.state is not None]
+        for unit in known:
+            self.units[unit.id] = replace(unit, door=DoorContact(state=None, age_ms=None))
+        return bool(known)
 
     def unit_name(self, unit_id: str | None) -> str | None:
         """The station's name of the unit, None when it has none."""

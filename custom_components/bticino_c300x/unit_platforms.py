@@ -1,4 +1,4 @@
-"""Call sensor, door button, camera and last visitor image of an outdoor unit."""
+"""Call sensor, door button, door contact, camera and last visitor image of an outdoor unit."""
 
 from __future__ import annotations
 
@@ -6,6 +6,8 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
+from homeassistant.components.binary_sensor import BinarySensorEntity
+from homeassistant.components.binary_sensor.const import BinarySensorDeviceClass
 from homeassistant.components.button import ButtonEntity
 from homeassistant.components.camera import Camera
 from homeassistant.components.image import ImageEntity
@@ -58,6 +60,39 @@ class C300XUnitCallSensor(C300XUnitEntity, SensorEntity):
             "attribution": call.attribution if call is not None else None,
             "answered_by": call.answered_by if call is not None else None,
         }
+
+
+class C300XUnitDoorContactBinarySensor(C300XUnitEntity, BinarySensorEntity):
+    """This outdoor unit's door contact: on while the door is open.
+
+    The agent reports it from the station's door frames; after an agent
+    restart the state is unknown until the next frame.
+    """
+
+    _attr_device_class = BinarySensorDeviceClass.DOOR
+    _attr_should_poll = False
+    _attr_translation_key = "door_contact"
+
+    def __init__(self, entry: BticinoC300XConfigEntry, unit: OutdoorUnit) -> None:
+        C300XUnitEntity.__init__(self, entry, unit, "door_contact")
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        from .call_registry import SIGNAL_DOORS_CHANGED
+
+        @callback
+        def changed(entry_id: str) -> None:
+            if entry_id == self._entry.entry_id:
+                self.async_write_ha_state()
+
+        self.async_on_remove(async_dispatcher_connect(self.hass, SIGNAL_DOORS_CHANGED, changed))
+
+    @property
+    def is_on(self) -> bool | None:
+        registry = self._calls
+        unit = registry.unit(self.unit_id) if registry is not None else None
+        state = unit.door.state if unit is not None and unit.door is not None else None
+        return None if state is None else state == "open"
 
 
 class C300XUnitDoorButton(C300XUnitEntity, ButtonEntity):

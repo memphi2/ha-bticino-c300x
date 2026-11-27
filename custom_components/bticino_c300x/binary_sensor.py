@@ -1,4 +1,4 @@
-"""Binary sensors for BTicino C300X push events."""
+"""Binary sensors: the Home Call and the door contacts of the outdoor units."""
 
 from __future__ import annotations
 
@@ -14,6 +14,8 @@ from .entity import C300XEntity, supports_capability
 from .entry_types import BticinoC300XConfigEntry
 from .event_payload import agent_event_key
 from .media_status import home_call_payload as _home_call_payload
+from .unit_entity import async_track_outdoor_units
+from .unit_platforms import C300XUnitDoorContactBinarySensor
 from .value_parsing import optional_int as _optional_int
 
 PARALLEL_UPDATES = 0
@@ -25,12 +27,18 @@ async def async_setup_entry(
     entry: BticinoC300XConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up C300X binary sensors."""
+    """Set up the Home Call sensor and the door contact of each outdoor unit that has one."""
 
     entities = []
     if supports_capability(entry, "home_call"):
         entities.append(C300XHomeCallActiveBinarySensor(entry))
     async_add_entities(entities)
+    if supports_capability(entry, "outdoor_units"):
+        async_track_outdoor_units(
+            hass, entry, async_add_entities,
+            lambda unit: [C300XUnitDoorContactBinarySensor(entry, unit)],
+            wants=lambda unit: unit.door is not None,
+        )
 
 
 class C300XHomeCallActiveBinarySensor(C300XEntity, BinarySensorEntity):

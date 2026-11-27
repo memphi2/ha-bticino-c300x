@@ -1330,6 +1330,9 @@
     "binary_sensor": {
       "home_call_active": {
         "name": "Home call active"
+      },
+      "door_contact": {
+        "name": "Door contact"
       }
     },
     "button": {

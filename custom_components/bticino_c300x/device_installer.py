@@ -801,11 +801,6 @@ def _device_activation_config(
     return {
         "enabled": True,
         "autoDiscover": auto_discover,
-        "discoveryRoots": [
-            "/home/bticino/cfg/extra/47",
-            "/home/bticino/cfg/extra",
-            "/home/bticino/cfg",
-        ],
         "items": items,
     }
 

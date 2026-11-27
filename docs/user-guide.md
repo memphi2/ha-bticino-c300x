@@ -706,3 +706,12 @@ its activation list differs, never on a plain HA start.
   parts (0-99 each) and reserves that ID, so up to 15 more activations fit.
 
 At most 16 activations are sent to the agent.
+
+**From the station:** the door locks of the outdoor units, the actuators and
+the stair light that the station itself is set up with (its own
+configuration, as its display shows them) are activations too, each with a
+button. The settings list them under **From the station**, the ones set up
+here under **Manual**; a manual activation of the same type at the same
+address replaces the station's. The button's attributes name the `source`
+(`config` for manual, `station`) and, for a station lock, the `unit` whose
+door it opens.

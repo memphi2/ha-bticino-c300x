@@ -10,6 +10,7 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
+from ._api_calls import valid_unit_id
 from .agent_contracts import (
     AgentDiagnosticsStatus,
     AuthConfigStatus,
@@ -191,7 +192,7 @@ def normalize_home_call(data: Any) -> HomeCallStatus:
 
 
 def normalize_activations(data: Any) -> dict[str, Any]:
-    """Normalize configured C300X activation discovery responses."""
+    """Normalize ``GET /api/v1/activations``: configured items, then the station's."""
 
     if not isinstance(data, dict):
         raise C300XAgentApiResponseError("activations returned non-object JSON")
@@ -201,12 +202,15 @@ def normalize_activations(data: Any) -> dict[str, Any]:
         for activation in (_normalize_activation(item) for item in items)
         if activation is not None
     ]
+    station = data.get("station")
     return {
-        "available": bool(data.get("available", True)),
-        "supported": bool(data.get("supported", bool(normalized_items))),
-        "count": _optional_int(data.get("count"), len(normalized_items)),
+        "enabled": _optional_bool(data.get("enabled")) is True,
+        "supported": bool(normalized_items),
+        "auto_discover": _optional_bool(data.get("auto_discover")) is True,
+        # The state of the station's archive.xml; None while its items are off.
+        "station": station if station in _ACTIVATION_STATION_STATES else None,
+        "count": len(normalized_items),
         "items": normalized_items,
-        "raw": data,
     }
 
 
@@ -879,31 +883,28 @@ def _normalize_memo(data: Any) -> dict[str, Any] | None:
     }
 
 
+_ACTIVATION_TYPES = frozenset({"lock", "actuator", "stair_light", "generic", "scenario"})
+_ACTIVATION_SOURCES = frozenset({"config", "station"})
+_ACTIVATION_STATION_STATES = frozenset({"ok", "empty", "missing", "unreadable"})
+
+
 def _normalize_activation(data: Any) -> dict[str, Any] | None:
+    """One item: configured in Home Assistant ("config") or the station's own ("station")."""
+
     if not isinstance(data, dict):
         return None
     activation_id = str(data.get("id") or "").strip()
-    if not ACTIVATION_ID_RE.fullmatch(activation_id):
+    source = data.get("source")
+    if not ACTIVATION_ID_RE.fullmatch(activation_id) or source not in _ACTIVATION_SOURCES:
         return None
     name = str(data.get("name") or "").strip()
     if not name:
         name = activation_id.replace("_", " ").replace("-", " ").title()
-    activation_type = str(data.get("type") or "unknown").strip().lower()
-    if activation_type not in {
-        "lock",
-        "actuator",
-        "stair_light",
-        "generic",
-        "scenario",
-        "unknown",
-    }:
+    activation_type = str(data.get("type") or "").strip().lower()
+    if activation_type not in _ACTIVATION_TYPES:
         activation_type = "unknown"
-    address_mode = str(
-        data.get("addressMode") or data.get("address_mode") or "manual"
-    ).strip().lower()
-    if address_mode not in {"manual", "auto"}:
-        address_mode = "manual"
-    source = str(data.get("source") or "agent").strip().lower() or "agent"
+    address_mode = "auto" if data.get("addressMode") == "auto" else "manual"
+    unit = data.get("unit")
     return {
         "id": activation_id,
         "name": name,
@@ -912,6 +913,8 @@ def _normalize_activation(data: Any) -> dict[str, Any] | None:
         "address": _optional_string(data.get("address")),
         "source": source,
         "executable": _optional_bool(data.get("executable")) is True,
+        # The outdoor unit whose door lock a lock item is.
+        "unit": valid_unit_id(unit),
     }
 
 

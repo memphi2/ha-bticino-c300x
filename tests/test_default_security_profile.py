@@ -77,11 +77,8 @@ def test_installer_config_closes_noauth_and_enables_runtime_defaults() -> None:
     }
     assert config["activations"]["enabled"] is True
     assert config["activations"]["autoDiscover"] is True
-    assert config["activations"]["discoveryRoots"] == [
-        "/home/bticino/cfg/extra/47",
-        "/home/bticino/cfg/extra",
-        "/home/bticino/cfg",
-    ]
+    # The agent reads the station's own items from archive.xml; it scans no directories.
+    assert "discoveryRoots" not in config["activations"]
     assert config["activations"]["items"] == []
     assert config["video"]["enabled"] is True
     assert config["displayBridge"]["enabled"] is False

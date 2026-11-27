@@ -143,6 +143,7 @@ class C300XDeviceActivationButton(C300XEntity, ButtonEntity):
             "address_mode": self._activation.get("address_mode"),
             "address": self._activation.get("address"),
             "source": self._activation.get("source"),
+            "unit": self._activation.get("unit"),
         }
 
     async def async_press(self) -> None:
@@ -527,11 +528,9 @@ async def _async_activation_items(entry: BticinoC300XConfigEntry) -> list[dict[s
 
     try:
         activations = await entry.runtime_data.api.async_activations()
-    except C300XAgentApiUnsupportedError:
-        activations = {"available": False, "supported": False, "items": []}
     except C300XAgentApiError as err:
-        _LOGGER.debug("C300X activation discovery failed: %s", err)
-        activations = {"available": False, "supported": False, "items": []}
+        _LOGGER.debug("C300X activations could not be read: %s", err)
+        activations = {"enabled": False, "supported": False, "items": []}
     entry.runtime_data.activations = activations
     items = activations.get("items") if isinstance(activations, dict) else []
     if not isinstance(items, list):

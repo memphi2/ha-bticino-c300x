@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -244,14 +244,20 @@ def activation_manage_form(
     items: list[dict[str, Any]],
     feature_data: dict[str, Any],
     errors: dict[str, str],
+    entry: Any = None,
 ) -> FlowResult:
-    """Return the Home Assistant manage form result."""
+    """Return the Home Assistant manage form result.
+
+    With the entry, the form also lists the station's own activations.
+    """
 
     return show_form(
         step_id=step_id,
         data_schema=device_activation_manage_schema(items, feature_data),
         errors=errors,
-        description_placeholders=activation_placeholders(items),
+        description_placeholders=activation_placeholders(
+            items, station_activation_items(entry)
+        ),
     )
 
 
@@ -272,13 +278,32 @@ def activation_item_form(
     )
 
 
-def activation_placeholders(items: list[dict[str, Any]]) -> dict[str, str]:
-    """Return display placeholders for the activation management step."""
+def activation_placeholders(
+    items: list[dict[str, Any]],
+    station_items: Sequence[Mapping[str, Any]] = (),
+) -> dict[str, str]:
+    """Return display placeholders for the activation management step.
+
+    ``items`` are the ones set up here (manual), ``station_items`` the ones the
+    station knows from its own configuration.
+    """
 
     return {
         "device_activation_count": str(len(items)),
         "device_activation_items": _activation_summary(items),
+        "station_activation_count": str(len(station_items)),
+        "station_activation_items": _activation_summary(station_items),
     }
+
+
+def station_activation_items(entry: Any) -> list[Mapping[str, Any]]:
+    """The station's own activations as the loaded entry read them from the agent."""
+
+    activations = getattr(getattr(entry, "runtime_data", None), "activations", None)
+    items = activations.get("items") if isinstance(activations, Mapping) else None
+    if not isinstance(items, list):
+        return []
+    return [item for item in items if isinstance(item, Mapping) and item.get("source") == "station"]
 
 
 def activation_by_id(
@@ -317,16 +342,17 @@ def activation_remove(
     return [item for item in items if item.get("id") != activation_id]
 
 
-def _activation_summary(items: list[dict[str, Any]]) -> str:
+def _activation_summary(items: Sequence[Mapping[str, Any]]) -> str:
+    # Names, ids, types and bus addresses only: the form's own text names the list.
     if not items:
-        return "None"
+        return "–"
     return "\n".join(
-        "- {id}: {name} ({type}, address {address})".format(
-            id=item.get("id", ""),
-            name=item.get("name", ""),
-            type=item.get("type", ""),
-            address=item.get("address", ""),
-        )
+        "- {name} (`{id}`): {type} {address}".format(
+            id=item.get("id") or "",
+            name=item.get("name") or "",
+            type=item.get("type") or "",
+            address=item.get("address") or "",
+        ).rstrip()
         for item in items
     )
 

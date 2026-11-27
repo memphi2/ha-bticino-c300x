@@ -3501,3 +3501,28 @@ def test_connection_input_keeps_a_saved_key_for_an_empty_field() -> None:
     assert errors == {}
     assert changed[CONF_AGENT_TOKEN] == "new-agent"
     assert changed[CONF_MAINTENANCE_TOKEN] == "new-maint"
+
+
+def test_options_activations_list_the_station_activations_apart_from_the_manual_ones() -> None:
+    """The settings show what the station knows itself next to what was set up here."""
+
+    entry = SimpleNamespace(
+        data={CONF_AGENT_HOST: "agent.local", CONF_DEVICE_ACTIVATION_MODE: DEVICE_ACTIVATION_MODE_AUTO},
+        options={"device_activations": [
+            {"id": "gate", "name": "Gate", "type": "actuator", "addressMode": "manual", "address": "25"},
+        ]},
+        runtime_data=SimpleNamespace(activations={"items": [
+            {"id": "gate", "name": "Gate", "type": "actuator", "address": "25", "source": "config"},
+            {"id": "station_lock_21", "name": "Garden lock", "type": "lock", "address": "21",
+             "source": "station", "unit": "21"},
+        ]}),
+        entry_id="entry-station-activations",
+    )
+
+    _flow, form = _options_area(entry, "device_activations")
+
+    assert form["step_id"] == "device_activations"
+    placeholders = form["description_placeholders"]
+    assert placeholders["device_activation_items"] == "- Gate (`gate`): actuator 25"
+    assert placeholders["station_activation_count"] == "1"
+    assert placeholders["station_activation_items"] == "- Garden lock (`station_lock_21`): lock 21"

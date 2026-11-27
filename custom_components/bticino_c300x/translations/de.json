@@ -226,7 +226,7 @@
       },
       "reconfigure_device_activations": {
         "title": "Zusätzliche Geräteaktivierungen",
-        "description": "Weitere Türschlösser und Aktoren der Türanlage legst du hier an, je eine Aktivierung, zum Beispiel für eine zweite Tür.\n\nKonfigurierte zusätzliche Aktivierungen: {device_activation_count}\n\n{device_activation_items}\n\nHinzufügen, Bearbeiten oder Entfernen ändert nur die ausstehende Home-Assistant-Konfiguration. Der Device-Agent wird erst nach dem Speichern synchronisiert und nur, wenn seine Aktivierungskonfiguration abweicht.",
+        "description": "Weitere Türschlösser und Aktoren der Türanlage legst du hier an, je eine Aktivierung, zum Beispiel für eine zweite Tür.\n\nManuell: {device_activation_count}\n\n{device_activation_items}\n\nVon der Station (ihre eigenen Schlösser, Aktoren und das Treppenlicht): {station_activation_count}\n\n{station_activation_items}\n\nHinzufügen, Bearbeiten oder Entfernen ändert nur die ausstehende Home-Assistant-Konfiguration. Der Device-Agent wird erst nach dem Speichern synchronisiert und nur, wenn seine Aktivierungskonfiguration abweicht.",
         "data": {
           "device_activation_mode": "Adresse des Treppenlichts",
           "device_activation_stair_light_p": "Treppenlicht P",
@@ -897,7 +897,7 @@
       },
       "device_activations": {
         "title": "Aktivierungen: Schlösser, Aktoren, Treppenlicht",
-        "description": "Weitere Türschlösser und Aktoren der Türanlage legst du hier an, je eine Aktivierung, zum Beispiel für eine zweite Tür.\n\nZusätzliche Aktivierungen: {device_activation_count}\n\n{device_activation_items}\n\nWähle, was du tun möchtest, und sende ab. Änderungen werden hier zunächst gesammelt; mit **Fertig und speichern** werden sie gespeichert und das Gerät wird aktualisiert, und nur, wenn seine Aktivierungen abweichen.",
+        "description": "Weitere Türschlösser und Aktoren der Türanlage legst du hier an, je eine Aktivierung, zum Beispiel für eine zweite Tür.\n\nManuell: {device_activation_count}\n\n{device_activation_items}\n\nVon der Station (ihre eigenen Schlösser, Aktoren und das Treppenlicht): {station_activation_count}\n\n{station_activation_items}\n\nWähle, was du tun möchtest, und sende ab. Änderungen werden hier zunächst gesammelt; mit **Fertig und speichern** werden sie gespeichert und das Gerät wird aktualisiert, und nur, wenn seine Aktivierungen abweichen.",
         "data": {
           "device_activation_mode": "Adresse des Treppenlichts",
           "device_activation_stair_light_p": "Treppenlicht P",

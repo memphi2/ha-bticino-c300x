@@ -1079,6 +1079,7 @@ class BticinoC300XConfigFlow(ModelTextConfigFlow, config_flow_auth.AuthFlowSteps
                 items=self._reconfigure_device_activations,
                 feature_data=self._reconfigure_feature_data,
                 errors=setting_errors,
+                entry=self._get_reconfigure_entry(),
             )
 
         result = _activation_manage_step(
@@ -1106,6 +1107,7 @@ class BticinoC300XConfigFlow(ModelTextConfigFlow, config_flow_auth.AuthFlowSteps
             items=result.items,
             feature_data=self._reconfigure_feature_data,
             errors=result.errors,
+            entry=self._get_reconfigure_entry(),
         )
 
     async def async_step_reconfigure_device_activation_item(
@@ -1570,6 +1572,7 @@ class BticinoC300XOptionsFlow(
                 items=self._device_activations,
                 feature_data=self._feature_options,
                 errors=setting_errors,
+                entry=self._config_entry,
             )
 
         result = _activation_manage_step(
@@ -1597,6 +1600,7 @@ class BticinoC300XOptionsFlow(
             items=result.items,
             feature_data=self._feature_options,
             errors=result.errors,
+            entry=self._config_entry,
         )
 
     async def async_step_device_activation_item(

@@ -226,7 +226,7 @@
       },
       "reconfigure_device_activations": {
         "title": "Additional device activations",
-        "description": "Further door locks and actuators of the door system are added here, one activation each, for example for a second door.\n\nConfigured additional activations: {device_activation_count}\n\n{device_activation_items}\n\nAdd, edit, or remove changes only the pending Home Assistant configuration. The device agent is synchronized after saving and only when its activation config differs.",
+        "description": "Further door locks and actuators of the door system are added here, one activation each, for example for a second door.\n\nManual: {device_activation_count}\n\n{device_activation_items}\n\nFrom the station (its own locks, actuators and stair light): {station_activation_count}\n\n{station_activation_items}\n\nAdd, edit, or remove changes only the pending Home Assistant configuration. The device agent is synchronized after saving and only when its activation config differs.",
         "data": {
           "device_activation_mode": "Stair light address",
           "device_activation_stair_light_p": "Stair light P",
@@ -897,7 +897,7 @@
       },
       "device_activations": {
         "title": "Activations: locks, actuators, stair light",
-        "description": "Further door locks and actuators of the door system are added here, one activation each, for example for a second door.\n\nAdditional activations: {device_activation_count}\n\n{device_activation_items}\n\nPick what to do and submit. Changes are collected here first; with **Finish and save** they are saved and the device is updated, and only if its activations differ.",
+        "description": "Further door locks and actuators of the door system are added here, one activation each, for example for a second door.\n\nManual: {device_activation_count}\n\n{device_activation_items}\n\nFrom the station (its own locks, actuators and stair light): {station_activation_count}\n\n{station_activation_items}\n\nPick what to do and submit. Changes are collected here first; with **Finish and save** they are saved and the device is updated, and only if its activations differ.",
         "data": {
           "device_activation_mode": "Stair light address",
           "device_activation_stair_light_p": "Stair light P",

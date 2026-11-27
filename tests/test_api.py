@@ -3032,7 +3032,8 @@ def test_activations_requests_authenticated_endpoint() -> None:
     activations = asyncio.run(api.async_activations())
 
     assert activations["supported"] is True
-    assert activations["count"] == 2
+    # The items Home Assistant can use: the malformed one is not counted.
+    assert activations["count"] == 1
     assert activations["items"] == [
         {
             "id": "front_lock",
@@ -3042,6 +3043,7 @@ def test_activations_requests_authenticated_endpoint() -> None:
             "address": "20",
             "source": "config",
             "executable": True,
+            "unit": None,
         }
     ]
     assert session.requests[0]["args"] == (
@@ -3276,22 +3278,30 @@ def test_normalize_activation_id_rejects_paths_or_raw_commands() -> None:
 def test_normalize_activations_hides_incomplete_or_invalid_items() -> None:
     assert normalize_activations(
         {
+            "ok": True,
+            "enabled": True,
             "supported": True,
             "items": [
                 [],
-                {"id": "scene_1", "name": "", "type": "scenario", "executable": True},
-                {"id": "broken/path", "name": "Broken", "executable": True},
+                {"id": "scene_1", "name": "", "type": "scenario", "source": "config", "executable": True},
+                {"id": "broken/path", "name": "Broken", "source": "config", "executable": True},
+                # Sources other than the two the agent has are not taken.
+                {"id": "old_lock", "name": "Old", "type": "lock", "source": "device", "executable": True},
                 {
                     "id": "unknown",
                     "name": "Unknown",
                     "type": "bad",
                     "addressMode": "bad",
+                    "source": "station",
+                    "unit": "../20",
                 },
             ],
         }
     ) == {
-        "available": True,
+        "enabled": True,
         "supported": True,
+        "auto_discover": False,
+        "station": None,
         "count": 2,
         "items": [
             {
@@ -3300,8 +3310,9 @@ def test_normalize_activations_hides_incomplete_or_invalid_items() -> None:
                 "type": "scenario",
                 "address_mode": "manual",
                 "address": None,
-                "source": "agent",
+                "source": "config",
                 "executable": True,
+                "unit": None,
             },
             {
                 "id": "unknown",
@@ -3309,25 +3320,42 @@ def test_normalize_activations_hides_incomplete_or_invalid_items() -> None:
                 "type": "unknown",
                 "address_mode": "manual",
                 "address": None,
-                "source": "agent",
+                "source": "station",
                 "executable": False,
+                "unit": None,
             },
         ],
-        "raw": {
-            "supported": True,
-            "items": [
-                [],
-                {"id": "scene_1", "name": "", "type": "scenario", "executable": True},
-                {"id": "broken/path", "name": "Broken", "executable": True},
-                {
-                    "id": "unknown",
-                    "name": "Unknown",
-                    "type": "bad",
-                    "addressMode": "bad",
-                },
-            ],
-        },
     }
+
+
+def test_normalize_activations_reads_the_station_items_of_agent_api_2() -> None:
+    """The documented answer: configured items, then the station's from its archive."""
+
+    answer = {
+        "ok": True, "enabled": True, "supported": True, "auto_discover": True,
+        "station": "ok", "count": 3,
+        "items": [
+            {"id": "gate", "name": "Gate", "type": "actuator", "addressMode": "manual",
+             "address": "25", "source": "config", "executable": True, "unit": None},
+            {"id": "station_lock_21", "name": "Garden lock", "type": "lock", "addressMode": "manual",
+             "address": "21", "source": "station", "executable": True, "unit": "21"},
+            {"id": "station_stair_light", "name": "Stairs", "type": "stair_light",
+             "addressMode": "manual", "address": "11", "source": "station", "executable": True,
+             "unit": None},
+        ],
+    }
+    result = normalize_activations(answer)
+    assert {key: result[key] for key in ("enabled", "supported", "auto_discover", "station", "count")} == {
+        "enabled": True, "supported": True, "auto_discover": True, "station": "ok", "count": 3,
+    }
+    assert [(item["id"], item["type"], item["source"], item["unit"]) for item in result["items"]] == [
+        ("gate", "actuator", "config", None),
+        ("station_lock_21", "lock", "station", "21"),
+        ("station_stair_light", "stair_light", "station", None),
+    ]
+    for station in ("empty", "missing", "unreadable", None):
+        assert normalize_activations({**answer, "station": station})["station"] == station
+    assert normalize_activations({**answer, "station": "bogus"})["station"] is None
 
 
 def test_normalize_doorbell_video_from_agent_bridge() -> None:

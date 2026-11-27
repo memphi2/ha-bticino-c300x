@@ -122,7 +122,7 @@ class _FakeMemoApi:
 
     async def async_activations(self) -> dict[str, Any]:
         return {
-            "available": True,
+            "enabled": True,
             "supported": True,
             "items": [
                 {
@@ -133,6 +133,7 @@ class _FakeMemoApi:
                     "address": "20",
                     "source": "config",
                     "executable": True,
+                    "unit": None,
                 },
                 {
                     "id": "unknown",
@@ -584,6 +585,7 @@ def test_activation_buttons_are_created_from_agent_discovery() -> None:
             "address_mode": "manual",
             "address": "20",
             "source": "config",
+            "unit": None,
         }
 
         await button.async_press()
@@ -617,7 +619,7 @@ def test_activation_discovery_ignores_agent_failures() -> None:
                 isinstance(entity, C300XDeviceActivationButton) for entity in entities
             )
             assert entry.runtime_data.activations == {
-                "available": False,
+                "enabled": False,
                 "supported": False,
                 "items": [],
             }

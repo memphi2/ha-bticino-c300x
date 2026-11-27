@@ -85,6 +85,14 @@ devices, entities and services; a Repair lists what to redo after the update.
   light command instead and did nothing at the actuator. Your Light
   activations become Actuator activations with the update; ID, name, address
   and button stay.
+- **Activations from the station.** The door locks of the outdoor units, the
+  actuators and the stair light that the station is set up with now get
+  activation buttons, read from the station's own configuration like its
+  display does. The settings list them under **From the station**, next to
+  the **Manual** ones. Before, the agent searched files on the station that
+  hold no such items and found nothing. The activation buttons' attribute
+  `source` is now `config` or `station` (no longer `device`); new is `unit`,
+  the outdoor unit whose door a station lock opens.
 - The native agent changed; an agent update is required. Until the agent
   update Repair has run, the integration shows no entities: the devices and
   entities move to the outdoor units with that update.

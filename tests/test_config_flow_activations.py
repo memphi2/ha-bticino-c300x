@@ -145,3 +145,67 @@ def test_activation_item_step_enforces_manual_mode_total_limit() -> None:
     assert result.next_step == ACTIVATION_STEP_MANAGE
     assert result.items == items
     assert result.errors == {"base": "invalid_device_activations"}
+
+
+def test_the_activation_form_lists_manual_and_station_activations_apart() -> None:
+    """Configured items are the manual ones; the station's come from the agent's answer."""
+
+    from types import SimpleNamespace
+
+    from custom_components.bticino_c300x.config_flow_activations import (
+        activation_manage_form,
+    )
+
+    manual = [{"id": "gate", "name": "Gate", "type": "actuator", "address": "25"}]
+    activations = {
+        "items": [
+            {"id": "gate", "name": "Gate", "type": "actuator", "address": "25", "source": "config"},
+            {"id": "station_lock_21", "name": "Garden lock", "type": "lock", "address": "21",
+             "source": "station", "unit": "21"},
+            {"id": "station_stair_light", "name": "Stairs", "type": "stair_light", "address": "11",
+             "source": "station", "unit": None},
+        ],
+    }
+    entry = SimpleNamespace(runtime_data=SimpleNamespace(activations=activations))
+    shown: list[dict] = []
+
+    activation_manage_form(
+        lambda **kwargs: shown.append(kwargs) or kwargs,
+        step_id="device_activations",
+        items=manual,
+        feature_data={CONF_DEVICE_ACTIVATION_MODE: "automatic"},
+        errors={},
+        entry=entry,
+    )
+
+    assert shown[0]["description_placeholders"] == {
+        "device_activation_count": "1",
+        "device_activation_items": "- Gate (`gate`): actuator 25",
+        "station_activation_count": "2",
+        "station_activation_items": (
+            "- Garden lock (`station_lock_21`): lock 21\n- Stairs (`station_stair_light`): stair_light 11"
+        ),
+    }
+    # Without a loaded entry (setup) the station's list is empty.
+    activation_manage_form(
+        lambda **kwargs: shown.append(kwargs) or kwargs,
+        step_id="user_device_activations",
+        items=[],
+        feature_data={},
+        errors={},
+    )
+    assert shown[1]["description_placeholders"]["station_activation_items"] == "–"
+    assert shown[1]["description_placeholders"]["device_activation_items"] == "–"
+
+
+def test_reconfigure_and_options_texts_name_manual_and_station_activations() -> None:
+    import json
+    from pathlib import Path
+
+    component = Path(__file__).resolve().parents[1] / "custom_components" / "bticino_c300x"
+    for path in (component / "strings.json", *sorted((component / "translations").glob("*.json"))):
+        data = json.loads(path.read_text(encoding="utf-8"))
+        for area, step in (("options", "device_activations"), ("config", "reconfigure_device_activations")):
+            description = data[area]["step"][step]["description"]
+            assert "{station_activation_items}" in description, (path.name, step)
+            assert "{station_activation_count}" in description, (path.name, step)

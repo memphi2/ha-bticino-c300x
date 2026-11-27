@@ -349,13 +349,16 @@ def _safe_activation_diagnostics(runtime: Any | None) -> dict[str, Any] | None:
                     "type": str(item.get("type") or ""),
                     "source": str(item.get("source") or ""),
                     "executable": bool(item.get("executable")),
-                    "address_mode": str(item.get("address_mode") or item.get("addressMode") or ""),
+                    "address_mode": str(item.get("address_mode") or ""),
                     "address_configured": bool(item.get("address")),
+                    "unit": item.get("unit"),
                 }
             )
     return {
-        "available": bool(activations.get("available", True)),
+        "enabled": bool(activations.get("enabled")),
         "supported": bool(activations.get("supported")),
+        "auto_discover": bool(activations.get("auto_discover")),
+        "station": activations.get("station"),
         "count": activations.get("count"),
         "item_count": len(safe_items),
         "items": safe_items,

@@ -226,7 +226,7 @@
       },
       "reconfigure_device_activations": {
         "title": "Activations appareil supplémentaires",
-        "description": "Les serrures et actionneurs supplémentaires de l'installation s'ajoutent ici, une activation chacune, par exemple pour une deuxième porte.\n\nActivations supplémentaires configurées : {device_activation_count}\n\n{device_activation_items}\n\nAjouter, modifier ou supprimer ne change que la configuration Home Assistant en attente. L'agent appareil est synchronisé après l'enregistrement, et seulement si sa configuration d'activations diffère.",
+        "description": "Les serrures et actionneurs supplémentaires de l'installation s'ajoutent ici, une activation chacune, par exemple pour une deuxième porte.\n\nManuelles : {device_activation_count}\n\n{device_activation_items}\n\nDe la station (ses propres serrures, actionneurs et éclairage d'escalier) : {station_activation_count}\n\n{station_activation_items}\n\nAjouter, modifier ou supprimer ne change que la configuration Home Assistant en attente. L'agent appareil est synchronisé après l'enregistrement, et seulement si sa configuration d'activations diffère.",
         "data": {
           "device_activation_mode": "Adresse de l'éclairage d'escalier",
           "device_activation_stair_light_p": "Éclairage d'escalier P",
@@ -897,7 +897,7 @@
       },
       "device_activations": {
         "title": "Activations : serrures, actionneurs, éclairage d'escalier",
-        "description": "Les serrures et actionneurs supplémentaires de l'installation s'ajoutent ici, une activation chacune, par exemple pour une deuxième porte.\n\nActivations supplémentaires : {device_activation_count}\n\n{device_activation_items}\n\nChoisissez quoi faire et validez. Les changements sont d'abord rassemblés ici ; avec **Terminer et enregistrer** ils sont enregistrés et l'appareil est mis à jour, et seulement si ses activations diffèrent.",
+        "description": "Les serrures et actionneurs supplémentaires de l'installation s'ajoutent ici, une activation chacune, par exemple pour une deuxième porte.\n\nManuelles : {device_activation_count}\n\n{device_activation_items}\n\nDe la station (ses propres serrures, actionneurs et éclairage d'escalier) : {station_activation_count}\n\n{station_activation_items}\n\nChoisissez quoi faire et validez. Les changements sont d'abord rassemblés ici ; avec **Terminer et enregistrer** ils sont enregistrés et l'appareil est mis à jour, et seulement si ses activations diffèrent.",
         "data": {
           "device_activation_mode": "Adresse de l'éclairage d'escalier",
           "device_activation_stair_light_p": "Éclairage d'escalier P",

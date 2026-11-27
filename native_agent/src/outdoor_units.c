@@ -1,39 +1,14 @@
 #include "outdoor_units.h"
 
-#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <errno.h>
 #include <unistd.h>
 
-#include "file_io.h"
 #include "json_util.h"
 #include "string_util.h"
 
-#define ARCHIVE_MAX_BYTES (128 * 1024)
-#define CONF_MAX_BYTES (128 * 1024)
 #define SEEN_MAX_BYTES (4 * 1024)
-
-int c300x_unit_where_valid(const char *where)
-{
-    size_t length = where != NULL ? strlen(where) : 0;
-    int digits = 0;
-
-    if (length == 0 || length >= C300X_UNIT_WHERE_LEN) {
-        return 0;
-    }
-    for (const char *p = where; *p != '\0'; p++) {
-        if (isdigit((unsigned char)*p)) {
-            digits++;
-        } else if (*p != '#' || digits == 0) {
-            return 0;
-        } else {
-            digits = 0;
-        }
-    }
-    return digits > 0;
-}
 
 void c300x_unit_id_from_where(const char *where, char *out, size_t out_len)
 {
@@ -54,47 +29,6 @@ void c300x_unit_action_where(const char *where, char *out, size_t out_len)
     }
 }
 
-/* The value of attribute name inside one tag [start, end), entities decoded. */
-static int tag_attribute(const char *start, const char *end, const char *name, char *out, size_t out_len)
-{
-    size_t name_len = strlen(name);
-
-    out[0] = '\0';
-    for (const char *p = start; p + name_len + 2 < end; p++) {
-        if (strncmp(p, name, name_len) != 0 || !isspace((unsigned char)p[-1])) {
-            continue;
-        }
-        const char *q = p + name_len;
-        while (q < end && isspace((unsigned char)*q)) q++;
-        if (q >= end || *q != '=') continue;
-        q++;
-        while (q < end && isspace((unsigned char)*q)) q++;
-        if (q >= end || (*q != '"' && *q != '\'')) continue;
-        char quote = *q++;
-        size_t used = 0;
-        while (q < end && *q != quote && used + 1 < out_len) {
-            static const char *const entities[][2] = {
-                {"&amp;", "&"}, {"&lt;", "<"}, {"&gt;", ">"}, {"&quot;", "\""}, {"&apos;", "'"},
-            };
-            char c = *q++;
-            if (c == '&') {
-                for (size_t e = 0; e < sizeof(entities) / sizeof(entities[0]); e++) {
-                    size_t entity_len = strlen(entities[e][0]);
-                    if ((size_t)(end - (q - 1)) >= entity_len && strncmp(q - 1, entities[e][0], entity_len) == 0) {
-                        c = entities[e][1][0];
-                        q += entity_len - 1;
-                        break;
-                    }
-                }
-            }
-            out[used++] = c;
-        }
-        out[used] = '\0';
-        return 1;
-    }
-    return 0;
-}
-
 static int add_unit(struct c300x_outdoor_units *units, const char *where, const char *name, const char *source)
 {
     struct c300x_outdoor_unit *unit;
@@ -113,86 +47,8 @@ static int add_unit(struct c300x_outdoor_units *units, const char *where, const 
     return units->count++;
 }
 
-static int join_address(char *out, size_t out_len, const char *dev, const char *where)
-{
-    return snprintf(out, out_len, "%s%s", dev, where) < (int)out_len && c300x_unit_where_valid(out);
-}
-
-/* Outdoor units are the <ist> without cid of an <obj> (locks have cid 10060
- * and the address of their unit, so a unit's lock is its action_where); the
- * bus address is the obj's dev followed by the ist's where. */
-static void parse_archive(struct c300x_outdoor_units *units, const char *xml)
-{
-    const char *obj = xml;
-
-    while ((obj = strstr(obj, "<obj")) != NULL) {
-        const char *obj_end = strchr(obj, '>');
-        char dev[8];
-        if (obj_end == NULL) break;
-        if (!tag_attribute(obj, obj_end, "dev", dev, sizeof(dev)) || dev[0] == '\0') {
-            c300x_copy_string(dev, sizeof(dev), "2");
-        }
-        const char *close = obj_end[-1] == '/' ? obj_end : strstr(obj_end, "</obj>");
-        if (close == NULL) close = obj_end + strlen(obj_end);
-        for (const char *ist = strstr(obj_end, "<ist"); ist != NULL && ist < close; ist = strstr(ist + 4, "<ist")) {
-            const char *ist_end = strchr(ist, '>');
-            char where[C300X_UNIT_WHERE_LEN], cid[16], name[C300X_UNIT_NAME_LEN], address[C300X_UNIT_WHERE_LEN];
-            if (ist_end == NULL) break;
-            if (!tag_attribute(ist, ist_end, "where", where, sizeof(where))
-                || !join_address(address, sizeof(address), dev, where)) {
-                continue;
-            }
-            if (tag_attribute(ist, ist_end, "cid", cid, sizeof(cid))) {
-                continue;
-            }
-            (void)tag_attribute(ist, ist_end, "descr", name, sizeof(name));
-            for (int index = 0; index < units->count; index++) {
-                if (strcmp(units->items[index].where, address) == 0) {
-                    address[0] = '\0';
-                }
-            }
-            if (address[0] != '\0') {
-                add_unit(units, address, name, "archive");
-            }
-        }
-        obj = close;
-    }
-}
-
-static int element_text(const char *start, const char *end, const char *name, char *out, size_t out_len)
-{
-    char open[32], close[32];
-    snprintf(open, sizeof(open), "<%s>", name);
-    snprintf(close, sizeof(close), "</%s>", name);
-    const char *value = strstr(start, open);
-    if (value == NULL || value >= end) return 0;
-    value += strlen(open);
-    const char *value_end = strstr(value, close);
-    if (value_end == NULL || value_end > end) return 0;
-    while (value < value_end && isspace((unsigned char)*value)) value++;
-    while (value_end > value && isspace((unsigned char)value_end[-1])) value_end--;
-    if ((size_t)(value_end - value) >= out_len) return 0;
-    memcpy(out, value, (size_t)(value_end - value));
-    out[value_end - value] = '\0';
-    return 1;
-}
-
-/* setup/vdes/communication/p_default: dev + address (2, 0 -> 20). */
-static int default_from_conf(const char *xml, char *out, size_t out_len)
-{
-    char dev[8], address[16];
-    const char *block = xml != NULL ? strstr(xml, "<p_default>") : NULL;
-    const char *block_end = block != NULL ? strstr(block, "</p_default>") : NULL;
-
-    return block_end != NULL
-        && element_text(block, block_end, "dev", dev, sizeof(dev))
-        && element_text(block, block_end, "address", address, sizeof(address))
-        && join_address(out, out_len, dev, address);
-}
-
-void c300x_outdoor_units_build(struct c300x_outdoor_units *units, const char *archive_xml,
-                               const char *archive_state, const char *conf_xml,
-                               const char *fallback_devaddr, const char *default_lock)
+void c300x_outdoor_units_build(struct c300x_outdoor_units *units, const struct c300x_station_archive *station,
+                               const char *archive_state, const char *fallback_devaddr, const char *default_lock)
 {
     struct c300x_outdoor_unit seen[C300X_MAX_OUTDOOR_UNITS];
     int seen_count = 0;
@@ -213,16 +69,14 @@ void c300x_outdoor_units_build(struct c300x_outdoor_units *units, const char *ar
     units->default_index = -1;
     units->loaded = 1;
     c300x_copy_string(units->archive, sizeof(units->archive), archive_state);
-    if (archive_xml != NULL) {
-        parse_archive(units, archive_xml);
-        if (units->count == 0 && strcmp(archive_state, "ok") == 0) {
-            c300x_copy_string(units->archive, sizeof(units->archive), "empty");
-        }
+    for (int index = 0; index < station->unit_count; index++) {
+        add_unit(units, station->units[index].where, station->units[index].name, "archive");
     }
-    if (!default_from_conf(conf_xml, default_where, sizeof(default_where))) {
-        c300x_copy_string(default_where, sizeof(default_where),
-            c300x_unit_where_valid(fallback_devaddr) ? fallback_devaddr : "20");
+    if (units->count == 0 && strcmp(archive_state, "ok") == 0) {
+        c300x_copy_string(units->archive, sizeof(units->archive), "empty");
     }
+    c300x_copy_string(default_where, sizeof(default_where), station->default_where[0] != '\0'
+        ? station->default_where : c300x_unit_where_valid(fallback_devaddr) ? fallback_devaddr : "20");
     for (int index = 0; index < units->count && units->default_index < 0; index++) {
         if (strcmp(units->items[index].action_where, default_where) == 0
             || strcmp(units->items[index].where, default_where) == 0) {
@@ -251,33 +105,23 @@ void c300x_outdoor_units_build(struct c300x_outdoor_units *units, const char *ar
     }
 }
 
-/* No stat(): the device's old libc does not export it. */
-static char *read_file(const char *path, size_t limit, const char **state)
-{
-    char *text = malloc(limit);
-    int truncated = 0;
-
-    errno = 0;
-    if (text == NULL || !read_bounded_text_file(path, text, limit, &truncated) || truncated) {
-        *state = text != NULL && errno == ENOENT ? "missing" : "unreadable";
-        free(text);
-        return NULL;
-    }
-    *state = "ok";
-    return text;
-}
-
 void c300x_outdoor_units_load(struct c300x_outdoor_units *units, const char *archive_path,
                               const char *conf_path, const char *fallback_devaddr,
                               const char *default_lock)
 {
-    const char *archive_state = "missing";
-    const char *conf_state = "missing";
-    char *archive = read_file(archive_path, ARCHIVE_MAX_BYTES, &archive_state);
-    char *conf = read_file(conf_path, CONF_MAX_BYTES, &conf_state);
-    c300x_outdoor_units_build(units, archive, archive_state, conf, fallback_devaddr, default_lock);
-    free(archive);
-    free(conf);
+    static const struct c300x_station_archive nothing;
+    const char *archive_state = "unreadable";
+    struct c300x_station_archive *station = malloc(sizeof(*station));
+
+    if (station == NULL) {
+        if (!units->loaded) {
+            c300x_outdoor_units_build(units, &nothing, archive_state, fallback_devaddr, default_lock);
+        }
+        return;
+    }
+    c300x_station_archive_load(station, archive_path, conf_path, &archive_state);
+    c300x_outdoor_units_build(units, station, archive_state, fallback_devaddr, default_lock);
+    free(station);
 }
 
 int c300x_outdoor_units_find_id(const struct c300x_outdoor_units *units, const char *id)
@@ -394,7 +238,7 @@ int c300x_outdoor_units_save_seen(const struct c300x_outdoor_units *units, const
 void c300x_outdoor_units_load_seen(struct c300x_outdoor_units *units, const char *path)
 {
     const char *state = "missing";
-    char *text = path != NULL && path[0] != '\0' ? read_file(path, SEEN_MAX_BYTES, &state) : NULL;
+    char *text = path != NULL && path[0] != '\0' ? c300x_station_file_read(path, SEEN_MAX_BYTES, &state) : NULL;
     char *line = text;
 
     while (line != NULL && *line != '\0') {

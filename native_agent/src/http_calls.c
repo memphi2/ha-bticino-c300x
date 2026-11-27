@@ -69,7 +69,8 @@ static void load_units(struct c300x_call_hub *hub)
         c300x_outdoor_units_load(&hub->units, C300X_ARCHIVE_XML_PATH, C300X_CONF_XML_PATH,
                                  hub->config->video_sip_devaddr, hub->config->lock_address);
     } else if (!hub->units.loaded) {
-        c300x_outdoor_units_build(&hub->units, NULL, "missing", NULL, "20", "20");
+        static const struct c300x_station_archive nothing;
+        c300x_outdoor_units_build(&hub->units, &nothing, "missing", "20", "20");
     }
     if (!hub->seen_loaded) {
         hub->seen_loaded = 1;

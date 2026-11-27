@@ -3,11 +3,9 @@
 
 #include <stddef.h>
 
+#include "station_archive.h"
+
 #define C300X_MAX_OUTDOOR_UNITS 16
-#define C300X_UNIT_WHERE_LEN 24
-#define C300X_UNIT_NAME_LEN 64
-#define C300X_ARCHIVE_XML_PATH "/home/bticino/cfg/extra/0/archive.xml"
-#define C300X_CONF_XML_PATH "/var/tmp/conf.xml"
 #define C300X_UNIT_PATH_LEN 256
 
 /* One outdoor unit. where is the caller frame's address (20#2), action_where
@@ -30,14 +28,12 @@ struct c300x_outdoor_units {
     char archive[12]; /* ok, empty, missing, unreadable */
 };
 
-int c300x_unit_where_valid(const char *where);
 void c300x_unit_id_from_where(const char *where, char *out, size_t out_len);
 void c300x_unit_action_where(const char *where, char *out, size_t out_len);
 
-/* Pure: archive_xml or conf_xml may be NULL. Seen units of units survive. */
-void c300x_outdoor_units_build(struct c300x_outdoor_units *units, const char *archive_xml,
-                               const char *archive_state, const char *conf_xml,
-                               const char *fallback_devaddr, const char *default_lock);
+/* Pure: the units of the parsed station files. Seen units of units survive. */
+void c300x_outdoor_units_build(struct c300x_outdoor_units *units, const struct c300x_station_archive *station,
+                               const char *archive_state, const char *fallback_devaddr, const char *default_lock);
 /* Reads the station files; seen units stay. */
 void c300x_outdoor_units_load(struct c300x_outdoor_units *units, const char *archive_path,
                               const char *conf_path, const char *fallback_devaddr,

@@ -70,10 +70,18 @@ static const char *ARCHIVE_THREE =
 static struct c300x_call_media media;
 static long long last_press;
 
+/* The units of these station files, as the agent builds them. */
+static void build(const char *archive, const char *conf)
+{
+    struct c300x_station_archive station;
+    c300x_station_archive_parse(&station, archive, conf);
+    c300x_outdoor_units_build(&units, &station, archive ? "ok" : "missing", "20", "20");
+}
+
 static void reset(const char *archive)
 {
     memset(&units, 0, sizeof(units));
-    c300x_outdoor_units_build(&units, archive, archive ? "ok" : "missing", CONF, "20", "20");
+    build(archive, CONF);
     c300x_calls_init(&calls, "8f3a1c2e");
     memset(&media, 0, sizeof(media));
     last_press = -100000;
@@ -237,7 +245,7 @@ static void unit_behind_interface(void)
     ring_with_caller(0, "*8*9#1#4*20#2##");
     expect(nth("call.caller_identified", 1), "\"unit\":\"20\",\"where\":\"20#2\",\"action_where\":\"20\"");
     assert(count("outdoor_units.changed") == 1 && units.count == 1);
-    c300x_outdoor_units_build(&units, NULL, "missing", CONF, "20", "20");
+    build(NULL, CONF);
     assert(units.count == 1 && strcmp(units.items[0].where, "20#2") == 0 && strcmp(units.items[0].id, "20") == 0);
     c300x_calls_end(&calls, &sink, "8f3a1c2e-1", "hangup", 20000);
     ring_with_caller(60000, "*8*9#1#4*20#2##");
@@ -454,12 +462,51 @@ static void seen_units_survive_restart(void)
     assert(strcmp(units.items[4].id, "24_1") == 0 && strcmp(units.items[4].where, "24#1") == 0);
     c300x_outdoor_units_load_seen(&units, path);
     assert(units.count == 5);
-    c300x_outdoor_units_build(&units, ARCHIVE_THREE, "ok", CONF, "20", "20");
+    build(ARCHIVE_THREE, CONF);
     assert(units.count == 5);
     unlink(path);
     reset(ARCHIVE_THREE);
     c300x_outdoor_units_load_seen(&units, path);
     assert(units.count == 3);
+}
+
+/* archive.xml names outdoor units only in its outdoor-unit object (cid
+ * 10050): the <ist> without cid. Locks (cid 10060), actuators (3008), the
+ * stair light (2009), cameras and intercoms are none; an <ist> attribute it
+ * lacks is its <obj>'s. */
+static const char *ARCHIVE_SAMPLE =
+    "<archive><obj where=\"0\" cid=\"10050\" descr=\"X\" lock=\"0\" id=\"10050\" dev=\"2\" staircase=\"0\">"
+    "<ist where=\"0\" cid=\"10060\" descr=\"L0\" uii=\"101\"/><ist where=\"1\" cid=\"10060\" descr=\"L1\" uii=\"109\"/>"
+    "<ist where=\"2\" cid=\"10060\" descr=\"L2\" uii=\"112\"/><ist where=\"0#2\" descr=\"Haust\xc3\xbcr\" uii=\"114\"/>"
+    "<ist where=\"1\" descr=\"Garten\" uii=\"115\"/><ist where=\"2\" descr=\"Garage\" uii=\"116\"/></obj>"
+    "<obj where=\"0\" cid=\"10053\" descr=\"g\" id=\"10053\" dev=\"1\"/>"
+    "<obj where=\"0\" cid=\"10052\" descr=\"g\" id=\"10052\" dev=\"1\"/></archive>";
+
+static void archive_objects_by_cid(void)
+{
+    static const char *const others =
+        "<archive><obj cid=\"3008\" dev=\"2\" where=\"0\" descr=\"Generic\"><ist where=\"5\" descr=\"Gate opener\" uii=\"1\"/></obj>"
+        "<obj cid=\"10052\" dev=\"1\" where=\"0\" descr=\"Intercom\"><ist where=\"3\" descr=\"Kitchen\" uii=\"2\"/></obj>"
+        "<obj cid=\"10051\" dev=\"4\" where=\"0\"><ist where=\"1\" descr=\"Camera\" uii=\"3\"/></obj>"
+        "<obj cid=\"2009\" dev=\"2\"><ist descr=\"Stairs\" uii=\"4\"/></obj>"
+        "<obj cid=\"10050\" dev=\"2\" where=\"7\" descr=\"Panel\"><ist cid=\"10060\" dev=\"5\" where=\"1\" lkid=\"a\"/>"
+        "<ist uii=\"5\"/><ist where=\"3\" dev=\"\" descr=\"No dev\"/><ist where=\"9 9\" descr=\"Bad\"/></obj>"
+        "<object cid=\"10050\"><ist where=\"8\"/></object></archive>";
+    struct c300x_station_archive station;
+
+    reset(ARCHIVE_SAMPLE);
+    assert(units.count == 3);
+    expect(units.items[0].where, "20#2");
+    assert(strcmp(units.items[0].name, "Haust\xc3\xbcr") == 0);
+    assert(strcmp(units.items[1].where, "21") == 0 && strcmp(units.items[1].name, "Garten") == 0);
+    assert(strcmp(units.items[2].where, "22") == 0 && strcmp(units.items[2].name, "Garage") == 0);
+    reset(others);
+    c300x_station_archive_parse(&station, others, CONF);
+    assert(station.unit_count == 2);
+    /* An <ist> without where or descr takes its <obj>'s; an empty dev is the default 2. */
+    assert(strcmp(station.units[0].where, "27") == 0 && strcmp(station.units[0].name, "Panel") == 0);
+    assert(strcmp(station.units[1].where, "23") == 0 && strcmp(station.units[1].name, "No dev") == 0);
+    assert(units.count == 3 && strcmp(units.items[2].source, "default") == 0);
 }
 
 int main(int argc, char **argv)
@@ -481,6 +528,7 @@ int main(int argc, char **argv)
         {"timeouts_and_json", timeouts_and_json},
         {"plain_address_is_the_qualified_unit", plain_address_is_the_qualified_unit},
         {"seen_units_survive_restart", seen_units_survive_restart},
+        {"archive_objects_by_cid", archive_objects_by_cid},
     };
     for (size_t index = 0; index < sizeof(cases) / sizeof(cases[0]); index++) {
         if (argc < 2 || strcmp(argv[1], cases[index].name) == 0) {

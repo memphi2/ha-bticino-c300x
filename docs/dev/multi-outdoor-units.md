@@ -57,12 +57,15 @@ caller frame, but its lock and video use the plain `20`
 
 Sources, in this order:
 
-1. `archive.xml` (`/home/bticino/cfg/extra/0/archive.xml`): inside an `<obj>`,
-   every `<ist>` without `cid` is an outdoor unit, every `<ist cid="10060">`
-   is a lock. The bus address is the `<obj>`'s `dev` (default `2`) followed by
-   the `where` of the `<ist>` (`0#2` -> `20#2`, `1` -> `21`). The name is
-   `descr`. A unit's lock is the lock with the same `action_where`; without
-   one the unit's own `action_where` is its lock.
+1. `archive.xml` (`/home/bticino/cfg/extra/0/archive.xml`): only the
+   outdoor-unit object `<obj cid="10050">` names outdoor units: every `<ist>`
+   in it without `cid`. Its `<ist cid="10060">` are locks; other objects
+   (cameras 10051, intercoms 10052/10053, actuators 3008, the stair light
+   2009, TVCC 10061, unknown ones) name no unit. The bus address is `dev`
+   (default `2`) followed by `where` (`0#2` -> `20#2`, `1` -> `21`), the name
+   is `descr`; an attribute the `<ist>` lacks is its `<obj>`'s, as the
+   station's display reads it. A unit's lock is the lock with the same
+   `action_where`; without one the unit's own `action_where` is its lock.
 2. The default unit from `conf.xml` (`/var/tmp/conf.xml`,
    `setup/vdes/communication/p_default`: `dev` + `address`, `2` + `0` -> `20`).
    Without `conf.xml` the agent's `video.sip.devaddr` (default `20`) is used.

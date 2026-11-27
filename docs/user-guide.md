@@ -202,9 +202,9 @@ leave it unticked to keep your size. See [Automatic Images](#automatic-images).
 
 ### Audio Codec
 
-For clearer sound, set the **Audio codec** select to **PCMU**. The browser plays
-PCMU as it is, so the agent no longer converts the sound between Speex and
-PCMU; that gives clearer audio and leaves the device more room. Switching
+For clearer sound, set the **Audio codec** select to **PCMU**. The station then
+sends the format the browser plays, so the agent no longer converts the sound
+from Speex; that gives clearer audio and leaves the device more room. Switching
 restarts the C300X once. It writes the same codec settings that BTicino ships
 on firmware 3.0.6, which already runs PCMU from the factory (1.7.19 and 2.0.2
 ship with Speex).
@@ -226,16 +226,19 @@ Under **Configure > Video and audio**:
 Both set the door station's sound everywhere Home Assistant hears it: the
 live view, answered Ring Calls and Ring Capture recordings (MP4 and the
 16 kHz WAV for transcription), with the same level in all of them and with
-either codec. Where the Classe 300X allows it, the door level is set in the
-station's own audio chip during a call answered through Home Assistant, which
-lifts the voice before it is compressed; the station then uses its own
-`/home/root/demo/Audio_State.sh` hook, which the agent writes and which **Stock**
-or removing the agent puts back. Elsewhere (the live view without a call, the
-Classe 100X, a station whose hook was changed by someone else) the agent adds
-the same amount in software, so the setting sounds the same either way. The
-fine adjustment is always added in software. Loud peaks are softened instead
-of clipped. `+12 dB` can bring loud speech close to full scale; lower the door
-level or use a negative fine adjustment if it sounds harsh.
+either codec.
+
+On a Classe 300X the door level is set in the station's own audio chip, which
+lifts the voice before it is compressed. The station uses the same chip
+setting for the live view, for calls answered in Home Assistant and for calls
+answered in the BTicino app, so a door level above **Stock** makes calls in
+the app louder too. For this the agent replaces the station's
+`/home/root/demo/Audio_State.sh` hook and keeps the original; **Stock** or
+removing the agent puts it back. Where the agent cannot use the chip, for
+example because another tool changed that hook, it adds the door level in
+software instead. On the Classe 100X the agent always adds the door level in
+software, and the app is not affected. The fine adjustment is always added in
+software. Loud peaks are softened instead of clipped.
 
 Home Call has its own audio path and is not changed by these options. The station loudspeaker's volume for announcements is the
 volume of the [Speaker](#speaker-announcements-and-tts) media player.

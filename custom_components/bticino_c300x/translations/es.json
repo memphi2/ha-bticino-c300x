@@ -71,7 +71,7 @@
         "data_description": {
           "video_enabled": "Imagen y sonido del videoportero en Home Assistant: al llamar, a petición y para Home Call.",
           "create_homeassistant_user": "El vídeo y el audio necesitan un acceso propio en el {model}. Con esta opción activada, la integración lo configura durante la instalación o mediante su reparación.",
-          "door_audio_level_db": "Sube el sonido del videoportero en la vista en directo, durante una llamada y en las grabaciones de llamada. Donde la estación lo permite, en su chip de audio; si no, el mismo valor por software. Predeterminado: valor de fábrica.",
+          "door_audio_level_db": "Sube el sonido del videoportero en la vista en directo, durante una llamada y en las grabaciones de llamada. En el Classe 300X en el chip de audio de la estación, lo que también sube las llamadas contestadas en la app BTicino; en el Classe 100X mediante el agente. Predeterminado: valor de fábrica.",
           "audio_fine_gain_db": "Añade de -10 a +10 dB al nivel del videoportero, igual en cada estación y con cada códec de audio. Predeterminado: 0.",
           "webrtc_ice_policy": "Qué direcciones de red puede usar el navegador para la imagen en directo. Cámbialo solo si la imagen en directo no conecta.",
           "native_two_way_audio": "Opcional, desactivado de forma predeterminada. Requiere Home Assistant 2026.11 o posterior, \"Audio bidireccional\" activado en Ajustes > Sistema > Labs, la imagen en directo por WebRTC, acceso por HTTPS y que el navegador tenga permiso para usar el micrófono. Responde antes a la llamada en la tarjeta del {model}; esta opción no la responde. Hablar en la tarjeta del {model} sigue igual."
@@ -200,7 +200,7 @@
         "data_description": {
           "video_enabled": "Imagen y sonido del videoportero en Home Assistant: al llamar, a petición y para Home Call.",
           "create_homeassistant_user": "El vídeo y el audio necesitan un acceso propio en el {model}. Con esta opción activada, la integración lo configura durante la instalación o mediante su reparación.",
-          "door_audio_level_db": "Sube el sonido del videoportero en la vista en directo, durante una llamada y en las grabaciones de llamada. Donde la estación lo permite, en su chip de audio; si no, el mismo valor por software. Predeterminado: valor de fábrica.",
+          "door_audio_level_db": "Sube el sonido del videoportero en la vista en directo, durante una llamada y en las grabaciones de llamada. En el Classe 300X en el chip de audio de la estación, lo que también sube las llamadas contestadas en la app BTicino; en el Classe 100X mediante el agente. Predeterminado: valor de fábrica.",
           "audio_fine_gain_db": "Añade de -10 a +10 dB al nivel del videoportero, igual en cada estación y con cada códec de audio. Predeterminado: 0.",
           "webrtc_ice_policy": "Qué direcciones de red puede usar el navegador para la imagen en directo. Cámbialo solo si la imagen en directo no conecta.",
           "native_two_way_audio": "Opcional, desactivado de forma predeterminada. Requiere Home Assistant 2026.11 o posterior, \"Audio bidireccional\" activado en Ajustes > Sistema > Labs, la imagen en directo por WebRTC, acceso por HTTPS y que el navegador tenga permiso para usar el micrófono. Responde antes a la llamada en la tarjeta del {model}; esta opción no la responde. Hablar en la tarjeta del {model} sigue igual."
@@ -843,7 +843,7 @@
         "data_description": {
           "video_enabled": "Imagen y sonido del videoportero en Home Assistant: al llamar, a petición y para Home Call.",
           "create_homeassistant_user": "El vídeo y el audio necesitan un acceso propio en el {model}. Con esta opción activada, la integración lo configura durante la instalación o mediante su reparación.",
-          "door_audio_level_db": "Sube el sonido del videoportero en la vista en directo, durante una llamada y en las grabaciones de llamada. Donde la estación lo permite, en su chip de audio; si no, el mismo valor por software. Predeterminado: valor de fábrica.",
+          "door_audio_level_db": "Sube el sonido del videoportero en la vista en directo, durante una llamada y en las grabaciones de llamada. En el Classe 300X en el chip de audio de la estación, lo que también sube las llamadas contestadas en la app BTicino; en el Classe 100X mediante el agente. Predeterminado: valor de fábrica.",
           "audio_fine_gain_db": "Añade de -10 a +10 dB al nivel del videoportero, igual en cada estación y con cada códec de audio. Predeterminado: 0.",
           "webrtc_ice_policy": "Qué direcciones de red puede usar el navegador para la imagen en directo. Cámbialo solo si la imagen en directo no conecta.",
           "native_two_way_audio": "Opcional, desactivado de forma predeterminada. Requiere Home Assistant 2026.11 o posterior, \"Audio bidireccional\" activado en Ajustes > Sistema > Labs, la imagen en directo por WebRTC, acceso por HTTPS y que el navegador tenga permiso para usar el micrófono. Responde antes a la llamada en la tarjeta del {model}; esta opción no la responde. Hablar en la tarjeta del {model} sigue igual."

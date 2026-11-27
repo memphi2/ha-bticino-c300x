@@ -73,7 +73,8 @@ CONF_NATIVE_TWO_WAY_AUDIO = "native_two_way_audio"
 # agent. Whole dB.
 CONF_DOOR_AUDIO_LEVEL_DB = "door_audio_level_db"
 CONF_AUDIO_FINE_GAIN_DB = "audio_fine_gain_db"
-# The level options before 3.0.0; read by nothing, dropped when options are saved.
+# The level options before 3.0.0; read by nothing. Saving the options drops them
+# from the options; a copy in the setup data stays, unread.
 RETIRED_AUDIO_OPTION_KEYS = ("doorstation_audio_gain_db", "ring_capture_audio_gain_db")
 CONF_VIDEO_PORT = "video_port"
 CONF_VIDEO_STREAM_PATH = "video_stream_path"

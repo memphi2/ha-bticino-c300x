@@ -13,11 +13,14 @@ on a Classe 300X with firmware 1.7.19; firmware 2.0.2, 3.0.6 and the Classe
   (Stock, +3, +6, +9, +12 dB; default Stock) raises the voice at the source:
   on a Classe 300X in the station's audio chip, before the sound is
   compressed; on the Classe 100X in the agent. **Fine adjustment** (-10 to
-  +10 dB) adds to it. Both work the same with Speex and PCMU, in the live view, during a call
-  and in ring recordings, which now have the same level as the live sound.
-  They replace "Live audio level" and "Volume of ring recordings"; the old
-  values are not taken over. The card plays the sound as it comes and no
-  longer adds its own gain.
+  +10 dB) adds to it. Both work the same with Speex and PCMU, in the live view,
+  during a call and in ring recordings, which now have the same level as the
+  live sound. They replace "Live audio level" and "Volume of ring recordings";
+  the old values are not taken over. On a Classe 300X a door level above Stock
+  also makes calls answered in the BTicino app louder; set it to Stock (or
+  remove the agent) before leaving the beta. The card plays the sound as it
+  comes and no longer adds its own gain. The camera attribute
+  `doorstation_audio_gain_db` is removed.
 - The native agent is rebuilt as **3.0.0b3**; an agent update is required.
 
 ## v3.0.0b2 - 2026-11-26

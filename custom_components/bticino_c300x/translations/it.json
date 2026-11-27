@@ -71,7 +71,7 @@
         "data_description": {
           "video_enabled": "Immagine e audio del posto esterno in Home Assistant: alla chiamata, su richiesta e per Home Call.",
           "create_homeassistant_user": "Video e audio richiedono un accesso proprio sul {model}. Se attivo, l'integrazione lo crea durante la configurazione o tramite la sua riparazione.",
-          "door_audio_level_db": "Alza l'audio del posto esterno dal vivo, durante una chiamata e nelle registrazioni di chiamata. Dove la stazione lo consente, nel suo chip audio, altrimenti dello stesso valore via software. Predefinito: impostazione di fabbrica.",
+          "door_audio_level_db": "Alza l'audio del posto esterno dal vivo, durante una chiamata e nelle registrazioni di chiamata. Sul Classe 300X nel chip audio della stazione, il che alza anche le chiamate risposte nell'app BTicino; sul Classe 100X tramite l'agent. Predefinito: impostazione di fabbrica.",
           "audio_fine_gain_db": "Aggiunge da -10 a +10 dB al livello del posto esterno, uguale su ogni stazione e con ogni codec audio. Predefinito: 0.",
           "webrtc_ice_policy": "Quali indirizzi di rete il browser può usare per l'immagine dal vivo. Da modificare solo se l'immagine dal vivo non si collega.",
           "native_two_way_audio": "Opzionale, disattivato per impostazione predefinita. Richiede Home Assistant 2026.11 o successivo, \"Two-way audio\" attivato in Impostazioni > Sistema > Labs, l'immagine dal vivo tramite WebRTC, accesso in HTTPS e il microfono consentito nel browser. Rispondi prima a una chiamata nella scheda {model}; questa opzione non risponde. Parlare nella scheda {model} resta invariato."
@@ -200,7 +200,7 @@
         "data_description": {
           "video_enabled": "Immagine e audio del posto esterno in Home Assistant: alla chiamata, su richiesta e per Home Call.",
           "create_homeassistant_user": "Video e audio richiedono un accesso proprio sul {model}. Se attivo, l'integrazione lo crea durante la configurazione o tramite la sua riparazione.",
-          "door_audio_level_db": "Alza l'audio del posto esterno dal vivo, durante una chiamata e nelle registrazioni di chiamata. Dove la stazione lo consente, nel suo chip audio, altrimenti dello stesso valore via software. Predefinito: impostazione di fabbrica.",
+          "door_audio_level_db": "Alza l'audio del posto esterno dal vivo, durante una chiamata e nelle registrazioni di chiamata. Sul Classe 300X nel chip audio della stazione, il che alza anche le chiamate risposte nell'app BTicino; sul Classe 100X tramite l'agent. Predefinito: impostazione di fabbrica.",
           "audio_fine_gain_db": "Aggiunge da -10 a +10 dB al livello del posto esterno, uguale su ogni stazione e con ogni codec audio. Predefinito: 0.",
           "webrtc_ice_policy": "Quali indirizzi di rete il browser può usare per l'immagine dal vivo. Da modificare solo se l'immagine dal vivo non si collega.",
           "native_two_way_audio": "Opzionale, disattivato per impostazione predefinita. Richiede Home Assistant 2026.11 o successivo, \"Two-way audio\" attivato in Impostazioni > Sistema > Labs, l'immagine dal vivo tramite WebRTC, accesso in HTTPS e il microfono consentito nel browser. Rispondi prima a una chiamata nella scheda {model}; questa opzione non risponde. Parlare nella scheda {model} resta invariato."
@@ -843,7 +843,7 @@
         "data_description": {
           "video_enabled": "Immagine e audio del posto esterno in Home Assistant: alla chiamata, su richiesta e per Home Call.",
           "create_homeassistant_user": "Video e audio richiedono un accesso proprio sul {model}. Se attivo, l'integrazione lo crea durante la configurazione o tramite la sua riparazione.",
-          "door_audio_level_db": "Alza l'audio del posto esterno dal vivo, durante una chiamata e nelle registrazioni di chiamata. Dove la stazione lo consente, nel suo chip audio, altrimenti dello stesso valore via software. Predefinito: impostazione di fabbrica.",
+          "door_audio_level_db": "Alza l'audio del posto esterno dal vivo, durante una chiamata e nelle registrazioni di chiamata. Sul Classe 300X nel chip audio della stazione, il che alza anche le chiamate risposte nell'app BTicino; sul Classe 100X tramite l'agent. Predefinito: impostazione di fabbrica.",
           "audio_fine_gain_db": "Aggiunge da -10 a +10 dB al livello del posto esterno, uguale su ogni stazione e con ogni codec audio. Predefinito: 0.",
           "webrtc_ice_policy": "Quali indirizzi di rete il browser può usare per l'immagine dal vivo. Da modificare solo se l'immagine dal vivo non si collega.",
           "native_two_way_audio": "Opzionale, disattivato per impostazione predefinita. Richiede Home Assistant 2026.11 o successivo, \"Two-way audio\" attivato in Impostazioni > Sistema > Labs, l'immagine dal vivo tramite WebRTC, accesso in HTTPS e il microfono consentito nel browser. Rispondi prima a una chiamata nella scheda {model}; questa opzione non risponde. Parlare nella scheda {model} resta invariato."

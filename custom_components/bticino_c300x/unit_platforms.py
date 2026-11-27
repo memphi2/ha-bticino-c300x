@@ -70,16 +70,22 @@ class C300XUnitDoorButton(C300XUnitEntity, ButtonEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """The lock's bus address and name, as the 3.0 door button had them."""
+        """lock_id and lock_name as the 3.0 door button had them, so 3.0 templates keep working.
+
+        The default unit opens the agent's configured lock ("default" unless
+        configured otherwise); another unit its own reported lock, else its
+        lock's bus address.
+        """
 
         registry = self._calls
         unit = registry.units.get(self.unit_id, self._unit) if registry is not None else self._unit
-        name = unit.name or unit.lock_where
-        if unit.default:
-            # The station's lock, as the agent is configured for it.
-            locks = locks_for_capabilities(getattr(self._entry.runtime_data, "capabilities", {}))
-            name = locks[0]["name"] if locks else name
-        return {"lock_id": unit.lock_where, "lock_name": name}
+        locks = locks_for_capabilities(getattr(self._entry.runtime_data, "capabilities", {}))
+        lock = locks[0] if unit.default and locks else next(
+            (item for item in locks if item["id"] in {unit.id, unit.lock_where}), None,
+        )
+        if lock is not None:
+            return {"lock_id": lock["id"], "lock_name": lock["name"]}
+        return {"lock_id": unit.lock_where, "lock_name": unit.name or unit.lock_where}
 
     async def async_press(self) -> None:
         from .executor import async_unlock_door

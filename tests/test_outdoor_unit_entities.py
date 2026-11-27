@@ -360,11 +360,17 @@ def test_door_buttons_name_their_lock_like_the_3_0_door_button() -> None:
         unit_id: C300XUnitDoorButton(entry, units[unit_id]).extra_state_attributes  # type: ignore[arg-type]
         for unit_id in units
     }
-    # lock_id is the lock's bus address; the station's own lock keeps its configured name.
+    # The default unit keeps exactly what 3.0 showed, so 3.0 templates keep
+    # working; another unit its lock's bus address.
     assert attributes == {
-        "20": {"lock_id": "20", "lock_name": "Main door"},
+        "20": {"lock_id": "default", "lock_name": "Main door"},
         "21": {"lock_id": "21", "lock_name": "21"},
         "22_1": {"lock_id": "23", "lock_name": "Garage"},
+    }
+    # A lock the agent reports for another unit keeps its id and name.
+    entry.runtime_data.capabilities["locks"]["locks"].append({"id": "23", "name": "Garage gate"})
+    assert C300XUnitDoorButton(entry, units["22_1"]).extra_state_attributes == {  # type: ignore[arg-type]
+        "lock_id": "23", "lock_name": "Garage gate",
     }
 
 

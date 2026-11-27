@@ -413,6 +413,44 @@ def test_a_station_event_belongs_to_its_unit_device_else_to_the_station(monkeypa
     assert unit_entity.event_device_id(None, entry, None) == "device-station"  # type: ignore[arg-type]
 
 
+def test_the_last_ring_survives_the_update_from_3_0_and_a_restart() -> None:
+    from homeassistant.core import State
+
+    entry = _entry(ONE)
+    unit = entry.runtime_data.calls.units["20"]
+
+    def restored(entity: Any, state: State | None) -> Any:
+        async def last_state() -> State | None:
+            return state
+
+        entity.async_get_last_state = last_state
+        return _added(entity)
+
+    # The 3.0 doorbell event, kept by its entity ID: the unit's ring event now.
+    old = State("event.door_doorbell_ring_event", "2026-11-26T09:00:00.123+00:00", {
+        "event_type": "ring", "last_ring_at": "2026-11-26T09:00:00.120000+00:00",
+        "event_key": "doorbell_pressed", "event": "Doorbell pressed",
+        "camera_entity_id": "camera.door_doorbell_camera", "video_available": True,
+    })
+    gate = restored(C300XUnitDoorbellEventEntity(entry, unit), old)  # type: ignore[arg-type]
+    assert gate.extra_state_attributes["last_ring_at"] == "2026-11-26T09:00:00.120000+00:00"
+    assert gate.extra_state_attributes["call_id"] is None
+    # 3.0 restarted before: no last_ring_at, the event's own time is the ring's.
+    old_restarted = State(old.entity_id, old.state, {**old.attributes, "last_ring_at": None})
+    gate = restored(C300XUnitDoorbellEventEntity(entry, unit), old_restarted)  # type: ignore[arg-type]
+    assert gate.extra_state_attributes["last_ring_at"] == "2026-11-26T09:00:00.123+00:00"
+    # A 3.1 restart keeps the call too; a station that never rang has none.
+    station = restored(C300XStationRingEventEntity(entry), State("event.door_station_ring", "2026-11-26T10:00:00.000+00:00", {  # type: ignore[arg-type]
+        "event_type": "ring", "call_id": "0badc0de-7", "last_ring_at": "2026-11-26T10:00:00+00:00",
+    }))
+    assert (station.extra_state_attributes["call_id"], station.extra_state_attributes["last_ring_at"]) == (
+        "0badc0de-7", "2026-11-26T10:00:00+00:00",
+    )
+    never = restored(C300XStationRingEventEntity(entry), State("event.door_station_ring", "unknown", {}))  # type: ignore[arg-type]
+    assert never.extra_state_attributes["last_ring_at"] is None
+    assert restored(C300XStationRingEventEntity(entry), None).extra_state_attributes["last_ring_at"] is None  # type: ignore[arg-type]
+
+
 def test_ring_entities_listen_to_the_agent_event_bus() -> None:
     entry = _entry(ONE)
     station = C300XStationRingEventEntity(entry)  # type: ignore[arg-type]

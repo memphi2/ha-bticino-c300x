@@ -23,7 +23,8 @@ devices, entities and services; a Repair lists what to redo after the update.
   fires at once with every ring, without the unit; use it for the fastest
   notification. Both carry the same `call_id`, also when the visitor presses
   again during the call; both fire again then. The ring event no longer has the
-  `video_available` attribute.
+  `video_available` attribute; its `last_ring_at` and `call_id` now survive a
+  restart.
 - New **Door** event on every outdoor unit (`opened`) and **Stair light**
   event on the station (`activated`). They fire with the station's own bus
   message, whatever opened the door or switched on the light: the button, the

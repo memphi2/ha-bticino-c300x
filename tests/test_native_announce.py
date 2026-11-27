@@ -43,8 +43,8 @@ fi
 # Like the device's sound driver, the player's own end sets the sound state to
 # off. A player that is killed cannot do that here.
 APLAY = """#!/bin/sh
+echo $$ > "$LAB/aplay.pid.new" && mv "$LAB/aplay.pid.new" "$LAB/aplay.pid"
 echo "aplay $*" >> "$LAB/log"
-echo $$ > "$LAB/aplay.pid"
 sleep "$(cat "$LAB/play-seconds")"
 echo 0 > "$LAB/mixer/Zia_Aud_St"
 exit "$(cat "$LAB/play-exit")"
@@ -149,11 +149,23 @@ class Lab:
             time.sleep(0.02)
 
     def player_alive(self) -> bool:
+        """Whether the player runs; one killed but not yet collected has ended."""
+
+        pid = int((self.dir / "aplay.pid").read_text())
         try:
-            os.kill(int((self.dir / "aplay.pid").read_text()), 0)
-        except ProcessLookupError:
+            os.kill(pid, 0)
+            status = Path(f"/proc/{pid}/status").read_text()
+        except (ProcessLookupError, FileNotFoundError):
             return False
-        return True
+        return status.split("State:")[1].split()[0] != "Z"
+
+    def wait_player_gone(self, seconds: float = 10) -> None:
+        """A killed player ends once the kernel has run it; it plays 30 s otherwise."""
+
+        deadline = time.monotonic() + seconds
+        while self.player_alive():
+            assert time.monotonic() < deadline, "the player still runs"
+            time.sleep(0.01)
 
     def wait_free(self, seconds: float = 5) -> None:
         deadline = time.monotonic() + seconds
@@ -527,7 +539,7 @@ def test_stop_ends_the_sound_and_switches_the_speaker_off(lab: Lab) -> None:
     lab.call("/actions/stop", {})
 
     assert lab.result() == "stopped"
-    assert not lab.player_alive()
+    lab.wait_player_gone()
     assert lab.log()[-4:] == SWITCH_OFF_AFTER_KILL
 
 
@@ -556,7 +568,7 @@ def test_an_agent_that_ends_while_playing_switches_the_speaker_off(lab: Lab) -> 
     lab.process.terminate()
     lab.process.wait(timeout=5)
 
-    assert not lab.player_alive()
+    lab.wait_player_gone()
     lab.wait_for("mixer Zia_Aud_St=0")
     assert lab.log()[-4:] == SWITCH_OFF_AFTER_KILL
     assert not (lab.dir / "announce.wav").exists()
@@ -571,7 +583,7 @@ def test_a_restarted_agent_ends_the_sound_of_one_that_was_killed(lab: Lab) -> No
     assert lab.player_alive()
     lab.restart()
 
-    assert not lab.player_alive()
+    lab.wait_player_gone()
     # What the old agent knew is gone: the new one acts as after a door frame.
     assert lab.call("/actions/play", {"volume": 50}, status=409)["error"] == "announcement_device_busy"
     lab.wait_for("mixer Zia_Aud_St=0", seconds=RING_HOLD + 5)

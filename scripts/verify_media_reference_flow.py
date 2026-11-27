@@ -949,8 +949,7 @@ def _timing_checks(
         return [
             Check("pcap.timing.timestamps_present", False),
         ]
-    # The 2.x route and the call-scoped one of 3.1.0 both match.
-    answer_post = _first_packet_containing(packets, "POST /api/v1/calls/", "/actions/answer")
+    answer_post = _first_call_answer(packets)
     first_large = _first_packet_between(packets, pressed, view, min_length=900)
     first_small = _first_packet_after(packets, view, max_length=350)
     checks = [
@@ -1095,8 +1094,7 @@ def _ring_timing(packets: list[Packet]) -> dict[str, float]:
     pressed = events.get("doorbell.pressed")
     closed = events.get("doorbell.media.closed")
     view = events.get("doorbell.view_requested")
-    # The 2.x route and the call-scoped one of 3.1.0 both match.
-    answer_post = _first_packet_containing(packets, "POST /api/v1/calls/", "/actions/answer")
+    answer_post = _first_call_answer(packets)
     if (
         pressed is None
         or closed is None
@@ -1214,6 +1212,14 @@ def _first_packet_after(
         ):
             return packet
     return None
+
+
+# The agent's call-scoped answer route; a call id is <8 hex>-<sequence>.
+_CALL_ANSWER = re.compile(r"POST /api/v1/calls/[0-9a-f]{8}-[0-9]{1,10}/actions/answer ")
+
+
+def _first_call_answer(packets: list[Packet]) -> Packet | None:
+    return next((packet for packet in packets if _CALL_ANSWER.search(packet.text)), None)
 
 
 def _first_packet_containing(packets: list[Packet], *needles: str) -> Packet | None:

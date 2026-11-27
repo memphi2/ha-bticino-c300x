@@ -22,7 +22,7 @@ def _script_module() -> ModuleType:
     return module
 
 
-def _ring_flow(*, view_delay: float = 0.12) -> str:
+def _ring_flow(*, view_delay: float = 0.12, call: str = "0badc0de-3") -> str:
     view_second = 3 + view_delay
     closed_second = view_second + 6
     return (
@@ -32,7 +32,7 @@ def _ring_flow(*, view_delay: float = 0.12) -> str:
         "2026-06-12 18:22:00.500000 IP 192.0.2.10.1 > 198.51.100.20.2: UDP, length 1200\n"
         "media\n"
         "2026-06-12 18:22:03.000000 IP 192.0.2.10.1 > 198.51.100.20.2: HTTP, length 220\n"
-        "POST /api/v1/calls/doorbell/actions/answer HTTP/1.1\r\n"
+        f"POST /api/v1/calls/{call}/actions/answer HTTP/1.1\r\n"
         f"2026-06-12 18:22:{view_second:09.6f} IP 192.0.2.10.1 > 198.51.100.20.2: UDP, length 180\n"
         '{"type":"doorbell.view_requested","data":{"doorbell":"view_requested","available":true,'
         '"window_available":true,"stream_path":"/doorbell-video"}}\n'
@@ -54,7 +54,7 @@ def _ring_dual_rtsp_flow(*, teardown_before_full_play: bool = False) -> str:
         "2026-06-12 18:22:00.500000 IP 192.0.2.10.1 > 198.51.100.20.2: UDP, length 1200\n"
         "media\n"
         "2026-06-12 18:22:03.080000 IP 192.0.2.10.1 > 198.51.100.20.2: HTTP, length 220\n"
-        "POST /api/v1/calls/doorbell/actions/answer HTTP/1.1\r\n"
+        "POST /api/v1/calls/0badc0de-3/actions/answer HTTP/1.1\r\n"
         "2026-06-12 18:22:03.100000 IP 192.0.2.10.1 > 198.51.100.20.2: UDP, length 180\n"
         '{"type":"doorbell.view_requested","data":{"doorbell":"view_requested","available":true,'
         '"window_available":true,"stream_path":"/doorbell-video"}}\n'
@@ -230,6 +230,25 @@ def test_ring_reference_pcap_comparison_rejects_timing_drift() -> None:
     module = _script_module()
     reference = module.parse_tcpdump_ascii(_ring_flow())
     candidate = module.parse_tcpdump_ascii(_ring_flow(view_delay=3.0))
+
+    failed = [
+        check.name
+        for check in module.collect_reference_pcap_checks(
+            mode="ring_call",
+            reference_packets=reference,
+            candidate_packets=candidate,
+        )
+        if not check.ok
+    ]
+
+    assert "pcap_compare.ring_call.timing.view_after_answer" in failed
+
+
+def test_ring_reference_pcap_comparison_takes_only_the_call_scoped_answer() -> None:
+    module = _script_module()
+    reference = module.parse_tcpdump_ascii(_ring_flow())
+    # The 2.x route without a call id is not the 3.1 agent's answer.
+    candidate = module.parse_tcpdump_ascii(_ring_flow(call="doorbell"))
 
     failed = [
         check.name

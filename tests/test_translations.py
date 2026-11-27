@@ -154,7 +154,7 @@ def test_every_visitor_image_failure_is_shown_in_words_in_every_language() -> No
             assert last_failure["name"] != english["state_attributes"]["last_failure"]["name"]
             for code, text in last_failure["state"].items():
                 assert text != english["state_attributes"]["last_failure"]["state"][code], (path.name, code)
-    guide = (ROOT / "docs" / "user-guide.md").read_text(encoding="utf-8")
+    guide = (ROOT / "docs" / "reference.md").read_text(encoding="utf-8")
     for code, text in english["state_attributes"]["last_failure"]["state"].items():
         assert f"| `{code}` | {text} |" in guide, code
 

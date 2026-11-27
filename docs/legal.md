@@ -1,7 +1,8 @@
 # Legal and Asset Hygiene
 
 This repository is an independent community project for local Home Assistant
-use with compatible BTicino Classe 300X / C300X devices.
+use with compatible BTicino Classe 300X / C300X and Classe 100X / C100X
+devices.
 
 ## License
 

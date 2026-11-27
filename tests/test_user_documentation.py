@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import posixpath
 import re
 from pathlib import Path
 
@@ -19,8 +20,10 @@ from custom_components.bticino_c300x.const import (
 
 ROOT = Path(__file__).resolve().parents[1]
 DOCS = ROOT / "docs"
-ICE_LINK = "media-troubleshooting.md#connection-paths-for-the-live-picture"
-REMOVAL_LINK = "advanced-maintenance.md#remove-home-assistant-integration"
+# Links relative to docs/; a page in a subfolder links them relative to itself.
+ICE_LINK = "reference.md#connection-paths-for-the-live-picture"
+REMOVAL_LINK = "classe-300x/5-update-and-removal.md#remove-the-integration"
+SETUP_PAGES = ("classe-300x/1-setup.md", "classe-100x/1-setup.md")
 ADDRESS_GROUPS = {
     "IPv4": "192.0.2.5",
     "IPv4 link-local": "169.254.1.1",
@@ -46,8 +49,19 @@ def test_support_policy_matches_latest_dated_stable_release():
     assert support.count("current stable") == 1
 
 
+def relative_link(document: str, link: str) -> str:
+    """``link`` (relative to docs/) as the page ``document`` writes it."""
+
+    target, anchor = link.split("#", 1)
+    return f"{posixpath.relpath(target, posixpath.dirname(document) or '.')}#{anchor}"
+
+
+def flat(text: str) -> str:
+    return " ".join(text.split())
+
+
 def ice_rows():
-    text = section("media-troubleshooting.md", "Connection Paths for the Live Picture")
+    text = section("reference.md", "Connection Paths for the Live Picture")
     rows = re.findall(r"^\| ([^|]+) \| `([^`]+)` \| ([^|]+) \| ([^|]+) \|$", text, re.M)
     assert len(rows) == len(WEBRTC_ICE_POLICIES)
     assert {row[1] for row in rows} == set(WEBRTC_ICE_POLICIES)
@@ -67,7 +81,7 @@ def test_documented_ice_choices_and_drops_match_actual_filter(policy):
 
 
 def test_ice_docs_state_real_default_and_non_absolute_family_filter():
-    text = " ".join(section("media-troubleshooting.md", "Connection Paths for the Live Picture").split())
+    text = " ".join(section("reference.md", "Connection Paths for the Live Picture").split())
     assert f"recommended** (`{DEFAULT_WEBRTC_ICE_POLICY}`)." in text
     for phrase in (
         "TURN relay candidates", "mDNS `.local` candidates", "unparseable candidate lines",
@@ -87,43 +101,54 @@ def test_ice_docs_state_real_default_and_non_absolute_family_filter():
     assert not ice_candidate_should_pass("candidate:1 1 udp 1 ::1 9 typ host", "prefer_ipv4_ula")
 
 
-@pytest.mark.parametrize("document", ["quickstart.md", "feature-reference.md"])
+@pytest.mark.parametrize("document", [*SETUP_PAGES, "reference.md"])
 def test_setup_docs_link_policy_and_removal_guides(document):
     text = (DOCS / document).read_text(encoding="utf-8")
-    assert f"]({ICE_LINK})" in text
-    assert f"]({REMOVAL_LINK})" in text
+    for link in (ICE_LINK, REMOVAL_LINK):
+        if document != link.split("#")[0]:
+            assert f"]({relative_link(document, link)})" in text, link
     assert "IPv4 and local IPv6 (ULA) -" in text
     assert "## Connection Paths for the Live Picture" in (DOCS / ICE_LINK.split("#")[0]).read_text()
-    assert "## Remove Home Assistant Integration" in (DOCS / REMOVAL_LINK.split("#")[0]).read_text()
+    assert "## Remove the Integration" in (DOCS / REMOVAL_LINK.split("#")[0]).read_text()
 
 
-# The repository of each project, by its owner: scripts/check_repo.py keeps
-# the full name of fquinto's project out of code.
+# The repository of each project, by its owner, on the setup page of its
+# model: scripts/check_repo.py keeps the full name of fquinto's project out of code.
 SSH_PROJECTS = {
-    "fquinto": "(C300X `1.7.x`)",
-    "davemajor/c300x-root": "(C300X `2.0.2` and `3.0.6`)",
-    "davemajor/bticino-c300x-usb-root": "(C300X `3.0.6` over USB, with SSH key login)",
-    "daniel-sc/bticino-c100x-firmware-tools": "(C100X `1.5.8`)",
+    "classe-300x/1-setup.md": {
+        "fquinto": "(C300X `1.7.x`)",
+        "davemajor/c300x-root": "(C300X `2.0.2` and `3.0.6`)",
+        "davemajor/bticino-c300x-usb-root": "(C300X `3.0.6` over USB, with SSH key login)",
+    },
+    "classe-100x/1-setup.md": {
+        "daniel-sc/bticino-c100x-firmware-tools": "(C100X `1.5.8`)",
+    },
 }
+SSH_SECTION = "Enable SSH on the Station"
 
 
-def test_quickstart_requirements_name_the_ssh_projects_and_a_clean_firmware():
-    requirements = " ".join(section("quickstart.md", "Requirements").split("\n### ", 1)[0].split())
+@pytest.mark.parametrize("document", SETUP_PAGES)
+def test_setup_pages_name_the_ssh_projects_and_a_clean_firmware(document):
+    rooting = flat(section(document, SSH_SECTION))
     for phrase in ("The integration cannot root a stock station.",
-                   "This project provides no firmware images", "rooting instructions",
-                   "at your own risk and without warranty", "flashing can brick the station",
-                   "The integration assumes a clean firmware: enable only SSH, no camera, MQTT "
-                   "or other extras."):
-        assert phrase in requirements, phrase
-    # Exactly these projects, each a repository front page with its
-    # station and firmware; the C100X line links this project's own test issue.
-    links = [link for link in re.findall(r"\]\((https?://[^)]+)\)", requirements)
-             if "/ha-bticino-c300x/" not in link]
-    assert len(links) == len(SSH_PROJECTS)
-    for link, (project, scope) in zip(links, SSH_PROJECTS.items(), strict=True):
+                   "This project provides no firmware images", "no rooting instructions",
+                   "at your own risk and without warranty", "Flashing can brick the station",
+                   "Enable nothing but SSH: no camera, MQTT or other extras."):
+        assert phrase in rooting, phrase
+    # Exactly the projects of this model, each a repository front page with
+    # its station and firmware.
+    projects = SSH_PROJECTS[document]
+    links = re.findall(r"\]\((https?://[^)]+)\)", rooting)
+    assert len(links) == len(projects)
+    for link, (project, scope) in zip(links, projects.items(), strict=True):
         assert re.fullmatch(r"https://github\.com/[\w.-]+/[\w.-]+", link), link
         assert link.startswith(f"https://github.com/{project}"), link
-        assert f"]({link}) {scope}" in requirements, scope
+        assert f"]({link}) {scope}" in rooting, scope
+    # No project of the other model, and jorgeavlobo's tool is not recommended.
+    page = (DOCS / document).read_text(encoding="utf-8")
+    others = [project for name, listed in SSH_PROJECTS.items() if name != document for project in listed]
+    assert not any(f"github.com/{project}" in page for project in others)
+    assert "jorgeavlobo" not in page
 
 
 def test_no_separate_rooting_page_and_no_link_to_one():
@@ -131,28 +156,39 @@ def test_no_separate_rooting_page_and_no_link_to_one():
     texts = [path for path in ROOT.rglob("*.md")
              if not {".git", ".venv", "node_modules"} & set(path.relative_to(ROOT).parts)]
     assert [path for path in texts if "root-access.md" in path.read_text(encoding="utf-8")] == []
-    # Only the quick start requirements name the projects; README and the C100X
-    # notes send the reader there.
-    for document in (ROOT / "README.md", DOCS / "c100x-experimental.md"):
+    # Only the setup pages name the projects; the README sends the reader there.
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    anchor = SSH_SECTION.lower().replace(" ", "-")
+    for page in SETUP_PAGES:
+        assert f"](docs/{page}#{anchor})" in readme, page
+    projects = [project for listed in SSH_PROJECTS.values() for project in listed]
+    user_pages = [ROOT / "README.md", *DOCS.glob("*.md"), *DOCS.glob("classe-*/*.md")]
+    setup_pages = {DOCS / page for page in SETUP_PAGES}
+    for document in user_pages:
+        if document in setup_pages:
+            continue
         text = document.read_text(encoding="utf-8")
-        assert "quickstart.md#requirements)" in text
-        assert not any(f"github.com/{project}" in text for project in SSH_PROJECTS), document.name
+        assert not any(f"github.com/{project}" in text for project in projects), document.name
 
 
 def test_removal_docs_distinguish_entry_package_device_and_retained_data():
-    text = " ".join(section("advanced-maintenance.md", "Remove Home Assistant Integration").split())
+    text = flat(section(REMOVAL_LINK.split("#")[0], "Remove the Integration"))
     for phrase in (
         "separate operations", "does not uninstall the device agent",
         "Settings > Devices & services", "**Delete**", "**Marketplace (HA 2026.11+):**",
         "**Uninstall**", "**HACS:**", "**Remove**", "**Manual installation:**",
-        "custom_components/bticino_c300x", "another C300X entry still uses it",
-        "actually includes their media storage", "not a C300X firmware/config backup",
-        "Snapshot retention stops", "does not adopt that old snapshot directory",
-        ".storage/bticino_c300x.snapshots.<entry_id>", "not credential revocation",
-        "not a historical-data purge", "does not erase older backup copies",
-        "Do not edit `.storage` while HA is running", "no removal operation was performed",
+        "custom_components/bticino_c300x", "no other station entry still uses it",
+        "actually includes their media storage", "A Home Assistant backup is not a backup of the station",
+        "no longer cleaned up", "A new entry does not take over the old images",
+        ".storage/bticino_c300x.snapshots.<entry_id>", "does not revoke the agent's keys",
+        "does not purge", "does not erase older backup copies",
+        "Do not edit `.storage` while Home Assistant is running",
     ):
-        assert phrase in text
+        assert phrase in text, phrase
+    # The evidence behind the steps stays with the developer notes.
+    evidence = flat(section("dev/behaviour-details.md", "Data That Can Remain"))
+    assert "HA/HACS UI sources checked on **2026-11-16**" in evidence
+    assert "no removal operation was performed" in evidence
     assert text.index("backup before removing configuration") < text.index("**Delete**")
     assert text.index("**Delete**") < text.index("**Uninstall**")
     for url in (
@@ -165,18 +201,18 @@ def test_removal_docs_distinguish_entry_package_device_and_retained_data():
 
 
 def test_agent_removal_docs_disclose_writes_backup_removal_and_reboot():
-    text = " ".join(section("advanced-maintenance.md", "Remove Agent").split())
+    text = flat(section(REMOVAL_LINK.split("#")[0], "Remove the Device Agent"))
     for phrase in (
-        "device-writing, rebooting operation", "not the HA-entry Delete action",
-        "no active call or recording", "only if you intend this removal",
-        "config.json", "removes its managed device-file backup root",
-        "scheduling a device reboot", "starts SSH for recovery",
-        "retains agent files/backups", "not a promise that every earlier step was rolled back",
-        "not a factory reset", "does not erase HA media or HA backups",
+        "writes to the station and restarts it", "not the same as deleting the entry",
+        "no active call or recording", "only when you want the agent gone",
+        "config.json", "on success, its backups",
+        "restarts the station", "starts SSH",
+        "keeps the agent and its backups", "Steps that already ran are not always undone",
+        "not a factory reset", "does not touch Home Assistant media or backups",
         "gives fquinto's old MQTT bridge (`/etc/tcpdump2mqtt/TcpDump2Mqtt`) its start rights back",
-        "its start link stays as the legacy MQTT switch left it",
+        "its start link stays as the **Legacy MQTT bridge** switch left it",
     ):
-        assert phrase in text
+        assert phrase in text, phrase
     script = (ROOT / "native_agent/scripts/remove_agent.sh").read_text()
     assert 'rm -rf "$AGENT_DIR" "$BACKUP_ROOT"' in script
     assert "schedule_reboot" in script
@@ -555,12 +591,12 @@ def test_display_docs_name_the_home_page_button_layouts_as_the_form_does():
     strings = json.loads((ROOT / "custom_components/bticino_c300x/strings.json").read_text())
     label = strings["options"]["step"]["dashboard"]["data"]["dashboard_dynamic_homepage"]
     options = strings["selector"]["dashboard_dynamic_homepage"]["options"]
-    display = section("display.md", "Enable the Display Pages")
+    display = section("classe-300x/3-display.md", "Enable the Display Pages")
     row = next(line for line in display.splitlines() if line.startswith(f"| **{label}** |"))
     assert f"**{options['stock']}** (default)" in row
     assert f"**{options['side_by_side']}**" in row
     assert "restarts the display once" in row
-    reference = (DOCS / "feature-reference.md").read_text(encoding="utf-8")
+    reference = (DOCS / "reference.md").read_text(encoding="utf-8")
     row = next(line for line in reference.splitlines() if line.startswith("| Display > Display and Display patch |"))
     assert label in row
     assert "Changing the home page buttons applies it again and restarts the display once" in row
@@ -569,22 +605,21 @@ def test_display_docs_name_the_home_page_button_layouts_as_the_form_does():
 def test_the_display_docs_name_the_notice_for_an_unknown_display():
     strings = json.loads((ROOT / "custom_components/bticino_c300x/strings.json").read_text())
     title = strings["issues"]["device_display_unsupported"]["title"]
-    qt5 = section("display.md", "Enable the Display Pages").split("### Display Patch on Firmware 3.0.6\n", 1)[1]
+    qt5 = section("classe-300x/3-display.md", "Firmware 3.0.6")
     assert f"**{title}**" in qt5
 
 
 def test_picture_control_docs_say_tvp5150_may_need_the_ring_call_path():
-    guide = (DOCS / "user-guide.md").read_text(encoding="utf-8")
+    guide = (DOCS / "classe-300x/2-use.md").read_text(encoding="utf-8")
     guide = guide.split("### Picture Controls\n", 1)[1].split("\n### ", 1)[0]
-    readme = next(line for line in (ROOT / "README.md").read_text(encoding="utf-8").splitlines()
-                  if line.startswith("| Picture controls |"))
-    for text in (guide.replace("\n  ", " "), readme):
+    firmware = section("classe-300x/1-setup.md", "Firmware 3.0.6")
+    for text in (flat(guide), flat(firmware)):
         assert "checked offline only" in text
         assert "may only work during a Ring Call" in text
 
 
 def test_announcement_docs_name_each_stations_own_sound_files():
-    announcements = section("user-guide.md", "Speaker Announcements and TTS").replace("\n", " ")
+    announcements = section("classe-300x/2-use.md", "Speaker and Announcements").replace("\n", " ")
     assert "same sound parts" not in announcements
     assert "each station's own sound files" in announcements
 
@@ -609,8 +644,8 @@ def test_the_3_0_6_texts_say_what_ran_on_a_station():
         "v2.10.0.md": (ROOT / ".github/release-notes/v2.10.0.md").read_text(encoding="utf-8"),
         "README.md": (ROOT / "README.md").read_text(encoding="utf-8"),
         "SUPPORT.md": (ROOT / "SUPPORT.md").read_text(encoding="utf-8"),
-        "display.md": (DOCS / "display.md").read_text(encoding="utf-8"),
-        "quickstart.md": (DOCS / "quickstart.md").read_text(encoding="utf-8"),
+        "3-display.md": (DOCS / "classe-300x/3-display.md").read_text(encoding="utf-8"),
+        "1-setup.md": (DOCS / "classe-300x/1-setup.md").read_text(encoding="utf-8"),
     }
     for name, text in texts.items():
         flat = " ".join(text.split())
@@ -623,7 +658,7 @@ def test_the_way_out_of_a_restart_loop_removes_the_overlay_before_the_setting():
     (tests/test_qml_patch_qt5_overlay.py); restore-all gives the display back as shipped."""
 
     agent = "/home/bticino/cfg/extra/c300x-native-agent"
-    for name, path in (("display.md", DOCS / "display.md"),
+    for name, path in (("4-troubleshooting.md", DOCS / "classe-300x/4-troubleshooting.md"),
                        ("v2.10.0.md", ROOT / ".github/release-notes/v2.10.0.md")):
         text = path.read_text(encoding="utf-8")
         way_out = " ".join(text.split("keeps restarting", 1)[1].split("\n## ", 1)[0].split())
@@ -640,7 +675,7 @@ def test_the_quarantine_texts_name_the_controls_that_retry_the_pages():
     the Display setting sync never retries it (display_patch_sync._differs)."""
 
     texts = {
-        "display.md": (DOCS / "display.md").read_text(encoding="utf-8"),
+        "3-display.md": (DOCS / "classe-300x/3-display.md").read_text(encoding="utf-8"),
         "v2.10.0.md": (ROOT / ".github/release-notes/v2.10.0.md").read_text(encoding="utf-8"),
         "CHANGELOG v2.10.0": changelog_2_10_0(),
     }

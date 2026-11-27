@@ -177,7 +177,7 @@ This narrow transformation test is not proof of complete Companion coexistence.
 Tool PATH, stock OWN service, Flexisip process naming and the three specific
 binary identities are cleared offline, not outstanding questions. Preserve
 provisioned accounts/routes. GUI/wrapper/QML identity and the
-[display activation by reboot](../c100x-experimental.md#display-activation-by-reboot-device-test)
+[display activation by reboot](c100x-device-test.md#display-activation-by-reboot-device-test)
 remain hardware acceptance checks. Display capabilities stay false until that
 activation is confirmed in its trial boot; the matching hashes are not
 permission to activate a device.

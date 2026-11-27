@@ -26,7 +26,7 @@ gate.
   reviewing them for private hosts and local identifiers.
 
 Maintenance steps for keys, noAuth and SSH are in
-[Tokens and Access](docs/advanced-maintenance.md#tokens-and-access).
+[Keys and access](docs/classe-300x/5-update-and-removal.md#keys-and-access).
 
 ## Home Assistant Service Permissions
 
@@ -85,7 +85,7 @@ from Home Assistant. It never returns the token, and the address binding means
 a relay gets a proof for the station's address, not for its own. The route is
 disabled while `api.noAuth` is on and for API tokens shorter than 32
 characters, which a single proof would expose to offline guessing. See
-[Station Changed Its Address](docs/media-troubleshooting.md#station-changed-its-address).
+[The station has a new address](docs/classe-300x/4-troubleshooting.md#the-station-has-a-new-address).
 
 Home Assistant stores the configured agent token, maintenance token, webhook id,
 and webhook secret in its config entry storage. The native agent stores its
@@ -97,7 +97,7 @@ do not echo token values back.
 
 Reconfigure and options forms never display saved access and maintenance keys;
 an empty key field keeps the stored key. Changing keys:
-[Tokens and Access](docs/advanced-maintenance.md#tokens-and-access).
+[Keys and access](docs/classe-300x/5-update-and-removal.md#keys-and-access).
 
 ### RTSP Access
 

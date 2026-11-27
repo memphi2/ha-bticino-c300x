@@ -6,206 +6,71 @@
 [![Marketplace](https://img.shields.io/badge/Home_Assistant-Marketplace-41BDF5?style=flat-square)](https://contributors.home-assistant.io/marketplace/)
 [![License Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-Beta: **3.0.0b3** (one package for the Classe 300X and the Classe 100X; the Classe 100X support is experimental and checked offline only), including **2.10.0**.
+Connects a BTicino Classe 300X or Classe 100X video door station to Home
+Assistant over your local network. A small agent on the station talks to Home
+Assistant; nothing goes through a cloud. The integration is called
+**BTicino C300X** for both models.
 
-Local-first Home Assistant custom integration for the BTicino **Classe 300X
-(C300X)** and **Classe 100X (C100X)** video door stations. A small agent on
-the station connects it to Home Assistant over your local network. The
-integration keeps its name **BTicino C300X** for both models.
-
-The Classe 100X on firmware 1.5.8 is **in test** in
-[issue #51](https://github.com/memphi2/ha-bticino-c300x/issues/51); see
-[Supported Devices](#supported-devices).
+Stable: **2.10.0**. Beta: **3.0.0b3**, one package for the Classe 300X and the
+Classe 100X.
 
 <p align="center">
-  <img src="custom_components/bticino_c300x/brand/icon.png" alt="BTicino C300X integration logo" width="140">
+  <img src="docs/images/readme/ha-doorbell-card-en.webp" alt="BTicino Doorbell Call Card in Home Assistant with a saved visitor image, play, call, door and light buttons" width="420">
 </p>
 
-[Quick Start](docs/quickstart.md) | [User guide](docs/user-guide.md) |
-[Display pages](docs/display.md) | [Troubleshooting](docs/media-troubleshooting.md)
-
-## Features
-
-Features depend on the model; [Supported Devices](#supported-devices) has the
-short table.
-
-- **See and answer the door:** live video, Ring Call, talkback and audio-only
-  Home Call in the bundled card ([details](#doorbell-video-ring-calls-and-talkback)).
-- **Choose the camera picture:** size, bit rate and frame rate, including an
-  optional 960x576 picture for the verified firmware 1.7.19 and 2.0.2 media
-  files. **PCMU** gives clearer sound on the C300X
-  ([details](docs/user-guide.md#camera-quality-and-picture-size)).
-- **Keep visitor images:** one image per ring or video session, saved in Home
-  Assistant and browsable in the card together with recorded clips
-  ([details](docs/user-guide.md#visitor-images-and-media-history)).
-- **Let the station speak (C300X):** its loudspeaker is a media player for `tts.speak`;
-  a door call always takes priority.
-- **Control the station:** door unlock, stair light, ringer, forwarding,
-  memos and extra activation buttons; on the C300X also the answering machine
-  and its messages.
-- **Use the station display:** Home Assistant pages for lights, covers,
-  climate, media, locks, weather, energy, calendars and Alarmo in the station's
-  blue interface ([Station Display Pages](docs/display.md)).
-- **Notify and automate:** notices shown on the station display, spoken on
-  the C300X, or both (not a life-safety alarm), plus [blueprints](docs/user-guide.md#blueprints)
-  for notifications, Ring capture and local transcription.
-- **Guided recovery:** the **Media readiness** sensor and Repairs explain and
-  fix setup problems.
-
-## Supported Devices
+## Which Device Do I Have?
 
 | Model | Firmware | Status |
 | --- | --- | --- |
-| Classe 300X / C300X (`344642`, `344643`) | `1.7.x`, `2.0.2` | Supported; every release is tested on `1.7.19`. |
-| Classe 300X / C300X | `3.0.6` | Supported, with the low-resolution camera stream ([what differs](docs/quickstart.md#firmware-306)). |
-| Classe 100X / C100X | `1.5.8` | **Experimental**, in test in [issue #51](https://github.com/memphi2/ha-bticino-c300x/issues/51); setup asks for an explicit confirmation. |
+| Classe 300X (C300X, `344642` or `344643`) | `1.7.x`, `2.0.2`, `3.0.6` | Supported. Every release is tested on `1.7.19`; on `2.0.2` and `3.0.6` most of it is checked offline only. |
+| Classe 100X (C100X) | `1.5.8` | Experimental, in test in [issue #51](https://github.com/memphi2/ha-bticino-c300x/issues/51). |
 
-| Feature | C300X | C100X 1.5.8 |
-| --- | --- | --- |
-| Door unlock, stair light, activations | Yes | In test |
-| Live video, Ring Call, talkback, picture controls | Yes | In test |
-| Text memos | Yes | In test |
-| Station display pages | Display patch | In test, activated by a reboot |
-| Ringer mute, touch tone, display notifications | Yes; touch tone and notifications with the Display patch | In test, after the display activation; notifications without a tone |
-| Speaker and TTS, message LED | Yes; the LED where the station reports one | No |
-| Answering machine, voice memos, memo delete | Yes | No |
-| PCMU codec switch, camera resolution select | Yes; no resolution select on 3.0.6 | No |
-| Display reload, home page button layout | Yes; the layout with the Display patch | No |
-
-**In test** means implemented for the C100X but not yet confirmed on a C100X
-device. Every feature, entity and firmware detail:
-[Models and Features](docs/feature-reference.md#models-and-features). C100X
-notes: [Classe 100X](docs/c100x-experimental.md).
-
-## Requirements
+You need:
 
 - Home Assistant `2026.10.0` or newer.
-- A supported station from the table above
-  ([what differs on firmware 3.0.6](docs/quickstart.md#firmware-306)).
-- Root or SSH access on the station for the first agent installation
-  ([how to enable SSH](docs/quickstart.md#requirements)).
-- A trusted local network between Home Assistant and the station.
+- Home Assistant and the station in a trusted local network.
+- SSH access on the station
+  ([Classe 300X](docs/classe-300x/1-setup.md#enable-ssh-on-the-station),
+  [Classe 100X](docs/classe-100x/1-setup.md#enable-ssh-on-the-station)).
 
-This project does not root a stock station and ships no firmware, APKs,
-exploits, rooting instructions or vendor files
-([firmware notes](docs/quickstart.md#requirements)). Use it at your own risk
-and without warranty.
+## Start Here
 
-## Installation
+- **[Classe 300X: start here](docs/classe-300x/1-setup.md)**
+- **[Classe 100X: start here](docs/classe-100x/1-setup.md)**
 
-**Classe 100X:** the same package serves the C100X as an experiment. Setup
-recognises the station and asks for an explicit confirmation before anything is
-installed; the [Classe 100X notes](docs/c100x-experimental.md#testing-a-classe-100x) have the details.
-Use stock firmware 1.5.8 with only the changes needed for root or SSH access;
-running alongside BTicino Companion is not supported.
+## Features
 
-**Classe 300X:**
+- Live video, ring calls and talking to the door in one card.
+- Door unlock, stair light and extra locks or lights as buttons.
+- One saved image of every visitor.
+- Home Assistant pages on the station's own display: lights, covers, climate,
+  energy, calendars, Alarmo and more.
+- Notices on the station display; on the Classe 300X also spoken by the
+  station.
+- Blueprints for phone alerts, ring recordings and calendar reminders.
 
-[![Open your Home Assistant instance and open this repository in the Marketplace](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=memphi2&repository=ha-bticino-c300x&category=integration)
+What each model can do: [Models and features](docs/reference.md#models-and-features).
 
-- **Home Assistant 2026.11 or newer:** open the button above or
-  **Settings > Marketplace** and install **BTicino C300X**.
-- **Home Assistant 2026.10:** download **BTicino C300X** in HACS (no custom
-  repository needed) and restart Home Assistant.
+## More
 
-Then add **BTicino C300X** under **Settings > Devices & services** and follow
-the [Quick Start](docs/quickstart.md): it installs the device agent, walks
-through the options and adds the card. Later releases: [Update](docs/quickstart.md#update).
-
-### Beta Versions
-
-Betas are opt-in. The current beta, **3.0.0b3**, puts the Classe 300X and the
-Classe 100X into one package. On a Classe 300X it works like stable 2.10.0,
-with the changes the [changelog](CHANGELOG.md) lists. The
-Classe 100X support is experimental: it is checked against the original 1.5.8
-firmware files offline only and not yet confirmed on a device. Enable
-**Pre-release** for this repository in Marketplace, or beta versions in HACS.
-Stable installations are not switched to a beta automatically. See
-[beta versions](docs/quickstart.md#beta-versions).
-
-## Doorbell Video, Ring Calls and Talkback
-
-Use one **BTicino Doorbell Call Card** in **Doorstation + Home Call** mode; the
-same card serves a C100X.
-
-| Task | How |
-| --- | --- |
-| Live video | Press **Stream**. Does not need **Forwarding** on Home Assistant. |
-| Ring Call | Set **Forwarding** to **Home Assistant**. When someone rings, the card shows the picture; press **Answer**, later **Hang Up**. With **Smartphone**, calls go to the Door Entry app instead. |
-| Home Call | Audio-only call from Home Assistant to the station display. |
-| Talkback | Speak through the browser microphone. Needs HTTPS or Home Assistant Cloud and microphone permission. |
-| Picture controls | Brightness, contrast and colour saturation during a Ring Call, and for on-demand video once the station reads them back live. Tested on 1.7.19; 2.0.2 and 3.0.6 are checked offline only. On TVP5150 boards (every 3.0.6 station) they may only work during a Ring Call until the station has written the contrast once after a start.  On the C100X 1.5.8 in test. Saved media stays unchanged. |
-
-Talking in Home Assistant's own camera view is optional and off by default
-(Home Assistant 2026.11+, **Two-way audio** in Labs and the option **Talk
-through the Home Assistant camera view**).
-
-If something does not work, check the
-[Media readiness](docs/media-troubleshooting.md#media-readiness) sensor first.
-Details: [Live picture and talkback](docs/user-guide.md#live-picture-and-talkback).
-
-## Screenshots
-
-<table>
-  <tr>
-    <td align="center"><strong>Doorbell card</strong><br><img src="docs/images/readme/ha-doorbell-card-en.webp" alt="BTicino Doorbell Call Card in Home Assistant dark mode with a saved visitor snapshot, play, call, door and light buttons" width="360"></td>
-    <td align="center"><strong>Station display</strong><br><img src="docs/images/readme/display-start-en.webp" alt="Home Assistant start page on the station with status, weather and the favourites bar" width="360"></td>
-  </tr>
-</table>
-<table>
-  <tr>
-    <td align="center"><strong>Energy</strong><br><img src="docs/images/readme/display-energy-flow-en.webp" alt="Energy page on the station: current flow between grid, solar, battery and home" width="240"></td>
-    <td align="center"><strong>Alarm (Alarmo)</strong><br><img src="docs/images/readme/display-alarmo-en.webp" alt="Alarm page on the station with arming modes and PIN keypad" width="240"></td>
-    <td align="center"><strong>Camera</strong><br><img src="docs/images/readme/display-camera-en.webp" alt="Camera page on the station with two picture tiles side by side" width="240"></td>
-  </tr>
-</table>
-
-The card is a capture from Home Assistant; the station pages are renders of
-the integration's own display pages with example values on a plain background
-of our own, see [legal notes](docs/legal.md#no-firmware-or-apk-payloads).
-The card shows an earlier visitor image. Entities and pages depend on the
-enabled options.
-
-## Documentation
-
-1. [Quick Start](docs/quickstart.md): install, first tests, updates.
-2. [Using the Integration](docs/user-guide.md): daily use and automations.
-3. [Station Display Pages](docs/display.md): pages and tiles on the station.
-4. [Reference](docs/feature-reference.md): options, entities, services, events.
-5. [Troubleshooting](docs/media-troubleshooting.md): when something fails.
-6. [Maintenance and Removal](docs/advanced-maintenance.md): agent, tokens,
-   recovery, removal.
-7. [Classe 100X](docs/c100x-experimental.md): model notes; the
-   [tester notes](docs/c100x-experimental.md#testing-a-classe-100x) for issue #51.
-
-Also: [Security](SECURITY.md), [Privacy](PRIVACY.md), [Support](SUPPORT.md),
-[Legal notes](docs/legal.md), [Changelog](CHANGELOG.md).
-
-For developers: [Architecture](docs/dev/architecture.md),
-[Native agent](docs/dev/native-agent.md), [Agent API](native_agent/API.md),
-[Quality scale](docs/dev/quality-scale.md),
-[Release validation](docs/dev/release-validation.md).
+[Reference](docs/reference.md) | [Support](SUPPORT.md) |
+[Security](SECURITY.md) | [Privacy](PRIVACY.md) | [Legal](docs/legal.md) |
+[Changelog](CHANGELOG.md) | [Developer docs](docs/dev/architecture.md)
 
 ## Status and Legal
 
-- Independent community project, not an official BTicino/Legrand or Home
-  Assistant Core integration, and not affiliated with, endorsed, sponsored or
-  certified by BTicino, Legrand, Home Assistant, Nabu Casa, HACS or the
-  referenced community projects.
-- IoT class `local_push`; HACS default repository (`zip_release`). Quality
-  scale: per-rule [self-assessment](docs/dev/quality-scale.md), not an awarded
-  tier.
-- License: Apache-2.0. Developed with AI assistance, including Codex and Claude.
-- The repository contains no vendor firmware, extracted firmware, APKs,
-  third-party controller source trees, device backups, private captures or
-  secrets. See [Legal notes](docs/legal.md).
+Independent community project, not affiliated with, endorsed or certified by
+BTicino, Legrand, Home Assistant, Nabu Casa or HACS. It ships no firmware,
+APKs or vendor files and does not root a station. Use it at your own risk and
+without warranty. License: Apache-2.0. Developed with AI assistance, including
+Codex and Claude. Quality scale: a
+[self-assessment](docs/dev/quality-scale.md), not an awarded tier.
 
 ### Support the Test Device
 
-Every release is tested on one C300X with firmware `1.7.19`; other firmware can
-only be checked against its files. The C100X is tested by community testers in
-issue #51. A contribution towards a second unit, or a
-used or defective Classe 300X / C300X (`344642` or `344643`), is welcome in a
+Every release is tested on one Classe 300X with firmware `1.7.19`. A
+contribution towards a second unit, or a used or defective Classe 300X
+(`344642` or `344643`), is welcome in a
 [discussion](https://github.com/memphi2/ha-bticino-c300x/discussions/new?category=general).
 It is voluntary; support and features stay open to everyone.
 

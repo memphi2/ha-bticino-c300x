@@ -102,8 +102,13 @@ def test_test_instructions_ship_with_the_local_package(monkeypatch, tmp_path):
     builder = importlib.import_module("build_hacs_release")
     monkeypatch.setattr(builder, "PACKAGE_ROOT", tmp_path)
     builder._copy_package_metadata()
+    c100x_pages = sorted((ROOT / "docs/classe-100x").glob("*.md"))
+    assert [page.name for page in c100x_pages] == [
+        "1-setup.md", "2-use.md", "3-display.md", "4-troubleshooting.md", "5-update-and-removal.md",
+    ]
     for relative in (
-        "docs/c100x-experimental.md",
+        *(str(page.relative_to(ROOT)) for page in c100x_pages),
+        "docs/dev/c100x-device-test.md",
         "docs/dev/c100x-display-parity.md", "docs/dev/c100x-field-report.md",
         "docs/dev/c100x-audio-analysis.md",
     ):
@@ -132,7 +137,10 @@ def test_complete_archive_contains_current_card_and_device_assets(monkeypatch, t
             assert zipped.read(name) == (builder.COMPONENT_SRC / name).read_bytes()
         assert zipped.read("device_agent/armhf/c300x-agent-native") == binary.read_bytes()
         assert zipped.read("device_agent/qml/c100x_bundle.sh")
-        assert zipped.read("docs/c100x-experimental.md") == (ROOT / "docs/c100x-experimental.md").read_bytes()
+        for page in ("1-setup.md", "5-update-and-removal.md"):
+            assert zipped.read(f"docs/classe-100x/{page}") == (ROOT / "docs/classe-100x" / page).read_bytes()
+        assert zipped.read("docs/dev/c100x-device-test.md") == (ROOT / "docs/dev/c100x-device-test.md").read_bytes()
+        assert "docs/c100x-experimental.md" not in zipped.namelist()
         assert "docs/c100x-test-release.md" not in zipped.namelist()
         assert zipped.read("docs/dev/c100x-audio-analysis.md") == (ROOT / "docs/dev/c100x-audio-analysis.md").read_bytes()
         manifest = json.loads(zipped.read("device_agent/bundle.json"))

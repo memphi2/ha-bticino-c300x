@@ -528,7 +528,7 @@ def test_turning_the_pages_off_after_the_rename_writes_the_resource_file_back(de
 
 
 def test_the_way_out_of_a_restart_loop_ends_with_the_display_as_shipped(device: Device, tmp_path: Path) -> None:
-    """docs/display.md, "If the station keeps restarting": rename the file, then restore-all."""
+    """docs/classe-300x/4-troubleshooting.md, "The Station Keeps Restarting": rename the file, then restore-all."""
 
     kept = _rename_resource_file(device, tmp_path)
     status = device.ok("restore-all")

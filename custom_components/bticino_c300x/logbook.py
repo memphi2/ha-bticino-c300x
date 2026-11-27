@@ -16,7 +16,6 @@ from homeassistant.helpers import device_registry as dr
 
 from .capabilities import event_label
 from .const import DOMAIN, EVENT_ACTION_RECEIVED, EVENT_AGENT_EVENT_RECEIVED
-from .event_types import agent_event_key
 
 ACTION_LABELS = {
     "en": "Action run: {action}",
@@ -36,7 +35,7 @@ def async_describe_events(
 
     @callback
     def describe_agent_event(event: Event) -> dict[str, str]:
-        key = agent_event_key(event.data) or str(event.data.get("event_type") or "")
+        key = str(event.data.get("event_type") or "")
         return {
             LOGBOOK_ENTRY_NAME: _source_name(hass, event.data),
             LOGBOOK_ENTRY_MESSAGE: event_label(key, hass.config.language) or key,

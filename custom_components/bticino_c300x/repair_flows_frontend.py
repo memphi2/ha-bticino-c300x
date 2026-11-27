@@ -23,7 +23,6 @@ from .repair_issues import FRONTEND_CARD_SETUP_HINT_ISSUE, repair_issue_id
 from .schema_compat import vol
 
 _DOORBELL_CALL_CARD_TYPE = "custom:c300x-doorbell-call-card"
-_DOORBELL_CAMERA_UNIQUE_ID_SUFFIX = "doorbell_camera"
 _LOVELACE_DASHBOARD_FIELD = "dashboard_path"
 _LOVELACE_DEFAULT_DASHBOARD_VALUE = "__default__"
 _LOVELACE_VIEW_FIELD = "view_path"

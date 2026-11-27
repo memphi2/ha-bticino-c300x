@@ -13,7 +13,6 @@ from .entry_types import BticinoC300XConfigEntry
 from .identity import media_camera_unique_id
 
 CAMERA_DOMAIN = "camera"
-DOORBELL_CAMERA_UNIQUE_ID_SUFFIX = "doorbell_camera"
 _CAMERA_PROXY_IMAGE_B64 = (
     "iVBORw0KGgoAAAANSUhEUgAAAKAAAABaCAIAAACwpMoFAAACCUlEQVR4nO3dMU4CQRSA4cFwAmsTW6m9hCewpKS0"
     "8CAWlpSUnMBLWFNzE4uJZAKKMbBv3/7zfxUmIOv8voVdyTq7vXso4roZewM0LAPDGRjOwHAGhjMwnIHh5u0XT2+f"

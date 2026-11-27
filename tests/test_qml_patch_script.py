@@ -2476,12 +2476,19 @@ def test_a_write_removes_the_staged_files_a_killed_write_left(tmp_path: Path) ->
     gui, backup, _before = _killed_apply(tmp_path)
     temp = tmp_path / "temp"
     assert list(temp.glob("c300x-qml-patch.*"))
-    # The staged files of a script that still runs are its own.
-    running = temp / f"c300x-qml-patch.{os.getpid()}"
-    running.mkdir()
-    result = _run_qml_patch_raw(tmp_path, gui, backup, "apply", env_overrides={"TMPDIR": str(temp)})
-    assert result.returncode == 0, result.stderr
-    assert [path.name for path in temp.glob("c300x-qml-patch.*")] == [running.name]
+    # A PID another program got since the killed write ended: its files go.
+    (temp / f"c300x-qml-patch.{os.getpid()}").mkdir()
+    owner = subprocess.Popen(["sh", "-c", "sleep 30; :", "qml_patch.sh"])
+    try:
+        # The staged files of a script that still runs are its own.
+        running = temp / f"c300x-qml-patch.{owner.pid}"
+        running.mkdir()
+        result = _run_qml_patch_raw(tmp_path, gui, backup, "apply", env_overrides={"TMPDIR": str(temp)})
+        assert result.returncode == 0, result.stderr
+        assert [path.name for path in temp.glob("c300x-qml-patch.*")] == [running.name]
+    finally:
+        owner.kill()
+        owner.wait()
 
 
 def test_a_leftover_cut_off_before_its_file_list_leaves_the_gui_alone(tmp_path: Path) -> None:

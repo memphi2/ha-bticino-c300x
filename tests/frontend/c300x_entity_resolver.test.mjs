@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  C300X_AUDIO_CODEC_OBJECT_ID,
   C300X_CAMERA_OBJECT_ID,
   C300X_DEFAULT_CONFIG,
   C300X_MEDIA_READINESS_OBJECT_ID,
@@ -15,6 +14,9 @@ import {
   c300xRelatedEntity,
   c300xResolveEntity,
 } from "../../custom_components/bticino_c300x/frontend/c300x-entity-resolver.js";
+
+// A select of the same device, to cover a domain other than sensor and button.
+const AUDIO_CODEC_OBJECT_ID = "bticino_c300x_audio_codec";
 
 function hass({
   states = {},
@@ -282,7 +284,7 @@ for (const [name, device] of [
     assert.equal(c300xFirstEntity(state, "camera", C300X_CAMERA_OBJECT_ID, "front-entry"), config.entity);
     assert.equal(c300xEntryId(state, config, config.entity), "front-entry");
     assert.equal(c300xRelatedEntity(state, config, "sensor", C300X_MEDIA_READINESS_OBJECT_ID), "sensor.front_media_readiness");
-    assert.equal(c300xRelatedEntity(state, config, "select", C300X_AUDIO_CODEC_OBJECT_ID), "select.front_audio_codec");
+    assert.equal(c300xRelatedEntity(state, config, "select", AUDIO_CODEC_OBJECT_ID), "select.front_audio_codec");
     assert.equal(c300xDeviceActionEntity(state, config, "door_unlock"), "button.front_door_unlock");
     assert.equal(c300xDeviceActionEntity(state, config, "stair_light"), "button.front_stair_light");
 
@@ -298,7 +300,7 @@ test("same-device lookups do not need an owner but service routing requires an u
     const state = displayHass(device);
     const config = { entity: "camera.front_doorbell_camera" };
     assert.equal(c300xEntryId(state, config, config.entity), "");
-    assert.equal(c300xRelatedEntity(state, config, "select", C300X_AUDIO_CODEC_OBJECT_ID), "select.front_audio_codec");
+    assert.equal(c300xRelatedEntity(state, config, "select", AUDIO_CODEC_OBJECT_ID), "select.front_audio_codec");
     assert.equal(c300xDeviceActionEntity(state, config, "door_unlock"), "button.front_door_unlock");
     assert.equal(c300xDeviceActionEntity(state, { ...config, entry_id: "front-entry" }, "door_unlock"), "");
   }
@@ -312,7 +314,7 @@ test("missing related entities never resolve to another device, even with the sa
   delete state.states["select.front_audio_codec"];
   delete state.states["button.front_door_unlock"];
   assert.equal(c300xRelatedEntity(state, config, "sensor", C300X_MEDIA_READINESS_OBJECT_ID), undefined);
-  assert.equal(c300xRelatedEntity(state, config, "select", C300X_AUDIO_CODEC_OBJECT_ID), undefined);
+  assert.equal(c300xRelatedEntity(state, config, "select", AUDIO_CODEC_OBJECT_ID), undefined);
   assert.equal(c300xDeviceActionEntity(state, config, "door_unlock"), "");
   assert.equal(c300xResolveEntity(state, { entry_id: "missing" }, "camera", C300X_CAMERA_OBJECT_ID), "");
   delete state.entities[config.entity];

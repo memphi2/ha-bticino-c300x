@@ -109,6 +109,9 @@ devices, entities and services; a Repair lists what to redo after the update.
   first door message. The station reports a change of the door only: after a
   restart of the agent the state is unknown until the door opens or closes
   again.
+- **Station call state.** A new sensor on the station shows what the station
+  itself is doing with a call: `idle`, `setup`, `ringing`, `viewing`,
+  `waiting`, `conversation`, `answering_machine`, `greeting` or `recording`.
 - The native agent changed; an agent update is required. Until the agent
   update Repair has run, the integration shows no entities: the devices and
   entities move to the outdoor units with that update.

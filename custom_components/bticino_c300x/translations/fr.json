@@ -1548,6 +1548,20 @@
           "answered": "Décroché",
           "viewing": "Vue"
         }
+      },
+      "station_call_state": {
+        "name": "État d'appel de la station",
+        "state": {
+          "idle": "Inactif",
+          "setup": "Établissement",
+          "ringing": "Sonne",
+          "viewing": "Vue",
+          "waiting": "En attente",
+          "conversation": "Conversation",
+          "answering_machine": "Répondeur",
+          "greeting": "Annonce",
+          "recording": "Enregistrement"
+        }
       }
     },
     "switch": {

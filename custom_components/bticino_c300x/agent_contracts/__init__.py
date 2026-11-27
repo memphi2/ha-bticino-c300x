@@ -9,6 +9,7 @@ from .calls import (
     OutdoorUnit,
     OutdoorUnitsPayload,
     RingCallStatus,
+    StationCallState,
 )
 from .capabilities import CapabilityPayload
 from .diagnostics import AgentDiagnosticsStatus
@@ -34,4 +35,5 @@ __all__ = [
     "RingCallStatus",
     "SelfTestCheck",
     "SelfTestStatus",
+    "StationCallState",
 ]

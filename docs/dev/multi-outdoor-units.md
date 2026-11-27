@@ -156,6 +156,12 @@ the captures and from the vendor functions that send each value:
 Other codes (the vendor code also sends `10`, `11` and `12`) have no proven
 meaning: `state: null`, they change no call.
 
+Home Assistant shows it as the station's `sensor` `station_call_state`
+(enum of the nine states, attribute `code`): seeded from `station_state` of
+`GET /api/v1/calls`, then `station.call_state`. A code without a state, an
+agent restart (until the next answer or event) and a station that has not
+reported one read as unknown.
+
 ### Current call
 
 Only the current call can be answered or hung up: the live ring call, else

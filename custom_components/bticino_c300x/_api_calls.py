@@ -11,6 +11,7 @@ from .agent_contracts import (
     DoorContact,
     OutdoorUnit,
     OutdoorUnitsPayload,
+    StationCallState,
 )
 from .api_errors import C300XAgentApiResponseError
 
@@ -21,6 +22,11 @@ _WHERE = re.compile(r"^[0-9][0-9#]{0,22}$")
 _CALL_ID = re.compile(r"^[0-9a-f]{8}-[0-9]{1,10}$")
 _CALL_STATES = frozenset({"ringing", "answered", "viewing", "ended"})
 _DOOR_STATES = frozenset({"open", "closed"})
+# The station's call states by name (bt_answering_machine's codes 0-4, 6-9).
+STATION_CALL_STATES = (
+    "idle", "setup", "ringing", "viewing", "waiting",
+    "conversation", "answering_machine", "greeting", "recording",
+)
 
 
 def valid_unit_id(value: Any) -> str | None:
@@ -107,6 +113,23 @@ def normalize_call(item: Any) -> Call | None:
     )
 
 
+def normalize_station_state(value: Any) -> StationCallState | None:
+    """``{"code", "state", "age_ms"}``, from ``GET /api/v1/calls`` or ``station.call_state``."""
+
+    if not isinstance(value, dict):
+        return None
+    code = value.get("code")
+    if not isinstance(code, int) or isinstance(code, bool) or not 0 <= code <= 99:
+        return None
+    state = value.get("state")
+    age = value.get("age_ms")
+    return StationCallState(
+        code=code,
+        state=state if state in STATION_CALL_STATES else None,
+        age_ms=age if isinstance(age, int) and not isinstance(age, bool) and age >= 0 else None,
+    )
+
+
 def normalize_calls(data: Any) -> CallsPayload:
     """Return the agent's calls, newest first."""
 
@@ -119,4 +142,5 @@ def normalize_calls(data: Any) -> CallsPayload:
         boot_id=_text(data.get("boot_id"), 16),
         current_call_id=current if any(call.call_id == current for call in calls) else None,
         calls=calls,
+        station_state=normalize_station_state(data.get("station_state")),
     )

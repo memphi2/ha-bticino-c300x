@@ -8,7 +8,7 @@ from typing import Any
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
-from ._api_calls import valid_unit_id
+from ._api_calls import normalize_station_state, valid_unit_id
 from .api_errors import C300XAgentApiError
 from .call_registry import (
     SIGNAL_CALLS_CHANGED,
@@ -145,6 +145,10 @@ def async_apply_call_event(
     if event_type == "outdoor_units_changed":
         _schedule(hass, entry, async_refresh_units(hass, entry), "units")
         return {}
+    if event_type == "station_call_state":
+        # The station's own call state; the agent ends and answers calls with it.
+        registry.station_state = normalize_station_state(data)
+        async_dispatcher_send(hass, SIGNAL_CALLS_CHANGED, entry.entry_id)
     if event_type in DOOR_EVENT_STATES:
         _apply_door_event(hass, entry, registry, valid_unit_id(data.get("unit")), DOOR_EVENT_STATES[event_type])
     call = registry.apply_event(event_type, data) if event_type in CALL_EVENT_TYPES else None

@@ -455,11 +455,13 @@ async def entity_inventory(document: dict) -> dict[str, list[list[str | None]]]:
 # 3.1.0 (docs/dev/multi-outdoor-units.md): the station's doorbell camera,
 # doorbell event and door button moved to the outdoor unit devices (created
 # once the station names its units, so not in this inventory), the station got
-# the ring and the stair light event, and the doorbell state sensor and the
-# agent event entity are gone.
+# the ring and the stair light event and its call state sensor, and the
+# doorbell state sensor and the agent event entity are gone.
 ADDED_IN_3_1_0 = {"event": [
     ["C300XStationRingEventEntity", "entry_ring", "ring", None, "True", "doorbell"],
     ["C300XStairLightEventEntity", "entry_stair_light_event", "stair_light", None, "True", None],
+], "sensor": [
+    ["C300XStationCallStateSensor", "entry_station_call_state", "station_call_state", None, "True", "enum"],
 ]}
 REMOVED_IN_3_1_0 = {
     "button": [["C300XDoorUnlockButton", "entry_door_unlock_front", "door_unlock", None, "True", None]],

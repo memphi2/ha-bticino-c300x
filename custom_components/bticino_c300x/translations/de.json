@@ -1548,6 +1548,20 @@
           "answered": "Angenommen",
           "viewing": "Ansicht"
         }
+      },
+      "station_call_state": {
+        "name": "Rufzustand der Station",
+        "state": {
+          "idle": "Ruhe",
+          "setup": "Aufbau",
+          "ringing": "Klingelt",
+          "viewing": "Ansicht",
+          "waiting": "Wartet",
+          "conversation": "Gespräch",
+          "answering_machine": "Anrufbeantworter",
+          "greeting": "Ansage",
+          "recording": "Aufnahme"
+        }
       }
     },
     "switch": {

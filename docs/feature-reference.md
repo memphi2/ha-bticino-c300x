@@ -139,6 +139,7 @@ Station entities:
 | --- | --- | --- |
 | `media_player` | Speaker | Station loudspeaker for TTS and sounds; a door call ends a sound at once. See [Speaker Announcements and TTS](user-guide.md#speaker-announcements-and-tts). Not on the C100X. |
 | `event` | Station ring | The station rings: fires at once with every ring, before the calling unit is known; see [Events](#events). |
+| `sensor` | Station call state | What the station itself is doing with a call: `idle`, `setup`, `ringing`, `viewing`, `waiting` (the ringtone is over and the call still waits), `conversation`, `answering_machine` (it took the call), `greeting`, `recording`. Unknown for a state the station reports without a known meaning (attribute `code` shows its number) and after a restart of the agent until the station reports again. |
 | `sensor` | Media readiness | See [Media Readiness](media-troubleshooting.md#media-readiness). |
 | `sensor` | Device agent status | Connection and health of the agent. |
 | `sensor` | Device agent diagnostics | Self-test and watcher details. Disabled by default. |

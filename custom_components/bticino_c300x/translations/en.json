@@ -1548,6 +1548,20 @@
           "answered": "Answered",
           "viewing": "Viewing"
         }
+      },
+      "station_call_state": {
+        "name": "Station call state",
+        "state": {
+          "idle": "Idle",
+          "setup": "Setting up",
+          "ringing": "Ringing",
+          "viewing": "Viewing",
+          "waiting": "Waiting",
+          "conversation": "Conversation",
+          "answering_machine": "Answering machine",
+          "greeting": "Greeting",
+          "recording": "Recording"
+        }
       }
     },
     "switch": {

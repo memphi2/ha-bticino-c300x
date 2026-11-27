@@ -100,10 +100,23 @@ class Call:
     end_reason: str | None
 
 
+@dataclass(frozen=True, slots=True)
+class StationCallState:
+    """The station's own call state (``*#8**35*<code>*0*0##``).
+
+    ``state`` is None for a code without a known meaning (10 to 12 so far).
+    """
+
+    code: int
+    state: str | None
+    age_ms: int | None
+
+
 @dataclass(frozen=True, slots=True, eq=False)
 class CallsPayload(AgentContract):
-    """``GET /api/v1/calls``."""
+    """``GET /api/v1/calls``; ``station_state`` is None until the agent has seen one."""
 
     boot_id: str
     current_call_id: str | None
     calls: tuple[Call, ...]
+    station_state: StationCallState | None

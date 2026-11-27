@@ -1548,6 +1548,20 @@
           "answered": "Risposta",
           "viewing": "Visione"
         }
+      },
+      "station_call_state": {
+        "name": "Stato di chiamata della stazione",
+        "state": {
+          "idle": "Inattivo",
+          "setup": "Impostazione",
+          "ringing": "Squilla",
+          "viewing": "Visione",
+          "waiting": "In attesa",
+          "conversation": "Conversazione",
+          "answering_machine": "Segreteria",
+          "greeting": "Annuncio",
+          "recording": "Registrazione"
+        }
       }
     },
     "switch": {

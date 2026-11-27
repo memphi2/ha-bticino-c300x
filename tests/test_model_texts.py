@@ -153,6 +153,17 @@ ADDED_SINCE_2_10_0 = frozenset({
     "selector/device_activation_item_type/options/actuator",
     # The door contact of an outdoor unit (3.1.0).
     "entity/binary_sensor/door_contact/name",
+    # The station's own call state (3.1.0).
+    "entity/sensor/station_call_state/name",
+    "entity/sensor/station_call_state/state/answering_machine",
+    "entity/sensor/station_call_state/state/conversation",
+    "entity/sensor/station_call_state/state/greeting",
+    "entity/sensor/station_call_state/state/idle",
+    "entity/sensor/station_call_state/state/recording",
+    "entity/sensor/station_call_state/state/ringing",
+    "entity/sensor/station_call_state/state/setup",
+    "entity/sensor/station_call_state/state/viewing",
+    "entity/sensor/station_call_state/state/waiting",
 })
 # Texts of 2.10.0 that read differently now: the SSH package message names the
 # package and the way out, the service name lost the model (neutral names), the

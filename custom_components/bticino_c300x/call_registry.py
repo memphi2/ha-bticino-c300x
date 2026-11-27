@@ -17,6 +17,7 @@ from .agent_contracts import (
     DoorContact,
     OutdoorUnit,
     OutdoorUnitsPayload,
+    StationCallState,
 )
 from .const import DOMAIN
 
@@ -45,6 +46,8 @@ class C300XCallRegistry:
     waiting_rings: dict[str, list[str]] = field(default_factory=dict)
     # Units whose doorbell event fired for the latest press of each call.
     rung: dict[str, set[str]] = field(default_factory=dict)
+    # The station's own call state; None until the agent reports one.
+    station_state: StationCallState | None = None
 
     # --- units ---------------------------------------------------------------
 
@@ -95,6 +98,7 @@ class C300XCallRegistry:
         """Replace the mirror with the agent's list (newest first there)."""
 
         self.calls = {call.call_id: call for call in reversed(payload.calls)}
+        self.station_state = payload.station_state
 
     @property
     def current_call(self) -> Call | None:
@@ -222,8 +226,9 @@ class C300XCallRegistry:
         return [call for call in calls if call is not None and call.unit == unit_id and call.state in _LIVE]
 
     def clear_calls(self) -> None:
-        """The agent restarted: its calls are gone."""
+        """The agent restarted: its calls are gone, and the station's state is unknown."""
 
+        self.station_state = None
         self.calls.clear()
         self.rung.clear()
         self.waiting_rings.clear()

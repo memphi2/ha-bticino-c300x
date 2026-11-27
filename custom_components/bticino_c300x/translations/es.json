@@ -1548,6 +1548,20 @@
           "answered": "Respondida",
           "viewing": "Visualizando"
         }
+      },
+      "station_call_state": {
+        "name": "Estado de llamada de la estación",
+        "state": {
+          "idle": "Inactiva",
+          "setup": "Estableciendo",
+          "ringing": "Sonando",
+          "viewing": "Visualizando",
+          "waiting": "En espera",
+          "conversation": "Conversación",
+          "answering_machine": "Contestador",
+          "greeting": "Saludo",
+          "recording": "Grabando"
+        }
       }
     },
     "switch": {

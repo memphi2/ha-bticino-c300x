@@ -50,6 +50,7 @@ from .message_refresh import (
     async_answering_machine_messages,
     async_memos,
 )
+from .station_call_state import C300XStationCallStateSensor
 from .stored_items import MEMO_ITEMS, VIDEO_MESSAGE_ITEMS, StoredItemsSpec
 from .system_metrics import async_system_metrics as _async_system_metrics
 from .system_metrics import (
@@ -227,6 +228,8 @@ async def async_setup_entry(
         await _async_refresh_initial_answering_machine_messages(entry)
         message_sensor = C300XVoicemailMessagesSensor(entry)
         entities.append(message_sensor)
+    if capability_is_supported(entry.runtime_data.capabilities, "calls"):
+        entities.append(C300XStationCallStateSensor(entry))
     if memos_supported(entry.runtime_data.capabilities):
         await _async_refresh_initial_memos(entry)
         entities.append(C300XTextMemosSensor(entry))

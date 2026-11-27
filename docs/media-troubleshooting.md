@@ -175,10 +175,13 @@ It never answers a call: answer in the card first. Details:
 
 ## Audio Is Too Quiet or Too Loud
 
-Adjust **Live audio level (dB)** for live and Ring Call audio and **Volume of
-ring recordings (dB)** for Ring Capture files under **Configure > Video and
-audio** before changing automations. Keep live audio at `0 dB` when the level
-is fine. Home Call has its own audio path; do not tune it with these options.
+Adjust **Door level** and **Fine adjustment (dB)** under **Configure > Video
+and audio** before changing automations. They apply to the live view, Ring
+Calls and Ring Capture recordings alike. Too quiet: raise the door level
+first. Too loud or harsh: lower the door level or set a negative fine
+adjustment. Home Call has its own audio path; these options do not change it.
+Diagnostics downloaded during a running call show under `audio_level` whether
+the station's audio chip or the agent's software applies the door level.
 For clearer sound use the PCMU codec. See
 [Codec and Audio Levels](user-guide.md#codec-and-audio-levels).
 

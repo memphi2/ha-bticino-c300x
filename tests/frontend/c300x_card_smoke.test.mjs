@@ -610,28 +610,14 @@ test("call services use the camera device owner and reject missing or ambiguous 
   assert.equal(calls.length, 1);
 });
 
-test("registry changes invalidate cached codec and a removed camera does not retain old state", async () => {
+test("a removed camera does not retain old state", async () => {
   const registry = installFakeDom();
   await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?registry-cache-test");
   const card = new (registry.get("c300x-doorbell-call-card"))();
   const cameraId = "camera.bticino_c300x_doorbell_camera";
   card.setConfig({ entity: cameraId });
   const hass = fakeHass();
-  for (const [id, mode] of [["1", "pcmu"], ["2", "speex"]]) {
-    hass.entities[`select.codec_${id}`] = {
-      device_id: `device-${id}`, platform: "bticino_c300x", translation_key: "audio_codec",
-    };
-    hass.states[`select.codec_${id}`] = { state: mode, attributes: {} };
-  }
   card.hass = hass;
-  assert.equal(card._audioCodecMode(), "pcmu");
-  hass.entities = {
-    ...hass.entities,
-    [cameraId]: { ...hass.entities[cameraId], device_id: "device-2" },
-  };
-  card.hass = hass;
-  assert.equal(card._audioCodecMode(), "speex");
-  assert.ok(hass.states["select.codec_1"]);
   delete hass.states[cameraId];
   hass.entities = { ...hass.entities };
   delete hass.entities[cameraId];
@@ -640,72 +626,7 @@ test("registry changes invalidate cached codec and a removed camera does not ret
   card.hass = hass;
   assert.equal(card._resolvedCameraEntityId(), cameraId);
   assert.equal(card._cameraEntity(), undefined);
-  assert.equal(card._audioCodecMode(), null);
   assert.throws(() => card._serviceData(), /Camera device assignment unavailable/);
-});
-
-test("card derives the PCMU browser gain from HA state, zero for speex", async () => {
-  const registry = installFakeDom();
-
-  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?card-gain-test");
-
-  const Card = registry.get("c300x-doorbell-call-card");
-  const card = new Card();
-  card.setConfig({
-    type: "custom:c300x-doorbell-call-card",
-    entity: "camera.bticino_c300x_doorbell_camera",
-  });
-
-  const hass = fakeHass();
-  hass.entities["select.bticino_c300x_audio_codec"] = {
-    device_id: "device-1",
-    platform: "bticino_c300x",
-    translation_key: "audio_codec",
-  };
-  hass.states["camera.bticino_c300x_doorbell_camera"].attributes.doorstation_audio_gain_db = 6;
-  hass.states["select.bticino_c300x_audio_codec"] = { state: "pcmu", attributes: {} };
-  card.hass = hass;
-
-  // PCMU: the agent runs passthrough, so the card applies the configured gain.
-  assert.equal(card._cardGainDb(), 6);
-
-  // speex: the agent applies the gain, so the card stays neutral.
-  hass.states["select.bticino_c300x_audio_codec"].state = "speex";
-  assert.equal(card._cardGainDb(), 0);
-});
-
-test("card keeps its gain when the codec select entity blips to unavailable", async () => {
-  const registry = installFakeDom();
-
-  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?card-gain-blip-test");
-
-  const Card = registry.get("c300x-doorbell-call-card");
-  const card = new Card();
-  card.setConfig({
-    type: "custom:c300x-doorbell-call-card",
-    entity: "camera.bticino_c300x_doorbell_camera",
-  });
-
-  const hass = fakeHass();
-  hass.entities["select.bticino_c300x_audio_codec"] = {
-    device_id: "device-1",
-    platform: "bticino_c300x",
-    translation_key: "audio_codec",
-  };
-  hass.states["camera.bticino_c300x_doorbell_camera"].attributes.doorstation_audio_gain_db = 6;
-  hass.states["select.bticino_c300x_audio_codec"] = { state: "pcmu", attributes: {} };
-  card.hass = hass;
-  let refreshes = 0;
-  card._webrtc = { refreshGain: () => (refreshes += 1) };
-  card._lastCardGainDb = 6;
-
-  // The select entity blips to 'unavailable' (integration reload) mid-call.
-  hass.states["select.bticino_c300x_audio_codec"].state = "unavailable";
-  card._maybeRefreshCardGain();
-
-  // Gain must NOT be disengaged: no refresh, last value unchanged.
-  assert.equal(refreshes, 0);
-  assert.equal(card._lastCardGainDb, 6);
 });
 
 test("doorbell card updates from direct camera state events without page reload", async () => {
@@ -1415,7 +1336,6 @@ test("doorbell card claims Android notification answer launches", async () => {
     card._webrtc = {
       running: false,
       close() {},
-      refreshGain() {},
     };
     const calls = [];
     card._startTalkback = async (options) => {
@@ -1485,7 +1405,6 @@ test("mounted doorbell card handles notification answer URL changes", async () =
     card._webrtc = {
       running: false,
       close() {},
-      refreshGain() {},
     };
     const calls = [];
     card._startTalkback = async (options) => {
@@ -1569,7 +1488,6 @@ test("home-call card ignores notification answer launches for doorbell cards", a
     homeCard._webrtc = {
       running: false,
       close() {},
-      refreshGain() {},
     };
     const homeCalls = [];
     homeCard._startTalkback = async () => {
@@ -1592,7 +1510,6 @@ test("home-call card ignores notification answer launches for doorbell cards", a
     doorbellCard._webrtc = {
       running: false,
       close() {},
-      refreshGain() {},
     };
     const doorbellCalls = [];
     doorbellCard._startTalkback = async (options) => {
@@ -1664,7 +1581,6 @@ function answerRaceCard(Card) {
         this.remoteStream = { getVideoTracks: () => [{}] };
       },
       close() { this.running = false; this.pc = null; this.remoteStream = null; },
-      refreshGain() {},
       retargetMedia() {},
     };
     clients.push(client);
@@ -1672,7 +1588,7 @@ function answerRaceCard(Card) {
   };
   card._webrtc = {
     pc: {}, running: true, remoteStream: { getVideoTracks: () => [{}] },
-    close() { this.running = false; this.pc = null; }, refreshGain() {},
+    close() { this.running = false; this.pc = null; },
   };
   return { card, clients };
 }
@@ -1862,7 +1778,6 @@ test("doorbell card promotes preview after Android notification answer launches"
       pc: {},
       running: true,
       close() {},
-      refreshGain() {},
     };
     const calls = [];
     card._startTalkback = async () => {

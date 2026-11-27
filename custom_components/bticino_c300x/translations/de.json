@@ -63,16 +63,16 @@
         "data": {
           "video_enabled": "Video und Ton der Türstation",
           "create_homeassistant_user": "Zugang für Video und Ton auf dem {model} einrichten",
-          "doorstation_audio_gain_db": "Lautstärke live (dB)",
-          "ring_capture_audio_gain_db": "Lautstärke von Klingel-Aufnahmen (dB)",
+          "door_audio_level_db": "Pegel der Türstation",
+          "audio_fine_gain_db": "Feinabgleich (dB)",
           "webrtc_ice_policy": "Verbindungswege für das Livebild",
           "native_two_way_audio": "Gegensprechen in der Kameraansicht von Home Assistant"
         },
         "data_description": {
           "video_enabled": "Bild und Ton der Türstation in Home Assistant: beim Klingeln, auf Abruf und für Home Call.",
           "create_homeassistant_user": "Video und Ton brauchen einen eigenen Zugang auf dem {model}. Ist das an, richtet die Integration ihn bei der Einrichtung oder über ihre Reparatur ein.",
-          "doorstation_audio_gain_db": "Lautstärke der Türstation in der Live-Ansicht und im Gespräch. -20 bis +20 dB; 0 lässt den Ton unverändert.",
-          "ring_capture_audio_gain_db": "Lautstärke des Tons in Aufnahmen, die beim Klingeln entstehen. -20 bis +20 dB; Standard ist 6.",
+          "door_audio_level_db": "Hebt den Ton der Türstation in der Live-Ansicht, im Gespräch und in Klingel-Aufnahmen an. Auf der Classe 300X im Audiochip der Station, dadurch werden auch in der BTicino-App angenommene Gespräche lauter; auf der Classe 100X durch den Agent. Standard: Werkseinstellung.",
+          "audio_fine_gain_db": "-10 bis +10 dB zusätzlich zum Pegel der Türstation, auf jeder Station und mit jedem Audiocodec gleich. Standard: 0.",
           "webrtc_ice_policy": "Welche Netzwerkadressen der Browser für das Livebild nutzen darf. Nur ändern, wenn das Livebild nicht verbindet.",
           "native_two_way_audio": "Optional, standardmäßig aus. Voraussetzungen: Home Assistant 2026.11 oder neuer, „Two-way audio“ unter Einstellungen > System > Labs eingeschaltet, das Livebild über WebRTC, Zugriff über HTTPS und das Mikrofon im Browser erlaubt. Einen Anruf nimmst du zuerst in der {model}-Karte an; diese Option nimmt ihn nicht an. Das Sprechen in der {model}-Karte bleibt, wie es ist."
         }
@@ -192,16 +192,16 @@
         "data": {
           "video_enabled": "Video und Ton der Türstation",
           "create_homeassistant_user": "Zugang für Video und Ton auf dem {model} einrichten",
-          "doorstation_audio_gain_db": "Lautstärke live (dB)",
-          "ring_capture_audio_gain_db": "Lautstärke von Klingel-Aufnahmen (dB)",
+          "door_audio_level_db": "Pegel der Türstation",
+          "audio_fine_gain_db": "Feinabgleich (dB)",
           "webrtc_ice_policy": "Verbindungswege für das Livebild",
           "native_two_way_audio": "Gegensprechen in der Kameraansicht von Home Assistant"
         },
         "data_description": {
           "video_enabled": "Bild und Ton der Türstation in Home Assistant: beim Klingeln, auf Abruf und für Home Call.",
           "create_homeassistant_user": "Video und Ton brauchen einen eigenen Zugang auf dem {model}. Ist das an, richtet die Integration ihn bei der Einrichtung oder über ihre Reparatur ein.",
-          "doorstation_audio_gain_db": "Lautstärke der Türstation in der Live-Ansicht und im Gespräch. -20 bis +20 dB; 0 lässt den Ton unverändert.",
-          "ring_capture_audio_gain_db": "Lautstärke des Tons in Aufnahmen, die beim Klingeln entstehen. -20 bis +20 dB; Standard ist 6.",
+          "door_audio_level_db": "Hebt den Ton der Türstation in der Live-Ansicht, im Gespräch und in Klingel-Aufnahmen an. Auf der Classe 300X im Audiochip der Station, dadurch werden auch in der BTicino-App angenommene Gespräche lauter; auf der Classe 100X durch den Agent. Standard: Werkseinstellung.",
+          "audio_fine_gain_db": "-10 bis +10 dB zusätzlich zum Pegel der Türstation, auf jeder Station und mit jedem Audiocodec gleich. Standard: 0.",
           "webrtc_ice_policy": "Welche Netzwerkadressen der Browser für das Livebild nutzen darf. Nur ändern, wenn das Livebild nicht verbindet.",
           "native_two_way_audio": "Optional, standardmäßig aus. Voraussetzungen: Home Assistant 2026.11 oder neuer, „Two-way audio“ unter Einstellungen > System > Labs eingeschaltet, das Livebild über WebRTC, Zugriff über HTTPS und das Mikrofon im Browser erlaubt. Einen Anruf nimmst du zuerst in der {model}-Karte an; diese Option nimmt ihn nicht an. Das Sprechen in der {model}-Karte bleibt, wie es ist."
         }
@@ -775,7 +775,7 @@
       "invalid_alarm_entity": "Wähle eine Alarmo-Alarm-Control-Panel-Entität oder lasse das Feld leer.",
       "invalid_alarm_page_entity": "Wähle eine unterstützte Dashboard-Entität für die Alarmseite oder lasse das Feld leer.",
       "invalid_weather_entity": "Wähle eine Wetter-Entität oder lasse das Feld leer.",
-      "invalid_audio_gain": "Wähle eine Audioverstärkung zwischen -20 dB und +20 dB.",
+      "invalid_audio_level": "Wähle einen Pegel aus der Liste und einen Feinabgleich zwischen -10 dB und +10 dB.",
       "invalid_device_activations": "Prüfe Aktivierungs-ID, Name, Typ und Adresse. IDs müssen eindeutig sein; der manuelle Treppenlichtmodus reserviert bereits stair_light.",
       "invalid_stair_light_part": "Gib einen numerischen P/N-Wert von 0 bis 99 ein.",
       "required": "Dieses Feld ist erforderlich.",
@@ -835,16 +835,16 @@
         "data": {
           "video_enabled": "Video und Ton der Türstation",
           "create_homeassistant_user": "Zugang für Video und Ton auf dem {model} einrichten",
-          "doorstation_audio_gain_db": "Lautstärke live (dB)",
-          "ring_capture_audio_gain_db": "Lautstärke von Klingel-Aufnahmen (dB)",
+          "door_audio_level_db": "Pegel der Türstation",
+          "audio_fine_gain_db": "Feinabgleich (dB)",
           "webrtc_ice_policy": "Verbindungswege für das Livebild",
           "native_two_way_audio": "Gegensprechen in der Kameraansicht von Home Assistant"
         },
         "data_description": {
           "video_enabled": "Bild und Ton der Türstation in Home Assistant: beim Klingeln, auf Abruf und für Home Call.",
           "create_homeassistant_user": "Video und Ton brauchen einen eigenen Zugang auf dem {model}. Ist das an, richtet die Integration ihn bei der Einrichtung oder über ihre Reparatur ein.",
-          "doorstation_audio_gain_db": "Lautstärke der Türstation in der Live-Ansicht und im Gespräch. -20 bis +20 dB; 0 lässt den Ton unverändert.",
-          "ring_capture_audio_gain_db": "Lautstärke des Tons in Aufnahmen, die beim Klingeln entstehen. -20 bis +20 dB; Standard ist 6.",
+          "door_audio_level_db": "Hebt den Ton der Türstation in der Live-Ansicht, im Gespräch und in Klingel-Aufnahmen an. Auf der Classe 300X im Audiochip der Station, dadurch werden auch in der BTicino-App angenommene Gespräche lauter; auf der Classe 100X durch den Agent. Standard: Werkseinstellung.",
+          "audio_fine_gain_db": "-10 bis +10 dB zusätzlich zum Pegel der Türstation, auf jeder Station und mit jedem Audiocodec gleich. Standard: 0.",
           "webrtc_ice_policy": "Welche Netzwerkadressen der Browser für das Livebild nutzen darf. Nur ändern, wenn das Livebild nicht verbindet.",
           "native_two_way_audio": "Optional, standardmäßig aus. Voraussetzungen: Home Assistant 2026.11 oder neuer, „Two-way audio“ unter Einstellungen > System > Labs eingeschaltet, das Livebild über WebRTC, Zugriff über HTTPS und das Mikrofon im Browser erlaubt. Einen Anruf nimmst du zuerst in der {model}-Karte an; diese Option nimmt ihn nicht an. Das Sprechen in der {model}-Karte bleibt, wie es ist."
         }
@@ -1301,7 +1301,7 @@
       "invalid_alarm_entity": "Wähle eine Alarmo-Alarm-Control-Panel-Entität oder lasse das Feld leer.",
       "invalid_alarm_page_entity": "Wähle eine unterstützte Dashboard-Entität für die Alarmseite oder lasse das Feld leer.",
       "invalid_weather_entity": "Wähle eine Wetter-Entität oder lasse das Feld leer.",
-      "invalid_audio_gain": "Wähle eine Audioverstärkung zwischen -20 dB und +20 dB.",
+      "invalid_audio_level": "Wähle einen Pegel aus der Liste und einen Feinabgleich zwischen -10 dB und +10 dB.",
       "invalid_device_activations": "Prüfe Aktivierungs-ID, Name, Typ und Adresse. IDs müssen eindeutig sein; der manuelle Treppenlichtmodus reserviert bereits stair_light.",
       "invalid_stair_light_part": "Gib einen numerischen P/N-Wert von 0 bis 99 ein.",
       "invalid_dashboard_entities": "Eine Entität kann auf dem Display nicht angezeigt werden.",
@@ -1932,6 +1932,15 @@
     }
   },
   "selector": {
+    "door_audio_level": {
+      "options": {
+        "0": "Werkseinstellung",
+        "3": "+3 dB",
+        "6": "+6 dB",
+        "9": "+9 dB",
+        "12": "+12 dB"
+      }
+    },
     "capture_mode": {
       "options": {
         "ring": "Klingelruf",

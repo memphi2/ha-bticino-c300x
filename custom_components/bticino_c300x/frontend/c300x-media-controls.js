@@ -1,6 +1,6 @@
-import { C300XMediaHistory } from "./c300x-media-history.js?v=4e9f95acb10b0270";
-import { mediaLocalize, mediaStamp } from "./c300x-media-translations.js?v=4e9f95acb10b0270";
-import { MEDIA_CONTROLS_TEMPLATE } from "./c300x-media-controls-template.js?v=4e9f95acb10b0270";
+import { C300XMediaHistory } from "./c300x-media-history.js?v=93532382eee6e74c";
+import { mediaLocalize, mediaStamp } from "./c300x-media-translations.js?v=93532382eee6e74c";
+import { MEDIA_CONTROLS_TEMPLATE } from "./c300x-media-controls-template.js?v=93532382eee6e74c";
 
 const boundedVolume = (value) => Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 1;
 const time = (value) => {
@@ -85,11 +85,10 @@ export class C300XMediaControls extends HTMLElement {
 
   configure({ hass, entryId, enabled = true, busy = false, live = false, hasAudio = false,
     volume = 1, muted = false, label = "", fullscreenAvailable = false, fullscreen = false,
-    expandAvailable = false, expanded = false, still = false, stillAt = null, scaledVolume = false } = {}) {
+    expandAvailable = false, expanded = false, still = false, stillAt = null } = {}) {
     const next = { hass, entryId, enabled, busy, live, hasAudio, volume: boundedVolume(volume),
       muted: !!muted, label: typeof label === "string" ? label : "", fullscreenAvailable, fullscreen,
-      expandAvailable: !!expandAvailable, expanded: !!expanded, still: !!still, stillAt,
-      scaledVolume: !!scaledVolume };
+      expandAvailable: !!expandAvailable, expanded: !!expanded, still: !!still, stillAt };
     this.config = next;
     // Always refresh transport/auth, but batch its synchronous invalidations.
     const wasActive = this.history.active;
@@ -98,7 +97,7 @@ export class C300XMediaControls extends HTMLElement {
     finally { this.configuring = false; }
     if (!this.nodes) return;
     const signature = JSON.stringify([enabled, busy, live, hasAudio, next.volume,
-      next.muted, next.label, fullscreenAvailable, fullscreen, next.expandAvailable, next.expanded, next.still, next.stillAt, next.scaledVolume, this.history.active,
+      next.muted, next.label, fullscreenAvailable, fullscreen, next.expandAvailable, next.expanded, next.still, next.stillAt, this.history.active,
       hass?.language || hass?.locale?.language || "en"]);
     const changed = this.historyChanged || wasActive !== this.history.active
       || signature !== this.configureSignature;
@@ -234,7 +233,7 @@ export class C300XMediaControls extends HTMLElement {
     this.buttonLabel("play", playing ? "pause" : "play");
     n.play.querySelector("ha-icon").setAttribute("icon", playing ? "mdi:pause" : "mdi:play");
     n.mute.hidden = !audio;
-    n.volume.hidden = !audio || (this.volumeFixed && (this.browsing || !c.scaledVolume));
+    n.volume.hidden = !audio || this.volumeFixed;
     this.buttonLabel("mute", this.audioMuted ? "unmute" : "mute");
     n.mute.setAttribute("aria-pressed", String(!!this.audioMuted));
     n.mute.querySelector("ha-icon").setAttribute("icon", this.audioMuted || !this.audioVolume ? "mdi:volume-off" : "mdi:volume-high");

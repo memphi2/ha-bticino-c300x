@@ -185,9 +185,12 @@ static int flush_tail(struct c300x_rtsp_writer *writer, int fd, long long limit)
     return 1;
 }
 
-static ssize_t writer_send(struct c300x_rtsp_writer *writer, int fd,
-                           const void *first, size_t first_len,
-                           const void *second, size_t second_len, enum rtsp_message kind)
+/* limit: a frame's absolute deadline when sooner than its own budget, 0 for
+ * none. */
+static ssize_t writer_send_by(struct c300x_rtsp_writer *writer, int fd,
+                              const void *first, size_t first_len,
+                              const void *second, size_t second_len, enum rtsp_message kind,
+                              long long limit)
 {
     int frame = kind == RTSP_FRAME;
     if (frame && writer && atomic_load(&writer->media_closed)) return 0;
@@ -197,6 +200,7 @@ static ssize_t writer_send(struct c300x_rtsp_writer *writer, int fd,
     int wait_ms = !frame ? RTSP_RESPONSE_MS
         : (writer != NULL && atomic_load(&writer->stalled_since) ? 0 : RTSP_FRAME_WRITE_MS);
     long long start_deadline = now + wait_ms;
+    if (frame && limit > 0 && limit < start_deadline) start_deadline = limit;
     if (!writer_lock(writer, start_deadline)) {
         if (frame && writer && atomic_load(&writer->media_closed)) return 0;
         if (frame && writer != NULL) return frame_dropped(writer, fd, c300x_monotonic_ms());
@@ -244,12 +248,31 @@ done:
     return result;
 }
 
+static ssize_t writer_send(struct c300x_rtsp_writer *writer, int fd,
+                           const void *first, size_t first_len,
+                           const void *second, size_t second_len, enum rtsp_message kind)
+{
+    return writer_send_by(writer, fd, first, first_len, second, second_len, kind, 0);
+}
+
+long long c300x_rtsp_deadline_in(int ms)
+{
+    return c300x_monotonic_ms() + ms;
+}
+
+ssize_t c300x_rtsp_send_pair_by(struct c300x_rtsp_writer *writer, int fd,
+                               const void *first, size_t first_len,
+                               const void *second, size_t second_len, long long deadline_ms)
+{
+    if (first_len > 65539 || second_len > 65539 - first_len) { errno = EMSGSIZE; return -1; }
+    return writer_send_by(writer, fd, first, first_len, second, second_len, RTSP_FRAME, deadline_ms);
+}
+
 ssize_t c300x_rtsp_send_pair(struct c300x_rtsp_writer *writer, int fd,
                             const void *first, size_t first_len,
                             const void *second, size_t second_len)
 {
-    if (first_len > 65539 || second_len > 65539 - first_len) { errno = EMSGSIZE; return -1; }
-    return writer_send(writer, fd, first, first_len, second, second_len, RTSP_FRAME);
+    return c300x_rtsp_send_pair_by(writer, fd, first, first_len, second, second_len, 0);
 }
 
 ssize_t c300x_rtsp_send_interleaved(struct c300x_rtsp_writer *writer,

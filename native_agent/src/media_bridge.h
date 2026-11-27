@@ -32,10 +32,6 @@ bool c300x_media_session_keepalive(struct c300x_video *video, bool audio);
 bool c300x_media_session_resume_parked_rtsp(struct c300x_video *video, bool audio);
 bool c300x_media_ring_call_answer(struct c300x_video *video);
 void c300x_media_ring_call_hangup(struct c300x_video *video);
-void c300x_media_bridge_set_doorstation_audio_gain_tenths(
-    struct c300x_video *video,
-    int gain_tenths
-);
 bool c300x_media_talkback_running(const struct c300x_video *video);
 bool c300x_media_ring_talkback_peer_ready(const struct c300x_video *video, int client_fd);
 bool c300x_media_ring_call_active(const struct c300x_video *video);

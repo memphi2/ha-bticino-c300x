@@ -355,6 +355,8 @@ class C300XAudioCodecSelect(C300XEntity, SelectEntity):
     async def async_added_to_hass(self) -> None:
         """Resolve pending codec changes when the agent reconnects post-reboot."""
 
+        # Home Assistant adds the same entity again after its id was renamed.
+        self._removed = False
         await super().async_added_to_hass()
         self.async_on_remove(self._cancel_pending_refresh)
         self.async_on_remove(

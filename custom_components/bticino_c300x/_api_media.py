@@ -84,16 +84,17 @@ class _ApiMediaMixin(_C300XApiCore):
             }
         return _ok_response(data)
 
-    async def async_set_doorstation_audio_gain_db(
+    async def async_set_doorstation_audio_level(
         self,
-        gain_db: float,
+        door_level_db: int,
+        fine_gain_db: int,
     ) -> dict[str, Any]:
-        """Set the native agent's runtime doorstation downstream audio gain."""
+        """Set the door level and the fine adjustment of the door station's sound."""
 
         data = await self._request_json(
             "POST",
             "/api/v1/video/doorbell/audio",
-            json_data={"doorstation_audio_gain_tenths": round(float(gain_db) * 10)},
+            json_data={"door_level_db": int(door_level_db), "fine_gain_db": int(fine_gain_db)},
         )
         return _ok_response(data)
 

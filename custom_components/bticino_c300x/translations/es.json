@@ -63,16 +63,16 @@
         "data": {
           "video_enabled": "Vídeo y audio del videoportero",
           "create_homeassistant_user": "Configurar el acceso de vídeo y audio en el {model}",
-          "doorstation_audio_gain_db": "Nivel del audio en directo (dB)",
-          "ring_capture_audio_gain_db": "Volumen de las grabaciones de llamada (dB)",
+          "door_audio_level_db": "Nivel del videoportero",
+          "audio_fine_gain_db": "Ajuste fino (dB)",
           "webrtc_ice_policy": "Rutas de conexión para la imagen en directo",
           "native_two_way_audio": "Hablar desde la vista de cámara de Home Assistant"
         },
         "data_description": {
           "video_enabled": "Imagen y sonido del videoportero en Home Assistant: al llamar, a petición y para Home Call.",
           "create_homeassistant_user": "El vídeo y el audio necesitan un acceso propio en el {model}. Con esta opción activada, la integración lo configura durante la instalación o mediante su reparación.",
-          "doorstation_audio_gain_db": "Nivel del sonido del videoportero en la vista en directo y durante una llamada. De -20 a +20 dB; 0 deja el sonido sin cambios.",
-          "ring_capture_audio_gain_db": "Volumen del sonido en las grabaciones que se hacen cuando alguien llama. De -20 a +20 dB; el valor predeterminado es 6.",
+          "door_audio_level_db": "Sube el sonido del videoportero en la vista en directo, durante una llamada y en las grabaciones de llamada. En el Classe 300X en el chip de audio de la estación, lo que también sube las llamadas contestadas en la app BTicino; en el Classe 100X mediante el agente. Predeterminado: valor de fábrica.",
+          "audio_fine_gain_db": "Añade de -10 a +10 dB al nivel del videoportero, igual en cada estación y con cada códec de audio. Predeterminado: 0.",
           "webrtc_ice_policy": "Qué direcciones de red puede usar el navegador para la imagen en directo. Cámbialo solo si la imagen en directo no conecta.",
           "native_two_way_audio": "Opcional, desactivado de forma predeterminada. Requiere Home Assistant 2026.11 o posterior, \"Audio bidireccional\" activado en Ajustes > Sistema > Labs, la imagen en directo por WebRTC, acceso por HTTPS y que el navegador tenga permiso para usar el micrófono. Responde antes a la llamada en la tarjeta del {model}; esta opción no la responde. Hablar en la tarjeta del {model} sigue igual."
         }
@@ -192,16 +192,16 @@
         "data": {
           "video_enabled": "Vídeo y audio del videoportero",
           "create_homeassistant_user": "Configurar el acceso de vídeo y audio en el {model}",
-          "doorstation_audio_gain_db": "Nivel del audio en directo (dB)",
-          "ring_capture_audio_gain_db": "Volumen de las grabaciones de llamada (dB)",
+          "door_audio_level_db": "Nivel del videoportero",
+          "audio_fine_gain_db": "Ajuste fino (dB)",
           "webrtc_ice_policy": "Rutas de conexión para la imagen en directo",
           "native_two_way_audio": "Hablar desde la vista de cámara de Home Assistant"
         },
         "data_description": {
           "video_enabled": "Imagen y sonido del videoportero en Home Assistant: al llamar, a petición y para Home Call.",
           "create_homeassistant_user": "El vídeo y el audio necesitan un acceso propio en el {model}. Con esta opción activada, la integración lo configura durante la instalación o mediante su reparación.",
-          "doorstation_audio_gain_db": "Nivel del sonido del videoportero en la vista en directo y durante una llamada. De -20 a +20 dB; 0 deja el sonido sin cambios.",
-          "ring_capture_audio_gain_db": "Volumen del sonido en las grabaciones que se hacen cuando alguien llama. De -20 a +20 dB; el valor predeterminado es 6.",
+          "door_audio_level_db": "Sube el sonido del videoportero en la vista en directo, durante una llamada y en las grabaciones de llamada. En el Classe 300X en el chip de audio de la estación, lo que también sube las llamadas contestadas en la app BTicino; en el Classe 100X mediante el agente. Predeterminado: valor de fábrica.",
+          "audio_fine_gain_db": "Añade de -10 a +10 dB al nivel del videoportero, igual en cada estación y con cada códec de audio. Predeterminado: 0.",
           "webrtc_ice_policy": "Qué direcciones de red puede usar el navegador para la imagen en directo. Cámbialo solo si la imagen en directo no conecta.",
           "native_two_way_audio": "Opcional, desactivado de forma predeterminada. Requiere Home Assistant 2026.11 o posterior, \"Audio bidireccional\" activado en Ajustes > Sistema > Labs, la imagen en directo por WebRTC, acceso por HTTPS y que el navegador tenga permiso para usar el micrófono. Responde antes a la llamada en la tarjeta del {model}; esta opción no la responde. Hablar en la tarjeta del {model} sigue igual."
         }
@@ -775,7 +775,7 @@
       "invalid_alarm_entity": "Selecciona una entidad de panel de control de alarma de Alarmo o deja el campo vacío.",
       "invalid_alarm_page_entity": "Selecciona una entidad de panel compatible para la página de alarma o deja el campo vacío.",
       "invalid_weather_entity": "Selecciona una entidad meteorológica o deja el campo vacío.",
-      "invalid_audio_gain": "Elige una ganancia de audio entre -20 dB y +20 dB.",
+      "invalid_audio_level": "Elige un nivel de la lista y un ajuste fino entre -10 dB y +10 dB.",
       "invalid_device_activations": "Comprueba el ID, el nombre, el tipo y la dirección de la activación. Los ID deben ser únicos; el modo manual de luz de escalera ya reserva stair_light.",
       "invalid_stair_light_part": "Introduce un valor P/N numérico de 0 a 99.",
       "required": "Este campo es obligatorio.",
@@ -835,16 +835,16 @@
         "data": {
           "video_enabled": "Vídeo y audio del videoportero",
           "create_homeassistant_user": "Configurar el acceso de vídeo y audio en el {model}",
-          "doorstation_audio_gain_db": "Nivel del audio en directo (dB)",
-          "ring_capture_audio_gain_db": "Volumen de las grabaciones de llamada (dB)",
+          "door_audio_level_db": "Nivel del videoportero",
+          "audio_fine_gain_db": "Ajuste fino (dB)",
           "webrtc_ice_policy": "Rutas de conexión para la imagen en directo",
           "native_two_way_audio": "Hablar desde la vista de cámara de Home Assistant"
         },
         "data_description": {
           "video_enabled": "Imagen y sonido del videoportero en Home Assistant: al llamar, a petición y para Home Call.",
           "create_homeassistant_user": "El vídeo y el audio necesitan un acceso propio en el {model}. Con esta opción activada, la integración lo configura durante la instalación o mediante su reparación.",
-          "doorstation_audio_gain_db": "Nivel del sonido del videoportero en la vista en directo y durante una llamada. De -20 a +20 dB; 0 deja el sonido sin cambios.",
-          "ring_capture_audio_gain_db": "Volumen del sonido en las grabaciones que se hacen cuando alguien llama. De -20 a +20 dB; el valor predeterminado es 6.",
+          "door_audio_level_db": "Sube el sonido del videoportero en la vista en directo, durante una llamada y en las grabaciones de llamada. En el Classe 300X en el chip de audio de la estación, lo que también sube las llamadas contestadas en la app BTicino; en el Classe 100X mediante el agente. Predeterminado: valor de fábrica.",
+          "audio_fine_gain_db": "Añade de -10 a +10 dB al nivel del videoportero, igual en cada estación y con cada códec de audio. Predeterminado: 0.",
           "webrtc_ice_policy": "Qué direcciones de red puede usar el navegador para la imagen en directo. Cámbialo solo si la imagen en directo no conecta.",
           "native_two_way_audio": "Opcional, desactivado de forma predeterminada. Requiere Home Assistant 2026.11 o posterior, \"Audio bidireccional\" activado en Ajustes > Sistema > Labs, la imagen en directo por WebRTC, acceso por HTTPS y que el navegador tenga permiso para usar el micrófono. Responde antes a la llamada en la tarjeta del {model}; esta opción no la responde. Hablar en la tarjeta del {model} sigue igual."
         }
@@ -1301,7 +1301,7 @@
       "invalid_alarm_entity": "Selecciona una entidad de panel de control de alarma de Alarmo o deja el campo vacío.",
       "invalid_alarm_page_entity": "Selecciona una entidad de panel compatible para la página de alarma o deja el campo vacío.",
       "invalid_weather_entity": "Selecciona una entidad meteorológica o deja el campo vacío.",
-      "invalid_audio_gain": "Elige una ganancia de audio entre -20 dB y +20 dB.",
+      "invalid_audio_level": "Elige un nivel de la lista y un ajuste fino entre -10 dB y +10 dB.",
       "invalid_device_activations": "Comprueba el ID, el nombre, el tipo y la dirección de la activación. Los ID deben ser únicos; el modo manual de luz de escalera ya reserva stair_light.",
       "invalid_stair_light_part": "Introduce un valor P/N numérico de 0 a 99.",
       "invalid_dashboard_entities": "Una entidad no se puede mostrar en la pantalla.",
@@ -1932,6 +1932,15 @@
     }
   },
   "selector": {
+    "door_audio_level": {
+      "options": {
+        "0": "Valor de fábrica",
+        "3": "+3 dB",
+        "6": "+6 dB",
+        "9": "+9 dB",
+        "12": "+12 dB"
+      }
+    },
     "capture_mode": {
       "options": {
         "ring": "Llamada de timbre",

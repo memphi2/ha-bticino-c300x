@@ -156,7 +156,7 @@ class _FakeApi:
         self.answer_doorbell_call_calls: list[bool] = []
         self.hangup_doorbell_call_calls = 0
         self.hangup_doorbell_call_error: Exception | None = None
-        self.doorstation_audio_gain_calls: list[float] = []
+        self.doorstation_audio_level_calls: list[tuple[int, int]] = []
         self.capture_doorbell_call_calls = 0
         self.activation_calls: list[str] = []
         self.home_call_start_calls: list[int | None] = []
@@ -206,12 +206,13 @@ class _FakeApi:
         }
         return {"ok": True, "audio": True}
 
-    async def async_set_doorstation_audio_gain_db(
+    async def async_set_doorstation_audio_level(
         self,
-        gain_db: float,
+        door_level_db: int,
+        fine_gain_db: int,
     ) -> dict[str, Any]:
-        self.doorstation_audio_gain_calls.append(gain_db)
-        return {"ok": True, "doorstation_audio_gain_db": gain_db}
+        self.doorstation_audio_level_calls.append((door_level_db, fine_gain_db))
+        return {"ok": True}
 
     async def async_hangup_doorbell_call(self, call_id: str | None = None, *, unit: str | None = None) -> dict[str, Any]:
         self.hangup_doorbell_call_calls += 1

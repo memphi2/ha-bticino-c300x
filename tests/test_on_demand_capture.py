@@ -25,7 +25,8 @@ def _idle(**bridge_changes):
         "audio_stream_path": "/doorbell",
         "recorder_stream_path": "/doorbell-recorder",
         "bridge": {
-            "media_owner": "idle", "clients": 0, "doorstation_audio_gain_db": 0,
+            "media_owner": "idle", "clients": 0,
+            "audio_level": {"door_level_db": 0, "fine_gain_db": 0},
             **bridge_changes,
         },
     }
@@ -286,8 +287,8 @@ def test_preparing_capture_cannot_continue_in_replacement_runtime(
     if replace_during == "status":
         original.api.async_doorbell_video_status.side_effect = replace
     elif replace_during == "gain":
-        entry.options["doorstation_audio_gain_db"] = 6
-        original.api.async_set_doorstation_audio_gain_db = AsyncMock(side_effect=replace)
+        entry.options["door_audio_level_db"] = 12
+        original.api.async_set_doorstation_audio_level = AsyncMock(side_effect=replace)
     else:
         capture_boundary[0].side_effect = replace
     with pytest.raises(HomeAssistantError) as error:

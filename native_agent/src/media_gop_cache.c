@@ -7,7 +7,8 @@
  * bounded in bytes, packets and time, and a client starts with them before
  * the live packets. Each client gets its own sequence numbers and timestamps:
  * the cached frames go out 1 ms apart, so the picture is current at once and
- * in step with the audio that starts at the same moment. A new stream or a
+ * in step with the audio that starts at the same moment. A client that cannot
+ * take the group quickly starts at the next IDR instead. A new stream or a
  * long gap keeps the client's numbering and waits for the next IDR. */
 #include "media_gop_cache.h"
 
@@ -28,6 +29,11 @@
 #define GOP_SEQ_WINDOW 1024u
 /* A client that missed more packets than this, while parked, restarts. */
 #define GOP_CLIENT_GAP 64u
+/* The cached groups sent while one packet is forwarded, to all clients that
+ * start with it, hold the relay this long at most: it reads neither the
+ * video nor the audio meanwhile. A client that cannot take its group in that
+ * time starts at the next IDR, with only the packets of it so far. */
+#define GOP_BURST_MS 200
 #define GOP_CLIENTS C300X_VIDEO_RING_PREVIEW_MAX_RTSP_CLIENTS
 #define NAL_STARTS 1u
 #define NAL_IDR 2u
@@ -64,6 +70,8 @@ static struct {
      * group: the cache starts with an IDR access unit. */
     bool au_clean, group, stream;
     unsigned epoch, group_serial;
+    /* The source the cache and the clients follow, 0 for none yet. */
+    unsigned source;
     uint32_t group_ts, ssrc, last_ts;
     uint16_t next_seq;
     uint8_t payload_type;
@@ -175,11 +183,14 @@ static void start_group(uint32_t ts)
 static bool cache_note(const unsigned char *packet, size_t len, const struct rtp_view *view, long long now)
 {
     uint16_t ahead = (uint16_t)(view->seq - gop.next_seq);
+    bool idle = now - gop.last_ms > GOP_IDLE_MS;
+    /* After a pause a packet that does not follow on is a restarted stream,
+     * even with the same SSRC and an earlier sequence number. */
     bool fresh = !gop.stream || view->ssrc != gop.ssrc || view->payload_type != gop.payload_type
-        || (ahead >= GOP_SEQ_WINDOW && ahead < 0x10000u - GOP_SEQ_WINDOW);
+        || (ahead >= GOP_SEQ_WINDOW && ahead < 0x10000u - GOP_SEQ_WINDOW) || (idle && ahead != 0);
     if (!fresh && ahead >= 0x10000u - GOP_SEQ_WINDOW) return false;
     /* After a pause the cached group is not sent to anyone any more. */
-    bool lost = !fresh && (ahead != 0 || now - gop.last_ms > GOP_IDLE_MS);
+    bool lost = !fresh && (ahead != 0 || idle);
     bool new_unit = fresh || view->ts != gop.last_ts;
     unsigned flags = nal_flags(view->payload, view->payload_len);
     if (fresh) {
@@ -210,6 +221,19 @@ static bool cache_note(const unsigned char *packet, size_t len, const struct rtp
     return true;
 }
 
+/* A ring and an on-demand view can deliver at the same time: the cache and
+ * the clients stay with the source that came first until it is reset or has
+ * sent nothing for GOP_IDLE_MS. A change is a new stream: every client waits
+ * for its IDR, with its numbering going on. */
+static bool follows(unsigned source, long long now)
+{
+    if (gop.source == source) return true;
+    if (gop.source != 0 && now - gop.last_ms <= GOP_IDLE_MS) return false;
+    gop.source = source;
+    gop.stream = false;
+    return true;
+}
+
 /* Maps the client's next packet, with this sequence number and timestamp, so
  * its numbering goes on; a client's first packet keeps the station's. */
 static void anchor(struct gop_client *client, uint16_t seq, uint32_t ts, uint32_t ssrc, long long now)
@@ -229,8 +253,9 @@ static void anchor(struct gop_client *client, uint16_t seq, uint32_t ts, uint32_
     client->ts_offset = out_ts - ts;
 }
 
+/* deadline: 0 for a live packet, which has the writer's own budget. */
 static ssize_t send_mapped(const rtsp_send_target_t *target, struct gop_client *client,
-                           const unsigned char *packet, size_t len, long long now)
+                           const unsigned char *packet, size_t len, long long now, long long deadline)
 {
     unsigned char head[16];
     uint16_t seq = (uint16_t)(be16(packet + 2) + client->seq_offset);
@@ -247,12 +272,15 @@ static ssize_t send_mapped(const rtsp_send_target_t *target, struct gop_client *
     client->last_out_ts = ts;
     client->next_in_seq = (uint16_t)(be16(packet + 2) + 1);
     client->last_ms = now;
-    return c300x_rtsp_send_pair(target->writer, target->fd, head, sizeof(head), packet + 12, len - 12);
+    return c300x_rtsp_send_pair_by(target->writer, target->fd, head, sizeof(head), packet + 12, len - 12,
+                                   deadline);
 }
 
-/* The whole group, the current packet last. False when the client could not
- * take it: it then waits for the next group instead of a repeated start. */
-static bool replay(const rtsp_send_target_t *target, struct gop_client *client, long long now)
+/* The whole group, the current packet last, by the deadline. False when the
+ * client could not take it: it then waits for the next group instead of a
+ * repeated start. */
+static bool replay(const rtsp_send_target_t *target, struct gop_client *client, long long now,
+                   long long deadline)
 {
     const unsigned char *first = gop.data + gop.packets[0].offset;
     uint32_t in_ts = be32(first + 4);
@@ -265,13 +293,14 @@ static bool replay(const rtsp_send_target_t *target, struct gop_client *client, 
             out_ts += GOP_CACHED_FRAME_TICKS;
             client->ts_offset = out_ts - in_ts;
         }
-        if (send_mapped(target, client, packet, gop.packets[index].length, now) <= 0) return false;
+        if (send_mapped(target, client, packet, gop.packets[index].length, now, deadline) <= 0) return false;
     }
     return true;
 }
 
+/* *burst: the deadline of this packet's cached groups, 0 until the first. */
 static void deliver(const rtsp_send_target_t *target, const unsigned char *packet, size_t len,
-                    const struct rtp_view *view, long long now)
+                    const struct rtp_view *view, long long now, long long *burst)
 {
     if (target->slot < 0 || target->slot >= (int)GOP_CLIENTS || !target->transport_tcp) return;
     struct gop_client *client = &gop.clients[target->slot];
@@ -290,35 +319,42 @@ static void deliver(const rtsp_send_target_t *target, const unsigned char *packe
         client->epoch = gop.epoch;
     }
     if (client->live) {
-        (void)send_mapped(target, client, packet, len, now);
+        (void)send_mapped(target, client, packet, len, now, 0);
         return;
     }
     if (!gop.group || (client->skip && client->skip_group == gop.group_serial)) return;
+    if (*burst == 0) *burst = c300x_rtsp_deadline_in(GOP_BURST_MS);
     client->epoch = gop.epoch;
-    client->live = replay(target, client, now);
+    client->live = replay(target, client, now, *burst);
     client->skip = !client->live;
     client->skip_group = gop.group_serial;
 }
 
-void c300x_media_gop_forward(const rtsp_send_target_t *targets, size_t count,
-                             const unsigned char *packet, size_t packet_len)
+void c300x_media_gop_forward(enum c300x_media_gop_source source, const rtsp_send_target_t *targets,
+                             size_t count, const unsigned char *packet, size_t packet_len)
 {
     struct rtp_view view;
     long long now = c300x_monotonic_ms();
+    long long burst = 0;
     pthread_mutex_lock(&gop.mutex);
     bool usable = packet != NULL && rtp_view(packet, packet_len, &view)
-        && cache_note(packet, packet_len, &view, now);
+        && follows((unsigned)source, now) && cache_note(packet, packet_len, &view, now);
     for (size_t index = 0; index < count; index++) {
-        if (usable) deliver(&targets[index], packet, packet_len, &view, now);
+        if (usable) deliver(&targets[index], packet, packet_len, &view, now, &burst);
         close(targets[index].fd);
         c300x_rtsp_writer_release(targets[index].writer);
     }
     pthread_mutex_unlock(&gop.mutex);
 }
 
-void c300x_media_gop_reset(void)
+void c300x_media_gop_reset(enum c300x_media_gop_source source)
 {
     pthread_mutex_lock(&gop.mutex);
+    if (gop.source != (unsigned)source) {
+        pthread_mutex_unlock(&gop.mutex);
+        return;
+    }
+    gop.source = 0;
     free(gop.data);
     gop.data = NULL;
     gop.alloc_failed = false;

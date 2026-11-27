@@ -1,4 +1,5 @@
 #include "activations.h"
+#include "audio_level.h"
 #include "activation_discovery.h"
 #include "agent_update.h"
 #include "c300x_agent.h"
@@ -5327,7 +5328,7 @@ static void handle_doorbell_video_get(
     struct agent_runtime *runtime
 )
 {
-    enum { VIDEO_STATUS_BODY_LEN = 12288 };
+    enum { VIDEO_STATUS_BODY_LEN = 12544 };
     char *body = malloc(VIDEO_STATUS_BODY_LEN);
     struct c300x_video_status video_status = {0};
     int running = 0;
@@ -5373,7 +5374,7 @@ static void handle_doorbell_video_get(
     unsigned long long rtsp_rejected_clients = 0;
     unsigned long long rtsp_rejected_describes = 0;
     unsigned long long rtsp_play_failures = 0;
-    int doorstation_audio_gain_tenths = 0;
+    char audio_level_json[C300X_AUDIO_LEVEL_JSON_MAX];
     unsigned long long bt_media_start_attempts = 0;
     unsigned long long bt_media_stop_attempts = 0;
     const char *last_rtp_at_json = "null";
@@ -5441,7 +5442,6 @@ static void handle_doorbell_video_get(
         rtsp_rejected_clients = video_status.rtsp_rejected_clients;
         rtsp_rejected_describes = video_status.rtsp_rejected_describes;
         rtsp_play_failures = video_status.rtsp_play_failures;
-        doorstation_audio_gain_tenths = video_status.doorstation_audio_gain_tenths;
         c300x_json_string(
             video_status.last_rtsp_method,
             last_rtsp_method_json,
@@ -5480,6 +5480,9 @@ static void handle_doorbell_video_get(
             && (bridge_media_active || call_active)
         )
     );
+    if (c300x_audio_level_json(audio_level_json, sizeof(audio_level_json)) == 0) {
+        snprintf(audio_level_json, sizeof(audio_level_json), "null");
+    }
     c300x_json_escape_string(config->video_rtsp_video_path, stream_path, sizeof(stream_path));
     c300x_json_escape_string(config->video_rtsp_path, audio_stream_path, sizeof(audio_stream_path));
     c300x_json_escape_string(config->video_rtsp_recorder_path, recorder_stream_path, sizeof(recorder_stream_path));
@@ -5527,7 +5530,7 @@ static void handle_doorbell_video_get(
         "\"ring_preview_sharing\":%s,"
         "\"media_starting\":%s,"
         "\"audio_enabled\":%s,"
-        "\"doorstation_audio_gain_db\":%.1f,"
+        "\"audio_level\":%s,"
         "\"bt_media_start_attempts\":%llu,"
         "\"bt_media_stop_attempts\":%llu,"
         "\"rtsp_options_requests\":%llu,"
@@ -5597,7 +5600,7 @@ static void handle_doorbell_video_get(
         max_clients > 1 ? "true" : "false",
         media_starting ? "true" : "false",
         stream_audio ? "true" : "false",
-        (double)doorstation_audio_gain_tenths / 10.0,
+        audio_level_json,
         bt_media_start_attempts,
         bt_media_stop_attempts,
         rtsp_options_requests,
@@ -8774,7 +8777,6 @@ static void handle_api_request(
     }
     if (c300x_try_handle_doorbell_video_audio_settings_route(
             client_fd,
-            runtime != NULL ? runtime->video : NULL,
             request->method,
             request->path,
             request->body

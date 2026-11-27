@@ -14,7 +14,7 @@ from homeassistant.exceptions import HomeAssistantError
 
 from ..camera_media.capture_lifecycle import RingCaptureCallGuard
 from ..camera_media.session_lifecycle import media_owner_stopping, media_stop_scope
-from ..doorstation_audio import async_ensure_doorstation_audio_gain
+from ..doorstation_audio import async_ensure_doorstation_audio_level
 from ..entry_locks import entry_lock
 from ..exceptions import home_assistant_error, service_validation_error
 from ..ring_capture import (
@@ -194,7 +194,7 @@ class RingCaptureUseCase:
         self._raise_if_ring_answer_blocked(runtime, status)
         if _ring_answer_media_ready(status) or _status_bridge(status).get("ring_answer_requested"):
             return False
-        await async_ensure_doorstation_audio_gain(self._entry, status=status)
+        await async_ensure_doorstation_audio_level(self._entry, status=status)
         self._ensure_ring_capture_runtime(runtime)
         # Gain synchronization can yield to a native client or another answer.
         status = await runtime.api.async_doorbell_video_status()

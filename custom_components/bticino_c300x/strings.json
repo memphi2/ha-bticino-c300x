@@ -63,16 +63,16 @@
         "data": {
           "video_enabled": "Door station video and audio",
           "create_homeassistant_user": "Set up video and audio access on the {model}",
-          "doorstation_audio_gain_db": "Live audio level (dB)",
-          "ring_capture_audio_gain_db": "Volume of ring recordings (dB)",
+          "door_audio_level_db": "Door level",
+          "audio_fine_gain_db": "Fine adjustment (dB)",
           "webrtc_ice_policy": "Connection paths for the live picture",
           "native_two_way_audio": "Talk through the Home Assistant camera view"
         },
         "data_description": {
           "video_enabled": "Picture and sound of the door station in Home Assistant: on a ring, on demand and for Home Call.",
           "create_homeassistant_user": "Video and audio need an access of their own on the {model}. With this on, the integration sets it up during setup or through its repair.",
-          "doorstation_audio_gain_db": "Level of the door station's sound in the live view and during a call. -20 to +20 dB; 0 leaves the sound unchanged.",
-          "ring_capture_audio_gain_db": "Volume of the sound in recordings made when someone rings. -20 to +20 dB; the default is 6.",
+          "door_audio_level_db": "Raises the door station's sound in the live view, in calls and in ring recordings. On a Classe 300X in the station's audio chip, which also makes calls answered in the BTicino app louder; on the Classe 100X the agent adds it. Default: Stock.",
+          "audio_fine_gain_db": "Adds -10 to +10 dB on top of the door level, the same on every station and audio codec. Default: 0.",
           "webrtc_ice_policy": "Which network addresses the browser may use for the live picture. Change this only when the live picture does not connect.",
           "native_two_way_audio": "Optional, off by default. Requires Home Assistant 2026.11 or later, \"Two-way audio\" switched on under Settings > System > Labs, the live picture over WebRTC, access over HTTPS and the browser allowed to use the microphone. Answer a call in the {model} card first; this option does not answer it. Talking in the {model} card stays as it is."
         }
@@ -192,16 +192,16 @@
         "data": {
           "video_enabled": "Door station video and audio",
           "create_homeassistant_user": "Set up video and audio access on the {model}",
-          "doorstation_audio_gain_db": "Live audio level (dB)",
-          "ring_capture_audio_gain_db": "Volume of ring recordings (dB)",
+          "door_audio_level_db": "Door level",
+          "audio_fine_gain_db": "Fine adjustment (dB)",
           "webrtc_ice_policy": "Connection paths for the live picture",
           "native_two_way_audio": "Talk through the Home Assistant camera view"
         },
         "data_description": {
           "video_enabled": "Picture and sound of the door station in Home Assistant: on a ring, on demand and for Home Call.",
           "create_homeassistant_user": "Video and audio need an access of their own on the {model}. With this on, the integration sets it up during setup or through its repair.",
-          "doorstation_audio_gain_db": "Level of the door station's sound in the live view and during a call. -20 to +20 dB; 0 leaves the sound unchanged.",
-          "ring_capture_audio_gain_db": "Volume of the sound in recordings made when someone rings. -20 to +20 dB; the default is 6.",
+          "door_audio_level_db": "Raises the door station's sound in the live view, in calls and in ring recordings. On a Classe 300X in the station's audio chip, which also makes calls answered in the BTicino app louder; on the Classe 100X the agent adds it. Default: Stock.",
+          "audio_fine_gain_db": "Adds -10 to +10 dB on top of the door level, the same on every station and audio codec. Default: 0.",
           "webrtc_ice_policy": "Which network addresses the browser may use for the live picture. Change this only when the live picture does not connect.",
           "native_two_way_audio": "Optional, off by default. Requires Home Assistant 2026.11 or later, \"Two-way audio\" switched on under Settings > System > Labs, the live picture over WebRTC, access over HTTPS and the browser allowed to use the microphone. Answer a call in the {model} card first; this option does not answer it. Talking in the {model} card stays as it is."
         }
@@ -775,7 +775,7 @@
       "invalid_alarm_entity": "Select an Alarmo alarm control panel entity or leave the field empty.",
       "invalid_alarm_page_entity": "Select a supported dashboard entity for the alarm page or leave the field empty.",
       "invalid_weather_entity": "Select a weather entity or leave the field empty.",
-      "invalid_audio_gain": "Choose an audio gain between -20 dB and +20 dB.",
+      "invalid_audio_level": "Choose a door level from the list and a fine adjustment between -10 dB and +10 dB.",
       "invalid_device_activations": "Check the activation ID, name, type, and address. IDs must be unique; manual stair light mode already reserves stair_light.",
       "invalid_stair_light_part": "Enter a numeric P/N value from 0 to 99.",
       "required": "This field is required.",
@@ -835,16 +835,16 @@
         "data": {
           "video_enabled": "Door station video and audio",
           "create_homeassistant_user": "Set up video and audio access on the {model}",
-          "doorstation_audio_gain_db": "Live audio level (dB)",
-          "ring_capture_audio_gain_db": "Volume of ring recordings (dB)",
+          "door_audio_level_db": "Door level",
+          "audio_fine_gain_db": "Fine adjustment (dB)",
           "webrtc_ice_policy": "Connection paths for the live picture",
           "native_two_way_audio": "Talk through the Home Assistant camera view"
         },
         "data_description": {
           "video_enabled": "Picture and sound of the door station in Home Assistant: on a ring, on demand and for Home Call.",
           "create_homeassistant_user": "Video and audio need an access of their own on the {model}. With this on, the integration sets it up during setup or through its repair.",
-          "doorstation_audio_gain_db": "Level of the door station's sound in the live view and during a call. -20 to +20 dB; 0 leaves the sound unchanged.",
-          "ring_capture_audio_gain_db": "Volume of the sound in recordings made when someone rings. -20 to +20 dB; the default is 6.",
+          "door_audio_level_db": "Raises the door station's sound in the live view, in calls and in ring recordings. On a Classe 300X in the station's audio chip, which also makes calls answered in the BTicino app louder; on the Classe 100X the agent adds it. Default: Stock.",
+          "audio_fine_gain_db": "Adds -10 to +10 dB on top of the door level, the same on every station and audio codec. Default: 0.",
           "webrtc_ice_policy": "Which network addresses the browser may use for the live picture. Change this only when the live picture does not connect.",
           "native_two_way_audio": "Optional, off by default. Requires Home Assistant 2026.11 or later, \"Two-way audio\" switched on under Settings > System > Labs, the live picture over WebRTC, access over HTTPS and the browser allowed to use the microphone. Answer a call in the {model} card first; this option does not answer it. Talking in the {model} card stays as it is."
         }
@@ -1301,7 +1301,7 @@
       "invalid_alarm_entity": "Select an Alarmo alarm control panel entity or leave the field empty.",
       "invalid_alarm_page_entity": "Select a supported dashboard entity for the alarm page or leave the field empty.",
       "invalid_weather_entity": "Select a weather entity or leave the field empty.",
-      "invalid_audio_gain": "Choose an audio gain between -20 dB and +20 dB.",
+      "invalid_audio_level": "Choose a door level from the list and a fine adjustment between -10 dB and +10 dB.",
       "invalid_device_activations": "Check the activation ID, name, type, and address. IDs must be unique; manual stair light mode already reserves stair_light.",
       "invalid_stair_light_part": "Enter a numeric P/N value from 0 to 99.",
       "invalid_dashboard_entities": "An entity cannot be shown on the display.",
@@ -1932,6 +1932,15 @@
     }
   },
   "selector": {
+    "door_audio_level": {
+      "options": {
+        "0": "Stock",
+        "3": "+3 dB",
+        "6": "+6 dB",
+        "9": "+9 dB",
+        "12": "+12 dB"
+      }
+    },
     "capture_mode": {
       "options": {
         "ring": "Ring call",

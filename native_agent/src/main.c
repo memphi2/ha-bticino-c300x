@@ -1,5 +1,6 @@
 #include "c300x_agent.h"
 #include "audio_codec.h"
+#include "audio_level.h"
 #include "camera_quality.h"
 #include "device_routing.h"
 #include "display_qt5.h"
@@ -208,6 +209,10 @@ int main(int argc, char **argv)
             fprintf(stderr, "Failed to restore media patches: %s\n", error);
             return 1;
         }
+        if (!c300x_audio_level_remove_patches(error, sizeof(error))) {
+            fprintf(stderr, "Failed to restore the audio state hook: %s\n", error);
+            return 1;
+        }
         const char *quality_error = "";
         if (!c300x_camera_quality_remove_patches(&quality_error)) {
             fprintf(stderr, "Failed to restore the camera quality: %s\n", quality_error);
@@ -250,5 +255,6 @@ int main(int argc, char **argv)
     /* The device libcurl must initialize before workers, and only on opt-in. */
     c300x_https_init(config.https_callbacks_enabled);
     (void)signal(SIGPIPE, SIG_IGN);
+    c300x_audio_level_start();
     return c300x_run(&config);
 }

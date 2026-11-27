@@ -11,7 +11,6 @@ from .activation_address import (
     normalize_stair_light_part,
 )
 from .camera_media.ha_compat import HA_SUPPORTS_NATIVE_CAMERA_TWO_WAY_AUDIO
-from .config_audio import AUDIO_GAIN_DB_MAX, AUDIO_GAIN_DB_MIN
 from .config_flow_forms import optional_suggested as _optional_suggested
 from .config_snapshots import (
     CONF_SNAPSHOT_DELAY,
@@ -23,9 +22,12 @@ from .config_snapshots import (
     SNAPSHOT_NUMBER_RANGES,
 )
 from .const import (
+    AUDIO_FINE_GAIN_DB_MAX,
+    AUDIO_FINE_GAIN_DB_MIN,
     CONF_AGENT_HOST,
     CONF_AGENT_PORT,
     CONF_AGENT_TOKEN,
+    CONF_AUDIO_FINE_GAIN_DB,
     CONF_CALLBACK_BASE_URL,
     CONF_CREATE_HOMEASSISTANT_USER,
     CONF_DEVICE_ACTIVATION_FLOW_ACTION,
@@ -37,15 +39,14 @@ from .const import (
     CONF_DEVICE_ACTIVATION_MODE,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
-    CONF_DOORSTATION_AUDIO_GAIN_DB,
+    CONF_DOOR_AUDIO_LEVEL_DB,
     CONF_MAINTENANCE_TOKEN,
     CONF_NATIVE_TWO_WAY_AUDIO,
-    CONF_RING_CAPTURE_AUDIO_GAIN_DB,
     CONF_ROTATE_SHARED_SECRET,
     CONF_VIDEO_ENABLED,
     CONF_WEBRTC_ICE_POLICY,
-    DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
-    DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
+    DEFAULT_AUDIO_FINE_GAIN_DB,
+    DEFAULT_DOOR_AUDIO_LEVEL_DB,
     DEFAULT_STAIR_LIGHT_N,
     DEFAULT_STAIR_LIGHT_P,
     DEFAULT_WEBRTC_ICE_POLICY,
@@ -55,6 +56,7 @@ from .const import (
     DEVICE_ACTIVATION_FLOW_ACTION_REMOVE,
     DEVICE_ACTIVATION_MODE_AUTO,
     DEVICE_ACTIVATION_MODES,
+    DOOR_AUDIO_LEVELS_DB,
     WEBRTC_ICE_POLICIES,
 )
 from .schema_compat import vol
@@ -71,8 +73,8 @@ def setup_features_schema(
     default_video_enabled: bool,
     *,
     default_create_homeassistant_user: bool = CREATE_HOMEASSISTANT_USER_DEFAULT,
-    default_doorstation_audio_gain_db: float = DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
-    default_ring_capture_audio_gain_db: float = DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
+    default_door_audio_level_db: int = DEFAULT_DOOR_AUDIO_LEVEL_DB,
+    default_audio_fine_gain_db: int = DEFAULT_AUDIO_FINE_GAIN_DB,
     default_native_two_way_audio: bool = False,
 ) -> vol.Schema:
     """Return the initial setup feature schema."""
@@ -80,8 +82,8 @@ def setup_features_schema(
     return _media_feature_schema(
         default_video_enabled=default_video_enabled,
         default_create_homeassistant_user=default_create_homeassistant_user,
-        default_doorstation_audio_gain_db=default_doorstation_audio_gain_db,
-        default_ring_capture_audio_gain_db=default_ring_capture_audio_gain_db,
+        default_door_audio_level_db=default_door_audio_level_db,
+        default_audio_fine_gain_db=default_audio_fine_gain_db,
         default_native_two_way_audio=default_native_two_way_audio,
     )
 
@@ -194,8 +196,8 @@ def reconfigure_features_schema(
     default_video_enabled: bool,
     *,
     default_create_homeassistant_user: bool = CREATE_HOMEASSISTANT_USER_DEFAULT,
-    default_doorstation_audio_gain_db: float = DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
-    default_ring_capture_audio_gain_db: float = DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
+    default_door_audio_level_db: int = DEFAULT_DOOR_AUDIO_LEVEL_DB,
+    default_audio_fine_gain_db: int = DEFAULT_AUDIO_FINE_GAIN_DB,
     default_webrtc_ice_policy: str = DEFAULT_WEBRTC_ICE_POLICY,
     default_native_two_way_audio: bool = False,
 ) -> vol.Schema:
@@ -204,8 +206,8 @@ def reconfigure_features_schema(
     return _media_feature_schema(
         default_video_enabled=default_video_enabled,
         default_create_homeassistant_user=default_create_homeassistant_user,
-        default_doorstation_audio_gain_db=default_doorstation_audio_gain_db,
-        default_ring_capture_audio_gain_db=default_ring_capture_audio_gain_db,
+        default_door_audio_level_db=default_door_audio_level_db,
+        default_audio_fine_gain_db=default_audio_fine_gain_db,
         default_webrtc_ice_policy=default_webrtc_ice_policy,
         default_native_two_way_audio=default_native_two_way_audio,
     )
@@ -223,13 +225,19 @@ def stair_light_n(value: Any) -> str:
     return normalize_stair_light_part(value, default=DEFAULT_STAIR_LIGHT_N)
 
 
-def audio_gain_db_selector() -> Any:
-    """Return a bounded HA audio gain selector."""
+def door_audio_level_selector() -> Any:
+    """Return the door level dropdown: stock, +3, +6, +9 or +12 dB."""
+
+    return _translated_select("door_audio_level", [str(level) for level in DOOR_AUDIO_LEVELS_DB])
+
+
+def audio_fine_gain_selector() -> Any:
+    """Return the fine adjustment slider in whole dB."""
     return selector.NumberSelector(
         selector.NumberSelectorConfig(
-            min=AUDIO_GAIN_DB_MIN,
-            max=AUDIO_GAIN_DB_MAX,
-            step=0.5,
+            min=AUDIO_FINE_GAIN_DB_MIN,
+            max=AUDIO_FINE_GAIN_DB_MAX,
+            step=1,
             mode=selector.NumberSelectorMode.SLIDER,
             unit_of_measurement="dB",
         )
@@ -340,8 +348,8 @@ def _media_feature_schema(
     *,
     default_video_enabled: bool,
     default_create_homeassistant_user: bool,
-    default_doorstation_audio_gain_db: float,
-    default_ring_capture_audio_gain_db: float,
+    default_door_audio_level_db: int,
+    default_audio_fine_gain_db: int,
     default_webrtc_ice_policy: str = DEFAULT_WEBRTC_ICE_POLICY,
     default_native_two_way_audio: bool = False,
 ) -> vol.Schema:
@@ -361,16 +369,16 @@ def _media_feature_schema(
         ] = bool
         fields[
             vol.Optional(
-                CONF_DOORSTATION_AUDIO_GAIN_DB,
-                default=default_doorstation_audio_gain_db,
+                CONF_DOOR_AUDIO_LEVEL_DB,
+                default=str(default_door_audio_level_db),
             )
-        ] = audio_gain_db_selector()
+        ] = door_audio_level_selector()
         fields[
             vol.Optional(
-                CONF_RING_CAPTURE_AUDIO_GAIN_DB,
-                default=default_ring_capture_audio_gain_db,
+                CONF_AUDIO_FINE_GAIN_DB,
+                default=default_audio_fine_gain_db,
             )
-        ] = audio_gain_db_selector()
+        ] = audio_fine_gain_selector()
         fields[
             vol.Optional(
                 CONF_WEBRTC_ICE_POLICY,

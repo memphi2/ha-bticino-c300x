@@ -6,7 +6,7 @@
 [![Marketplace](https://img.shields.io/badge/Home_Assistant-Marketplace-41BDF5?style=flat-square)](https://contributors.home-assistant.io/marketplace/)
 [![License Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-Beta: **3.0.0b2** (one package for the Classe 300X and the Classe 100X; the Classe 100X support is experimental and checked offline only), including **2.10.0**.
+Beta: **3.0.0b3** (one package for the Classe 300X and the Classe 100X; the Classe 100X support is experimental and checked offline only), including **2.10.0**.
 
 Local-first Home Assistant custom integration for the BTicino **Classe 300X
 (C300X)** and **Classe 100X (C100X)** video door stations. A small agent on
@@ -114,7 +114,7 @@ through the options and adds the card. Later releases: [Update](docs/quickstart.
 
 ### Beta Versions
 
-Betas are opt-in. The current beta, **3.0.0b2**, puts the Classe 300X and the
+Betas are opt-in. The current beta, **3.0.0b3**, puts the Classe 300X and the
 Classe 100X into one package. On a Classe 300X it works like stable 2.10.0,
 with the changes the [changelog](CHANGELOG.md) lists. The
 Classe 100X support is experimental: it is checked against the original 1.5.8

@@ -13,6 +13,7 @@ import time
 from pathlib import Path
 
 import pytest
+from test_native_audio_level import STUB, build_level_binary, render_hook
 from test_qml_patch_script import _write_original_gui
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -65,7 +66,8 @@ def removal_binary(tmp_path_factory: pytest.TempPathFactory) -> Path:
         ["make", "-C", str(ROOT / "native_agent"), f"BUILD_DIR={build}", "-j2", "all",
          "CFLAGS=-std=c11 -O2 -Wall -Wextra -Werror -pedantic -D_DEFAULT_SOURCE "
          "-D_POSIX_C_SOURCE=200809L -DC300X_DEVICE_PATCH_STOCK_SHA256="
-         f'\\"{hashlib.sha256(ROUTING_STOCK).hexdigest()}\\"' + patched_ranges],
+         f'\\"{hashlib.sha256(ROUTING_STOCK).hexdigest()}\\"'
+         f' -DSTOCK_HOOK_SHA256=\\"{hashlib.sha256(STUB).hexdigest()}\\"' + patched_ranges],
         capture_output=True, text=True,
     )
     assert result.returncode == 0, result.stdout + result.stderr
@@ -100,6 +102,7 @@ def device(tmp_path: Path, removal_binary: Path) -> dict[str, str]:
         "C300X_AUDIO_LINPHONE_CONF": ("linphone.conf", LINPHONE),
         "C300X_INIT_SCRIPT": ("init", "agent startup"),
         "C300X_INIT_LINK": ("init-link", "agent startup link"),
+        "C300X_AUDIO_STATE_HOOK": ("Audio_State.sh", STUB.decode()),
         "C300X_IPTABLES": ("iptables", "original firewall\n"),
         "C300X_IPTABLES6": ("iptables6", "original firewall\n"),
     }
@@ -220,6 +223,44 @@ def test_uninstall_keeps_files_if_codec_restore_fails(device: dict[str, str]) ->
     linphone.write_bytes(linphone.read_bytes().replace(b"\n", b"\r\n"))
     _assert_kept(device, _remove(device))
     assert "<enable_speex>0</enable_speex>" in Path(device["C300X_AUDIO_STACK_OPEN"]).read_text()
+
+
+@pytest.fixture(scope="module")
+def our_hook(tmp_path_factory: pytest.TempPathFactory) -> bytes:
+    return render_hook(build_level_binary(tmp_path_factory.mktemp("hook") / "render"), 2)
+
+
+def test_uninstall_puts_the_vendor_audio_state_stub_back(device: dict[str, str], our_hook: bytes) -> None:
+    hook = Path(device["C300X_AUDIO_STATE_HOOK"])
+    hook.write_bytes(our_hook)
+    (Path(device["C300X_AUDIO_BACKUP_DIR"]) / "Audio_State.sh").write_bytes(STUB)
+    _assert_removed(device, _remove(device))
+    assert hook.read_bytes() == STUB
+
+
+# What a lost or broken backup gives back: the stub's behaviour, no vendor bytes.
+NEUTRAL_STUB = b"#!/bin/sh\nexit 1\n"
+
+
+@pytest.mark.parametrize("backup", [b"#!/bin/sh\n", None], ids=["invalid", "missing"])
+def test_uninstall_puts_a_neutral_stub_back_without_the_stub_in_the_hook_backup(
+    device: dict[str, str], our_hook: bytes, backup: bytes | None
+) -> None:
+    hook = Path(device["C300X_AUDIO_STATE_HOOK"])
+    hook.write_bytes(our_hook)
+    hook.chmod(0o775)
+    if backup is not None:
+        (Path(device["C300X_AUDIO_BACKUP_DIR"]) / "Audio_State.sh").write_bytes(backup)
+    _assert_removed(device, _remove(device))
+    assert hook.read_bytes() == NEUTRAL_STUB
+    assert hook.stat().st_mode & 0o777 == 0o775
+
+
+def test_uninstall_leaves_a_foreign_audio_state_hook_alone(device: dict[str, str]) -> None:
+    hook = Path(device["C300X_AUDIO_STATE_HOOK"])
+    hook.write_text("#!/bin/sh\necho mine\n")
+    _assert_removed(device, _remove(device))
+    assert hook.read_text() == "#!/bin/sh\necho mine\n"
 
 
 PCMU_STACK = "<config><enable_speex>0</enable_speex></config>\n"

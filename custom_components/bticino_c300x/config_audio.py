@@ -1,33 +1,57 @@
-"""Audio option validation helpers for C300X config flows."""
+"""Audio level option validation helpers for C300X config flows."""
 
 from __future__ import annotations
 
 from typing import Any
 
+from .const import AUDIO_FINE_GAIN_DB_MAX, AUDIO_FINE_GAIN_DB_MIN, DOOR_AUDIO_LEVELS_DB
 from .schema_compat import vol
 
-AUDIO_GAIN_DB_MIN = -20.0
-AUDIO_GAIN_DB_MAX = 20.0
 
-
-def audio_gain_db(value: Any) -> float:
-    """Validate a configurable C300X audio gain in dB."""
-
+def _whole_db(value: Any) -> int:
+    if isinstance(value, bool):
+        raise vol.Invalid("invalid audio level")
     try:
-        gain = float(value)
+        number = float(value)
     except (TypeError, ValueError) as err:
-        raise vol.Invalid("invalid audio gain") from err
-    # Written as one range test so that NaN, which compares false with
-    # everything, fails it instead of slipping between two bound checks.
-    if not AUDIO_GAIN_DB_MIN <= gain <= AUDIO_GAIN_DB_MAX:
-        raise vol.Invalid("invalid audio gain")
+        raise vol.Invalid("invalid audio level") from err
+    # NaN and infinities fail is_integer(); 6.0 from a slider counts as 6.
+    if not number.is_integer():
+        raise vol.Invalid("invalid audio level")
+    return int(number)
+
+
+def door_audio_level_db(value: Any) -> int:
+    """Validate the door level: stock (0), +3, +6, +9 or +12 dB."""
+
+    level = _whole_db(value)
+    if level not in DOOR_AUDIO_LEVELS_DB:
+        raise vol.Invalid("invalid audio level")
+    return level
+
+
+def audio_fine_gain_db(value: Any) -> int:
+    """Validate the fine adjustment: whole dB from -10 to +10."""
+
+    gain = _whole_db(value)
+    if not AUDIO_FINE_GAIN_DB_MIN <= gain <= AUDIO_FINE_GAIN_DB_MAX:
+        raise vol.Invalid("invalid audio level")
     return gain
 
 
-def audio_gain_db_or_default(value: Any, default: float) -> float:
-    """Return a valid audio gain default for persisted options."""
+def door_audio_level_db_or_default(value: Any, default: int) -> int:
+    """Return a valid door level for persisted options."""
 
     try:
-        return audio_gain_db(value)
+        return door_audio_level_db(value)
+    except vol.Invalid:
+        return default
+
+
+def audio_fine_gain_db_or_default(value: Any, default: int) -> int:
+    """Return a valid fine adjustment for persisted options."""
+
+    try:
+        return audio_fine_gain_db(value)
     except vol.Invalid:
         return default

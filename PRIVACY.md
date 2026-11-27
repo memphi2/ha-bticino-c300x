@@ -66,6 +66,9 @@ The native agent may store:
 - Event subscription metadata and token fingerprints.
 - One-time backups of original QML and firewall files when those maintenance
   features are explicitly used.
+- On a Classe 300X with a door level above Stock: its own version of
+  `/home/root/demo/Audio_State.sh`, after a backup of the original. Stock or
+  removing the agent puts the original back.
 
 Message and memo delete actions modify the corresponding local device data by
 design.

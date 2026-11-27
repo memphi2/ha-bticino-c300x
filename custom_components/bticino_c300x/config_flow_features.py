@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from .capabilities import entry_gui_function_patch_active
-from .config_audio import audio_gain_db_or_default
+from .config_audio import audio_fine_gain_db_or_default, door_audio_level_db_or_default
 from .config_flow_camera_quality import camera_quality_offered
 from .config_flow_dashboard import (
     DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT as _DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT,
@@ -34,6 +34,7 @@ from .const import (
     CONF_AGENT_TOKEN,
     CONF_ALARM_ENTITY_ID,
     CONF_ALARM_PAGE_ENTITY_ID,
+    CONF_AUDIO_FINE_GAIN_DB,
     CONF_CALLBACK_BASE_URL,
     CONF_CREATE_HOMEASSISTANT_USER,
     CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
@@ -48,19 +49,18 @@ from .const import (
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
     CONF_DEVICE_ACTIVATIONS,
     CONF_DEVICE_UI_ENABLED,
-    CONF_DOORSTATION_AUDIO_GAIN_DB,
+    CONF_DOOR_AUDIO_LEVEL_DB,
     CONF_ENERGY_PAGE,
     CONF_MAINTENANCE_TOKEN,
     CONF_NATIVE_TWO_WAY_AUDIO,
-    CONF_RING_CAPTURE_AUDIO_GAIN_DB,
     CONF_VIDEO_ENABLED,
     CONF_VIDEO_PORT,
     CONF_VIDEO_STREAM_PATH,
     CONF_WEATHER_ENTITY_ID,
     CONF_WEBRTC_ICE_POLICY,
     DEFAULT_AGENT_PORT,
-    DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
-    DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
+    DEFAULT_AUDIO_FINE_GAIN_DB,
+    DEFAULT_DOOR_AUDIO_LEVEL_DB,
     DEFAULT_STAIR_LIGHT_N,
     DEFAULT_STAIR_LIGHT_P,
     DEFAULT_VIDEO_PORT,
@@ -105,10 +105,10 @@ RECONFIGURED_OPTION_KEYS = frozenset(
         CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
         CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
         CONF_DEVICE_UI_ENABLED,
-        CONF_DOORSTATION_AUDIO_GAIN_DB,
+        CONF_DOOR_AUDIO_LEVEL_DB,
         CONF_MAINTENANCE_TOKEN,
         CONF_NATIVE_TWO_WAY_AUDIO,
-        CONF_RING_CAPTURE_AUDIO_GAIN_DB,
+        CONF_AUDIO_FINE_GAIN_DB,
         CONF_VIDEO_ENABLED,
         CONF_VIDEO_PORT,
         CONF_VIDEO_STREAM_PATH,
@@ -197,21 +197,21 @@ def options_features_schema(
         if create_homeassistant_user is None
         else create_homeassistant_user
     )
-    default_ring_capture_audio_gain_db = audio_gain_db_or_default(
+    default_audio_fine_gain_db = audio_fine_gain_db_or_default(
         _config_default(
             config_entry,
-            CONF_RING_CAPTURE_AUDIO_GAIN_DB,
-            DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
+            CONF_AUDIO_FINE_GAIN_DB,
+            DEFAULT_AUDIO_FINE_GAIN_DB,
         ),
-        DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
+        DEFAULT_AUDIO_FINE_GAIN_DB,
     )
-    default_doorstation_audio_gain_db = audio_gain_db_or_default(
+    default_door_audio_level_db = door_audio_level_db_or_default(
         _config_default(
             config_entry,
-            CONF_DOORSTATION_AUDIO_GAIN_DB,
-            DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
+            CONF_DOOR_AUDIO_LEVEL_DB,
+            DEFAULT_DOOR_AUDIO_LEVEL_DB,
         ),
-        DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
+        DEFAULT_DOOR_AUDIO_LEVEL_DB,
     )
     default_webrtc_ice_policy = webrtc_ice_policy_or_default(
         _config_default(config_entry, CONF_WEBRTC_ICE_POLICY, DEFAULT_WEBRTC_ICE_POLICY)
@@ -221,8 +221,8 @@ def options_features_schema(
     return _reconfigure_features_schema(
         default_video_enabled,
         default_create_homeassistant_user=bool(default_create_homeassistant_user),
-        default_doorstation_audio_gain_db=default_doorstation_audio_gain_db,
-        default_ring_capture_audio_gain_db=default_ring_capture_audio_gain_db,
+        default_door_audio_level_db=default_door_audio_level_db,
+        default_audio_fine_gain_db=default_audio_fine_gain_db,
         default_webrtc_ice_policy=default_webrtc_ice_policy,
         default_native_two_way_audio=(
             _config_default(config_entry, CONF_NATIVE_TWO_WAY_AUDIO, False) is True
@@ -314,21 +314,21 @@ def current_feature_options(
             CONF_VIDEO_STREAM_PATH,
             DEFAULT_VIDEO_STREAM_PATH,
         ),
-        CONF_DOORSTATION_AUDIO_GAIN_DB: audio_gain_db_or_default(
+        CONF_DOOR_AUDIO_LEVEL_DB: door_audio_level_db_or_default(
             _config_default(
                 config_entry,
-                CONF_DOORSTATION_AUDIO_GAIN_DB,
-                DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
+                CONF_DOOR_AUDIO_LEVEL_DB,
+                DEFAULT_DOOR_AUDIO_LEVEL_DB,
             ),
-            DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
+            DEFAULT_DOOR_AUDIO_LEVEL_DB,
         ),
-        CONF_RING_CAPTURE_AUDIO_GAIN_DB: audio_gain_db_or_default(
+        CONF_AUDIO_FINE_GAIN_DB: audio_fine_gain_db_or_default(
             _config_default(
                 config_entry,
-                CONF_RING_CAPTURE_AUDIO_GAIN_DB,
-                DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
+                CONF_AUDIO_FINE_GAIN_DB,
+                DEFAULT_AUDIO_FINE_GAIN_DB,
             ),
-            DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
+            DEFAULT_AUDIO_FINE_GAIN_DB,
         ),
         CONF_WEBRTC_ICE_POLICY: webrtc_ice_policy_or_default(
             _config_default(
@@ -398,12 +398,8 @@ def reconfigure_features_schema_from_current(
     return _reconfigure_features_schema(
         bool(current[CONF_VIDEO_ENABLED]),
         default_create_homeassistant_user=bool(current[CONF_CREATE_HOMEASSISTANT_USER]),
-        default_doorstation_audio_gain_db=float(
-            current[CONF_DOORSTATION_AUDIO_GAIN_DB]
-        ),
-        default_ring_capture_audio_gain_db=float(
-            current[CONF_RING_CAPTURE_AUDIO_GAIN_DB]
-        ),
+        default_door_audio_level_db=int(current[CONF_DOOR_AUDIO_LEVEL_DB]),
+        default_audio_fine_gain_db=int(current[CONF_AUDIO_FINE_GAIN_DB]),
         default_webrtc_ice_policy=webrtc_ice_policy_or_default(
             current[CONF_WEBRTC_ICE_POLICY]
         ),
@@ -456,14 +452,14 @@ def feature_input_defaults(
         defaults.get(CONF_VIDEO_STREAM_PATH, DEFAULT_VIDEO_STREAM_PATH),
     )
     data.setdefault(
-        CONF_DOORSTATION_AUDIO_GAIN_DB,
-        defaults.get(CONF_DOORSTATION_AUDIO_GAIN_DB, DEFAULT_DOORSTATION_AUDIO_GAIN_DB),
+        CONF_DOOR_AUDIO_LEVEL_DB,
+        defaults.get(CONF_DOOR_AUDIO_LEVEL_DB, DEFAULT_DOOR_AUDIO_LEVEL_DB),
     )
     data.setdefault(
-        CONF_RING_CAPTURE_AUDIO_GAIN_DB,
+        CONF_AUDIO_FINE_GAIN_DB,
         defaults.get(
-            CONF_RING_CAPTURE_AUDIO_GAIN_DB,
-            DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
+            CONF_AUDIO_FINE_GAIN_DB,
+            DEFAULT_AUDIO_FINE_GAIN_DB,
         ),
     )
     data.setdefault(

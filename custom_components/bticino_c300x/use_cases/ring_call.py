@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..camera_media.session_lifecycle import media_stop_scope
-from ..doorstation_audio import async_ensure_doorstation_audio_gain
+from ..doorstation_audio import async_ensure_doorstation_audio_level
 from .common import (
     ensure_current_runtime,
     ensure_doorbell_call_supported,
@@ -29,7 +29,7 @@ class RingCallUseCase:
             runtime.api.async_doorbell_video_status(), entry=self._entry,
         )
         ensure_current_runtime(self._entry, runtime)
-        await async_ensure_doorstation_audio_gain(self._entry, status=status)
+        await async_ensure_doorstation_audio_level(self._entry, status=status)
         ensure_current_runtime(self._entry, runtime)
         await raise_agent_command_failed(
             runtime.api.async_answer_doorbell_call(call_id, unit=unit), entry=self._entry,

@@ -43,6 +43,11 @@ from .const import (
     MEDIA_USER_SETUP_ENTITY_KEY,
 )
 from .device_installer import installer_bundle_status
+from .doorstation_audio import (
+    agent_audio_level,
+    audio_fine_gain_db,
+    door_audio_level_db,
+)
 from .entity import entry_config_value, entry_entity_unique_id, entry_video_enabled
 from .entry_types import BticinoC300XConfigEntry
 from .fingerprint import fnv1a64_fingerprint
@@ -148,6 +153,15 @@ _SAFE_AGENT_DIAGNOSTIC_KEYS = (
     "flexisip_restart_marker",
     "flexisip_backup_marker",
     "flexisip_reference_state",
+)
+# The agent's door level and fine adjustment, and where the door level went.
+_AUDIO_LEVEL_DIAGNOSTIC_KEYS = (
+    "door_level_db",
+    "fine_gain_db",
+    "door_level_path",
+    "chip_lever",
+    "chip_gain_db",
+    "software_gain_db",
 )
 _SAFE_AGENT_DIAGNOSTIC_RUNTIME_KEYS = (
     "agent_diagnostics_updated_by",
@@ -694,6 +708,16 @@ async def _async_video_bridge_diagnostics(
     }
     # Presence, not text: a device error message is not redactable in general.
     result["last_error_present"] = bool(bridge.get("last_error"))
+    level = agent_audio_level(status)
+    result["audio_level"] = {
+        key: value
+        for key in _AUDIO_LEVEL_DIAGNOSTIC_KEYS
+        if isinstance(value := level.get(key), int | str) and len(str(value)) <= 32
+    }
+    result["audio_level_configured"] = {
+        "door_level_db": door_audio_level_db(entry),
+        "fine_gain_db": audio_fine_gain_db(entry),
+    }
     return result
 
 

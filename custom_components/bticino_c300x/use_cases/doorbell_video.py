@@ -11,7 +11,7 @@ from ..camera_media.state_machine import (
     derive_media_state,
     media_state_input_from_video_status,
 )
-from ..doorstation_audio import async_ensure_doorstation_audio_gain
+from ..doorstation_audio import async_ensure_doorstation_audio_level
 from .common import (
     ensure_current_runtime,
     ensure_doorbell_video_supported,
@@ -35,7 +35,7 @@ class DoorbellVideoUseCase:
         runtime = self._entry.runtime_data
         ensure_current_runtime(self._entry, runtime)
         if audio:
-            await async_ensure_doorstation_audio_gain(self._entry, status=status)
+            await async_ensure_doorstation_audio_level(self._entry, status=status)
             ensure_current_runtime(self._entry, runtime)
         if before_activate is not None:
             before_activate()

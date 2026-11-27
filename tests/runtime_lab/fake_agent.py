@@ -123,7 +123,12 @@ class FakeAgent:
                 {
                     "available": False,
                     "window_available": False,
-                    "bridge": {"media_owner": "idle", "available": True},
+                    "bridge": {
+                        "media_owner": "idle",
+                        "available": True,
+                        # A fresh agent at Stock: setup finds nothing to send.
+                        "audio_level": {"door_level_db": 0, "fine_gain_db": 0},
+                    },
                 }
             )
         if key == ("GET", "/api/v1/outdoor-units"):

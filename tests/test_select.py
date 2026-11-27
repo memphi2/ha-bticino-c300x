@@ -664,3 +664,35 @@ def test_a_forwarding_reading_tells_the_readiness_sensor(monkeypatch) -> None:
     asyncio.run(entity.async_update())
 
     assert sent == [("hass", "bticino_c300x_forwarding_changed", "entry-1")]
+
+
+def test_audio_codec_select_works_again_after_ha_adds_it_again() -> None:
+    """HA removes the entity and adds the same object again after an entity_id change."""
+
+    async def run() -> None:
+        entry = _audio_codec_entry()
+        entity = C300XAudioCodecSelect(entry)
+        removers: list[Any] = []
+        tasks: list[asyncio.Task[None]] = []
+        entity.hass = SimpleNamespace(
+            async_create_task=lambda coro: tasks.append(asyncio.create_task(coro)) or tasks[-1],
+        )
+        entity.async_on_remove = removers.append
+        await entity.async_added_to_hass()
+        await entity.async_update()
+        await entity.async_select_option("pcmu")
+        assert entity.extra_state_attributes["pending_option"] == "pcmu"
+
+        for remove in removers:
+            remove()
+        removers.clear()
+        await entity.async_added_to_hass()
+
+        entry.runtime_data.api.audio_codec_running_state = "pcmu"
+        entity._handle_reboot_reconnect(entry.entry_id)
+        assert len(tasks) == 1
+        await tasks[0]
+        assert entity.current_option == "pcmu"
+        assert entity.extra_state_attributes["pending_option"] is None
+
+    asyncio.run(run())

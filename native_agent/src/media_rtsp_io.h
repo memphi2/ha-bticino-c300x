@@ -32,6 +32,13 @@ int c300x_rtsp_read_timeout(int teardown_seconds, int session_seconds, long long
 ssize_t c300x_rtsp_send_pair(struct c300x_rtsp_writer *writer,
                             int fd, const void *first, size_t first_len,
                             const void *second, size_t second_len);
+/* A deadline on the writers' clock, ms from now. */
+long long c300x_rtsp_deadline_in(int ms);
+/* c300x_rtsp_send_pair that waits for the connection no longer than
+ * deadline_ms: once it has passed, one attempt that does not wait. */
+ssize_t c300x_rtsp_send_pair_by(struct c300x_rtsp_writer *writer,
+                               int fd, const void *first, size_t first_len,
+                               const void *second, size_t second_len, long long deadline_ms);
 /* Frame length if sent, 0 if dropped or its unsent suffix is retained, -1 on
  * failure. One partial frame per connection is finished before any subsequent
  * media or RTSP response. Input buffers are never borrowed after return. */

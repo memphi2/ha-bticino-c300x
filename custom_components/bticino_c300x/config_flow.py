@@ -180,6 +180,7 @@ from .const import (
     CONF_AGENT_HOST,
     CONF_AGENT_PORT,
     CONF_AGENT_TOKEN,
+    CONF_AUDIO_FINE_GAIN_DB,
     CONF_BOOTSTRAP_INSTALL_AGENT,
     CONF_CALLBACK_BASE_URL,
     CONF_CREATE_HOMEASSISTANT_USER,
@@ -194,13 +195,12 @@ from .const import (
     CONF_DEVICE_UI_ENABLED,
     CONF_DISPLAY_FOLLOWUP_PENDING,
     CONF_DISPLAY_SETTING_PENDING,
-    CONF_DOORSTATION_AUDIO_GAIN_DB,
+    CONF_DOOR_AUDIO_LEVEL_DB,
     CONF_ENERGY_PAGE,
     CONF_EVENT_WEBHOOK_ID,
     CONF_EVENT_WEBHOOK_TOKEN,
     CONF_MAINTENANCE_TOKEN,
     CONF_NATIVE_TWO_WAY_AUDIO,
-    CONF_RING_CAPTURE_AUDIO_GAIN_DB,
     CONF_ROTATE_SHARED_SECRET,
     CONF_SHARED_SECRET,
     CONF_VIDEO_ENABLED,
@@ -1021,12 +1021,8 @@ class BticinoC300XConfigFlow(ModelTextConfigFlow, config_flow_auth.AuthFlowSteps
                                 feature_defaults[CONF_CREATE_HOMEASSISTANT_USER],
                             )
                         ),
-                        default_doorstation_audio_gain_db=float(
-                            feature_data[CONF_DOORSTATION_AUDIO_GAIN_DB]
-                        ),
-                        default_ring_capture_audio_gain_db=float(
-                            feature_data[CONF_RING_CAPTURE_AUDIO_GAIN_DB]
-                        ),
+                        default_door_audio_level_db=int(feature_data[CONF_DOOR_AUDIO_LEVEL_DB]),
+                        default_audio_fine_gain_db=int(feature_data[CONF_AUDIO_FINE_GAIN_DB]),
                         default_webrtc_ice_policy=_webrtc_ice_policy_or_default(
                             user_input.get(
                                 CONF_WEBRTC_ICE_POLICY,

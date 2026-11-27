@@ -23,9 +23,11 @@ from custom_components.bticino_c300x.config_flow_features import (
 from custom_components.bticino_c300x.config_flow_input import _feature_input
 from custom_components.bticino_c300x.config_schemas import setup_features_schema
 from custom_components.bticino_c300x.const import (
-    CONF_DOORSTATION_AUDIO_GAIN_DB,
+    CONF_AUDIO_FINE_GAIN_DB,
+    CONF_DOOR_AUDIO_LEVEL_DB,
     CONF_NATIVE_TWO_WAY_AUDIO,
     CONF_VIDEO_ENABLED,
+    RETIRED_AUDIO_OPTION_KEYS,
 )
 
 
@@ -96,10 +98,10 @@ def test_native_audio_choice_is_retained_on_success_and_validation_error(kind, e
         CONF_VIDEO_ENABLED: True,
         CONF_NATIVE_TWO_WAY_AUDIO: enabled,
         # A changed level: the options flow writes nothing for an unchanged area.
-        CONF_DOORSTATION_AUDIO_GAIN_DB: 99 if invalid else 1,
+        CONF_DOOR_AUDIO_LEVEL_DB: 99 if invalid else "3",
     }))
     if invalid:
-        assert result["errors"] == {CONF_DOORSTATION_AUDIO_GAIN_DB: "invalid_audio_gain"}
+        assert result["errors"] == {CONF_DOOR_AUDIO_LEVEL_DB: "invalid_audio_level"}
         _assert_form_audio(result["data_schema"], enabled)
         if kind == "options":
             areas.hass.config_entries.async_update_entry.assert_not_called()
@@ -123,3 +125,22 @@ def test_reconfigure_removes_stale_native_audio_override():
     entry = SimpleNamespace(options={CONF_NATIVE_TWO_WAY_AUDIO: True, "unrelated": "keep"})
     _clear_reconfigured_option_overrides(hass, entry, {CONF_NATIVE_TWO_WAY_AUDIO: False})
     assert updates == [{"unrelated": "keep"}]
+
+
+def test_an_entry_with_the_retired_audio_keys_loads_and_saving_drops_them():
+    entry = SimpleNamespace(
+        data={CONF_VIDEO_ENABLED: True},
+        options={"doorstation_audio_gain_db": 15.5, "ring_capture_audio_gain_db": -20.0},
+        runtime_data=None,
+    )
+    current = current_feature_options(entry)
+    assert (current[CONF_DOOR_AUDIO_LEVEL_DB], current[CONF_AUDIO_FINE_GAIN_DB]) == (0, 0)
+    assert options_features_schema(entry)({})[CONF_DOOR_AUDIO_LEVEL_DB] == "0"
+    areas = _OptionsAreas(entry)
+    flow = areas._flow()
+    flow.async_show_form = lambda **kwargs: kwargs
+    asyncio.run(flow.async_step_features({CONF_VIDEO_ENABLED: True, CONF_DOOR_AUDIO_LEVEL_DB: "9"}))
+    saved = areas.hass.config_entries.async_update_entry.call_args.kwargs["options"]
+    assert saved[CONF_DOOR_AUDIO_LEVEL_DB] == 9
+    assert saved[CONF_AUDIO_FINE_GAIN_DB] == 0
+    assert not set(RETIRED_AUDIO_OPTION_KEYS) & set(saved)

@@ -9,7 +9,7 @@ from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.bticino_c300x.data import C300XRuntimeResources
 from custom_components.bticino_c300x.doorstation_audio import (
-    async_ensure_doorstation_audio_gain,
+    async_ensure_doorstation_audio_level,
 )
 from custom_components.bticino_c300x.use_cases.doorbell_video import (
     DoorbellVideoUseCase,
@@ -29,7 +29,7 @@ def test_media_setup_stays_on_its_original_runtime(action, wait_at, invalidate):
         async def wait(*args):
             entered.set()
             await finish.wait()
-            return {"bridge": {"doorstation_audio_gain_db": 0}}
+            return {"bridge": {"audio_level": {"door_level_db": 0, "fine_gain_db": 0}}}
 
         def runtime():
             return SimpleNamespace(
@@ -37,7 +37,7 @@ def test_media_setup_stays_on_its_original_runtime(action, wait_at, invalidate):
                               ("doorbell_video", "doorbell_call")},
                 api=SimpleNamespace(
                     async_doorbell_video_status=AsyncMock(return_value={}),
-                    async_set_doorstation_audio_gain_db=AsyncMock(),
+                    async_set_doorstation_audio_level=AsyncMock(),
                     async_activate_doorbell_video=AsyncMock(),
                     async_answer_doorbell_call=AsyncMock(),
                 ), resources=C300XRuntimeResources(),
@@ -45,13 +45,13 @@ def test_media_setup_stays_on_its_original_runtime(action, wait_at, invalidate):
 
         old, replacement = runtime(), runtime()
         method = (old.api.async_doorbell_video_status if wait_at == "status"
-                  else old.api.async_set_doorstation_audio_gain_db)
+                  else old.api.async_set_doorstation_audio_level)
         method.side_effect = wait
         entry = SimpleNamespace(runtime_data=old, data={"video_enabled": True},
-                                options={"doorstation_audio_gain_db": 6})
+                                options={"door_audio_level_db": 6})
         operation = {"activate": DoorbellVideoUseCase(entry).activate,
                      "answer": RingCallUseCase(entry).answer,
-                     "gain": lambda: async_ensure_doorstation_audio_gain(entry)}[action]
+                     "gain": lambda: async_ensure_doorstation_audio_level(entry)}[action]
         task = asyncio.create_task(operation())
         await asyncio.wait_for(entered.wait(), 1)
         if invalidate == "replace":
@@ -67,7 +67,7 @@ def test_media_setup_stays_on_its_original_runtime(action, wait_at, invalidate):
             current.api.async_activate_doorbell_video.assert_not_awaited()
             current.api.async_answer_doorbell_call.assert_not_awaited()
         replacement.api.async_doorbell_video_status.assert_not_awaited()
-        replacement.api.async_set_doorstation_audio_gain_db.assert_not_awaited()
-        assert old.api.async_set_doorstation_audio_gain_db.await_count == (wait_at == "gain")
+        replacement.api.async_set_doorstation_audio_level.assert_not_awaited()
+        assert old.api.async_set_doorstation_audio_level.await_count == (wait_at == "gain")
 
     asyncio.run(run())

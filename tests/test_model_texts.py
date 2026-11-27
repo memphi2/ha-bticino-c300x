@@ -125,6 +125,26 @@ ADDED_SINCE_2_10_0 = frozenset({
     "options/abort/unsupported_display",
     "options/step/init/menu_option_descriptions/dashboard_alarm",
     "options/step/init/menu_options/dashboard_alarm",
+    # Door level and fine adjustment replace the two audio gains.
+    "config/error/invalid_audio_level",
+    "config/step/reconfigure_features/data/audio_fine_gain_db",
+    "config/step/reconfigure_features/data/door_audio_level_db",
+    "config/step/reconfigure_features/data_description/audio_fine_gain_db",
+    "config/step/reconfigure_features/data_description/door_audio_level_db",
+    "config/step/user_features/data/audio_fine_gain_db",
+    "config/step/user_features/data/door_audio_level_db",
+    "config/step/user_features/data_description/audio_fine_gain_db",
+    "config/step/user_features/data_description/door_audio_level_db",
+    "options/error/invalid_audio_level",
+    "options/step/features/data/audio_fine_gain_db",
+    "options/step/features/data/door_audio_level_db",
+    "options/step/features/data_description/audio_fine_gain_db",
+    "options/step/features/data_description/door_audio_level_db",
+    "selector/door_audio_level/options/0",
+    "selector/door_audio_level/options/12",
+    "selector/door_audio_level/options/3",
+    "selector/door_audio_level/options/6",
+    "selector/door_audio_level/options/9",
 })
 # Texts of 2.10.0 that read differently now: the SSH package message names the
 # package and the way out, the service name lost the model (neutral names), the
@@ -137,11 +157,21 @@ CHANGED_SINCE_2_10_0 = frozenset({
     "issues/device_agent_update_required/fix_flow/step/ssh_install/description",
     "services/capture_doorbell_call/name",
 })
-# Texts of 2.10.0 that 3.1.0 removed with the outdoor units and calls: the agent
-# event entity, the doorbell state sensor, the station's door button (each unit
-# has its own) and the entry id of the services, which take a target now
-# (docs/dev/multi-outdoor-units.md).
+# Texts of 2.10.0 that are gone: 3.1.0 removed the agent event entity, the
+# doorbell state sensor, the station's door button (each unit has its own) and
+# the entry id of the services, which take a target now
+# (docs/dev/multi-outdoor-units.md); the two audio gains became the door level
+# and the fine adjustment.
 REMOVED_SINCE_2_10_0 = frozenset({
+    "config/error/invalid_audio_gain",
+    "config/step/reconfigure_features/data/doorstation_audio_gain_db",
+    "config/step/reconfigure_features/data/ring_capture_audio_gain_db",
+    "config/step/reconfigure_features/data_description/doorstation_audio_gain_db",
+    "config/step/reconfigure_features/data_description/ring_capture_audio_gain_db",
+    "config/step/user_features/data/doorstation_audio_gain_db",
+    "config/step/user_features/data/ring_capture_audio_gain_db",
+    "config/step/user_features/data_description/doorstation_audio_gain_db",
+    "config/step/user_features/data_description/ring_capture_audio_gain_db",
     "entity/button/door_unlock/name",
     "entity/event/agent_event/name",
     "entity/event/agent_event/state_attributes/event_type/state/activation_executed",
@@ -171,16 +201,22 @@ REMOVED_SINCE_2_10_0 = frozenset({
     "entity/sensor/doorbell_state/state/idle",
     "entity/sensor/doorbell_state/state/ringing",
     "entity/sensor/doorbell_state/state/view_requested",
+    "options/error/invalid_audio_gain",
+    "options/step/features/data/doorstation_audio_gain_db",
+    "options/step/features/data/ring_capture_audio_gain_db",
+    "options/step/features/data_description/doorstation_audio_gain_db",
+    "options/step/features/data_description/ring_capture_audio_gain_db",
     "services/camera_picture/fields/entry_id/name",
 })
-# sha256 over every text of 2.10.0 (f4f75ea3) but the changed and removed ones, per file:
+# sha256 over every text of 2.10.0 (f4f75ea3) but the changed and the removed
+# ones, per file:
 #   json.dumps({"a/b/c": text}, sort_keys=True, ensure_ascii=False)
 DIGESTS_2_10_0 = {
-    "base": "6b5f80e7a905c052598d6314f4d1dda0074d7dbf141ec15876ca5034574fdcc1",
-    "en": "6b5f80e7a905c052598d6314f4d1dda0074d7dbf141ec15876ca5034574fdcc1",
-    "de": "8d270cfcc488ef70132e1b8516be942dc7eb9097fd58d3580b1ae770eaeac4e8",
-    "it": "e099c26c0f0126a19caeb160e8c06a32c374c75c26926ed031f08094dca91c89",
-    "fr": "227f63ce639fd659804c8733232910c57b1784d04aec4efdd9d176f65db8e855",
+    "base": "2e6c780cad1732c6e4819688eb3ab6175e958f422174308553892f7ab34e0e56",
+    "en": "2e6c780cad1732c6e4819688eb3ab6175e958f422174308553892f7ab34e0e56",
+    "de": "f4272454e56fac9007c25cf5e7a902dca61ca2977e6e4c04403c974addf589db",
+    "it": "99a386a8334361654b1c7266f80606c029a80043f389346ee68b8c2c14a3954a",
+    "fr": "bffb22f19e7451a89a0db219ed58f63f189fe8ab0585287aa6f7c06cceaeb8b2",
 }
 
 

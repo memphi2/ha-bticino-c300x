@@ -23,6 +23,8 @@ static struct {
     int hook_ours;
     int observed;
     int chip_db;
+    /* Counts every set(): a chip read begun before one is stale. */
+    unsigned generation;
     long long chip_checked_ms;
     const char *lever;
     struct c300x_audio_gain gain;
@@ -119,6 +121,7 @@ int c300x_audio_level_set(int door_level_db, int fine_gain_db)
     /* Without our hook the chip is at the profile's value again. */
     level.chip_db = ours ? level.chip_db : 0;
     level.chip_checked_ms = 0;
+    level.generation++;
     rebuild_locked();
     pthread_mutex_unlock(&level_lock);
     pthread_mutex_unlock(&set_lock);
@@ -153,13 +156,16 @@ size_t c300x_audio_level_json(char *out, size_t out_len)
     return written > 0 && (size_t)written < out_len ? (size_t)written : 0;
 }
 
-/* Reads the chip outside the lock, at most every CHIP_CHECK_MS. */
+/* Reads the chip outside the lock, at most every CHIP_CHECK_MS. A set()
+ * meanwhile wins: its result was read with the old hook and is dropped; the
+ * next packet reads again. */
 static void refresh_chip(void)
 {
     long long now = c300x_monotonic_ms();
     int check;
     int ours;
     int chip_db = 0;
+    unsigned generation;
 
     pthread_mutex_lock(&level_lock);
     check = level.chip_checked_ms == 0 || now - level.chip_checked_ms >= CHIP_CHECK_MS;
@@ -167,6 +173,7 @@ static void refresh_chip(void)
         level.chip_checked_ms = now;
     }
     ours = level.hook_ours;
+    generation = level.generation;
     pthread_mutex_unlock(&level_lock);
     if (!check) {
         return;
@@ -175,9 +182,11 @@ static void refresh_chip(void)
         chip_db = 0;
     }
     pthread_mutex_lock(&level_lock);
-    level.chip_db = chip_db;
-    level.observed = 1;
-    rebuild_locked();
+    if (generation == level.generation) {
+        level.chip_db = chip_db;
+        level.observed = 1;
+        rebuild_locked();
+    }
     pthread_mutex_unlock(&level_lock);
 }
 

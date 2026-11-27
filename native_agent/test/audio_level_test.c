@@ -1,12 +1,31 @@
 /* Door level and fine adjustment: the gain curve, the chip hook and the
  * software share. Built with -DSTOCK_HOOK_SHA256/-DIP_PROFILE_SHA256 of the
  * synthetic stand-ins the runner writes; argv[1] is a scratch directory. */
+#include <assert.h>
+
 #include "../src/audio_gain.c"
 #include "../src/audio_chip.c"
+/* The chip read of audio_level.c, with a set() that can come in while it
+ * runs outside the lock. */
+int chip_read_racing(int *db);
+#define c300x_audio_chip_current_db chip_read_racing
 #include "../src/audio_level.c"
+#undef c300x_audio_chip_current_db
 
-#include <assert.h>
 #include <sys/stat.h>
+
+static int race_door_db = -1;
+
+int chip_read_racing(int *db)
+{
+    int ok = c300x_audio_chip_current_db(db);
+    if (race_door_db >= 0) {
+        int door = race_door_db;
+        race_door_db = -1;
+        assert(c300x_audio_level_set(door, 0));
+    }
+    return ok;
+}
 
 static int model = C300X_DEVICE_MODEL_C300X;
 enum c300x_device_model c300x_device_model(void) { return (enum c300x_device_model)model; }
@@ -372,6 +391,18 @@ static void test_level(void)
     for (size_t index = 0; index < sizeof(pcmu); index++) {
         assert(pcmu[index] == level.gain.pcmu[index]);
     }
+
+    /* A set() while a chip read runs: the read was made with the old hook
+     * and never lands; the packet gets the new level at once. */
+    put("mark", "15\n", 0644);
+    put("sout", "15\n", 0644);
+    assert(c300x_audio_level_set(12, 0));
+    assert(pass(1000) == c300x_pcmu_decode(c300x_pcmu_encode(1000)) && level.chip_db == 12);
+    level.chip_checked_ms = 0;
+    race_door_db = 0;
+    assert(pass(1000) == c300x_pcmu_decode(c300x_pcmu_encode(1000)));
+    assert(race_door_db == -1 && level.chip_db == 0 && level.gain.db == 0);
+    assert(atoi(get("sout")) == 11 && !exists("mark"));
 
     /* Stock puts the stub back; no lever means the full level in software. */
     assert(c300x_audio_level_set(0, 0));

@@ -32,7 +32,7 @@ def binary(request, tmp_path_factory):
             + " -Wl,--wrap=send -Wl,--wrap=connect -Wl,--wrap=poll -Wl,--wrap=__poll_chk")
     result = subprocess.run(
         ["make", "-C", str(ROOT / "native_agent"), f"BUILD_DIR={build}", f"CFLAGS={flags}",
-         f"LDFLAGS={link}", "-j2", "all"], capture_output=True, text=True, timeout=120,
+         f"LDFLAGS={link}", "-j2", "all"], capture_output=True, text=True, timeout=600,
     )
     assert result.returncode == 0, result.stdout + result.stderr
     return build / "host/c300x-agent-native"

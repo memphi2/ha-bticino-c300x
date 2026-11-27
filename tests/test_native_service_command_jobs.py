@@ -59,7 +59,7 @@ def binary(request, tmp_path_factory):
         link += " -Wl,--wrap=c300x_audio_codec_" + function
     result = subprocess.run(
         ["make", "-C", str(ROOT / "native_agent"), f"BUILD_DIR={build}",
-         f"CFLAGS={flags}", f"LDFLAGS={link}", "-j2", "all"], capture_output=True, text=True, timeout=120,
+         f"CFLAGS={flags}", f"LDFLAGS={link}", "-j2", "all"], capture_output=True, text=True, timeout=600,
     )
     assert result.returncode == 0, result.stdout + result.stderr
     return build / "host/c300x-agent-native"

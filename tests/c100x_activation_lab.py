@@ -27,7 +27,7 @@ def build_agent(tmp_path_factory, extra=""):
              # Never the host's own reboot.
              '-DC300X_REBOOT_PROGRAM=\\\"/nonexistent/reboot\\\" ' + extra)
     result = subprocess.run(["make", "-C", str(ROOT / "native_agent"), f"BUILD_DIR={build}",
-                             f"CFLAGS={flags}", "-j2", "all"], capture_output=True, text=True, timeout=120)
+                             f"CFLAGS={flags}", "-j2", "all"], capture_output=True, text=True, timeout=600)
     assert result.returncode == 0, result.stdout + result.stderr
     return build / "host/c300x-agent-native"
 

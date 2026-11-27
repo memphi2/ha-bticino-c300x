@@ -198,11 +198,18 @@ class FakeRuntimeData:
     diagnostics: Any = None
 
 
+# A 3.1 entry: the station id and its units are known.
+_ENTRY_DATA = {
+    "station_id": "c300x-0123456789ab",
+    "outdoor_units": {"default_unit": "20", "units": [{"id": "20", "where": "20", "default": True}]},
+}
+
+
 @dataclass(slots=True)
 class FakeEntry:
     runtime_data: FakeRuntimeData
     entry_id: str = "entry-1"
-    data: dict[str, Any] = field(default_factory=dict)
+    data: dict[str, Any] = field(default_factory=lambda: dict(_ENTRY_DATA))
     options: dict[str, Any] = field(default_factory=dict)
 
 
@@ -1237,7 +1244,7 @@ def test_frontend_card_repair_initializes_missing_lovelace_config(monkeypatch) -
             unique_id: str,
         ) -> str | None:
             assert platform == "bticino_c300x"
-            if domain == "camera" and unique_id == "entry-1_doorbell_camera":
+            if domain == "camera" and unique_id == "c300x-0123456789ab_unit_20_camera":
                 return "camera.bticino_c300x_doorbell_camera"
             return None
 
@@ -1299,7 +1306,7 @@ def test_frontend_card_repair_rejects_invalid_lovelace_configs(monkeypatch) -> N
             unique_id: str,
         ) -> str | None:
             assert platform == "bticino_c300x"
-            if domain == "camera" and unique_id == "entry-1_doorbell_camera":
+            if domain == "camera" and unique_id == "c300x-0123456789ab_unit_20_camera":
                 return "camera.bticino_c300x_doorbell_camera"
             return None
 
@@ -2059,7 +2066,7 @@ def test_frontend_card_repair_adds_storage_lovelace_view(monkeypatch) -> None:
             unique_id: str,
         ) -> str | None:
             assert platform == "bticino_c300x"
-            if domain == "camera" and unique_id == "entry-1_doorbell_camera":
+            if domain == "camera" and unique_id == "c300x-0123456789ab_unit_20_camera":
                 return "camera.bticino_c300x_doorbell_camera"
             if domain == "sensor" and unique_id == "entry-1_doorbell_state":
                 return "sensor.bticino_c300x_tuerklingel_status"
@@ -2140,7 +2147,7 @@ def test_frontend_card_repair_replaces_legacy_split_cards(monkeypatch) -> None:
             unique_id: str,
         ) -> str | None:
             assert platform == "bticino_c300x"
-            if domain == "camera" and unique_id == "entry-1_doorbell_camera":
+            if domain == "camera" and unique_id == "c300x-0123456789ab_unit_20_camera":
                 return "camera.bticino_c300x_doorbell_camera"
             return None
 
@@ -2234,7 +2241,7 @@ def test_frontend_card_repair_cleans_all_lovelace_views(monkeypatch) -> None:
             unique_id: str,
         ) -> str | None:
             assert platform == "bticino_c300x"
-            if domain == "camera" and unique_id == "entry-1_doorbell_camera":
+            if domain == "camera" and unique_id == "c300x-0123456789ab_unit_20_camera":
                 return "camera.bticino_c300x_doorbell_camera"
             return None
 
@@ -2346,7 +2353,7 @@ def test_frontend_card_repair_adds_cards_to_selected_dashboard_and_view(
             unique_id: str,
         ) -> str | None:
             assert platform == "bticino_c300x"
-            if domain == "camera" and unique_id == "entry-1_doorbell_camera":
+            if domain == "camera" and unique_id == "c300x-0123456789ab_unit_20_camera":
                 return "camera.bticino_c300x_doorbell_camera"
             if domain == "sensor" and unique_id == "entry-1_doorbell_state":
                 return "sensor.bticino_c300x_tuerklingel_status"

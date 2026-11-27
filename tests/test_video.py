@@ -17,14 +17,22 @@ def test_transparent_camera_proxy_image_is_png() -> None:
     assert TRANSPARENT_CAMERA_PROXY_IMAGE.startswith(b"\x89PNG\r\n\x1a\n")
 
 
-def test_doorbell_camera_unique_id_uses_entry_id_suffix() -> None:
-    entry = SimpleNamespace(entry_id="abc123")
+_ENTRY_DATA = {
+    "station_id": "c300x-0123456789ab",
+    "outdoor_units": {"default_unit": "20", "units": [{"id": "20", "where": "20", "default": True}]},
+}
 
-    assert doorbell_camera_unique_id(entry) == "abc123_doorbell_camera"
+
+def test_doorbell_camera_unique_id_is_the_default_units_camera() -> None:
+    entry = SimpleNamespace(entry_id="abc123", data=_ENTRY_DATA)
+
+    assert doorbell_camera_unique_id(entry) == "c300x-0123456789ab_unit_20_camera"
+    # Before the station named its units there is no media camera.
+    assert doorbell_camera_unique_id(SimpleNamespace(entry_id="abc123", data={})) is None
 
 
 def test_resolve_doorbell_camera_entity_id_uses_entity_registry(monkeypatch) -> None:
-    entry = SimpleNamespace(entry_id="abc123")
+    entry = SimpleNamespace(entry_id="abc123", data=_ENTRY_DATA)
     calls: list[tuple[str, str, str]] = []
 
     class _Registry:
@@ -35,7 +43,9 @@ def test_resolve_doorbell_camera_entity_id_uses_entity_registry(monkeypatch) -> 
     monkeypatch.setattr(video_module.er, "async_get", lambda _hass: _Registry())
 
     assert resolve_doorbell_camera_entity_id("hass", entry) == "camera.front_door"
-    assert calls == [("camera", "bticino_c300x", "abc123_doorbell_camera")]
+    assert calls == [("camera", "bticino_c300x", "c300x-0123456789ab_unit_20_camera")]
+    assert resolve_doorbell_camera_entity_id("hass", SimpleNamespace(entry_id="abc123", data={})) is None
+    assert len(calls) == 1
 
 
 def test_resolve_doorbell_camera_entity_id_handles_missing_registry(monkeypatch) -> None:

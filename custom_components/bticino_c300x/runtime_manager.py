@@ -366,7 +366,6 @@ class C300XRuntimeManager:
         from .call_sync import (
             async_refresh_calls,
             async_refresh_units,
-            calls_supported,
             load_stored_units,
         )
         from .identity_migration import (
@@ -376,7 +375,7 @@ class C300XRuntimeManager:
 
         registry = self.entry.runtime_data.calls
         load_stored_units(self.entry, registry)
-        if not (self.connection_state.available and calls_supported(self.capabilities)):
+        if not self.connection_state.available:
             return
         await async_refresh_units(self.hass, self.entry, during_setup=True)
         await async_refresh_calls(self.hass, self.entry)

@@ -16,7 +16,6 @@ from .call_registry import (
     units_from_stored,
     units_to_stored,
 )
-from .capabilities import capability_is_supported
 from .const import CONF_OUTDOOR_UNITS, DOMAIN
 from .entry_types import BticinoC300XConfigEntry
 from .error_text import compact_error_text
@@ -31,12 +30,6 @@ CALL_EVENT_TYPES = frozenset({
     "call_ended",
 })
 _UNIT_BINDING_EVENTS = frozenset({"doorbell_pressed", "call_caller_identified", "call_view_started"})
-
-
-def calls_supported(capabilities: Any) -> bool:
-    """The agent owns calls and outdoor units (API 2)."""
-
-    return isinstance(capabilities, dict) and capability_is_supported(capabilities, "calls")
 
 
 def entry_call_registry(entry: BticinoC300XConfigEntry) -> C300XCallRegistry | None:
@@ -63,7 +56,7 @@ async def async_refresh_units(
 
     runtime = getattr(entry, "runtime_data", None)
     registry = entry_call_registry(entry)
-    if runtime is None or registry is None or not calls_supported(runtime.capabilities):
+    if runtime is None or registry is None:
         return False
     try:
         payload = await runtime.api.async_outdoor_units()
@@ -101,7 +94,7 @@ async def async_refresh_calls(hass: HomeAssistant, entry: BticinoC300XConfigEntr
 
     runtime = getattr(entry, "runtime_data", None)
     registry = entry_call_registry(entry)
-    if runtime is None or registry is None or not calls_supported(runtime.capabilities):
+    if runtime is None or registry is None:
         return
     try:
         payload = await runtime.api.async_calls()

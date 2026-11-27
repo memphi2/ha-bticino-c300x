@@ -22,8 +22,8 @@ from .call_sync import entry_call_registry
 from .const import DOMAIN
 from .entity import C300XEntity
 from .entry_types import BticinoC300XConfigEntry
-from .identity import default_unit_id, unit_unique_id
-from .unit_entity import DeviceInfo, async_track_outdoor_units, unit_device_info
+from .identity import default_unit_id, unit_device_identifier, unit_unique_id
+from .unit_entity import DeviceInfo, async_track_outdoor_units
 from .unit_platforms import C300XUnitCamera
 
 
@@ -32,12 +32,18 @@ def async_add_unit_cameras(
     hass: HomeAssistant,
     entry: BticinoC300XConfigEntry,
     add_entities: Callable[[Iterable[Entity]], None],
+    media_camera: Callable[[], Entity],
 ) -> None:
-    """A camera for every outdoor unit but the default one, which has the media camera."""
+    """The media camera for the default outdoor unit, a camera for every other unit.
+
+    Each comes with its unit: before the station named its units there is none.
+    """
 
     def build(unit: OutdoorUnit) -> list[Entity]:
         registry = entry_call_registry(entry)
-        return [] if registry is None or unit.id == registry.default_unit else [C300XUnitCamera(entry, unit)]
+        if registry is None:
+            return []
+        return [media_camera() if unit.id == registry.default_unit else C300XUnitCamera(entry, unit)]
 
     async_track_outdoor_units(hass, entry, add_entities, build)
 
@@ -66,10 +72,9 @@ class MediaCameraUnit(C300XEntity):
 
     @property
     def device_info(self) -> DeviceInfo:
-        registry = entry_call_registry(self._entry)
-        unit = registry.unit(default_unit_id(self._entry)) if registry is not None else None
-        # Before the station named its units: the station's device.
-        return unit_device_info(self._entry, unit) if unit is not None else super().device_info
+        # Built with the default unit (async_add_unit_cameras), so it is known.
+        unit = default_unit_id(self._entry) or ""
+        return DeviceInfo(identifiers={unit_device_identifier(self._entry, unit)})
 
     def _call_attributes(self) -> dict[str, Any]:
         return current_call_attributes(getattr(self, "hass", None), self._entry)

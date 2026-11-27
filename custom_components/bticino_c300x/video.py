@@ -29,7 +29,7 @@ _CAMERA_PROXY_IMAGE_B64 = (
 TRANSPARENT_CAMERA_PROXY_IMAGE = b64decode(_CAMERA_PROXY_IMAGE_B64)
 
 
-def doorbell_camera_unique_id(entry: BticinoC300XConfigEntry) -> str:
+def doorbell_camera_unique_id(entry: BticinoC300XConfigEntry) -> str | None:
     """Return the stable unique ID used by the doorbell camera entity."""
 
     return media_camera_unique_id(entry)
@@ -41,14 +41,11 @@ def resolve_doorbell_camera_entity_id(
 ) -> str | None:
     """Resolve the current doorbell camera entity ID from the entity registry."""
 
+    unique_id = doorbell_camera_unique_id(entry)
     registry = er.async_get(hass)
-    if registry is None or not hasattr(registry, "async_get_entity_id"):
+    if unique_id is None or registry is None or not hasattr(registry, "async_get_entity_id"):
         return None
-    entity_id = registry.async_get_entity_id(
-        CAMERA_DOMAIN,
-        DOMAIN,
-        doorbell_camera_unique_id(entry),
-    )
+    entity_id = registry.async_get_entity_id(CAMERA_DOMAIN, DOMAIN, unique_id)
     return entity_id if isinstance(entity_id, str) else None
 
 

@@ -273,29 +273,50 @@ def test_failed_probe_does_not_block_next_call_or_manual_retry() -> None:
     assert ring.state is MediaState.RING_PENDING
 
 
-def test_camera_setup_entry_adds_entity_only_when_capability_is_supported() -> None:
+def test_camera_setup_entry_adds_entity_only_when_capability_is_supported(monkeypatch) -> None:
+    from custom_components.bticino_c300x import camera_units
+    from custom_components.bticino_c300x._api_calls import normalize_outdoor_units
+    from custom_components.bticino_c300x.call_registry import C300XCallRegistry
+    from custom_components.bticino_c300x.const import (
+        CONF_OUTDOOR_UNITS,
+        CONF_STATION_ID,
+    )
+
+    units = {"default_unit": "20", "units": [
+        {"id": "20", "where": "20", "default": True}, {"id": "21", "where": "21"},
+    ]}
+
+    def track(_hass, entry, add_entities, build):
+        registry = entry.runtime_data.calls
+        add_entities([entity for unit in registry.units.values() for entity in build(unit)])
+
+    monkeypatch.setattr(camera_units, "async_track_outdoor_units", track)
+
     async def _run() -> None:
-        unsupported = _FakeEntry()
-        unsupported.runtime_data.capabilities = {"doorbell_video": {"supported": False}}
-        supported = _FakeEntry()
-        supported.runtime_data.capabilities = {"doorbell_video": {"supported": True}}
-        unsupported_entities: list[Any] = []
-        supported_entities: list[Any] = []
+        entries = {}
+        for supported in (False, True):
+            entry = _FakeEntry(data={CONF_STATION_ID: "c300x-0123456789ab", CONF_OUTDOOR_UNITS: units})
+            entry.runtime_data.capabilities = {"doorbell_video": {"supported": supported}}
+            entry.runtime_data.calls = C300XCallRegistry()
+            entry.runtime_data.calls.set_units(normalize_outdoor_units(units))
+            added: list[Any] = []
+            await async_setup_entry(SimpleNamespace(data={}), entry, added.extend)  # type: ignore[arg-type]
+            entries[supported] = added
 
-        await async_setup_entry(
-            SimpleNamespace(data={}),  # type: ignore[arg-type]
-            unsupported,  # type: ignore[arg-type]
-            unsupported_entities.extend,
-        )
-        await async_setup_entry(
-            SimpleNamespace(data={}),  # type: ignore[arg-type]
-            supported,  # type: ignore[arg-type]
-            supported_entities.extend,
-        )
+        assert entries[False] == []
+        # The media camera comes with the default unit, a plain camera with every other.
+        media, other = entries[True]
+        assert isinstance(media, C300XDoorbellCamera)
+        assert not isinstance(other, C300XDoorbellCamera)
+        assert media.unique_id == "c300x-0123456789ab_unit_20_camera"
 
-        assert unsupported_entities == []
-        assert len(supported_entities) == 1
-        assert isinstance(supported_entities[0], C300XDoorbellCamera)
+        # Before the station named its units there is no media camera.
+        empty = _FakeEntry(data={CONF_STATION_ID: "c300x-0123456789ab"})
+        empty.runtime_data.capabilities = {"doorbell_video": {"supported": True}}
+        empty.runtime_data.calls = C300XCallRegistry()
+        added = []
+        await async_setup_entry(SimpleNamespace(data={}), empty, added.extend)  # type: ignore[arg-type]
+        assert added == []
 
     asyncio.run(_run())
 

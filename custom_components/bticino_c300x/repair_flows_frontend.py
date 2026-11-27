@@ -252,10 +252,12 @@ def _resolve_doorbell_camera_entity_id(hass: HomeAssistant, entry: Any) -> str |
 def _resolve_registry_entity_id(
     hass: HomeAssistant,
     domain: str,
-    unique_id: str,
+    unique_id: str | None,
 ) -> str | None:
     """Resolve a registered entity id for one C300X unique id."""
 
+    if unique_id is None:
+        return None
     try:
         from homeassistant.helpers import entity_registry as er  # noqa: PLC0415
     except (ImportError, ModuleNotFoundError):

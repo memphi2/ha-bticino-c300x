@@ -65,6 +65,7 @@ def _control_entity(
         return None
     entry = resolve_entry(call)
     registry = er.async_get(hass)
-    entity_id = registry.async_get_entity_id("camera", DOMAIN, media_camera_unique_id(entry))
+    unique_id = media_camera_unique_id(entry)
+    entity_id = registry.async_get_entity_id("camera", DOMAIN, unique_id) if unique_id else None
     registered = registry.async_get(entity_id) if entity_id else None
     return entity_id if registered is not None and not registered.disabled_by else None

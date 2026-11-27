@@ -136,7 +136,7 @@ def test_identity_is_the_station_not_the_entry() -> None:
     # Before the first setup with an API 2 agent the entry id stands in (the 2.x ids).
     legacy = _Entry(data={}, version=1)
     assert station_unique_id(legacy, "doorbell_camera") == "entry-1_doorbell_camera"
-    assert media_camera_unique_id(legacy) == "entry-1_doorbell_camera"
+    assert media_camera_unique_id(legacy) is None
     assert station_mac(legacy) is None
     legacy.data = {CONF_STATION_ID: "c300x-0123456789ab", CONF_OUTDOOR_UNITS: ONE}
     assert media_camera_unique_id(legacy) == "c300x-0123456789ab_unit_20_camera"

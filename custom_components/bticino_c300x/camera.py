@@ -190,8 +190,7 @@ async def async_setup_entry(
     """Set up the optional C300X WebRTC camera."""
 
     if supports_capability(entry, "doorbell_video"):
-        async_add_entities([C300XDoorbellCamera(entry)])
-        async_add_unit_cameras(hass, entry, async_add_entities)
+        async_add_unit_cameras(hass, entry, async_add_entities, lambda: C300XDoorbellCamera(entry))
 
 
 class C300XDoorbellCamera(MediaCameraUnit, WebRTCDebugMixin, C300XEntity, Camera):

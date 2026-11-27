@@ -271,7 +271,7 @@ Every outdoor unit, also the only one:
 | Entity | Key | Notes |
 | --- | --- | --- |
 | `event` | `doorbell` | device class `doorbell`, event type `ring`; attributes `call_id`, `unit`, `unit_name`, `attribution`, `camera_entity_id` (the media camera). |
-| `camera` | `camera` | The default unit's camera is the media camera (ring, answer, on-demand). Another unit's camera shows a still of the live picture while it has the current call (the station switches the picture to the caller), else its last visitor image. |
+| `camera` | `camera` | The default unit's camera is the media camera (ring, answer, on-demand); like every unit camera it appears with its unit. Another unit's camera shows a still of the live picture while it has the current call (the station switches the picture to the caller), else its last visitor image. |
 | `button` | `door` | Unlocks this unit (`outdoor-units/{unit_id}/actions/unlock`); attributes `lock_address` (the unit's `lock_where`) and `lock_name` (the name the agent reports for that address, else the unit's name), the same for every unit. |
 | `event` | `door_event` | Event type `opened` on this unit's `door_unlock.started` (the agent names the unit of the lock address); attribute `call_id` while the unit has a call. |
 | `sensor` | `call` | `idle`, `ringing`, `answered`, `viewing`; attribute `call_id`. |

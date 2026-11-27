@@ -102,6 +102,13 @@ class FakeRuntimeData:
     self_test_status: dict[str, Any] = field(default_factory=dict)
 
 
+# A 3.1 entry: the station id and its units are known.
+_ENTRY_DATA = {
+    "station_id": "c300x-0123456789ab",
+    "outdoor_units": {"default_unit": "20", "units": [{"id": "20", "where": "20", "default": True}]},
+}
+
+
 @dataclass(slots=True)
 class FakeEntry:
     entry_id: str = "entry-1"
@@ -135,7 +142,7 @@ class FakeEntityRegistry:
         if (
             domain == "camera"
             and platform == "bticino_c300x"
-            and unique_id == "entry-1_doorbell_camera"
+            and unique_id == "c300x-0123456789ab_unit_20_camera"
         ):
             return "camera.bticino_c300x_doorbell_camera"
         return None
@@ -345,6 +352,7 @@ def test_frontend_card_setup_hint_cleared_after_current_options_marker() -> None
 
 def test_frontend_card_setup_hint_created_when_cards_exist_without_fix_marker() -> None:
     entry = FakeEntry(
+        data=dict(_ENTRY_DATA),
         runtime_data=FakeRuntimeData(
             capabilities={"doorbell_video": {"supported": True}},
         )

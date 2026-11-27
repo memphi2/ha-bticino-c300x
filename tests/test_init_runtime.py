@@ -14,6 +14,10 @@ import custom_components.bticino_c300x as integration
 import custom_components.bticino_c300x.entry_locks as entry_locks
 import custom_components.bticino_c300x.runtime_manager as runtime_manager
 from custom_components.bticino_c300x import api_errors
+from custom_components.bticino_c300x._api_calls import (
+    normalize_calls,
+    normalize_outdoor_units,
+)
 from custom_components.bticino_c300x.const import (
     CONF_AGENT_HOST,
     CONF_AGENT_TOKEN,
@@ -183,6 +187,10 @@ def test_setup_entry_builds_runtime_and_forwards_platforms(
     monkeypatch.setattr(
         dispatcher, "async_dispatcher_send", lambda *args: signals.append(args)
     )
+    import custom_components.bticino_c300x.call_sync as call_sync
+
+    call_signals = []
+    monkeypatch.setattr(call_sync, "async_dispatcher_send", lambda *args: call_signals.append(args[1:]))
 
     import custom_components.bticino_c300x.agent_update as agent_update
     import custom_components.bticino_c300x.capabilities as capabilities
@@ -294,6 +302,8 @@ def test_setup_entry_builds_runtime_and_forwards_platforms(
     asyncio.run(setup())
     snapshot_runtime_boundary.assert_awaited_once_with(hass, entry)
     assert len(signals) == 1
+    # The units and calls are read before the platforms load.
+    assert call_signals == [(call_sync.SIGNAL_CALLS_CHANGED, "entry-1")]
 
     assert entry.runtime_data.agent_info["version"] == "1.2.0"
     assert runtime_manager.CAMERA_PLATFORM in entry.runtime_data.loaded_platforms
@@ -371,6 +381,7 @@ def test_setup_failure_releases_callbacks_and_allows_retry(
     manager_type = runtime_manager.C300XRuntimeManager
     monkeypatch.setattr(manager_type, "_required_config_present", lambda self: True)
     monkeypatch.setattr(manager_type, "_build_agent_api", lambda self: object())
+    monkeypatch.setattr(manager_type, "async_sync_calls", noop)
     monkeypatch.setattr(manager_type, "async_validate_agent", noop)
     monkeypatch.setattr(manager_type, "async_sync_platform_gate_state", noop)
     monkeypatch.setattr(manager_type, "async_sync_activation_state", noop)
@@ -2027,6 +2038,12 @@ class _SetupApi:
 
     async def async_self_test(self) -> dict[str, Any]:
         return {"ok": True, "checks": {}}
+
+    async def async_outdoor_units(self) -> Any:
+        return normalize_outdoor_units({"units": []})
+
+    async def async_calls(self) -> Any:
+        return normalize_calls({"calls": []})
 
 
 class _RecoveringSetupApi:

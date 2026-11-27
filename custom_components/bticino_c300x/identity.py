@@ -70,8 +70,11 @@ def default_unit_id(entry: Any) -> str | None:
     return value if isinstance(value, str) and value else None
 
 
-def media_camera_unique_id(entry: Any) -> str:
-    """The camera with ring, answer and on-demand video: the default unit's."""
+def media_camera_unique_id(entry: Any) -> str | None:
+    """The camera with ring, answer and on-demand video: the default unit's.
+
+    None before the station named its units: there is no such camera yet.
+    """
 
     unit = default_unit_id(entry)
-    return unit_unique_id(entry, unit, "camera") if unit else station_unique_id(entry, "doorbell_camera")
+    return unit_unique_id(entry, unit, "camera") if unit else None

@@ -99,7 +99,7 @@ A call has `call_id`, `kind` (`ring` or `view`), `state`, `unit`
 | `state` | Meaning |
 | --- | --- |
 | `ringing` | A ring is in progress. |
-| `answered` | Answered by Home Assistant (`answered_by: "ha"`) or on the station (`"station"`). |
+| `answered` | Answered by Home Assistant (`answered_by: "ha"`), on the station (`"station"`: display or app) or by the station's answering machine (`"answering_machine"`). |
 | `viewing` | On-demand view of a unit (`kind: "view"`). |
 | `ended` | Over; kept for 60 s for late requests, then dropped. |
 
@@ -111,8 +111,8 @@ A call has `call_id`, `kind` (`ring` or `view`), `state`, `unit`
 
 ### Ring timing
 
-A call mirrors the agent's ring session of 3.0.0; it adds no state machine of
-its own.
+A call mirrors the agent's ring session of 3.0.0 and the station's own call
+state (see Station call state).
 
 1. A ring frame or the ring's SIP INVITE that the 3.0.0 duplicate filter lets
    through (the first ring, then none for 1000 ms) is `doorbell.pressed`, as
@@ -131,6 +131,31 @@ its own.
 The station has one ring session at a time: two units pressed in the same
 session are one call, named by the last caller frame.
 
+### Station call state
+
+bt_answering_machine sends `*#8**35*<code>*<x>*<y>##` to the station's
+monitor channel (the multicast the agent reads) on every change of its call
+state, and answers the query `*#8**35##` with it. The frame and its sender
+are the same on C300X 1.7.19, 2.0.2, 3.0.6 and C100X 1.5.8. `x` and `y` are
+two fields of the answering machine's call record; they were `0` in every
+capture and live log and the agent does not use them. The meanings come from
+the captures and from the vendor functions that send each value:
+
+| `code` | `state` | Seen |
+| --- | --- | --- |
+| `0` | `idle` | after the end frame of every call |
+| `1` | `setup` | with the ring frame, and when a view is set up |
+| `2` | `ringing` | with the caller frame, while the ringtone plays |
+| `3` | `viewing` | a view without a ring |
+| `4` | `waiting` | about 2.5 s after `2` with the ringtone's end (`*7*59#8…`), or when the ringer is muted; the call still waits |
+| `6` | `conversation` | the display, the app or Home Assistant answered (`*8*2#…`) |
+| `7` | `answering_machine` | it took the unanswered call (`*8*67*<unit>##`) |
+| `8` | `greeting` | it plays the greeting (`*7*58#…` audio path) |
+| `9` | `recording` | it records the visitor; a saved message follows the end (`*8*96#1#0*##`) |
+
+Other codes (the vendor code also sends `10`, `11` and `12`) have no proven
+meaning: `state: null`, they change no call.
+
 ### Current call
 
 Only the current call can be answered or hung up: the live ring call, else
@@ -139,15 +164,19 @@ the stop button does.
 
 ### End of a call
 
-Start, answer and end come from the agent's ring and media events, the same
-as in 3.0.0; the bus frames only name the unit (caller frame) or open a view
-(view frame).
+Start comes from the agent's ring events, as in 3.0.0. Answer and end come
+from the agent's media events and from the station's call state; the other
+bus frames only name the unit (caller frame) or open a view (view frame).
+The display's own channel (`*8*80#6#2*…`, `*8*3#6#2*…` at wake and off) is
+not a call.
 
 | Event | Call |
 | --- | --- |
 | `doorbell.pressed` | Opens the ring call, or belongs to the live one (see Ring timing). |
 | `doorbell.view_requested` of the ring (`*8*2#1#…`, or the agent's own answer) | The ring call is `answered`: `answered_by: "ha"` while the agent's ring leg is answered by Home Assistant, else `"station"` (display or app). In which order the display's frames and the ring leg's close come does not matter. |
 | `doorbell.media.closed` whose payload still reports the station's own media | A ringing call is `answered` by the station. |
+| Station state `6` (conversation) | The ringing call is `answered`: `"ha"` while Home Assistant answered the ring leg, else `"station"`. |
+| Station state `7` (answering machine) | The ringing call is `answered` (`"answering_machine"`). |
 | View frame `*8*1#5#4#<where>*…##` | Opens a `viewing` call of that unit; a view of another unit ends the one before (`reason: "superseded"`). |
 
 | Source | Ends |
@@ -156,7 +185,8 @@ as in 3.0.0; the bus frames only name the unit (caller frame) or open a view
 | `doorbell.media.closed` while answered by Home Assistant, or of a view | That call. |
 | The bus end frame of a call answered on the station | That call. The close of the agent's own leg does not end it: the display call goes on. |
 | Hang-up through the API | That call (`reason: "hangup"`, also when the hang-up's own media close comes first). |
-| The agent's media state, checked 66 s after the answer and every 5 s after that (a view: every 5 s) | An answered call whose leg is gone, or whose display call is over (the station's conversation limit is 60 s, the agent's display guard 65 s), ends with `reason: "media_closed"`: a lost end frame keeps no call. |
+| Station state `0` (idle) | A call that was live then and that nothing else ended within 1.5 s (`reason: "station_idle"`, or the reason of a media close that was waiting): a lost end frame keeps no call. |
+| The agent's media state, checked 66 s after the answer and every 5 s after that (a view: every 5 s) | An answered call whose leg is gone, or that the station holds while neither its media nor a non-idle station state is seen, ends with `reason: "media_closed"`. |
 | No change for 90 s while `ringing` | That call (`reason: "timeout"`). |
 
 The timer exists only while a call is live or ended less than 60 s ago; an
@@ -193,6 +223,8 @@ station has none.
   "ok": true,
   "boot_id": "8f3a1c2e",
   "current_call_id": "8f3a1c2e-7",
+  "caller_frames_ignored": 0,
+  "station_state": {"code": 2, "state": "ringing", "age_ms": 1150},
   "calls": [
     {"call_id": "8f3a1c2e-7", "kind": "ring", "state": "ringing",
      "unit": "21", "attribution": "caller_frame", "answered_by": null,
@@ -202,6 +234,8 @@ station has none.
 ```
 
 Lists live calls and calls ended in the last 60 s, newest first, at most 8.
+`station_state`: see Station call state; `null` until the station sent or
+answered one.
 
 ### `POST /api/v1/calls/{call_id}/actions/answer`, `.../hangup`
 
@@ -260,6 +294,7 @@ All carry the 2.x envelope (`event_id`, `type`, `occurred_at`, `data`).
 | `call.answered` | `call_id`, `unit`, `answered_by` |
 | `call.view_started` | `call_id`, `unit` (a view frame `*8*1#5#4#<where>*…##` opened a view) |
 | `call.ended` | `call_id`, `unit`, `kind`, `reason` |
+| `station.call_state` | `code`, `state` (see Station call state; `null` for a code without a proven meaning), on every change |
 | `doorbell.view_requested` | adds `call_id` and `unit` when the frame names the unit |
 | `door_unlock.started`, `door_unlock.ended` | add `unit` when the address is a unit's lock, and `call_id` of its live call |
 | `outdoor_units.changed` | `count`; Home Assistant reads `GET /api/v1/outdoor-units` again |

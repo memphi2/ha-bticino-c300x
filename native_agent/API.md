@@ -235,7 +235,7 @@ for example `config_error`, `api_token_missing`, `api_bind_failed`,
 | `GET`, `POST` | `/api/v1/video/picture` | API | GET reads brightness, contrast and saturation; POST changes one of them on the active video source. |
 | `GET` | `/api/v1/calls/doorbell` | API | None. |
 | `GET` | `/api/v1/calls/doorbell/status` | API | None. |
-| `GET` | `/api/v1/calls` | API | None. |
+| `GET` | `/api/v1/calls` | API | Asks the station for its call state (`*#8**35##`) once, while none was seen since the agent started. |
 | `POST` | `/api/v1/calls/{call_id}/actions/answer` | API | Answers the current ring call locally. |
 | `POST` | `/api/v1/calls/{call_id}/actions/hangup` | API | Hangs up the current ring call or stops the current view. |
 | `GET` | `/api/v1/outdoor-units` | API | None (reads the station's archive on every request). |
@@ -1372,7 +1372,21 @@ Capabilities report `api_version: "2"`, `capabilities.outdoor_units` and
 - `GET /api/v1/outdoor-units`: the units (`id`, `where`, `action_where`,
   `lock_where`, `name`, `source`, `default`), `default_unit` and `archive`.
 - `GET /api/v1/calls`: `boot_id` (drawn at agent start), `current_call_id`,
-  `caller_frames_ignored` and live calls plus calls ended in the last 60 s.
+  `caller_frames_ignored`, `station_state` and live calls plus calls ended in
+  the last 60 s. `station_state` is the station's own call state from its
+  frame `*#8**35*<code>*0*0##` (`{"code", "state", "age_ms"}`), `null` until
+  one was seen; while none was seen the first request asks the station
+  (`*#8**35##`) once. `state` by `code`: `0` `idle`, `1` `setup` (a ring or
+  view is set up), `2` `ringing` (the ringtone plays), `3` `viewing` (a view
+  without a ring), `4` `waiting` (the ringtone is over, timed out or muted,
+  and the call still waits), `6` `conversation`, `7` `answering_machine`
+  (it took the call), `8` `greeting`, `9` `recording`; any other code has
+  `state: null`. A ringing call is answered when the station reports `6`
+  (`answered_by` `ha` while Home Assistant answered the ring leg, else
+  `station`) or `7` (`answering_machine`). A call the station holds stays
+  live while its state is not `idle`; once it is `idle`, a call that was live
+  then and that nothing else ended within 1.5 s ends with
+  `reason: "station_idle"`.
 - `POST /api/v1/calls/{call_id}/actions/answer`, `.../hangup`: answer or hang
   up the current call: the live ring call, else the live on-demand view, which
   a hang-up stops (an answer of a view gets `409 call_not_ringing`). A call id
@@ -1397,8 +1411,9 @@ Capabilities report `api_version: "2"`, `capabilities.outdoor_units` and
   stays selected for later streams until the next activation.
 
 Events: `doorbell.pressed` carries `call_id`, `unit` and `attribution`; new are
-`call.caller_identified`, `call.answered`, `call.view_started`, `call.ended`
-and `outdoor_units.changed`; `door_unlock.*` and `doorbell.view_requested`
+`call.caller_identified`, `call.answered`, `call.view_started`, `call.ended`,
+`station.call_state` (`code`, `state` as above, on every change) and
+`outdoor_units.changed`; `door_unlock.*` and `doorbell.view_requested`
 carry `unit` and `call_id` when they belong to a unit.
 
 ### `POST /api/v1/calls/doorbell/actions/capture`

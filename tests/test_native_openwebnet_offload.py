@@ -55,6 +55,8 @@ class BusHandler(socketserver.BaseRequestHandler):
                     reply = "*#8**41*30##"
                 elif frame == "*#8**40##":
                     reply = "*#8**40*0*0##"
+                elif frame == "*#8**35##":
+                    reply = "*#8**35*0*0*0##"
                 else:
                     reply = "*#*1##"
                 self.request.sendall(reply.encode())
@@ -489,6 +491,7 @@ def test_an_unlock_of_the_current_unit_keeps_its_unit_while_it_waits(lab: Lab, t
 
     udp_port = json.loads((tmp_path / "config.json").read_text())["events"]["udp"]["port"]
     send_udp_event(udp_port, "*8*1#1#4#21*11##")
+    send_udp_event(udp_port, "*#8**35*1*0*0##")
     time.sleep(0.1)
     send_udp_event(udp_port, "*8*9#1#4*21##")
     time.sleep(0.3)
@@ -515,6 +518,15 @@ def test_an_unlock_of_the_current_unit_keeps_its_unit_while_it_waits(lab: Lab, t
     assert lab.bus.frames == ["*8*19*21##", "*8*20*21##"]
 
 
+def test_the_station_is_asked_for_its_call_state_once(lab: Lab) -> None:
+    # The station sends its call state only on a change: without one since
+    # the agent started, the first calls request asks it, once.
+    first = api_get(lab.api_port, "/api/v1/calls")
+    assert first["station_state"]["code"] == 0 and first["station_state"]["state"] == "idle"
+    assert api_get(lab.api_port, "/api/v1/calls")["station_state"]["state"] == "idle"
+    assert lab.bus.frames == ["*#8**35##"]
+
+
 def test_a_refused_unit_unlock_leaves_the_running_one_alone(lab: Lab) -> None:
     # Another unlock while the press is out is refused for its unknown unit:
     # the running one still releases its own door and names its unit.
@@ -537,6 +549,7 @@ def test_a_waiting_unit_unlock_does_not_move_the_running_one(lab: Lab, tmp_path:
 
     udp_port = json.loads((tmp_path / "config.json").read_text())["events"]["udp"]["port"]
     send_udp_event(udp_port, "*8*1#1#4#21*11##")
+    send_udp_event(udp_port, "*#8**35*1*0*0##")
     time.sleep(0.1)
     send_udp_event(udp_port, "*8*9#1#4*21##")
     time.sleep(0.3)

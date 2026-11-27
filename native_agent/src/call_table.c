@@ -36,6 +36,8 @@ static void draw_boot_id(struct c300x_calls *calls)
 void c300x_calls_init(struct c300x_calls *calls, const char *boot_id)
 {
     memset(calls, 0, sizeof(*calls));
+    calls->station_state = C300X_STATION_STATE_UNKNOWN;
+    calls->idle_ms = -1;
     if (boot_id != NULL && boot_id[0] != '\0') {
         c300x_copy_string(calls->boot_id, sizeof(calls->boot_id), boot_id);
     } else {
@@ -265,6 +267,28 @@ void c300x_calls_frame(struct c300x_calls *calls, const struct c300x_call_sink *
     }
 }
 
+void c300x_calls_station(struct c300x_calls *calls, const struct c300x_call_sink *sink,
+                         const struct c300x_call_media *media, int code, long long now)
+{
+    struct c300x_call *call = ring_call(calls);
+    const char *name = c300x_station_state_name(code);
+    char data[96];
+
+    if (code == calls->station_state) {
+        return;
+    }
+    calls->station_state = code;
+    calls->station_ms = now;
+    calls->idle_ms = code == 0 ? now : -1;
+    snprintf(data, sizeof(data), "{\"code\":%d,\"state\":%s%s%s}", code, name ? "\"" : "", name ? name : "null",
+             name ? "\"" : "");
+    emit(sink, "station.call_state", data);
+    if (call != NULL && call->state == C300X_CALL_RINGING && (code == 6 || code == 7)) {
+        c300x_calls_answered(calls, sink, call->id,
+                             code == 7 ? "answering_machine" : media->ha_answered ? "ha" : "station", now);
+    }
+}
+
 void c300x_calls_answer_seen(struct c300x_calls *calls, const struct c300x_call_sink *sink,
                              const struct c300x_call_media *media, long long now)
 {
@@ -303,16 +327,25 @@ void c300x_calls_media_closed(struct c300x_calls *calls, const struct c300x_call
     }
 }
 
-/* The media the call stands for is still there. */
-static int media_live(const struct c300x_call *call, const struct c300x_call_media *media)
+/* The media the call stands for is still there; a call the station holds
+ * lives while the station's state is not idle. */
+static int media_live(const struct c300x_calls *calls, const struct c300x_call *call,
+                      const struct c300x_call_media *media)
 {
     if (call->view) {
         return media->agent || media->external;
     }
-    return media->ring_leg || (strcmp(call->answered_by, "station") == 0 && media->external);
+    return media->ring_leg
+        || (strcmp(call->answered_by, "ha") != 0 && (media->external || calls->station_state > 0));
 }
 
-static long long deadline(const struct c300x_call *call)
+/* The station went idle while the call was live. */
+static int station_idle(const struct c300x_calls *calls, const struct c300x_call *call)
+{
+    return calls->idle_ms >= 0 && live(call) && call->started_ms <= calls->idle_ms;
+}
+
+static long long call_deadline(const struct c300x_call *call)
 {
     if (call->state == C300X_CALL_RINGING) {
         long long due = call->updated_ms + C300X_CALL_RINGING_TIMEOUT_MS;
@@ -329,6 +362,16 @@ static long long deadline(const struct c300x_call *call)
         return call->updated_ms + C300X_CALL_ENDED_KEEP_MS;
     }
     return live(call) ? call->probe_ms : -1;
+}
+
+static long long deadline(const struct c300x_calls *calls, const struct c300x_call *call)
+{
+    long long due = call_deadline(call);
+
+    if (station_idle(calls, call) && (due < 0 || calls->idle_ms + C300X_CALL_SETTLE_MS < due)) {
+        due = calls->idle_ms + C300X_CALL_SETTLE_MS;
+    }
+    return due;
 }
 
 static void fall_back(struct c300x_call *call, const struct c300x_call_sink *sink)
@@ -348,11 +391,13 @@ void c300x_calls_tick(struct c300x_calls *calls, const struct c300x_call_sink *s
 {
     for (int index = 0; index < C300X_MAX_CALLS; index++) {
         struct c300x_call *call = &calls->items[index];
-        long long due = deadline(call);
+        long long due = deadline(calls, call);
         if (due < 0 || now < due) {
             continue;
         }
-        if (call->state == C300X_CALL_ENDED) {
+        if (station_idle(calls, call) && now - calls->idle_ms >= C300X_CALL_SETTLE_MS) {
+            c300x_calls_end(calls, sink, call->id, call->closing != NULL ? call->closing : "station_idle", now);
+        } else if (call->state == C300X_CALL_ENDED) {
             memset(call, 0, sizeof(*call));
         } else if (call->state == C300X_CALL_RINGING) {
             if (strcmp(call->attribution, "pending") == 0 && now - call->started_ms >= C300X_CALLER_WAIT_MS) {
@@ -363,7 +408,7 @@ void c300x_calls_tick(struct c300x_calls *calls, const struct c300x_call_sink *s
             } else if (now - call->updated_ms >= C300X_CALL_RINGING_TIMEOUT_MS) {
                 c300x_calls_end(calls, sink, call->id, "timeout", now);
             }
-        } else if (!media_live(call, media)) {
+        } else if (!media_live(calls, call, media)) {
             c300x_calls_end(calls, sink, call->id, "media_closed", now);
         } else {
             call->probe_ms = now + C300X_CALL_PROBE_MS;
@@ -376,7 +421,7 @@ int c300x_calls_timeout_ms(const struct c300x_calls *calls, long long now)
     long long next = -1;
 
     for (int index = 0; index < C300X_MAX_CALLS; index++) {
-        long long due = deadline(&calls->items[index]);
+        long long due = deadline(calls, &calls->items[index]);
         if (due >= 0 && (next < 0 || due < next)) {
             next = due;
         }
@@ -493,9 +538,22 @@ int c300x_calls_json(const struct c300x_calls *calls, long long now, char *out, 
         listed[at] = call;
     }
     if (!c300x_appendf(out, out_len, &used, "{\"ok\":true,\"boot_id\":\"%s\",\"current_call_id\":%s%s%s,"
-                       "\"caller_frames_ignored\":%lu,\"calls\":[", calls->boot_id,
+                       "\"caller_frames_ignored\":%lu,\"station_state\":", calls->boot_id,
                        current ? "\"" : "null", current ? current->id : "", current ? "\"" : "",
                        calls->caller_frames_ignored)) {
+        return 0;
+    }
+    if (calls->station_state == C300X_STATION_STATE_UNKNOWN) {
+        if (!c300x_appendf(out, out_len, &used, "null")) return 0;
+    } else {
+        const char *name = c300x_station_state_name(calls->station_state);
+        if (!c300x_appendf(out, out_len, &used, "{\"code\":%d,\"state\":%s%s%s,\"age_ms\":%lld}",
+                           calls->station_state, name ? "\"" : "", name ? name : "null", name ? "\"" : "",
+                           now - calls->station_ms)) {
+            return 0;
+        }
+    }
+    if (!c300x_appendf(out, out_len, &used, ",\"calls\":[")) {
         return 0;
     }
     for (int index = 0; index < count; index++) {

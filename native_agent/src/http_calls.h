@@ -34,6 +34,7 @@ struct c300x_call_hub {
     int stopping; /* HA's hang-up or stop runs in its handler right now */
     char seen_path[C300X_UNIT_PATH_LEN]; /* empty: seen units are not kept */
     int seen_loaded;
+    int station_asked; /* the station was asked for its call state */
 };
 
 void c300x_call_hub_init(struct c300x_call_hub *hub, const struct c300x_config *config,

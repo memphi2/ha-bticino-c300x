@@ -101,6 +101,14 @@ static void media_state(const struct c300x_call_hub *hub, struct c300x_call_medi
 
 void c300x_call_hub_frame(struct c300x_call_hub *hub, const char *frame)
 {
+    struct c300x_call_media media;
+    int code;
+
+    if (hub != NULL && c300x_station_state_parse(frame, &code)) {
+        media_state(hub, &media);
+        c300x_calls_station(&hub->calls, &hub->sink, &media, code, c300x_monotonic_ms());
+        return;
+    }
     if (hub == NULL || frame == NULL || strncmp(frame, "*8*", 3) != 0) {
         return;
     }
@@ -374,6 +382,32 @@ static void unlock(int client_fd, const struct c300x_call_routes *routes, const 
     c300x_http_send_json(client_fd, 200, "OK", body);
 }
 
+/* The station's call state is sent on changes only: once, while none was
+ * seen since the agent started, the station is asked. Zero: the request
+ * runs again with the answer. */
+static int ask_station_state(const struct c300x_call_routes *routes)
+{
+    struct c300x_call_hub *hub = routes->hub;
+    int owns = routes->openwebnet != NULL && c300x_openwebnet_async_owns(routes->openwebnet);
+    char reply[64], error[C300X_MAX_ERROR_LEN];
+    struct c300x_call_media media;
+    int code;
+
+    /* Once its query is out, only its answer ends the request. */
+    if (!owns && (hub->station_asked || hub->config == NULL
+                  || hub->calls.station_state != C300X_STATION_STATE_UNKNOWN)) {
+        return 1;
+    }
+    if (!c300x_openwebnet_send(hub->config, "*#8**35##", reply, sizeof(reply), error, sizeof(error))) {
+        if (c300x_openwebnet_deferred()) return 0;
+    } else if (c300x_station_state_parse(reply, &code) && hub->calls.station_state == C300X_STATION_STATE_UNKNOWN) {
+        media_state(hub, &media);
+        c300x_calls_station(&hub->calls, &hub->sink, &media, code, c300x_monotonic_ms());
+    }
+    hub->station_asked = 1;
+    return 1;
+}
+
 /* The segment of path after prefix up to suffix, which ends the path. */
 static int path_segment(const char *path, const char *prefix, const char *suffix, char *out, size_t out_len)
 {
@@ -438,6 +472,7 @@ int c300x_http_calls_route(int client_fd, const struct c300x_call_routes *routes
     }
     if (strcmp(request->path, "/api/v1/calls") == 0 && get) {
         if (!hub->units.loaded) load_units(hub);
+        if (!ask_station_state(routes)) return 1;
         tick(hub);
         if (!c300x_calls_json(&hub->calls, c300x_monotonic_ms(), body, sizeof(body))) {
             c300x_copy_string(body, sizeof(body), "{\"ok\":false,\"error\":\"response_too_large\"}\n");

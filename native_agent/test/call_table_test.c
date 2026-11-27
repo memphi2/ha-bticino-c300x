@@ -100,6 +100,13 @@ static void ring(long long now)
     record(NULL, "doorbell.pressed", data);
 }
 static void frame(const char *text, long long now) { c300x_calls_frame(&calls, &sink, text, now); }
+/* A *#8**35 frame on the multicast path, sent three times as the station does. */
+static void station(const char *text, long long now)
+{
+    int code;
+    assert(c300x_station_state_parse(text, &code));
+    for (int copy = 0; copy < 3; copy++) c300x_calls_station(&calls, &sink, &media, code, now + 20 * copy);
+}
 static void tick(long long now) { c300x_calls_tick(&calls, &sink, &media, now); }
 static void answer_seen(long long now) { c300x_calls_answer_seen(&calls, &sink, &media, now); }
 static void closed(int external, int from_bus, long long now)
@@ -645,11 +652,99 @@ static void station_activations(void)
     expect(json, "{\"ok\":true,\"enabled\":true,\"supported\":false,\"auto_discover\":false,\"station\":null,\"count\":0,\"items\":[]}\n");
 }
 
+/* The station's call state (*#8**35*S*0*0##) of the captures, times from
+ * the ring frame. */
+static void station_states(void)
+{
+    char json[2048];
+    int code;
+
+    assert(!c300x_station_state_parse("*#8**35##", &code) && !c300x_station_state_parse("*#8**36*1*0*0##", &code));
+    assert(!c300x_station_state_parse("*#8**35*1*0*0##x", &code) && !c300x_station_state_parse(NULL, &code));
+    assert(c300x_station_state_name(5) == NULL && c300x_station_state_name(10) == NULL);
+    assert(strcmp(c300x_station_state_name(4), "waiting") == 0);
+
+    /* c300x-aswm-ring-audio-20260704-143004: nobody answers, the answering
+     * machine takes the call (*8*67 at 4873), greets, records; the end frame
+     * and idle at 25.5 s. */
+    reset(NULL);
+    c300x_calls_json(&calls, 0, json, sizeof(json));
+    expect(json, "\"station_state\":null");
+    ring(0);
+    station("*#8**35*1*0*0##", 5);
+    frame("*8*9#1#4*20##", 353);
+    station("*#8**35*2*0*0##", 446);
+    station("*#8**35*4*0*0##", 2859);
+    assert(count("call.answered") == 0);
+    station("*#8**35*7*0*0##", 4878);
+    expect(nth("call.answered", 1), "\"unit\":\"20\",\"answered_by\":\"answering_machine\"");
+    station("*#8**35*8*0*0##", 4953);
+    station("*#8**35*9*0*0##", 9221);
+    tick(9221 + C300X_CALL_GUARD_MS - 1);
+    assert(count("call.ended") == 0 && c300x_calls_is_current(&calls, "8f3a1c2e-1"));
+    station("*#8**35*0*0*0##", 25462);
+    closed(0, 1, 25477);
+    expect(nth("call.ended", 1), "\"kind\":\"ring\",\"reason\":\"media_closed\"");
+    assert(count("station.call_state") == 7);
+    expect(nth("station.call_state", 1), "{\"code\":1,\"state\":\"setup\"}");
+    expect(nth("station.call_state", 3), "{\"code\":4,\"state\":\"waiting\"}");
+    expect(nth("station.call_state", 7), "{\"code\":0,\"state\":\"idle\"}");
+    c300x_calls_json(&calls, 26000, json, sizeof(json));
+    expect(json, "\"station_state\":{\"code\":0,\"state\":\"idle\",\"age_ms\":538},\"calls\":[");
+
+    /* c300x-full-ring-20260704-145356: the display answers (6 at 14.4 s);
+     * its end frame is lost: the station's idle ends the call, not the
+     * 66 s display guard. */
+    reset(NULL);
+    ring_with_caller(0, "*8*9#1#4*20##");
+    station("*#8**35*1*0*0##", 5);
+    station("*#8**35*2*0*0##", 435);
+    station("*#8**35*4*0*0##", 3002);
+    station("*#8**35*6*0*0##", 14401);
+    expect(nth("call.answered", 1), "\"answered_by\":\"station\"");
+    /* bus.log 22:29:31-22:30:22: the display's own channel (kind 6 mode 2)
+     * at wake and off is not a call. */
+    int before = total;
+    frame("*8*80#6#2*11##", 15000);
+    frame("*8*3#6#2*411##", 16000);
+    assert(total == before && c300x_calls_is_current(&calls, "8f3a1c2e-1"));
+    media.external = 1;
+    station("*#8**35*0*0*0##", 27010);
+    assert(c300x_calls_timeout_ms(&calls, 27050) == 27010 + C300X_CALL_SETTLE_MS - 27050);
+    tick(27010 + C300X_CALL_SETTLE_MS - 1);
+    assert(count("call.ended") == 0);
+    tick(27010 + C300X_CALL_SETTLE_MS);
+    expect(nth("call.ended", 1), "\"reason\":\"station_idle\"");
+    media.external = 0;
+
+    /* HA answers: the station's conversation is HA's answer, not the display's. */
+    reset(NULL);
+    ring_with_caller(0, "*8*9#1#4*20##");
+    media.ring_leg = media.ha_answered = 1;
+    station("*#8**35*6*0*0##", 6000);
+    answer_seen(6030);
+    assert(count("call.answered") == 1);
+    expect(nth("call.answered", 1), "\"answered_by\":\"ha\"");
+    media.ring_leg = media.ha_answered = 0;
+
+    /* A ring after the station went idle, before its own setup state: the
+     * old idle ends nothing; an unknown state is reported raw. */
+    reset(NULL);
+    station("*#8**35*0*0*0##", 0);
+    ring(60000);
+    tick(60000 + C300X_CALL_SETTLE_MS);
+    assert(count("call.ended") == 0 && c300x_calls_is_current(&calls, "8f3a1c2e-1"));
+    station("*#8**35*5*0*0##", 60100);
+    expect(nth("station.call_state", 2), "{\"code\":5,\"state\":null}");
+    assert(calls.idle_ms == -1);
+}
+
 int main(int argc, char **argv)
 {
     static const struct { const char *name; void (*run)(void); } cases[] = {
         {"single_unit_capture", single_unit_capture},
         {"station_activations", station_activations},
+        {"station_states", station_states},
         {"unanswered_capture", unanswered_capture},
         {"station_answer", station_answer},
         {"app_answer_end_frame_first", app_answer_end_frame_first},

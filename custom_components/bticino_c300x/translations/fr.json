@@ -1761,7 +1761,8 @@
           "ssh_unreachable": "Le {model} ne répond pas en SSH (port 22). SSH est désactivé ou bloqué sur la station ; vérifiez l'adresse et que l'outil root a activé SSH.",
           "ssh_password_login_disabled": "Le {model} n'accepte pas de connexion par mot de passe, seulement des clés SSH. Collez la clé privée configurée par l'outil root, ou construisez l'image avec une connexion par mot de passe.",
           "firewall_hook_changed": "Le script de démarrage du pare-feu du {model} (/etc/network/if-pre-up.d/iptables) a été modifié par autre chose après l'ajout des ports de l'agent ; l'original sauvegardé ne correspond plus. Le script n'a pas été modifié. Restaurez-le, ou retirez-en le bloc de l'agent, puis réessayez.",
-          "not_a_bticino_station": "L'appareil à cette adresse n'est pas une platine BTicino. Rien n'y a été écrit. Vérifiez l'adresse."
+          "not_a_bticino_station": "L'appareil à cette adresse n'est pas une platine BTicino. Rien n'y a été écrit. Vérifiez l'adresse.",
+          "wrong_device": "Cette adresse mène désormais à une autre station. Rien n'y a été modifié."
         },
         "abort": {
           "entry_not_loaded": "L'entrée BTicino C300X n'est pas chargée."

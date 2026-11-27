@@ -109,6 +109,7 @@ from .repair_issues import (
 )
 from .repair_work import OTHER_FLOW_FINISHED, RepairStepWork, async_run_repair_step
 from .schema_compat import vol
+from .station_identity import WRONG_STATION
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -503,7 +504,7 @@ def _ssh_install_error(err: BaseException) -> str:
     reason = err.reason if isinstance(err, C300XDeviceInstallError) else ""
     shown = (
         LOGIN_REFUSED, DISPLAY_WRITE_TIMEOUT, NOT_A_BTICINO_STATION, INVALID_SSH_KEY, SSH_USER_NOT_ROOT,
-        SSH_UNREACHABLE, SSH_PASSWORD_LOGIN_DISABLED, FIREWALL_HOOK_CHANGED,
+        SSH_UNREACHABLE, SSH_PASSWORD_LOGIN_DISABLED, FIREWALL_HOOK_CHANGED, WRONG_STATION,
     )
     return reason if reason in shown else "ssh_install_failed"
 
@@ -731,6 +732,7 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
                         **login,
                         # The entry exists: its station was accepted at setup.
                         c100x_confirmed=True,
+                        station_id=str(entry.unique_id or ""),
                         agent_port=int(
                             entry_config_value(entry, CONF_AGENT_PORT, DEFAULT_AGENT_PORT)
                         ),

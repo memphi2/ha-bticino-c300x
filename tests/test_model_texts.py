@@ -103,6 +103,7 @@ ADDED_SINCE_2_10_0 = frozenset({
     "issues/device_agent_update_required/fix_flow/error/ssh_password_login_disabled",
     "issues/device_agent_update_required/fix_flow/error/ssh_unreachable",
     "issues/device_agent_update_required/fix_flow/error/ssh_user_not_root",
+    "issues/device_agent_update_required/fix_flow/error/wrong_device",
     "issues/device_agent_update_required/fix_flow/step/ssh_install/data/bootstrap_ssh_key",
     "issues/device_agent_update_required/fix_flow/step/ssh_install/data/bootstrap_ssh_key_passphrase",
     "options/abort/unsupported_display",

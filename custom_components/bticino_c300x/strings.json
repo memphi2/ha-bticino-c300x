@@ -1761,7 +1761,8 @@
           "ssh_unreachable": "The {model} does not answer on SSH (port 22). SSH on the station is off or blocked; check the address and that the root tool turned SSH on.",
           "ssh_password_login_disabled": "The {model} accepts no password login, only SSH keys. Paste the private key the root tool set up, or build the image with a password login.",
           "firewall_hook_changed": "The firewall start script of the {model} (/etc/network/if-pre-up.d/iptables) was changed by something else after the agent added its ports, so the saved original no longer matches it. The script was left as it is. Restore it, or remove the agent's block from it, then retry.",
-          "not_a_bticino_station": "The device at this address is not a BTicino station. Nothing was written to it. Check the address."
+          "not_a_bticino_station": "The device at this address is not a BTicino station. Nothing was written to it. Check the address.",
+          "wrong_device": "This address now leads to a different station. Nothing was changed on it."
         },
         "abort": {
           "entry_not_loaded": "The BTicino C300X entry is not loaded."

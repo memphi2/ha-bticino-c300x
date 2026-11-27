@@ -57,6 +57,7 @@ from .display_activation import (
     display_unsupported,
 )
 from .factory_login import LOGIN_REFUSED, factory_login_candidates
+from .station_identity import WRONG_STATION, read_station_names, station_is_another
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -173,6 +174,9 @@ class C300XDeviceInstallRequest:
     # The user confirmed the experimental Classe 100X support, or the entry
     # exists already. Without it a Classe 100X is refused before any write.
     c100x_confirmed: bool = False
+    # The unique id of the entry this install is for; empty for a new setup.
+    # A station proven to be another one is refused before any write.
+    station_id: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -326,6 +330,8 @@ def _install_device_agent_sync(
     try:
         existing = _read_remote_config_sync(client, config_path)
         kind = _admit_station_sync(client, bundle, request.remote_dir, request.c100x_confirmed)
+        if request.station_id and station_is_another(request.station_id, read_station_names(client.run)):
+            raise C300XDeviceInstallError(WRONG_STATION)
         if display is not None:
             display.kind = kind
         if request.apply_gui_patch and kind == QT5_ONDISK:

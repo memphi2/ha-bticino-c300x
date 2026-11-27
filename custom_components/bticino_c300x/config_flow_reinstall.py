@@ -4,7 +4,8 @@ The keys of an installed agent exist only in the entry that installed it. When
 they are gone, the SSH installer writes the bundled agent again with newly
 generated keys; the entry then stores them. What the station holds besides the
 keys stays: the installer keeps the device-owned configuration sections and
-changes no display page.
+changes no display page. Before it writes anything, the installer reads
+which station the entry's address leads to: another station is left alone.
 """
 
 from __future__ import annotations
@@ -41,6 +42,7 @@ from .device_installer import (
 )
 from .entry_config import entry_config_value
 from .factory_login import install_login, login_model
+from .station_identity import WRONG_STATION
 
 _LOGGER = logging.getLogger(__name__)
 _KEYS = (CONF_AGENT_TOKEN, CONF_MAINTENANCE_TOKEN)
@@ -57,6 +59,7 @@ def entry_reinstall_request(
         **install_login(user_input, model),
         # The entry exists: its station was accepted at setup.
         c100x_confirmed=True,
+        station_id=str(getattr(entry, "unique_id", None) or ""),
         agent_port=int(entry_config_value(entry, CONF_AGENT_PORT, DEFAULT_AGENT_PORT)),
         apply_gui_patch=False,
         device_activation_mode=str(entry_config_value(
@@ -104,6 +107,9 @@ class ReinstallSteps:
                     maintenance_token=keys[CONF_MAINTENANCE_TOKEN],
                 )
             except C300XDeviceInstallError as err:
+                if err.reason == WRONG_STATION:
+                    # The address leads to another station now; nothing was written on it.
+                    return cast(ConfigFlowResult, self.async_abort(reason="reauth_wrong_device"))
                 _LOGGER.warning("Reinstalling the device agent failed: %s", err.reason)
                 errors["base"] = err.reason
                 if err.keys_written and current_connection_options(entry) == connection:

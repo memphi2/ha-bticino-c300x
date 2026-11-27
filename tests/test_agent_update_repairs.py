@@ -204,6 +204,7 @@ class FakeEntry:
     entry_id: str = "entry-1"
     data: dict[str, Any] = field(default_factory=dict)
     options: dict[str, Any] = field(default_factory=dict)
+    unique_id: str | None = None
 
 
 class FakeConfigEntries:

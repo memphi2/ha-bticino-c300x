@@ -209,11 +209,16 @@ def test_reauth_reinstall_asks_for_the_ssh_login_once_the_factory_login_is_refus
     assert "ssh-secret" not in str(flow.async_update_and_abort.call_args)
 
 
-def test_reauth_reinstall_asks_the_station_nothing_after_the_install(monkeypatch):
-    flow = _reauth_flow(_entry())
+def test_reauth_reinstall_names_the_entry_s_station_and_asks_its_agent_nothing(monkeypatch):
+    existing = _entry()
+    existing.unique_id = "c300x-aabbccddeeff"
+    flow = _reauth_flow(existing)
     installer = AsyncMock(return_value=SimpleNamespace(display_pending=False))
     result, validate = _reinstall(monkeypatch, flow, installer)
     assert result["reason"] == "reauth_successful"
+    # The installer compares the station it reached over SSH with this name
+    # before it writes; the agent there may be missing or broken.
+    assert installer.await_args.args[0].station_id == "c300x-aabbccddeeff"
     validate.assert_not_called()
 
 

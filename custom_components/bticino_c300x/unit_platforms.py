@@ -15,6 +15,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from .agent_contracts import OutdoorUnit
 from .api_errors import C300XAgentApiError
+from .capabilities import locks_for_capabilities
 from .config_snapshots import snapshot_options
 from .entry_types import BticinoC300XConfigEntry
 from .unit_entity import C300XUnitEntity
@@ -66,6 +67,19 @@ class C300XUnitDoorButton(C300XUnitEntity, ButtonEntity):
 
     def __init__(self, entry: BticinoC300XConfigEntry, unit: OutdoorUnit) -> None:
         C300XUnitEntity.__init__(self, entry, unit, "door")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """The lock's bus address and name, as the 3.0 door button had them."""
+
+        registry = self._calls
+        unit = registry.units.get(self.unit_id, self._unit) if registry is not None else self._unit
+        name = unit.name or unit.lock_where
+        if unit.default:
+            # The station's lock, as the agent is configured for it.
+            locks = locks_for_capabilities(getattr(self._entry.runtime_data, "capabilities", {}))
+            name = locks[0]["name"] if locks else name
+        return {"lock_id": unit.lock_where, "lock_name": name}
 
     async def async_press(self) -> None:
         from .executor import async_unlock_door

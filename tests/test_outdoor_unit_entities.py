@@ -346,6 +346,28 @@ def test_door_button_opens_its_own_unit() -> None:
     assert button.device_info["identifiers"] == {("bticino_c300x", "c300x-0123456789ab:unit:22_1")}
 
 
+def test_door_buttons_name_their_lock_like_the_3_0_door_button() -> None:
+    entry = _entry({"default_unit": "20", "units": [
+        {"id": "20", "where": "20", "name": "Gate", "default": True},
+        {"id": "21", "where": "21", "name": ""},
+        {"id": "22_1", "where": "22#1", "lock_where": "23", "name": "Garage"},
+    ]})
+    entry.runtime_data.capabilities["locks"] = {
+        "supported": True, "default_id": "default", "locks": [{"id": "default", "name": "Main door"}],
+    }
+    units = entry.runtime_data.calls.units
+    attributes = {
+        unit_id: C300XUnitDoorButton(entry, units[unit_id]).extra_state_attributes  # type: ignore[arg-type]
+        for unit_id in units
+    }
+    # lock_id is the lock's bus address; the station's own lock keeps its configured name.
+    assert attributes == {
+        "20": {"lock_id": "20", "lock_name": "Main door"},
+        "21": {"lock_id": "21", "lock_name": "21"},
+        "22_1": {"lock_id": "23", "lock_name": "Garage"},
+    }
+
+
 def test_units_learned_later_get_their_entities(monkeypatch: pytest.MonkeyPatch) -> None:
     signals: list[Any] = []
     monkeypatch.setattr(unit_entity, "async_dispatcher_connect", lambda _hass, _signal, handler: signals.append(handler) or (lambda: None))

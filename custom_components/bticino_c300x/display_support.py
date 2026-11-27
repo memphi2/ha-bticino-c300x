@@ -51,6 +51,16 @@ def setup_is_c100x(setup: Any) -> bool:
     return isinstance(setup, Mapping) and _c100x(setup)
 
 
+def setup_display_pages_default(setup: Mapping[str, Any]) -> bool:
+    """Whether a new entry offers the Home Assistant display pages switched on.
+
+    Only a C300X whose agent confirms its display: the C100X activates its
+    pages separately with a reboot, and an unknown display stays off.
+    """
+
+    return not _c100x(setup) and device_display_support(setup) is True
+
+
 def entry_is_c100x(entry: Any) -> bool:
     """Return whether the loaded entry's agent reported a C100X."""
 

@@ -224,6 +224,7 @@ from .display_support import (
     device_display_support,
     entry_display_supported,
     entry_is_c100x,
+    setup_display_pages_default,
     setup_is_c100x,
 )
 from .entry_types import BticinoC300XConfigEntry
@@ -272,7 +273,6 @@ class BticinoC300XConfigFlow(ModelTextConfigFlow, config_flow_auth.AuthFlowSteps
         self._setup_agent_needs_token = False
         self._setup_bootstrapped = False
         self._setup_pending_features: dict[str, Any] | None = None
-        self._setup_device_ui_default = False
         self._setup_feature_data: dict[str, Any] = {}
         self._setup_device_activations: list[dict[str, Any]] = []
         self._setup_activation_edit_id: str | None = None
@@ -854,7 +854,7 @@ class BticinoC300XConfigFlow(ModelTextConfigFlow, config_flow_auth.AuthFlowSteps
                 default_device_ui_enabled=bool(
                     (user_input or {}).get(
                         CONF_DEVICE_UI_ENABLED,
-                        self._setup_device_ui_default,
+                        setup_display_pages_default(self._setup_agent_info),
                     )
                 ),
                 default_dashboard_navigation=(user_input or {}).get(CONF_DASHBOARD_NAVIGATION),

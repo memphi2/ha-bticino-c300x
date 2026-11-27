@@ -20,6 +20,8 @@ language (German, English, French, Italian or Spanish; otherwise English).
 
 ## Enable the Display Pages
 
+A new setup has the pages on. To turn them on later:
+
 1. Open **Configure > Display > Display and Display patch**.
 2. Turn on **Home Assistant pages on the display** and submit.
 3. Wait up to a minute: the station's display restarts with the new buttons.

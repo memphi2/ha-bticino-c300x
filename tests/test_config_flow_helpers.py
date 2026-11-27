@@ -1943,12 +1943,6 @@ def test_feature_schemas_keep_gui_patch_on_dashboard_page() -> None:
     assert CONF_VIDEO_STREAM_PATH not in _schema_key_names(dashboard_schema)
 
 
-def test_initial_flow_defaults_gui_patch_disabled() -> None:
-    flow = BticinoC300XConfigFlow()
-
-    assert flow._setup_device_ui_default is False
-
-
 def test_options_connection_schema_keeps_connection_on_first_page() -> None:
     entry = SimpleNamespace(
         data={

@@ -97,7 +97,7 @@ Setup now walks through the settings. Later you find them under
 | **Talk through the Home Assistant camera view** | Off. Talking in the card does not need it. |
 | **Visitor Snapshot** | Keep the defaults. |
 | **Additional device activations** | Leave empty for now ([activations](2-use.md#door-stair-light-and-activations)). |
-| **Home Assistant pages on the display** | Off for now ([station display](3-display.md)). |
+| **Home Assistant pages on the display** | On (the default); the next step picks the pages ([station display](3-display.md)). |
 | **Alarm (Alarmo)** | Leave empty. |
 
 <img src="../images/readme/ha-options-video-audio-en.webp" alt="Video and audio settings with video on, access set up on the station, door level and the recommended connection paths" width="320">

@@ -2,9 +2,10 @@
 
 ## v3.0.0b3 - 2026-11-27
 
-Beta. Includes everything of 3.0.0b2. The agent update and the live view ran
-on a Classe 300X with firmware 1.7.19; firmware 2.0.2, 3.0.6 and the Classe
-100X 1.5.8 are checked offline.
+Beta. Includes everything of 3.0.0b2. The agent update, the live view, an
+answered call and the door level in the audio chip ran on a Classe 300X with
+firmware 1.7.19; firmware 2.0.2, 3.0.6 and the Classe 100X 1.5.8 are checked
+offline.
 
 - **Clean picture from the first frame.** Live video starts with a complete
   picture in the live view, the ring preview and an answered call, instead of

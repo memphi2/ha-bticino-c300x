@@ -209,7 +209,7 @@ _ENTRY_DATA = {
 class FakeEntry:
     runtime_data: FakeRuntimeData
     entry_id: str = "entry-1"
-    data: dict[str, Any] = field(default_factory=lambda: dict(_ENTRY_DATA))
+    data: dict[str, Any] = field(default_factory=dict)
     options: dict[str, Any] = field(default_factory=dict)
 
 
@@ -1261,7 +1261,7 @@ def test_frontend_card_repair_initializes_missing_lovelace_config(monkeypatch) -
             self.saved = config
 
     dashboard = FailingLoadDashboard()
-    entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()))
+    entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()), data=dict(_ENTRY_DATA))
     hass = FakeHass(entry)
     hass.entity_registry = FakeEntityRegistry()
     hass.data["lovelace"] = types.SimpleNamespace(dashboards={None: dashboard})
@@ -1322,7 +1322,7 @@ def test_frontend_card_repair_rejects_invalid_lovelace_configs(monkeypatch) -> N
         async def async_save(self, _config: dict[str, Any]) -> None:
             raise AssertionError("invalid config must not be saved")
 
-    entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()))
+    entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()), data=dict(_ENTRY_DATA))
     hass = FakeHass(entry)
     hass.entity_registry = FakeEntityRegistry()
     monkeypatch.setitem(sys.modules, "homeassistant.components.lovelace", lovelace_package)
@@ -2087,7 +2087,7 @@ def test_frontend_card_repair_adds_storage_lovelace_view(monkeypatch) -> None:
             self.config = config
 
     dashboard = FakeLovelaceDashboard()
-    entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()))
+    entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()), data=dict(_ENTRY_DATA))
     hass = FakeHass(entry)
     hass.entity_registry = FakeEntityRegistry()
     hass.data["lovelace"] = types.SimpleNamespace(dashboards={None: dashboard})
@@ -2189,7 +2189,7 @@ def test_frontend_card_repair_replaces_legacy_split_cards(monkeypatch) -> None:
             self.config = config
 
     dashboard = FakeLovelaceDashboard()
-    entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()))
+    entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()), data=dict(_ENTRY_DATA))
     hass = FakeHass(entry)
     hass.entity_registry = FakeEntityRegistry()
     hass.data["lovelace"] = types.SimpleNamespace(dashboards={None: dashboard})
@@ -2302,7 +2302,7 @@ def test_frontend_card_repair_cleans_all_lovelace_views(monkeypatch) -> None:
             self.config = config
 
     dashboard = FakeLovelaceDashboard()
-    entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()))
+    entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()), data=dict(_ENTRY_DATA))
     hass = FakeHass(entry)
     hass.entity_registry = FakeEntityRegistry()
     hass.data["lovelace"] = types.SimpleNamespace(dashboards={None: dashboard})
@@ -2389,7 +2389,7 @@ def test_frontend_card_repair_adds_cards_to_selected_dashboard_and_view(
             }
         ]
     }
-    entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()))
+    entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()), data=dict(_ENTRY_DATA))
     hass = FakeHass(entry)
     frontend_setups: list[Any] = []
     hass.entity_registry = FakeEntityRegistry()

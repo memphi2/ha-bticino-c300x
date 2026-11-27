@@ -411,8 +411,10 @@ def _entry(document: dict) -> MagicMock:
     entry.entry_id = "entry"
     entry.unique_id = "station"
     entry.title = "Door"
+    # The station id spelled like the entry id, so the unique ids read as in
+    # 2.10.0 (the identity migration renames them, not this comparison).
     entry.data = {"host": "station.invalid", "port": 8091, "name": "Door", "video_enabled": True,
-                  "model": document["device"]["model"]}
+                  "model": document["device"]["model"], "station_id": "entry"}
     entry.options = {}
     entry.runtime_data = runtime
     return entry

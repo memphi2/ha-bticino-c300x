@@ -30,7 +30,9 @@ from custom_components.bticino_c300x.event import (
 )
 from custom_components.bticino_c300x.event import async_setup_entry as event_setup
 from custom_components.bticino_c300x.identity import (
+    StationIdUnknown,
     media_camera_unique_id,
+    station_id_known,
     station_mac,
     station_unique_id,
     unit_unique_id,
@@ -133,12 +135,17 @@ def test_identity_is_the_station_not_the_entry() -> None:
     assert station_unique_id(entry, "ringer_mute") == "c300x-0123456789ab_ringer_mute"
     assert unit_unique_id(entry, "22_1", "door") == "c300x-0123456789ab_unit_22_1_door"
     assert station_mac(entry) == "01:23:45:67:89:ab"
-    # Before the first setup with an API 2 agent the entry id stands in (the 2.x ids).
+    # An entry from before 3.1.0 has no id until its migration: the entry id
+    # never stands in.
     legacy = _Entry(data={}, version=1)
-    assert station_unique_id(legacy, "doorbell_camera") == "entry-1_doorbell_camera"
+    assert not station_id_known(legacy)
+    with pytest.raises(StationIdUnknown):
+        station_unique_id(legacy, "doorbell_camera")
+    with pytest.raises(StationIdUnknown):
+        station_mac(legacy)
     assert media_camera_unique_id(legacy) is None
-    assert station_mac(legacy) is None
     legacy.data = {CONF_STATION_ID: "c300x-0123456789ab", CONF_OUTDOOR_UNITS: ONE}
+    assert station_id_known(legacy)
     assert media_camera_unique_id(legacy) == "c300x-0123456789ab_unit_20_camera"
 
 

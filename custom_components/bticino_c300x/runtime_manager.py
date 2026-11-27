@@ -92,6 +92,7 @@ from .entry_config import entry_config_value as _entry_config_value
 from .entry_locks import clear_entry_locks
 from .entry_types import BticinoC300XConfigEntry
 from .error_text import compact_error_text
+from .identity import station_id_known
 from .runtime_auth import async_request_reauth
 
 if TYPE_CHECKING:
@@ -218,9 +219,29 @@ class C300XRuntimeManager:
         _async_remove_stale_gui_dependent_entities(self.hass, self.entry)
         await self.async_sync_activation_state()
         await self.async_sync_calls()
-        await self.async_forward_platforms()
+        if station_id_known(self.entry):
+            await self.async_forward_platforms()
+        else:
+            self._wait_for_identity()
         self.async_schedule_startup_sync()
         return True
+
+    def _wait_for_identity(self) -> None:
+        """An entry from before 3.1.0 whose identity migration could not run yet.
+
+        Its entities need the station id, which the migration stores together
+        with the station's units: the station is offline (the entry reloads
+        when it answers) or its agent is outdated (the agent update Repair is
+        open and reloads the entry). Until then no entity is built.
+        """
+
+        self.entry.runtime_data.loaded_platforms = ()
+        _LOGGER.warning(
+            "C300X entry %s waits for the station's outdoor units (%s) before it builds entities",
+            self.entry.entry_id,
+            "agent update required" if getattr(self.agent_update_state, "update_required", False)
+            else "station not reachable or no units reported",
+        )
 
     async def async_validate_agent(self) -> None:
         """Validate the device-agent setup state and derive capabilities."""
@@ -713,6 +734,10 @@ def _async_remove_stale_gui_dependent_entities(
     # had its buttons removed here and re-added a moment later on every setup,
     # discarding whatever the user had renamed, hidden or moved.
     if entry_device_ui_enabled_or_patch_active(entry):
+        return
+    if not station_id_known(entry):
+        # Without the station id no entity is built; the reload after the
+        # identity migration runs this again.
         return
 
     if entry_device_ui_configured(entry) is None:

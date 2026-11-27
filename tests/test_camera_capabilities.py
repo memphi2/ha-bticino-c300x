@@ -27,7 +27,7 @@ def _assert_native_audio(camera, expected):
 @pytest.fixture
 def camera(monkeypatch):
     entry = SimpleNamespace(
-        entry_id="entry-1", title="C300X", data={}, options={},
+        entry_id="entry-1", title="C300X", data={"station_id": "c300x-0123456789ab"}, options={},
         runtime_data=SimpleNamespace(),
     )
     monkeypatch.setattr(camera_module, "publish_agent_media_facts", lambda *_: None)

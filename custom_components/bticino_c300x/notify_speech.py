@@ -14,6 +14,7 @@ from .const import DOMAIN
 from .entity import entry_entity_unique_id, supports_capability
 from .entry_config import speech_settings
 from .entry_types import BticinoC300XConfigEntry
+from .identity import station_id_known
 
 
 @dataclass(frozen=True)
@@ -68,7 +69,7 @@ def prepare_speech(
         )
     entity_id = er.async_get(hass).async_get_entity_id(
         "media_player", DOMAIN, entry_entity_unique_id(entry, "speaker"),
-    )
+    ) if station_id_known(entry) else None
     state = hass.states.get(entity_id) if entity_id is not None else None
     if entity_id is None or state is None:
         raise ServiceValidationError("The C300X speaker entity is missing or disabled")

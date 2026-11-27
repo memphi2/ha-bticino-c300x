@@ -71,7 +71,9 @@ devices, entities and services; a Repair lists what to redo after the update.
   refused. Use the switches instead: `display` -> `display: true`, `speech` ->
   `tts: true`, `both` -> `display: true` and `tts: true`, `led` -> `led: true`.
   Without switches a notification is shown as before.
-- The native agent changed; an agent update is required.
+- The native agent changed; an agent update is required. Until the agent
+  update Repair has run, the integration shows no entities: the devices and
+  entities move to the outdoor units with that update.
 
 ## v3.0.0b3 - 2026-11-27
 

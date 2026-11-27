@@ -41,7 +41,7 @@ def _entry() -> SimpleNamespace:
     return SimpleNamespace(
         entry_id="entry-1",
         title="C300X",
-        data={},
+        data={"station_id": "c300x-0123456789ab"},
         options={},
         runtime_data=SimpleNamespace(
             api=_DownApi(),

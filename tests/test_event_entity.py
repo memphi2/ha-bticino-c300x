@@ -44,6 +44,8 @@ class _FakeEntry:
     entry_id: str = "entry-1"
     title: str = "C300X"
     runtime_data: _FakeRuntimeData = field(default_factory=_FakeRuntimeData)
+    # A set-up 3.1 entry: the config flow stored the station id.
+    data: dict[str, Any] = field(default_factory=lambda: {"station_id": "c300x-0123456789ab"})
 
 
 class _FakeBus:
@@ -121,7 +123,8 @@ def test_device_info_shows_the_board_and_the_article_number_the_station_reports(
     # An agent that reports neither leaves the device as release 2.10.0 showed it.
     plain = _FakeEntry(runtime_data=_FakeRuntimeData(agent_info={"model": "C300X", "firmware": "2.0.2"}))
     assert dict(C300XEntity(plain, "test").device_info) == {  # type: ignore[arg-type]
-        "identifiers": {("bticino_c300x", plain.entry_id)}, "manufacturer": "BTicino",
+        "identifiers": {("bticino_c300x", "c300x-0123456789ab")}, "manufacturer": "BTicino",
+        "connections": {("mac", "01:23:45:67:89:ab")},
         "model": "Classe 300X", "name": plain.title, "sw_version": "2.0.2",
     }
     for empty in (None, "", "  "):

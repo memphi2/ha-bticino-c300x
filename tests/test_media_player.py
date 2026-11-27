@@ -103,6 +103,8 @@ class _FakeEntry:
     options: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
+        # A set-up 3.1 entry: the config flow stored the station id.
+        self.data.setdefault("station_id", "c300x-0123456789ab")
         self.runtime_data = SimpleNamespace(
             api=self.api, capabilities=self.capabilities, event_state=SimpleNamespace(),
             connection_state=SimpleNamespace(available=True),

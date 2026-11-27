@@ -19,7 +19,6 @@ from .const import CONF_STATION_ID, DOMAIN
 from .entry_types import BticinoC300XConfigEntry
 from .identity import (
     station_device_identifier,
-    station_id,
     station_unique_id,
     unit_device_identifier,
     unit_unique_id,
@@ -40,11 +39,17 @@ UNIT_KEYS = {
 REMOVED_KEYS = frozenset({"doorbell_state", "agent_event"})
 
 
+def _current_id(entry: BticinoC300XConfigEntry) -> str:
+    """The id the entry's registry entries carry now: the stored station id, else the entry id of 2.x."""
+
+    return valid_station_id(entry.data.get(CONF_STATION_ID)) or str(entry.entry_id)
+
+
 def identity_migration_needed(entry: BticinoC300XConfigEntry, agent_station_id: str | None) -> bool:
     """True until the entry carries the station id the agent reports."""
 
     new = valid_station_id(agent_station_id)
-    return new is not None and (new != station_id(entry) or entry.version < ENTRY_VERSION)
+    return new is not None and (new != _current_id(entry) or entry.version < ENTRY_VERSION)
 
 
 def _move_unit_devices(devices: Any, entry: BticinoC300XConfigEntry, old: str, new: str) -> None:
@@ -75,10 +80,10 @@ def async_migrate_identity(
     new = valid_station_id(agent_station_id)
     if new is None:
         raise ValueError("invalid station id")
-    old = station_id(entry)
+    old = _current_id(entry)
     devices = dr.async_get(hass)
     entities = er.async_get(hass)
-    old_identifier = station_device_identifier(entry)
+    old_identifier = (DOMAIN, old)
     result: dict[str, list[str]] = {"moved": [], "removed": []}
 
     hass.config_entries.async_update_entry(

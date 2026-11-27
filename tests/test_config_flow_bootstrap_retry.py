@@ -78,12 +78,23 @@ def test_manual_setup_blank_keys_do_not_inherit_prior_input(monkeypatch):
     flow.hass = station_flow_harness.hass()
     flow.context = {"source": "user"}
     flow._setup_connection = {CONF_AGENT_HOST: "a.local", CONF_AGENT_PORT: 8091, CONF_AGENT_TOKEN: "prior", CONF_MAINTENANCE_TOKEN: "prior-admin"}
-    validator = AsyncMock(return_value=({}, {}))
+    validator = AsyncMock(return_value=({"device_id": "device-a"}, {}))
     monkeypatch.setattr(config_flow_auth, "async_validate_connection", validator)
     result = asyncio.run(flow.async_step_agent_auth({}))
     assert result["step_id"] == "user_features"
     candidate = validator.call_args.args[1]
     assert candidate[CONF_AGENT_TOKEN] == candidate[CONF_MAINTENANCE_TOKEN] == ""
+
+
+def test_an_agent_that_names_no_station_is_not_set_up(monkeypatch):
+    flow = BticinoC300XConfigFlow()
+    flow.hass = station_flow_harness.hass()
+    flow.context = {"source": "user"}
+    flow._setup_connection = {CONF_AGENT_HOST: "a.local", CONF_AGENT_PORT: 8091}
+    monkeypatch.setattr(config_flow_auth, "async_validate_connection", AsyncMock(return_value=({}, {})))
+    result = asyncio.run(flow.async_step_agent_auth({CONF_AGENT_TOKEN: "a", CONF_MAINTENANCE_TOKEN: "m"}))
+    assert result["step_id"] == "agent_auth"
+    assert result["errors"] == {"base": "cannot_connect"}
 
 
 def test_manual_final_validation_retry_keeps_the_typed_maintenance_key(monkeypatch):

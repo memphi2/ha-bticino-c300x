@@ -254,6 +254,10 @@ class _FakeEntry:
     options: dict[str, Any] = field(default_factory=dict)
     runtime_data: _FakeRuntimeData = field(default_factory=_FakeRuntimeData)
 
+    def __post_init__(self) -> None:
+        # A set-up 3.1 entry: the config flow stored the station id.
+        self.data.setdefault("station_id", "c300x-0123456789ab")
+
     def async_on_unload(self, _cancel: Any) -> None:
         return None
 

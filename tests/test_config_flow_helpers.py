@@ -70,6 +70,7 @@ from custom_components.bticino_c300x.config_schemas import (  # noqa: E402
 )
 from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_ACTIONS,
+    CONF_STATION_ID,
     CONF_ACTIONS_JSON,
     CONF_AGENT_TOKEN,
     CONF_AGENT_HOST,
@@ -129,7 +130,8 @@ def authenticated_connection_boundary(monkeypatch):
     from custom_components.bticino_c300x import config_flow_auth
 
     async def validate(_hass, _connection):
-        return {}, {}
+        # A 3.1 agent always names its station.
+        return {"device_id": "c300x-0123456789ab"}, {}
 
     monkeypatch.setattr(config_flow_auth, "async_validate_connection", validate)
 
@@ -1166,11 +1168,14 @@ def test_manual_setup_reachable_agent_creates_entry_after_dashboard_display(
         }
     }
     assert result["options"][CONF_DASHBOARD_PAGES] == [{"name": "C300X", "order": 1}]
+    # Every entity is named by the station: the entry stores its id from the start.
+    assert result["data"][CONF_STATION_ID] == "c300x-0123456789ab"
     assert calls == [
         "unique:bticino_c300x:c300x.local:8091",
         "abort_check",
         "probe:c300x.local",
-        "unique:bticino_c300x:c300x.local:8091",
+        # The station the agent names is the entry's identity.
+        "unique:c300x0123456789ab",
         "abort_check",
         "create_entry",
     ]

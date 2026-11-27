@@ -44,7 +44,7 @@ def entry_for(key="first", *, title="Front door", enabled=True, capability=True)
         return lambda: listeners.remove(listener)
 
     return SimpleNamespace(
-        entry_id=key, title=title, data={}, options={"device_ui_enabled": enabled},
+        entry_id=key, title=title, data={"station_id": f"c300x-{key}"}, options={"device_ui_enabled": enabled},
         async_on_unload=callbacks.append, unload_callbacks=callbacks,
         add_update_listener=add_update_listener, update_listeners=listeners,
         runtime_data=SimpleNamespace(

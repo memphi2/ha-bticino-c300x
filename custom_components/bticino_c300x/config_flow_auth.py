@@ -34,6 +34,7 @@ from .const import (
     DEFAULT_AGENT_PORT,
 )
 from .discovery import discovery_matches_entry
+from .identity import valid_station_id
 from .runtime_auth import REAUTH_MAINTENANCE
 
 _KEYS = (CONF_AGENT_TOKEN, CONF_MAINTENANCE_TOKEN)
@@ -101,8 +102,13 @@ class AuthFlowSteps(C100XOptInSteps, ReinstallSteps, StationEntrySteps):
     """Share setup validation and reauth without expanding the main wizard."""
 
     _setup_unique_id: str | None
+    _setup_station_id: str | None
 
     def _setup_identity_error(self: Any, setup: dict[str, Any]) -> dict[str, str]:
+        # The entry stores the station id: every entity is named by it.
+        self._setup_station_id = valid_station_id(setup.get("device_id"))
+        if self._setup_station_id is None:
+            return {"base": "cannot_connect"}
         identity = stable_unique_id_from_setup_data(setup)
         if self._setup_unique_id is not None:
             if identity is None:

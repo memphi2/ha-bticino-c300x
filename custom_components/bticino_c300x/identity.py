@@ -2,8 +2,8 @@
 
 The station is named by the agent's device id (``c300x-<mac>``), not by the
 config entry: deleting and re-adding the entry gives the same identifiers.
-Until the first setup with an agent that reports outdoor units the entry id
-stands in, which is what 2.x used (docs/dev/multi-outdoor-units.md).
+The config flow stores it with a new entry; an entry from before 3.1.0 gets
+it from the identity migration (docs/dev/multi-outdoor-units.md).
 """
 
 from __future__ import annotations
@@ -26,10 +26,23 @@ def valid_station_id(value: Any) -> str | None:
     return value if _STATION_ID.fullmatch(value) else None
 
 
-def station_id(entry: Any) -> str:
-    """The station's identity: the agent's device id once known, else the entry id."""
+class StationIdUnknown(LookupError):
+    """The entry has no station id: an entry from before 3.1.0 not migrated yet."""
 
-    return valid_station_id(getattr(entry, "data", {}).get(CONF_STATION_ID)) or str(entry.entry_id)
+
+def station_id_known(entry: Any) -> bool:
+    """True once the entry carries the station id; until then no entity can be built."""
+
+    return valid_station_id(getattr(entry, "data", {}).get(CONF_STATION_ID)) is not None
+
+
+def station_id(entry: Any) -> str:
+    """The station's identity: the agent's device id the entry stores."""
+
+    value = valid_station_id(getattr(entry, "data", {}).get(CONF_STATION_ID))
+    if value is None:
+        raise StationIdUnknown(getattr(entry, "entry_id", None))
+    return value
 
 
 def station_mac(entry: Any) -> str | None:

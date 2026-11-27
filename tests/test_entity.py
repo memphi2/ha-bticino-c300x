@@ -44,6 +44,7 @@ def _entry(available: bool = True) -> SimpleNamespace:
     return SimpleNamespace(
         entry_id="entry-1",
         title="C300X",
+        data={"station_id": "c300x-0123456789ab"},
         runtime_data=SimpleNamespace(
             connection_state=SimpleNamespace(available=available), agent_info={}
         ),

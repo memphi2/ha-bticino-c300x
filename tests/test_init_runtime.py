@@ -33,6 +33,7 @@ from custom_components.bticino_c300x.const import (
     CONF_HOMEASSISTANT_MEDIA_USER_BOOTSTRAPPED,
     CONF_MAINTENANCE_TOKEN,
     CONF_SHARED_SECRET,
+    CONF_STATION_ID,
     CONF_VIDEO_ENABLED,
     CONF_WEBHOOK_ID,
     DATA_RUNTIME_ENTRIES,
@@ -278,6 +279,7 @@ def test_setup_entry_builds_runtime_and_forwards_platforms(
             CONF_SHARED_SECRET: "secret",
             CONF_EVENT_WEBHOOK_ID: "event-webhook-id",
             CONF_EVENT_WEBHOOK_TOKEN: "event-token",
+            **_STATION,
         },
         options={CONF_VIDEO_ENABLED: True},
     )
@@ -387,7 +389,7 @@ def test_setup_failure_releases_callbacks_and_allows_retry(
     monkeypatch.setattr(manager_type, "async_sync_activation_state", noop)
     monkeypatch.setattr(manager_type, "async_forward_platforms", platforms)
     monkeypatch.setattr(manager_type, "async_schedule_startup_sync", lambda self: None)
-    entry = _entry()
+    entry = _entry(data=dict(_STATION))
     entry.add_update_listener = lambda callback: lambda: None
     entry.async_on_unload = lambda callback: None
     hass = SimpleNamespace(data={})
@@ -407,6 +409,58 @@ def test_setup_failure_releases_callbacks_and_allows_retry(
         assert not active
 
     asyncio.run(exercise())
+
+
+@pytest.mark.parametrize("migrated", [False, True])
+def test_an_entry_builds_entities_only_with_the_station_id(
+    monkeypatch, migrated, caplog, snapshot_runtime_boundary,
+):
+    """An entry from before 3.1.0 that could not migrate yet (station offline,
+    outdated agent) loads no platform: the entry id never stands in."""
+    from custom_components.bticino_c300x import events, repair_issues, services, webhook
+
+    forwarded = []
+
+    async def noop(*args, **kwargs):
+        return None
+
+    async def platforms(self):
+        forwarded.append(self.entry.entry_id)
+
+    async def sync_calls(self):
+        if migrated:
+            # The migration stores the station id before the platforms load.
+            self.entry.data = {**self.entry.data, **_STATION}
+
+    monkeypatch.setattr(webhook, "async_register_webhook", lambda *args: lambda: None)
+    monkeypatch.setattr(webhook, "async_register_agent_event_webhook", lambda *args: lambda: None)
+    monkeypatch.setattr(events, "async_start_agent_event_registration", lambda *a, **k: _async_value(lambda: None))
+    monkeypatch.setattr(services, "async_setup_services", noop)
+    monkeypatch.setattr(repair_issues, "async_sync_entry_repair_issues", lambda *args: None)
+    monkeypatch.setattr(runtime_manager, "_async_remove_stale_gui_dependent_entities", lambda *args: None)
+    manager_type = runtime_manager.C300XRuntimeManager
+    monkeypatch.setattr(manager_type, "_required_config_present", lambda self: True)
+    monkeypatch.setattr(manager_type, "_build_agent_api", lambda self: object())
+    monkeypatch.setattr(manager_type, "async_sync_calls", sync_calls)
+    monkeypatch.setattr(manager_type, "async_validate_agent", noop)
+    monkeypatch.setattr(manager_type, "async_sync_platform_gate_state", noop)
+    monkeypatch.setattr(manager_type, "async_sync_activation_state", noop)
+    monkeypatch.setattr(manager_type, "async_forward_platforms", platforms)
+    monkeypatch.setattr(manager_type, "async_schedule_startup_sync", lambda self: None)
+    entry = _entry(data={}, options={CONF_DEVICE_UI_ENABLED: False})
+    entry.add_update_listener = lambda callback: lambda: None
+    entry.async_on_unload = lambda callback: None
+    hass = SimpleNamespace(data={})
+
+    assert asyncio.run(manager_type(hass, entry).async_prepare())
+    if migrated:
+        assert forwarded == ["entry-1"]
+        assert entry.runtime_data.loaded_platforms
+    else:
+        assert forwarded == []
+        assert entry.runtime_data.loaded_platforms == ()
+        assert "waits for the station's outdoor units" in caplog.text
+    runtime_manager.cleanup_entry_runtime_resources(hass, entry)
 
 
 def test_remove_entry_clears_repair_issues_and_runtime_resources(
@@ -1694,7 +1748,7 @@ def test_remove_stale_gui_entities_removes_registry_and_state(monkeypatch, expli
     hass = SimpleNamespace(
         states=SimpleNamespace(async_remove=lambda entity_id: state_removed.append(entity_id))
     )
-    entry = _entry(options={CONF_DEVICE_UI_ENABLED: False} if explicit_disabled else {})
+    entry = _entry(data=dict(_STATION), options={CONF_DEVICE_UI_ENABLED: False} if explicit_disabled else {})
     if not explicit_disabled:
         entry.runtime_data = SimpleNamespace(qml_patch_status={"patched": False})
 
@@ -1876,6 +1930,10 @@ def _record_async(calls: list[str], value: str) -> Any:
         calls.append(value)
 
     return recorder
+
+
+# A set-up 3.1 entry: the config flow stored the station id.
+_STATION = {CONF_STATION_ID: "c300x-0123456789ab"}
 
 
 def _entry(

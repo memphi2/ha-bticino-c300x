@@ -71,6 +71,8 @@ class _FakeEntry:
     entry_id: str = "entry-1"
     title: str = "C300X"
     runtime_data: _FakeRuntimeData = field(default_factory=_FakeRuntimeData)
+    # A set-up 3.1 entry: the config flow stored the station id.
+    data: dict[str, Any] = field(default_factory=lambda: {"station_id": "c300x-0123456789ab"})
 
 
 def test_number_setup_adds_supported_entity_after_initial_refresh() -> None:

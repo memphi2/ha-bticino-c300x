@@ -348,7 +348,12 @@ call's unit, else the default unit.
 
 ### Migration (config entry version 2)
 
-Runs once, at the first setup with a 3.1.0 agent, before the platforms load:
+A new entry stores the station id from the config flow and needs no
+migration. An entry from before 3.1.0 is migrated once, at the first setup
+with a 3.1.0 agent, before the platforms load. Until then it builds no
+entities: with the station offline it reloads when the station answers;
+with an outdated agent the agent update Repair is open and reloads it.
+
 
 | From | To |
 | --- | --- |

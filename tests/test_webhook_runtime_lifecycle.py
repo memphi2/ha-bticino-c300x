@@ -35,7 +35,8 @@ def runtime():
 def entry_for(current):
     return SimpleNamespace(
         entry_id="review", title="Review",
-        data={CONF_EVENT_WEBHOOK_TOKEN: "secret"}, options={}, runtime_data=current,
+        data={CONF_EVENT_WEBHOOK_TOKEN: "secret", "station_id": "c300x-0123456789ab"},
+        options={}, runtime_data=current,
     )
 
 

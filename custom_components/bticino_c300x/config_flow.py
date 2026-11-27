@@ -203,6 +203,7 @@ from .const import (
     CONF_NATIVE_TWO_WAY_AUDIO,
     CONF_ROTATE_SHARED_SECRET,
     CONF_SHARED_SECRET,
+    CONF_STATION_ID,
     CONF_VIDEO_ENABLED,
     CONF_WEBHOOK_ID,
     CONF_WEBRTC_ICE_POLICY,
@@ -268,6 +269,7 @@ class BticinoC300XConfigFlow(ModelTextConfigFlow, config_flow_auth.AuthFlowSteps
         super().__init__()
         self._setup_connection: dict[str, Any] = {}
         self._setup_unique_id: str | None = None
+        self._setup_station_id: str | None = None
         self._setup_agent_info: dict[str, Any] = {}
         self._setup_agent_needs_token = False
         self._setup_bootstrapped = False
@@ -925,6 +927,7 @@ class BticinoC300XConfigFlow(ModelTextConfigFlow, config_flow_auth.AuthFlowSteps
                 **self._setup_connection,
                 **feature_data,
                 **({DISPLAY_SUPPORTED: display_supported} if display_supported is not None else {}),
+                CONF_STATION_ID: self._setup_station_id,
                 CONF_WEBHOOK_ID: secrets.token_urlsafe(24),
                 CONF_SHARED_SECRET: secrets.token_urlsafe(32),
                 CONF_EVENT_WEBHOOK_ID: secrets.token_urlsafe(24),

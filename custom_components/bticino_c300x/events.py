@@ -33,7 +33,7 @@ from .data import C300XConnectionState
 from .entry_types import BticinoC300XConfigEntry
 from .error_text import compact_error_text
 from .fingerprint import fnv1a64_fingerprint
-from .identity import station_unique_id
+from .identity import station_id_known, station_unique_id
 from .runtime_auth import async_classify_runtime_auth_error, async_request_reauth
 from .system_metrics import invalidate_system_metrics
 
@@ -586,8 +586,10 @@ def _registry_entity_active(
     *,
     missing_active: bool = True,
 ) -> bool:
-    unique_id = station_unique_id(entry, key)
-    entity_id = registry.async_get_entity_id(domain, DOMAIN, unique_id)
+    if not station_id_known(entry):
+        # No entity is built before the identity migration.
+        return missing_active
+    entity_id = registry.async_get_entity_id(domain, DOMAIN, station_unique_id(entry, key))
     if entity_id is None:
         return missing_active
     entity = registry.async_get(entity_id)

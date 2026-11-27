@@ -79,6 +79,12 @@ devices, entities and services; a Repair lists what to redo after the update.
   stores it for the outdoor unit you are watching and uses it for every later
   ring and live view of that unit. They work during a Ring Call and live video
   on every supported firmware, also on 3.0.6.
+- **Activations: "Light" is now "Actuator".** It is the station's generic
+  actuator ("Generic" on its display, for example a gate opener), which is
+  pressed and released like a door lock. A Light activation sent the stair
+  light command instead and did nothing at the actuator. Your Light
+  activations become Actuator activations with the update; ID, name, address
+  and button stay.
 - The native agent changed; an agent update is required. Until the agent
   update Repair has run, the integration shows no entities: the devices and
   entities move to the outdoor units with that update.

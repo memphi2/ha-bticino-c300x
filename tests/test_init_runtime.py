@@ -89,7 +89,7 @@ def test_migrate_entry_generates_missing_setup_fields(monkeypatch: pytest.Monkey
             },
             "options": {},
             "version": 1,
-            "minor_version": 3,
+            "minor_version": 4,
         }
     ]
 
@@ -2342,7 +2342,7 @@ def test_migrate_entry_leaves_the_home_page_layout_as_stored(
     update = migrate({CONF_AGENT_HOST: "192.0.2.60"}, {})
     assert "dashboard_dynamic_homepage" not in update["data"]
     assert "dashboard_dynamic_homepage" not in update["options"]
-    assert update["minor_version"] == 3
+    assert update["minor_version"] == 4
     for stored in (True, False):
         update = migrate({CONF_AGENT_HOST: "192.0.2.60", "dashboard_dynamic_homepage": stored}, {})
         assert update["data"]["dashboard_dynamic_homepage"] is stored
@@ -2372,3 +2372,38 @@ def test_display_patch_apply_sends_the_stored_home_page_layout(data, options, ex
     entry = SimpleNamespace(options=options, data=data, runtime_data=SimpleNamespace(api=api))
     asyncio.run(_apply_full_patch_action(entry)())
     api.async_apply_qml_patch.assert_awaited_once_with(dynamic_homepage=expected)
+
+
+def test_migrate_entry_turns_light_activations_into_actuators_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Activations stored as "light" become "actuator" in data and options, once."""
+
+    monkeypatch.setattr(integration.secrets, "token_urlsafe", lambda n: f"token-{n}")
+    light = {"id": "gate", "name": "Gate", "type": "light", "addressMode": "manual", "address": "25"}
+    lock = {"id": "front", "name": "Front", "type": "lock", "addressMode": "manual", "address": "21"}
+
+    def migrate(minor: int) -> list[dict[str, Any]]:
+        updates: list[dict[str, Any]] = []
+        entry = SimpleNamespace(
+            data={CONF_AGENT_HOST: "192.0.2.60", "device_activations": [light, lock]},
+            options={"device_activations": [light]},
+            minor_version=minor,
+        )
+        hass = SimpleNamespace(
+            config_entries=SimpleNamespace(
+                async_update_entry=lambda _entry, **kwargs: updates.append(kwargs)
+            )
+        )
+        assert asyncio.run(integration.async_migrate_entry(hass, entry)) is True
+        return updates
+
+    actuator = {**light, "type": "actuator"}
+    update, = migrate(3)
+    assert update["data"]["device_activations"] == [actuator, lock]
+    assert update["options"]["device_activations"] == [actuator]
+    assert update["minor_version"] == 4
+    # An entry at the current minor version had its items migrated already.
+    update, = migrate(4)
+    assert update["data"]["device_activations"] == [light, lock]
+    assert update["options"]["device_activations"] == [light]

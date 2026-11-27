@@ -97,7 +97,7 @@
       },
       "user_device_activations": {
         "title": "Zusätzliche Geräteaktivierungen",
-        "description": "Weitere Türschlösser und Lichter der Türanlage legst du hier an, je eine Aktivierung, zum Beispiel für eine zweite Tür.\n\nKonfigurierte zusätzliche Aktivierungen: {device_activation_count}\n\n{device_activation_items}\n\nHinzufügen, Bearbeiten oder Entfernen ändert nur die ausstehende Home-Assistant-Konfiguration. Der Device-Agent wird erst nach dem Speichern synchronisiert und nur, wenn seine Aktivierungskonfiguration abweicht.",
+        "description": "Weitere Türschlösser und Aktoren der Türanlage legst du hier an, je eine Aktivierung, zum Beispiel für eine zweite Tür.\n\nKonfigurierte zusätzliche Aktivierungen: {device_activation_count}\n\n{device_activation_items}\n\nHinzufügen, Bearbeiten oder Entfernen ändert nur die ausstehende Home-Assistant-Konfiguration. Der Device-Agent wird erst nach dem Speichern synchronisiert und nur, wenn seine Aktivierungskonfiguration abweicht.",
         "data": {
           "device_activation_mode": "Adresse des Treppenlichts",
           "device_activation_stair_light_p": "Treppenlicht P",
@@ -125,7 +125,7 @@
         "data_description": {
           "device_activation_item_id": "Buchstaben, Ziffern, _ und -, höchstens 32 Zeichen. Jede ID gibt es nur einmal.",
           "device_activation_item_name": "Name des Buttons in Home Assistant, höchstens 63 Zeichen.",
-          "device_activation_item_type": "Was die Adresse auslöst: ein Türschloss, ein Licht oder das Treppenlicht.",
+          "device_activation_item_type": "Was die Adresse auslöst: ein Türschloss, ein Aktor wie ein Toröffner oder das Treppenlicht.",
           "device_activation_item_address": "Adresse in der Türanlage, an die die Aktivierung geht (OpenWebNet „where“), höchstens 31 Zeichen."
         }
       },
@@ -226,7 +226,7 @@
       },
       "reconfigure_device_activations": {
         "title": "Zusätzliche Geräteaktivierungen",
-        "description": "Weitere Türschlösser und Lichter der Türanlage legst du hier an, je eine Aktivierung, zum Beispiel für eine zweite Tür.\n\nKonfigurierte zusätzliche Aktivierungen: {device_activation_count}\n\n{device_activation_items}\n\nHinzufügen, Bearbeiten oder Entfernen ändert nur die ausstehende Home-Assistant-Konfiguration. Der Device-Agent wird erst nach dem Speichern synchronisiert und nur, wenn seine Aktivierungskonfiguration abweicht.",
+        "description": "Weitere Türschlösser und Aktoren der Türanlage legst du hier an, je eine Aktivierung, zum Beispiel für eine zweite Tür.\n\nKonfigurierte zusätzliche Aktivierungen: {device_activation_count}\n\n{device_activation_items}\n\nHinzufügen, Bearbeiten oder Entfernen ändert nur die ausstehende Home-Assistant-Konfiguration. Der Device-Agent wird erst nach dem Speichern synchronisiert und nur, wenn seine Aktivierungskonfiguration abweicht.",
         "data": {
           "device_activation_mode": "Adresse des Treppenlichts",
           "device_activation_stair_light_p": "Treppenlicht P",
@@ -254,7 +254,7 @@
         "data_description": {
           "device_activation_item_id": "Buchstaben, Ziffern, _ und -, höchstens 32 Zeichen. Jede ID gibt es nur einmal.",
           "device_activation_item_name": "Name des Buttons in Home Assistant, höchstens 63 Zeichen.",
-          "device_activation_item_type": "Was die Adresse auslöst: ein Türschloss, ein Licht oder das Treppenlicht.",
+          "device_activation_item_type": "Was die Adresse auslöst: ein Türschloss, ein Aktor wie ein Toröffner oder das Treppenlicht.",
           "device_activation_item_address": "Adresse in der Türanlage, an die die Aktivierung geht (OpenWebNet „where“), höchstens 31 Zeichen."
         }
       },
@@ -896,8 +896,8 @@
         }
       },
       "device_activations": {
-        "title": "Aktivierungen: Schlösser, Lichter, Treppenlicht",
-        "description": "Weitere Türschlösser und Lichter der Türanlage legst du hier an, je eine Aktivierung, zum Beispiel für eine zweite Tür.\n\nZusätzliche Aktivierungen: {device_activation_count}\n\n{device_activation_items}\n\nWähle, was du tun möchtest, und sende ab. Änderungen werden hier zunächst gesammelt; mit **Fertig und speichern** werden sie gespeichert und das Gerät wird aktualisiert, und nur, wenn seine Aktivierungen abweichen.",
+        "title": "Aktivierungen: Schlösser, Aktoren, Treppenlicht",
+        "description": "Weitere Türschlösser und Aktoren der Türanlage legst du hier an, je eine Aktivierung, zum Beispiel für eine zweite Tür.\n\nZusätzliche Aktivierungen: {device_activation_count}\n\n{device_activation_items}\n\nWähle, was du tun möchtest, und sende ab. Änderungen werden hier zunächst gesammelt; mit **Fertig und speichern** werden sie gespeichert und das Gerät wird aktualisiert, und nur, wenn seine Aktivierungen abweichen.",
         "data": {
           "device_activation_mode": "Adresse des Treppenlichts",
           "device_activation_stair_light_p": "Treppenlicht P",
@@ -925,7 +925,7 @@
         "data_description": {
           "device_activation_item_id": "Buchstaben, Ziffern, _ und -, höchstens 32 Zeichen. Jede ID gibt es nur einmal.",
           "device_activation_item_name": "Name des Buttons in Home Assistant, höchstens 63 Zeichen.",
-          "device_activation_item_type": "Was die Adresse auslöst: ein Türschloss, ein Licht oder das Treppenlicht.",
+          "device_activation_item_type": "Was die Adresse auslöst: ein Türschloss, ein Aktor wie ein Toröffner oder das Treppenlicht.",
           "device_activation_item_address": "Adresse in der Türanlage, an die die Aktivierung geht (OpenWebNet „where“), höchstens 31 Zeichen."
         }
       },
@@ -975,7 +975,7 @@
           "features": "Video und Audio",
           "visitor_snapshot": "Besucher-Snapshot",
           "camera_quality": "Kameraqualität",
-          "device_activations": "Aktivierungen: Schlösser, Lichter, Treppenlicht",
+          "device_activations": "Aktivierungen: Schlösser, Aktoren, Treppenlicht",
           "speech": "Sprachausgabe",
           "display": "Display",
           "done": "Fertig",
@@ -986,7 +986,7 @@
           "features": "Livebild, Gegensprechen, Lautstärken und der Zugang für Video und Ton auf dem C300X.",
           "visitor_snapshot": "Größe des gespeicherten Besucherbilds, Verzögerung der Aufnahme, Aufbewahrung und das Datum im Bild.",
           "camera_quality": "Größe, Bitrate und Bildrate des Kamerastreams; eine Änderung startet das Gerät neu.",
-          "device_activations": "Zusätzliche Schlösser und Lichter der Türanlage, die Home Assistant auslösen kann, und die Adresse des Treppenlichts.",
+          "device_activations": "Zusätzliche Schlösser und Aktoren der Türanlage, die Home Assistant auslösen kann, und die Adresse des Treppenlichts.",
           "speech": "Sprachausgabe-Engine und Sprache für gesprochene Meldungen.",
           "display": "Display-Patch, Seiten, Kacheln und Alarmo.",
           "done": "Einstellungen schließen. Alles Abgesendete ist bereits gespeichert.",
@@ -1001,7 +1001,7 @@
           "features": "Video und Audio",
           "visitor_snapshot": "Besucher-Snapshot",
           "camera_quality": "Kameraqualität",
-          "device_activations": "Aktivierungen: Schlösser, Lichter, Treppenlicht",
+          "device_activations": "Aktivierungen: Schlösser, Aktoren, Treppenlicht",
           "speech": "Sprachausgabe",
           "display": "Display",
           "done": "Fertig",
@@ -1012,7 +1012,7 @@
           "features": "Livebild, Gegensprechen, Lautstärken und der Zugang für Video und Ton auf dem C100X.",
           "visitor_snapshot": "Größe des gespeicherten Besucherbilds, Verzögerung der Aufnahme, Aufbewahrung und das Datum im Bild.",
           "camera_quality": "Größe, Bitrate und Bildrate des Kamerastreams; eine Änderung startet das Gerät neu.",
-          "device_activations": "Zusätzliche Schlösser und Lichter der Türanlage, die Home Assistant auslösen kann, und die Adresse des Treppenlichts.",
+          "device_activations": "Zusätzliche Schlösser und Aktoren der Türanlage, die Home Assistant auslösen kann, und die Adresse des Treppenlichts.",
           "speech": "Sprachausgabe-Engine und Sprache für gesprochene Meldungen.",
           "display": "Seiten, Kacheln und Alarmo.",
           "done": "Einstellungen schließen. Alles Abgesendete ist bereits gespeichert.",
@@ -2012,7 +2012,7 @@
     "device_activation_item_type": {
       "options": {
         "lock": "Türschloss",
-        "light": "Licht",
+        "actuator": "Aktor",
         "stair_light": "Treppenlicht"
       }
     },

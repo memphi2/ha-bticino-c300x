@@ -9,7 +9,9 @@ from typing import Any
 from .const import DEVICE_ACTIVATION_MODE_MANUAL
 from .validation_patterns import ACTIVATION_ID_RE, DEVICE_ACTIVATION_ADDRESS_RE
 
-DEVICE_ACTIVATION_TYPES = ("lock", "light", "stair_light", "generic", "scenario")
+DEVICE_ACTIVATION_TYPES = ("lock", "actuator", "stair_light", "generic", "scenario")
+# Types the agent presses at an address with its own frames.
+ADDRESSED_ACTIVATION_TYPES = frozenset({"lock", "actuator", "stair_light"})
 DEVICE_ACTIVATION_ADDRESS_MODES = ("manual", "auto")
 MAX_DEVICE_ACTIVATIONS = 16
 MAX_DEVICE_ACTIVATION_NAME_LEN = 63
@@ -97,6 +99,23 @@ def activation_items_match(left: Sequence[Mapping[str, Any]], right: Any) -> boo
         return False
 
 
+def activation_items_without_light(value: Any) -> Any:
+    """Stored items of an entry before 3.1.0: the type "light" is now "actuator".
+
+    "light" sent the stair-light frame at the item's address; the station's
+    generic actuator it meant is pressed with the lock frames (type
+    "actuator"). Id, name and address stay. Anything else is returned as is.
+    """
+
+    if not isinstance(value, list):
+        return value
+    return [
+        {**item, "type": "actuator"}
+        if isinstance(item, Mapping) and item.get("type") == "light" else item
+        for item in value
+    ]
+
+
 def _raw_activation_items(value: Any) -> list[Any]:
     if value in (None, "", []):
         return []
@@ -162,6 +181,6 @@ def _validate_executable_activation(
 ) -> None:
     if address_mode == "auto":
         return
-    if activation_type in {"lock", "light", "stair_light"} and address:
+    if activation_type in ADDRESSED_ACTIVATION_TYPES and address:
         return
     raise DeviceActivationConfigError("invalid_device_activation_address")

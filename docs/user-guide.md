@@ -684,9 +684,10 @@ ahead (see the
 
 ## Device Activations
 
-Extra door locks and lights of the door system, for example a second door,
-become activations: button entities (`button.press`). Configure them in setup, options or
-reconfigure under **Activations: locks, lights, stair light**. Changes are
+Extra door locks and actuators of the door system, for example a second door
+or a gate opener, become activations: button entities (`button.press`).
+Configure them in setup, options or reconfigure under **Activations: locks,
+actuators, stair light**. Changes are
 collected and saved with **Finish and save**; the device is written only when
 its activation list differs, never on a plain HA start.
 
@@ -694,7 +695,7 @@ its activation list differs, never on a plain HA start.
 | --- | --- |
 | ID | Letters, numbers, `_` and `-`, up to 32 characters, unique. |
 | Name | Button name, up to 63 characters. |
-| Type | Door lock, Light or Stair light. Activations reported by the agent can also be `scenario` or `generic`. |
+| Type | Door lock, Actuator or Stair light. An actuator is what the station's display calls "Generic": it is pressed and released like a door lock. Activations reported by the agent can also be `scenario` or `generic`. |
 | Address | OpenWebNet `where` value, up to 31 characters. |
 
 **Stair light address:**

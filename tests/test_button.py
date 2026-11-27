@@ -992,7 +992,7 @@ def test_maintenance_buttons_translate_agent_errors() -> None:
 
 
 def test_activation_icon_maps_known_and_unknown_types() -> None:
-    assert _activation_icon("light") == "mdi:lightbulb-on"
+    assert _activation_icon("actuator") == "mdi:electric-switch"
     assert _activation_icon("stair_light") == "mdi:lightbulb-on"
     assert _activation_icon("scenario") == "mdi:play-box"
     assert _activation_icon("unknown") == "mdi:gesture-tap-button"

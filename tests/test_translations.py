@@ -20,17 +20,17 @@ def test_localized_translation_files_match_english_keys() -> None:
 
 
 ACTIVATIONS_HINT = {
-    "strings": ("Further door locks and lights", "are added here"),
-    "en": ("Further door locks and lights", "are added here"),
-    "de": ("Weitere Türschlösser und Lichter", "legst du hier an"),
-    "fr": ("Les serrures et lumières supplémentaires", "s'ajoutent ici"),
-    "it": ("Serrature e luci aggiuntive", "si aggiungono qui"),
-    "es": ("más cerraduras y luces", "Aquí se añaden"),
+    "strings": ("Further door locks and actuators", "are added here"),
+    "en": ("Further door locks and actuators", "are added here"),
+    "de": ("Weitere Türschlösser und Aktoren", "legst du hier an"),
+    "fr": ("Les serrures et actionneurs supplémentaires", "s'ajoutent ici"),
+    "it": ("Serrature e attuatori aggiuntivi", "si aggiungono qui"),
+    "es": ("más cerraduras y actuadores", "Aquí se añaden"),
 }
 
 
-def test_the_activations_form_says_that_further_locks_and_lights_are_added_there() -> None:
-    """Users looked elsewhere for a second door or a light; the form says it is the place."""
+def test_the_activations_form_says_that_further_locks_and_actuators_are_added_there() -> None:
+    """Users looked elsewhere for a second door or a gate; the form says it is the place."""
 
     for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
         data = _load_json(path)

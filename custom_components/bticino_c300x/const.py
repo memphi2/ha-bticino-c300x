@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 DOMAIN = "bticino_c300x"
+# Minor version of a config entry: 4 since activations have no type "light".
+ENTRY_MINOR_VERSION = 4
 DEFAULT_NAME = "BTicino C300X"
 DATA_RUNTIME_ENTRIES = "runtime_entries"
 

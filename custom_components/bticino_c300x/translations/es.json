@@ -97,7 +97,7 @@
       },
       "user_device_activations": {
         "title": "Activaciones adicionales del dispositivo",
-        "description": "Aquí se añaden más cerraduras y luces de la instalación de videoportero, una activación por cada una, por ejemplo para una segunda puerta.\n\nActivaciones adicionales configuradas: {device_activation_count}\n\n{device_activation_items}\n\nAñadir, editar o eliminar solo cambia la configuración pendiente de Home Assistant. El agente del dispositivo se sincroniza después de guardar y solo cuando su configuración de activaciones difiere.",
+        "description": "Aquí se añaden más cerraduras y actuadores de la instalación de videoportero, una activación por cada una, por ejemplo para una segunda puerta.\n\nActivaciones adicionales configuradas: {device_activation_count}\n\n{device_activation_items}\n\nAñadir, editar o eliminar solo cambia la configuración pendiente de Home Assistant. El agente del dispositivo se sincroniza después de guardar y solo cuando su configuración de activaciones difiere.",
         "data": {
           "device_activation_mode": "Dirección de la luz de escalera",
           "device_activation_stair_light_p": "Luz de escalera P",
@@ -125,7 +125,7 @@
         "data_description": {
           "device_activation_item_id": "Letras, números, _ y -, hasta 32 caracteres. Cada ID solo se puede usar una vez.",
           "device_activation_item_name": "Nombre del botón en Home Assistant, hasta 63 caracteres.",
-          "device_activation_item_type": "Lo que acciona la dirección: una cerradura, una luz o la luz de escalera.",
+          "device_activation_item_type": "Lo que acciona la dirección: una cerradura, un actuador como un abrepuertas de cancela o la luz de escalera.",
           "device_activation_item_address": "Dirección de la instalación de videoportero a la que se envía la activación (\"where\" de OpenWebNet), hasta 31 caracteres."
         }
       },
@@ -226,7 +226,7 @@
       },
       "reconfigure_device_activations": {
         "title": "Activaciones adicionales del dispositivo",
-        "description": "Aquí se añaden más cerraduras y luces de la instalación de videoportero, una activación por cada una, por ejemplo para una segunda puerta.\n\nActivaciones adicionales configuradas: {device_activation_count}\n\n{device_activation_items}\n\nAñadir, editar o eliminar solo cambia la configuración pendiente de Home Assistant. El agente del dispositivo se sincroniza después de guardar y solo cuando su configuración de activaciones difiere.",
+        "description": "Aquí se añaden más cerraduras y actuadores de la instalación de videoportero, una activación por cada una, por ejemplo para una segunda puerta.\n\nActivaciones adicionales configuradas: {device_activation_count}\n\n{device_activation_items}\n\nAñadir, editar o eliminar solo cambia la configuración pendiente de Home Assistant. El agente del dispositivo se sincroniza después de guardar y solo cuando su configuración de activaciones difiere.",
         "data": {
           "device_activation_mode": "Dirección de la luz de escalera",
           "device_activation_stair_light_p": "Luz de escalera P",
@@ -254,7 +254,7 @@
         "data_description": {
           "device_activation_item_id": "Letras, números, _ y -, hasta 32 caracteres. Cada ID solo se puede usar una vez.",
           "device_activation_item_name": "Nombre del botón en Home Assistant, hasta 63 caracteres.",
-          "device_activation_item_type": "Lo que acciona la dirección: una cerradura, una luz o la luz de escalera.",
+          "device_activation_item_type": "Lo que acciona la dirección: una cerradura, un actuador como un abrepuertas de cancela o la luz de escalera.",
           "device_activation_item_address": "Dirección de la instalación de videoportero a la que se envía la activación (\"where\" de OpenWebNet), hasta 31 caracteres."
         }
       },
@@ -896,8 +896,8 @@
         }
       },
       "device_activations": {
-        "title": "Activaciones: cerraduras, luces, luz de escalera",
-        "description": "Aquí se añaden más cerraduras y luces de la instalación de videoportero, una activación por cada una, por ejemplo para una segunda puerta.\n\nActivaciones adicionales: {device_activation_count}\n\n{device_activation_items}\n\nElige qué hacer y envía. Los cambios se recogen primero aquí; con **Terminar y guardar** se guardan y se actualiza el dispositivo, y solo si sus activaciones difieren.",
+        "title": "Activaciones: cerraduras, actuadores, luz de escalera",
+        "description": "Aquí se añaden más cerraduras y actuadores de la instalación de videoportero, una activación por cada una, por ejemplo para una segunda puerta.\n\nActivaciones adicionales: {device_activation_count}\n\n{device_activation_items}\n\nElige qué hacer y envía. Los cambios se recogen primero aquí; con **Terminar y guardar** se guardan y se actualiza el dispositivo, y solo si sus activaciones difieren.",
         "data": {
           "device_activation_mode": "Dirección de la luz de escalera",
           "device_activation_stair_light_p": "Luz de escalera P",
@@ -925,7 +925,7 @@
         "data_description": {
           "device_activation_item_id": "Letras, números, _ y -, hasta 32 caracteres. Cada ID solo se puede usar una vez.",
           "device_activation_item_name": "Nombre del botón en Home Assistant, hasta 63 caracteres.",
-          "device_activation_item_type": "Lo que acciona la dirección: una cerradura, una luz o la luz de escalera.",
+          "device_activation_item_type": "Lo que acciona la dirección: una cerradura, un actuador como un abrepuertas de cancela o la luz de escalera.",
           "device_activation_item_address": "Dirección de la instalación de videoportero a la que se envía la activación (\"where\" de OpenWebNet), hasta 31 caracteres."
         }
       },
@@ -975,7 +975,7 @@
           "features": "Vídeo y audio",
           "visitor_snapshot": "Instantánea del visitante",
           "camera_quality": "Calidad de la cámara",
-          "device_activations": "Activaciones: cerraduras, luces, luz de escalera",
+          "device_activations": "Activaciones: cerraduras, actuadores, luz de escalera",
           "speech": "Voz",
           "display": "Pantalla",
           "done": "Listo",
@@ -986,7 +986,7 @@
           "features": "Imagen en directo, conversación, volúmenes y el acceso de vídeo y audio en el C300X.",
           "visitor_snapshot": "Tamaño de la imagen del visitante guardada, retardo de captura, conservación y la fecha escrita en la imagen.",
           "camera_quality": "Tamaño, tasa de bits y fotogramas por segundo de la transmisión de la cámara; un cambio reinicia el dispositivo.",
-          "device_activations": "Cerraduras y luces adicionales de la instalación de videoportero que Home Assistant puede accionar, y la dirección de la luz de escalera.",
+          "device_activations": "Cerraduras y actuadores adicionales de la instalación de videoportero que Home Assistant puede accionar, y la dirección de la luz de escalera.",
           "speech": "Motor de texto a voz e idioma para las notificaciones habladas.",
           "display": "Parche de pantalla, páginas, mosaicos y Alarmo.",
           "done": "Cierra los ajustes. Todo lo enviado ya está guardado.",
@@ -1001,7 +1001,7 @@
           "features": "Vídeo y audio",
           "visitor_snapshot": "Instantánea del visitante",
           "camera_quality": "Calidad de la cámara",
-          "device_activations": "Activaciones: cerraduras, luces, luz de escalera",
+          "device_activations": "Activaciones: cerraduras, actuadores, luz de escalera",
           "speech": "Voz",
           "display": "Pantalla",
           "done": "Listo",
@@ -1012,7 +1012,7 @@
           "features": "Imagen en directo, conversación, volúmenes y el acceso de vídeo y audio en el C100X.",
           "visitor_snapshot": "Tamaño de la imagen del visitante guardada, retardo de captura, conservación y la fecha escrita en la imagen.",
           "camera_quality": "Tamaño, tasa de bits y fotogramas por segundo de la transmisión de la cámara; un cambio reinicia el dispositivo.",
-          "device_activations": "Cerraduras y luces adicionales de la instalación de videoportero que Home Assistant puede accionar, y la dirección de la luz de escalera.",
+          "device_activations": "Cerraduras y actuadores adicionales de la instalación de videoportero que Home Assistant puede accionar, y la dirección de la luz de escalera.",
           "speech": "Motor de texto a voz e idioma para las notificaciones habladas.",
           "display": "Páginas, mosaicos y Alarmo.",
           "done": "Cierra los ajustes. Todo lo enviado ya está guardado.",
@@ -2012,7 +2012,7 @@
     "device_activation_item_type": {
       "options": {
         "lock": "Cerradura",
-        "light": "Luz",
+        "actuator": "Actuador",
         "stair_light": "Luz de escalera"
       }
     },

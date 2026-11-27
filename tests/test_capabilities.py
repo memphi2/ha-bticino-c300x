@@ -198,7 +198,7 @@ def test_migrate_entry_repairs_update_shape_without_overwriting_optional_blanks(
 
     update = hass.config_entries.update_kwargs
     assert update is not None
-    assert update["minor_version"] == 3
+    assert update["minor_version"] == 4
     assert update["data"][CONF_AGENT_HOST] == "c300x.local"
     assert update["data"][CONF_AGENT_TOKEN] == "stored-token"
     assert update["data"][CONF_WEBHOOK_ID]

@@ -149,6 +149,8 @@ ADDED_SINCE_2_10_0 = frozenset({
     "selector/door_audio_level/options/3",
     "selector/door_audio_level/options/6",
     "selector/door_audio_level/options/9",
+    # The activation type "light" is now "actuator" (3.1.0).
+    "selector/device_activation_item_type/options/actuator",
 })
 # Texts of 2.10.0 that read differently now: the SSH package message names the
 # package and the way out, the service name lost the model (neutral names), the
@@ -162,6 +164,18 @@ CHANGED_SINCE_2_10_0 = frozenset({
     "issues/device_agent_update_required/fix_flow/step/ssh_install/description",
     "services/camera_picture/description",
     "services/capture_doorbell_call/name",
+    # The activation type "light" is now "actuator" (3.1.0).
+    "config/step/reconfigure_device_activation_item/data_description/device_activation_item_type",
+    "config/step/reconfigure_device_activations/description",
+    "config/step/user_device_activation_item/data_description/device_activation_item_type",
+    "config/step/user_device_activations/description",
+    "options/step/device_activation_item/data_description/device_activation_item_type",
+    "options/step/device_activations/description",
+    "options/step/device_activations/title",
+    "options/step/init/menu_option_descriptions/device_activations",
+    "options/step/init/menu_options/device_activations",
+    "options/step/init_c100x/menu_option_descriptions/device_activations",
+    "options/step/init_c100x/menu_options/device_activations",
 })
 # Texts of 2.10.0 that are gone: 3.1.0 removed the agent event entity, the
 # doorbell state sensor, the station's door button (each unit has its own) and
@@ -213,16 +227,18 @@ REMOVED_SINCE_2_10_0 = frozenset({
     "options/step/features/data_description/doorstation_audio_gain_db",
     "options/step/features/data_description/ring_capture_audio_gain_db",
     "services/camera_picture/fields/entry_id/name",
+    # The activation type "light" is now "actuator" (3.1.0).
+    "selector/device_activation_item_type/options/light",
 })
 # sha256 over every text of 2.10.0 (f4f75ea3) but the changed and the removed
 # ones, per file:
 #   json.dumps({"a/b/c": text}, sort_keys=True, ensure_ascii=False)
 DIGESTS_2_10_0 = {
-    "base": "e4eed4e68c1112ba8cd6cfc0a56aaa5d9705000ab1202d1455811296fbdf25d5",
-    "en": "e4eed4e68c1112ba8cd6cfc0a56aaa5d9705000ab1202d1455811296fbdf25d5",
-    "de": "507223aeff3bc8dd7aab9ea7b2f37aa453781e0498cb3c2fe85b7f09cc33b1b2",
-    "it": "2cc7c1269504e00bfd9a6a45b929f36c8504a9bd09f87f368bf0ebab32b52479",
-    "fr": "45501fc127600a2428fbefcd3030f58cac24b7b4c3e12605936f49bfa4bbfa52",
+    "base": "447d8f3eeab58e2825bddf95fbe80a9218524b73bb97196a31fbfea7b60a6ce7",
+    "en": "447d8f3eeab58e2825bddf95fbe80a9218524b73bb97196a31fbfea7b60a6ce7",
+    "de": "9554f0d09644a071f8bef8178c3a6c510c3dc3ef7a811f0069bf16eb9cdbc612",
+    "it": "a06054c5015c11fd21a9e5f0b64ee0849509dc3a374fb7a331960cc4f7ab3e1d",
+    "fr": "ddd9c45cb4c81e8f87b50e4ef7de02ff3d2644a537098e2123248451f3cf8a0b",
 }
 
 

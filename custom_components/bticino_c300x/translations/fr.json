@@ -97,7 +97,7 @@
       },
       "user_device_activations": {
         "title": "Activations appareil supplémentaires",
-        "description": "Les serrures et lumières supplémentaires de l'installation s'ajoutent ici, une activation chacune, par exemple pour une deuxième porte.\n\nActivations supplémentaires configurées : {device_activation_count}\n\n{device_activation_items}\n\nAjouter, modifier ou supprimer ne change que la configuration Home Assistant en attente. L'agent appareil est synchronisé après l'enregistrement, et seulement si sa configuration d'activations diffère.",
+        "description": "Les serrures et actionneurs supplémentaires de l'installation s'ajoutent ici, une activation chacune, par exemple pour une deuxième porte.\n\nActivations supplémentaires configurées : {device_activation_count}\n\n{device_activation_items}\n\nAjouter, modifier ou supprimer ne change que la configuration Home Assistant en attente. L'agent appareil est synchronisé après l'enregistrement, et seulement si sa configuration d'activations diffère.",
         "data": {
           "device_activation_mode": "Adresse de l'éclairage d'escalier",
           "device_activation_stair_light_p": "Éclairage d'escalier P",
@@ -125,7 +125,7 @@
         "data_description": {
           "device_activation_item_id": "Lettres, chiffres, _ et -, 32 caractères au plus. Chaque ID ne sert qu'une fois.",
           "device_activation_item_name": "Nom du bouton dans Home Assistant, 63 caractères au plus.",
-          "device_activation_item_type": "Ce que l'adresse déclenche : une serrure de porte, une lumière ou l'éclairage d'escalier.",
+          "device_activation_item_type": "Ce que l'adresse déclenche : une serrure de porte, un actionneur comme une ouverture de portail ou l'éclairage d'escalier.",
           "device_activation_item_address": "Adresse dans l'installation à laquelle l'activation est envoyée (OpenWebNet « where »), 31 caractères au plus."
         }
       },
@@ -226,7 +226,7 @@
       },
       "reconfigure_device_activations": {
         "title": "Activations appareil supplémentaires",
-        "description": "Les serrures et lumières supplémentaires de l'installation s'ajoutent ici, une activation chacune, par exemple pour une deuxième porte.\n\nActivations supplémentaires configurées : {device_activation_count}\n\n{device_activation_items}\n\nAjouter, modifier ou supprimer ne change que la configuration Home Assistant en attente. L'agent appareil est synchronisé après l'enregistrement, et seulement si sa configuration d'activations diffère.",
+        "description": "Les serrures et actionneurs supplémentaires de l'installation s'ajoutent ici, une activation chacune, par exemple pour une deuxième porte.\n\nActivations supplémentaires configurées : {device_activation_count}\n\n{device_activation_items}\n\nAjouter, modifier ou supprimer ne change que la configuration Home Assistant en attente. L'agent appareil est synchronisé après l'enregistrement, et seulement si sa configuration d'activations diffère.",
         "data": {
           "device_activation_mode": "Adresse de l'éclairage d'escalier",
           "device_activation_stair_light_p": "Éclairage d'escalier P",
@@ -254,7 +254,7 @@
         "data_description": {
           "device_activation_item_id": "Lettres, chiffres, _ et -, 32 caractères au plus. Chaque ID ne sert qu'une fois.",
           "device_activation_item_name": "Nom du bouton dans Home Assistant, 63 caractères au plus.",
-          "device_activation_item_type": "Ce que l'adresse déclenche : une serrure de porte, une lumière ou l'éclairage d'escalier.",
+          "device_activation_item_type": "Ce que l'adresse déclenche : une serrure de porte, un actionneur comme une ouverture de portail ou l'éclairage d'escalier.",
           "device_activation_item_address": "Adresse dans l'installation à laquelle l'activation est envoyée (OpenWebNet « where »), 31 caractères au plus."
         }
       },
@@ -896,8 +896,8 @@
         }
       },
       "device_activations": {
-        "title": "Activations : serrures, lumières, éclairage d'escalier",
-        "description": "Les serrures et lumières supplémentaires de l'installation s'ajoutent ici, une activation chacune, par exemple pour une deuxième porte.\n\nActivations supplémentaires : {device_activation_count}\n\n{device_activation_items}\n\nChoisissez quoi faire et validez. Les changements sont d'abord rassemblés ici ; avec **Terminer et enregistrer** ils sont enregistrés et l'appareil est mis à jour, et seulement si ses activations diffèrent.",
+        "title": "Activations : serrures, actionneurs, éclairage d'escalier",
+        "description": "Les serrures et actionneurs supplémentaires de l'installation s'ajoutent ici, une activation chacune, par exemple pour une deuxième porte.\n\nActivations supplémentaires : {device_activation_count}\n\n{device_activation_items}\n\nChoisissez quoi faire et validez. Les changements sont d'abord rassemblés ici ; avec **Terminer et enregistrer** ils sont enregistrés et l'appareil est mis à jour, et seulement si ses activations diffèrent.",
         "data": {
           "device_activation_mode": "Adresse de l'éclairage d'escalier",
           "device_activation_stair_light_p": "Éclairage d'escalier P",
@@ -925,7 +925,7 @@
         "data_description": {
           "device_activation_item_id": "Lettres, chiffres, _ et -, 32 caractères au plus. Chaque ID ne sert qu'une fois.",
           "device_activation_item_name": "Nom du bouton dans Home Assistant, 63 caractères au plus.",
-          "device_activation_item_type": "Ce que l'adresse déclenche : une serrure de porte, une lumière ou l'éclairage d'escalier.",
+          "device_activation_item_type": "Ce que l'adresse déclenche : une serrure de porte, un actionneur comme une ouverture de portail ou l'éclairage d'escalier.",
           "device_activation_item_address": "Adresse dans l'installation à laquelle l'activation est envoyée (OpenWebNet « where »), 31 caractères au plus."
         }
       },
@@ -975,7 +975,7 @@
           "features": "Vidéo et audio",
           "visitor_snapshot": "Instantané visiteur",
           "camera_quality": "Qualité de la caméra",
-          "device_activations": "Activations : serrures, lumières, éclairage d'escalier",
+          "device_activations": "Activations : serrures, actionneurs, éclairage d'escalier",
           "speech": "Synthèse vocale",
           "display": "Écran",
           "done": "Terminé",
@@ -986,7 +986,7 @@
           "features": "Image en direct, parole, volumes et accès vidéo et audio sur le C300X.",
           "visitor_snapshot": "Taille de l'image du visiteur enregistrée, délai de capture, conservation et date inscrite dans l'image.",
           "camera_quality": "Taille, débit et fréquence d'images du flux caméra ; une modification redémarre l'appareil.",
-          "device_activations": "Serrures et lumières supplémentaires de l'installation que Home Assistant peut déclencher, et l'adresse de l'éclairage d'escalier.",
+          "device_activations": "Serrures et actionneurs supplémentaires de l'installation que Home Assistant peut déclencher, et l'adresse de l'éclairage d'escalier.",
           "speech": "Moteur de synthèse vocale et langue des notifications parlées.",
           "display": "Patch display, pages, tuiles et Alarmo.",
           "done": "Fermer les réglages. Tout ce qui a été validé est déjà enregistré.",
@@ -1001,7 +1001,7 @@
           "features": "Vidéo et audio",
           "visitor_snapshot": "Instantané visiteur",
           "camera_quality": "Qualité de la caméra",
-          "device_activations": "Activations : serrures, lumières, éclairage d'escalier",
+          "device_activations": "Activations : serrures, actionneurs, éclairage d'escalier",
           "speech": "Synthèse vocale",
           "display": "Écran",
           "done": "Terminé",
@@ -1012,7 +1012,7 @@
           "features": "Image en direct, parole, volumes et accès vidéo et audio sur le C100X.",
           "visitor_snapshot": "Taille de l'image du visiteur enregistrée, délai de capture, conservation et date inscrite dans l'image.",
           "camera_quality": "Taille, débit et fréquence d'images du flux caméra ; une modification redémarre l'appareil.",
-          "device_activations": "Serrures et lumières supplémentaires de l'installation que Home Assistant peut déclencher, et l'adresse de l'éclairage d'escalier.",
+          "device_activations": "Serrures et actionneurs supplémentaires de l'installation que Home Assistant peut déclencher, et l'adresse de l'éclairage d'escalier.",
           "speech": "Moteur de synthèse vocale et langue des notifications parlées.",
           "display": "Pages, tuiles et Alarmo.",
           "done": "Fermer les réglages. Tout ce qui a été validé est déjà enregistré.",
@@ -2012,7 +2012,7 @@
     "device_activation_item_type": {
       "options": {
         "lock": "Serrure de porte",
-        "light": "Lumière",
+        "actuator": "Actionneur",
         "stair_light": "Éclairage d'escalier"
       }
     },

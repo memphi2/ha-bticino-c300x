@@ -544,8 +544,10 @@ def _activation_icon(activation_type: str) -> str:
 
     if activation_type == "lock":
         return "mdi:lock-open-variant"
-    if activation_type in {"light", "stair_light"}:
+    if activation_type == "stair_light":
         return "mdi:lightbulb-on"
+    if activation_type == "actuator":
+        return "mdi:electric-switch"
     if activation_type == "scenario":
         return "mdi:play-box"
     return "mdi:gesture-tap-button"

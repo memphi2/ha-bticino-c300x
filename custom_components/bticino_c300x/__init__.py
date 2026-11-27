@@ -10,12 +10,15 @@ from homeassistant.helpers import config_validation as cv
 
 from .const import (
     CONF_AGENT_HOST,
+    CONF_DEVICE_ACTIVATIONS,
     CONF_EVENT_WEBHOOK_ID,
     CONF_EVENT_WEBHOOK_TOKEN,
     CONF_SHARED_SECRET,
     CONF_WEBHOOK_ID,
     DOMAIN,
+    ENTRY_MINOR_VERSION,
 )
+from .device_activations import activation_items_without_light
 from .entry_config import (
     normalized_update_options,
 )
@@ -77,11 +80,18 @@ async def async_migrate_entry(
     _ensure_generated_setup_secret(data, CONF_SHARED_SECRET, 32)
     _ensure_generated_setup_secret(data, CONF_EVENT_WEBHOOK_ID, 24)
     _ensure_generated_setup_secret(data, CONF_EVENT_WEBHOOK_TOKEN, 32)
+    minor_version = getattr(entry, "minor_version", 1)
+    if minor_version < 4:
+        for stored in (data, options):
+            if CONF_DEVICE_ACTIVATIONS in stored:
+                stored[CONF_DEVICE_ACTIVATIONS] = activation_items_without_light(
+                    stored[CONF_DEVICE_ACTIVATIONS]
+                )
 
     if (
         data != original_data
         or options != original_options
-        or getattr(entry, "minor_version", 1) < 3
+        or minor_version < ENTRY_MINOR_VERSION
     ):
         hass.config_entries.async_update_entry(
             entry,
@@ -89,7 +99,7 @@ async def async_migrate_entry(
             options=options,
             # The major version moves to 2 in setup, with the station's identity.
             version=getattr(entry, "version", 1),
-            minor_version=3,
+            minor_version=ENTRY_MINOR_VERSION,
         )
     return True
 

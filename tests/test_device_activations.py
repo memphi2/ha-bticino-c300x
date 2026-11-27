@@ -40,7 +40,7 @@ def test_normalize_device_activations_rejects_duplicate_reserved_ids() -> None:
                 {
                     "id": "stair_light",
                     "name": "Duplicate stair light",
-                    "type": "light",
+                    "type": "actuator",
                     "address": "10",
                 }
             ],
@@ -129,3 +129,35 @@ def test_activation_items_match_ignores_agent_runtime_fields() -> None:
             }
         ],
     )
+
+
+def test_the_generic_actuator_is_type_actuator_and_light_is_gone() -> None:
+    """The station's generic actuator is pressed at its address, like a lock."""
+
+    assert normalize_device_activations(
+        [{"id": "gate", "name": "Gate", "type": "actuator", "address": "25"}]
+    ) == [
+        {"id": "gate", "name": "Gate", "type": "actuator", "addressMode": "manual", "address": "25"}
+    ]
+    for item in (
+        {"id": "gate", "name": "Gate", "type": "light", "address": "25"},
+        {"id": "gate", "name": "Gate", "type": "actuator"},
+    ):
+        with pytest.raises(DeviceActivationConfigError):
+            normalize_device_activations([item])
+
+
+def test_stored_light_items_become_actuators() -> None:
+    from custom_components.bticino_c300x.device_activations import (
+        activation_items_without_light,
+    )
+
+    stored = [
+        {"id": "gate", "name": "Gate", "type": "light", "addressMode": "manual", "address": "25"},
+        {"id": "front", "name": "Front", "type": "lock", "addressMode": "manual", "address": "21"},
+    ]
+    assert activation_items_without_light(stored) == [
+        {"id": "gate", "name": "Gate", "type": "actuator", "addressMode": "manual", "address": "25"},
+        stored[1],
+    ]
+    assert activation_items_without_light(None) is None

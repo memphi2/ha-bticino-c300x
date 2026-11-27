@@ -891,7 +891,7 @@ def _normalize_activation(data: Any) -> dict[str, Any] | None:
     activation_type = str(data.get("type") or "unknown").strip().lower()
     if activation_type not in {
         "lock",
-        "light",
+        "actuator",
         "stair_light",
         "generic",
         "scenario",

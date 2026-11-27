@@ -115,7 +115,7 @@ def test_activation_item_step_rejects_stair_light_id_in_auto_mode() -> None:
         {
             CONF_DEVICE_ACTIVATION_ITEM_ID: "stair_light",
             CONF_DEVICE_ACTIVATION_ITEM_NAME: "Conflicting stair light",
-            CONF_DEVICE_ACTIVATION_ITEM_TYPE: "light",
+            CONF_DEVICE_ACTIVATION_ITEM_TYPE: "actuator",
             CONF_DEVICE_ACTIVATION_ITEM_ADDRESS: "10",
         },
         [],

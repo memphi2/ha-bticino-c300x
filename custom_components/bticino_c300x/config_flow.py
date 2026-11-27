@@ -210,6 +210,7 @@ from .const import (
     DEFAULT_AGENT_PORT,
     DEFAULT_NAME,
     DOMAIN,
+    ENTRY_MINOR_VERSION,
 )
 from .dashboard_optional_config import optional_page_values
 from .device_installer import (
@@ -261,7 +262,7 @@ class BticinoC300XConfigFlow(ModelTextConfigFlow, config_flow_auth.AuthFlowSteps
     """Handle a config flow for BTicino C300X."""
 
     VERSION = 2
-    MINOR_VERSION = 3
+    MINOR_VERSION = ENTRY_MINOR_VERSION
 
     def __init__(self) -> None:
         """Initialize transient flow state."""

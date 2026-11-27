@@ -278,7 +278,7 @@ def _device_activation_target_selector(items: list[dict[str, Any]]) -> Any:
 
 
 def _device_activation_type_selector() -> Any:
-    return _translated_select("device_activation_item_type", ["lock", "light", "stair_light"])
+    return _translated_select("device_activation_item_type", ["lock", "actuator", "stair_light"])
 
 
 def _device_activation_mode_default(value: Any) -> str:

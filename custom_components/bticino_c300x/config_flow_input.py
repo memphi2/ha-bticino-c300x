@@ -37,7 +37,7 @@ from .config_flow_dashboard import (
 )
 from .config_flow_forms import optional_suggested as _optional_suggested
 from .config_flow_forms import password_selector as _password_selector
-from .config_flow_forms import ssh_key_fields
+from .config_flow_forms import ssh_login_fields
 from .config_schemas import stair_light_n as _stair_light_n
 from .config_schemas import stair_light_p as _stair_light_p
 from .config_snapshots import SNAPSHOT_DEFAULTS, snapshot_values
@@ -52,8 +52,6 @@ from .const import (
     CONF_ALARM_PAGE_ENTITY_ID,
     CONF_AUDIO_FINE_GAIN_DB,
     CONF_BOOTSTRAP_INSTALL_AGENT,
-    CONF_BOOTSTRAP_SSH_PASSWORD,
-    CONF_BOOTSTRAP_SSH_USERNAME,
     CONF_CALLBACK_BASE_URL,
     CONF_CREATE_HOMEASSISTANT_USER,
     CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
@@ -140,13 +138,7 @@ def _agent_missing_schema() -> vol.Schema:
 def _bootstrap_install_schema() -> vol.Schema:
     """Return the one-shot SSH bootstrap install schema."""
 
-    return vol.Schema(
-        {
-            vol.Optional(CONF_BOOTSTRAP_SSH_USERNAME, default=""): str,
-            vol.Optional(CONF_BOOTSTRAP_SSH_PASSWORD, default=""): _password_selector(),
-            **ssh_key_fields(),
-        }
-    )
+    return vol.Schema(ssh_login_fields())
 
 
 def _agent_auth_schema(require_agent_token: bool, *, reinstall: bool = False) -> vol.Schema:

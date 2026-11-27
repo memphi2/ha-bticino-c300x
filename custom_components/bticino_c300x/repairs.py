@@ -41,15 +41,13 @@ from .capabilities import (
     maintenance_action_is_advertised,
     qml_patch_status_is_active,
 )
-from .config_flow_forms import ssh_key_fields
+from .config_flow_forms import ssh_login_fields
 from .const import (
     CONF_AGENT_HOST,
     CONF_AGENT_PORT,
     CONF_AGENT_TOKEN,
     CONF_AGENT_UPDATE_PAYLOAD_PENDING,
     CONF_AGENT_UPDATE_QML_PENDING,
-    CONF_BOOTSTRAP_SSH_PASSWORD,
-    CONF_BOOTSTRAP_SSH_USERNAME,
     CONF_CALLBACK_BASE_URL,
     CONF_DEVICE_ACTIVATION_MODE,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
@@ -1268,13 +1266,7 @@ def _ssh_install_schema(ask_login: bool) -> vol.Schema:
 
     if not ask_login:
         return vol.Schema({})
-    return vol.Schema(
-        {
-            vol.Optional(CONF_BOOTSTRAP_SSH_USERNAME, default=""): str,
-            vol.Optional(CONF_BOOTSTRAP_SSH_PASSWORD, default=""): str,
-            **ssh_key_fields(),
-        }
-    )
+    return vol.Schema(ssh_login_fields())
 
 
 def _core_hook_placeholders(entry: Any) -> dict[str, str]:

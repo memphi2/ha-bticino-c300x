@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from homeassistant.helpers import selector
 
 from custom_components.bticino_c300x import config_flow
 from custom_components.bticino_c300x.config_flow import BticinoC300XConfigFlow
@@ -92,6 +93,14 @@ def test_every_ssh_credential_form_offers_the_key_and_its_passphrase():
     assert _ssh_install_schema(False).schema == {}
     # The repair names an unreadable key instead of a general failure.
     assert _ssh_install_error(C300XDeviceInstallError("invalid_ssh_key")) == "invalid_ssh_key"
+
+
+def test_every_ssh_credential_form_hides_the_password_and_the_passphrase():
+    for schema in (_bootstrap_install_schema(), _ssh_install_schema(True)):
+        fields = {str(key): value for key, value in schema.schema.items()}
+        for name in (CONF_BOOTSTRAP_SSH_PASSWORD, CONF_BOOTSTRAP_SSH_KEY_PASSPHRASE):
+            assert isinstance(fields[name], selector.TextSelector), name
+            assert fields[name].config["type"] == selector.TextSelectorType.PASSWORD, name
 
 
 def test_setup_installs_with_the_key_and_keeps_it_nowhere(monkeypatch):

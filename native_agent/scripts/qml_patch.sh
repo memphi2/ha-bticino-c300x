@@ -2689,6 +2689,20 @@ cleanup_staging() {
     fi
 }
 
+# A run the agent had to SIGKILL at its job deadline could not remove its
+# staged files, and /tmp is in RAM. A later write removes those of runs that
+# have ended; a run still going keeps its own.
+remove_ended_staging() {
+    [ -z "${C300X_QML_STAGING_DIR:-}" ] || return 0
+    for ended_dir in "${TMPDIR:-/tmp}"/c300x-qml-patch.*; do
+        ended_pid="${ended_dir##*.}"
+        case "$ended_pid" in ""|*[!0-9]*) continue ;; esac
+        if [ "$ended_pid" != "$$" ] && [ ! -d "/proc/$ended_pid" ] && ! kill -0 "$ended_pid" 2>/dev/null; then
+            rm -rf "$ended_dir"
+        fi
+    done
+}
+
 generate_core_patch_stage() {
     cleanup_staging
     trap cleanup_staging EXIT
@@ -3217,6 +3231,7 @@ case "$ACTION" in
             printf 'An unfinished GUI write is still in place\n' >&2
             exit 1
         fi
+        remove_ended_staging
         trap 'exit 130' HUP INT TERM
         ;;
 esac

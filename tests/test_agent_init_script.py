@@ -43,7 +43,7 @@ def test_init_propagates_failures(tmp_path, action, start_rc, stop_rc, expected,
     script.chmod(0o700)
     log = tmp_path / "calls"
     result = subprocess.run([str(script), action], capture_output=True, text=True,
-                            timeout=5, env={**os.environ, "C300X_AGENT_DIR": str(tmp_path),
+                            timeout=60, env={**os.environ, "C300X_AGENT_DIR": str(tmp_path),
                             "C300X_AGENT_ENV": str(tmp_path / "absent-env"),
                             "START_RC": str(start_rc), "STOP_RC": str(stop_rc), "CALL_LOG": str(log)})
     assert result.returncode == expected, result.stderr
@@ -121,6 +121,7 @@ int main(void) {
     FILE *log = fopen(getenv("STUB_LOG"), "a");
     int fd = socket(AF_INET, SOCK_STREAM, 0), one = 1;
     struct sockaddr_in a;
+    sigset_t blocked, waiting;
     setvbuf(log, NULL, _IONBF, 0);
     setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one);
     memset(&a, 0, sizeof a);
@@ -131,14 +132,41 @@ int main(void) {
         fprintf(log, "api_bind_failed %d\n", (int)getpid());
         return 1;
     }
-    /* Before the start line: the test may stop the agent as soon as it reads it. */
+    /* Before the start line: the test may stop the agent as soon as it reads it.
+     * TERM stays blocked outside sigsuspend, so it cannot slip in between the
+     * check of the flag and the wait. */
     signal(SIGTERM, getenv("STUB_IGNORE_TERM") ? SIG_IGN : on_term);
+    sigemptyset(&blocked);
+    sigaddset(&blocked, SIGTERM);
+    sigprocmask(SIG_BLOCK, &blocked, &waiting);
+    sigdelset(&waiting, SIGTERM);
     fprintf(log, "started %d\n", (int)getpid());
-    while (!term) pause();
+    while (!term) sigsuspend(&waiting);
     usleep(600000);
     fprintf(log, "stopped %d\n", (int)getpid());
     return 0;
 }
+"""
+
+
+START_STOP_DAEMON = r"""#!/bin/sh
+{run}
+rc=$?
+case " $* " in
+    *" --start "*" --background "*) ;;
+    *) exit "$rc" ;;
+esac
+tries=1200
+while [ "$tries" -gt 0 ]; do
+    pid="$(cat {pidfile} 2>/dev/null)"
+    if [ -n "$pid" ]; then
+        exe="$(readlink /proc/"$pid"/exe 2>/dev/null)" || break
+        [ "$exe" = {qemu} ] || break
+    fi
+    tries=$((tries - 1))
+    sleep 0.05
+done
+exit "$rc"
 """
 
 
@@ -183,8 +211,17 @@ def _device_init(tmp_path: Path, source: str | None = None, firmware: str = "1.7
             assert program.name == ("busybox.nosuid" if applet in ("start-stop-daemon", "usleep")
                                     else f"{applet}.coreutils"), (firmware, applet, program)
         wrapper = commands / applet
-        wrapper.write_text(f'#!/bin/sh\nexec {qemu} -L {sysroot} -E LD_LIBRARY_PATH={rootfs}/lib:{rootfs}/usr/lib '
-                           f'-0 {applet} {program} "$@"\n')
+        run = (f'{qemu} -L {sysroot} -E LD_LIBRARY_PATH={rootfs}/lib:{rootfs}/usr/lib '
+               f'-0 {applet} {program} "$@"')
+        if applet == "start-stop-daemon":
+            # On the station --background forks with vfork, so the call returns
+            # once the child has written the PID file and become the agent. The
+            # emulator runs vfork as a plain fork and returns at once; the wait
+            # gives back what the station guarantees.
+            wrapper.write_text(START_STOP_DAEMON.format(run=run, qemu=qemu,
+                                                        pidfile=tmp_path / "c300x-agent-native.pid"))
+        else:
+            wrapper.write_text(f'#!/bin/sh\nexec {run}\n')
         wrapper.chmod(0o700)
     (tmp_path / "c300x-agent-native.c").write_text(STUB_AGENT)
     subprocess.run([compiler, "-O", "-o", str(tmp_path / "c300x-agent-native"),
@@ -203,7 +240,7 @@ def _device_init(tmp_path: Path, source: str | None = None, firmware: str = "1.7
 
     def run(action: str, **extra: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run([str(script), action], capture_output=True, text=True,
-                              timeout=60, env={**env, **extra}, check=False)
+                              timeout=300, env={**env, **extra}, check=False)
 
     return run, log, tmp_path / "c300x-agent-native.pid", port
 
@@ -217,7 +254,7 @@ def _alive(pid: int) -> bool:
 
 
 def _wait_started(pidfile: Path, log: Path, seconds: float = 60) -> int:
-    """The PID of the started agent, once it has written its start line.
+    """The PID of the started agent, once that agent has written its start line.
 
     start-stop-daemon writes the PID file before the agent has opened its log,
     and under the emulator on a busy machine both can take seconds.
@@ -227,10 +264,9 @@ def _wait_started(pidfile: Path, log: Path, seconds: float = 60) -> int:
 
     deadline = time.monotonic() + seconds
     while True:
-        if pidfile.exists() and log.exists() and "started" in log.read_text():
-            pid = pidfile.read_text().strip()
-            if pid:
-                return int(pid)
+        pid = pidfile.read_text().strip() if pidfile.exists() else ""
+        if pid and log.exists() and f"started {pid}" in log.read_text().splitlines():
+            return int(pid)
         assert time.monotonic() < deadline, log.read_text() if log.exists() else "no agent log"
         time.sleep(0.05)
 
@@ -255,7 +291,7 @@ def test_restart_waits_for_the_old_agent_on_the_station_busybox(tmp_path, firmwa
         events = log.read_text()
         assert "api_bind_failed" not in events, events
         assert restart.returncode == 0, restart.stderr + events
-        second = int(pidfile.read_text())
+        second = _wait_started(pidfile, log)
         assert second != first and not _alive(first) and _alive(second)
         assert run("status").returncode == 0
         assert run("stop").returncode == 0

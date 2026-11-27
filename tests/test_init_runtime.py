@@ -1720,8 +1720,8 @@ def test_display_bridge_notify_ignores_stale_runtime() -> None:
     assert old_runtime.display_bridge_alarm_notify_pending is False
 
 
-@pytest.mark.parametrize("explicit_disabled", [True, False])
-def test_remove_stale_gui_entities_removes_registry_and_state(monkeypatch, explicit_disabled) -> None:  # noqa: ANN001
+@pytest.mark.parametrize("off_by", ["setting", "patch_status", "no_display"])
+def test_remove_stale_gui_entities_removes_registry_and_state(monkeypatch, off_by) -> None:  # noqa: ANN001
     import homeassistant.helpers.entity_registry as entity_registry
 
     class FakeRegistry:
@@ -1748,8 +1748,13 @@ def test_remove_stale_gui_entities_removes_registry_and_state(monkeypatch, expli
     hass = SimpleNamespace(
         states=SimpleNamespace(async_remove=lambda entity_id: state_removed.append(entity_id))
     )
-    entry = _entry(data=dict(_STATION), options={CONF_DEVICE_UI_ENABLED: False} if explicit_disabled else {})
-    if not explicit_disabled:
+    # The Display integration is known to be off: by the setting, by the
+    # station's patch status, or because the station has no display.
+    entry = _entry(
+        data={**_STATION, **({"device_display_supported": False} if off_by == "no_display" else {})},
+        options={CONF_DEVICE_UI_ENABLED: False} if off_by == "setting" else {},
+    )
+    if off_by == "patch_status":
         entry.runtime_data = SimpleNamespace(qml_patch_status={"patched": False})
 
     runtime_manager._async_remove_stale_gui_dependent_entities(hass, entry)
@@ -2138,11 +2143,9 @@ def test_setup_reads_the_patch_status_before_cleaning_up_gui_buttons() -> None:
 @pytest.mark.parametrize("status", [{"patched": True}, {}, {"patched": None}, None])
 @pytest.mark.parametrize("available", [False, True])
 def test_remove_stale_gui_entities_leaves_patch_backed_buttons_alone(monkeypatch, status, available) -> None:  # noqa: ANN001
-    """The button platform creates these under entry_device_ui_enabled_or_patch_
-    active. Gating the cleanup on the strict predicate meant an entry predating
-    the device-UI option but running an active patch had its buttons removed
-    here and re-added moments later on every setup, discarding the user's own
-    entity id, name, area and hidden flags each time."""
+    """An unknown or active Display state removes nothing: removing and
+    re-adding the buttons on every setup discarded the user's own entity id,
+    name, area and hidden flags each time."""
 
     import homeassistant.helpers.entity_registry as entity_registry
 
@@ -2165,9 +2168,7 @@ def test_remove_stale_gui_entities_leaves_patch_backed_buttons_alone(monkeypatch
     monkeypatch.setattr(entity_registry, "async_get", lambda _hass: registry)
     state_removed: list[str] = []
     hass = SimpleNamespace(states=SimpleNamespace(async_remove=state_removed.append))
-    # Legacy entries retain their registry metadata unless status confirms
-    # the patch is absent, including when an offline startup cannot read it.
-    entry = _entry()
+    entry = _entry(data=dict(_STATION))
     entry.runtime_data = SimpleNamespace(
         qml_patch_status=status,
         connection_state=SimpleNamespace(available=available),

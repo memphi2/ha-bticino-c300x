@@ -23,7 +23,6 @@ from .api_errors import C300XDisplayBridgeNotRegisteredError
 from .c100x_display_activation import async_follow_c100x_display_if_open
 from .capabilities import (
     capability_is_supported,
-    entry_device_ui_configured,
     entry_device_ui_effective,
     entry_device_ui_enabled_or_patch_active,
     maintenance_action_is_advertised,
@@ -729,23 +728,15 @@ def _async_remove_stale_gui_dependent_entities(
 ) -> None:
     """Remove stale HA entities for C300X GUI functions that are currently gated."""
 
-    # The same predicate the button platform creates them with. With the strict
-    # one, an entry that predates the device-UI option but has an active patch
-    # had its buttons removed here and re-added a moment later on every setup,
-    # discarding whatever the user had renamed, hidden or moved.
-    if entry_device_ui_enabled_or_patch_active(entry):
+    # Only when the Display integration is known to be off, by the same
+    # predicate the button platform creates them with: an unknown state
+    # removes nothing, so the user's names, areas and hidden flags stay.
+    if entry_device_ui_effective(entry) is not False:
         return
     if not station_id_known(entry):
         # Without the station id no entity is built; the reload after the
         # identity migration runs this again.
         return
-
-    if entry_device_ui_configured(entry) is None:
-        # Legacy entries depend on device state. Offline or unavailable status
-        # is not evidence that their existing registry entries are obsolete.
-        status = getattr(getattr(entry, "runtime_data", None), "qml_patch_status", None)
-        if not isinstance(status, dict) or status.get("patched") is not False:
-            return
 
     import homeassistant.helpers.entity_registry as er
 

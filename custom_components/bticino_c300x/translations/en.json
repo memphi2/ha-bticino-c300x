@@ -1398,6 +1398,26 @@
             }
           }
         }
+      },
+      "door": {
+        "name": "Door",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "opened": "Opened"
+            }
+          }
+        }
+      },
+      "stair_light": {
+        "name": "Stair light",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "activated": "Activated"
+            }
+          }
+        }
       }
     },
     "media_player": {

@@ -23,8 +23,10 @@ from custom_components.bticino_c300x.const import (
     EVENT_AGENT_EVENT_RECEIVED,
 )
 from custom_components.bticino_c300x.event import (
+    C300XStairLightEventEntity,
     C300XStationRingEventEntity,
     C300XUnitDoorbellEventEntity,
+    C300XUnitDoorEventEntity,
 )
 from custom_components.bticino_c300x.event import async_setup_entry as event_setup
 from custom_components.bticino_c300x.identity import (
@@ -93,9 +95,11 @@ def _added(entity: Any) -> Any:
     return entity
 
 
-def _setup(entry: _Entry) -> list[Any]:
+def _setup(entry: _Entry, *, rings_only: bool = True) -> list[Any]:
     added: list[Any] = []
     asyncio.run(event_setup(SimpleNamespace(), entry, added.extend))  # type: ignore[arg-type]
+    if rings_only:
+        added = [entity for entity in added if isinstance(entity, (C300XStationRingEventEntity, C300XUnitDoorbellEventEntity))]
     return [_added(entity) for entity in added]
 
 
@@ -155,6 +159,57 @@ def test_one_unit_rings_on_the_station_at_once_and_on_the_unit_when_it_is_named(
     _send(entities, entry, "call_caller_identified", call_id="0badc0de-1", unit_id="20",
           attribution="default_fallback")
     assert _fired(entities)["c300x-0123456789ab_unit_20_doorbell"] == ["0badc0de-1"]
+
+
+def _bus(entities: list[Any], entry: _Entry, key: str, **data: Any) -> None:
+    """A station frame as the webhook puts it on the bus."""
+
+    event = SimpleNamespace(data={
+        "event_type": key, "entry_id": entry.entry_id, "unit": data.get("unit"),
+        "call_id": data.get("call_id"), "event_at": "now", "data": data,
+    })
+    for entity in entities:
+        entity._agent_event(event)
+
+
+def test_a_door_frame_fires_its_units_door_and_the_stair_light_fires_on_the_station() -> None:
+    entry = _entry(THREE)
+    entry.runtime_data.capabilities["stair_light"] = True
+    entities = _setup(entry, rings_only=False)
+    doors = {entity.unit_id: entity for entity in entities if isinstance(entity, C300XUnitDoorEventEntity)}
+    (stair,) = [entity for entity in entities if isinstance(entity, C300XStairLightEventEntity)]
+    assert set(doors) == {"20", "21", "22_1"}
+    assert doors["21"].unique_id == "c300x-0123456789ab_unit_21_door_event"
+    assert doors["21"].event_types == ["opened"] and stair.event_types == ["activated"]
+    assert stair.unique_id == "c300x-0123456789ab_stair_light_event"
+
+    # Whatever opened it: in a call, and outside one (from the station or the app).
+    _bus(entities, entry, "door_unlock_started", unit="21", call_id="0badc0de-1", address="21")
+    _bus(entities, entry, "door_unlock_started", unit="20", call_id=None, address="20")
+    # The release of the lock, another station, or a lock of no unit fire nothing.
+    _bus(entities, entry, "door_unlock_ended", unit="21", call_id=None, address="21")
+    _bus(entities, entry, "door_unlock_started", unit=None, call_id=None, address="4")
+    _bus(entities, _Entry(entry_id="entry-2"), "door_unlock_started", unit="21", address="21")
+    assert {unit: door.fired for unit, door in doors.items()} == {
+        "20": [("opened", {"call_id": None})],
+        "21": [("opened", {"call_id": "0badc0de-1"})],
+        "22_1": [],
+    }
+    _bus(entities, entry, "stair_light_activated", address="0")
+    _bus(entities, entry, "stair_light_released", address="0")
+    assert stair.fired == [("activated", {"address": "0"})]
+
+
+def test_the_door_and_stair_light_events_follow_the_capabilities() -> None:
+    entry = _entry(ONE)
+    entry.runtime_data.capabilities = {"doorbell_events": True}
+    assert [type(entity) for entity in _setup(entry, rings_only=False)] == [
+        C300XStationRingEventEntity, C300XUnitDoorbellEventEntity,
+    ]
+    entry.runtime_data.capabilities = {"locks": True, "stair_light": True}
+    assert [type(entity) for entity in _setup(entry, rings_only=False)] == [
+        C300XStairLightEventEntity, C300XUnitDoorEventEntity,
+    ]
 
 
 def test_a_ring_at_a_unit_the_station_had_not_listed_rings_that_unit() -> None:

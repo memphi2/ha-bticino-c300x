@@ -221,6 +221,8 @@ admin-only: capture and analysis, display notices and stored messages. Automatio
 | --- | --- | --- |
 | Station ring | Event type `ring` (device class doorbell) at once with every ring, before the calling unit is known. The fastest trigger. | `call_id`, `last_ring_at`, `camera_entity_id` |
 | Doorbell ring event (outdoor unit) | Event type `ring` (device class doorbell) when a visitor rang at this unit, as soon as the station names the caller (about 0.3 s, at most 1 s), also with one unit. A unit's first ring fires when its entities are added. Same `call_id` as the station's ring. | `call_id`, `unit`, `unit_name`, `attribution`, `last_ring_at`, `camera_entity_id` |
+| Door (outdoor unit) | Event type `opened` when the station bus reports this unit's lock opened, whatever opened it: the door button, the station display, the BTicino app or a lock activation. | `call_id` while the unit has a call |
+| Stair light (station) | Event type `activated` with every stair light frame on the bus. | `address` |
 
 `attribution` is `caller_frame` when the station named the unit, or
 `default_fallback` when it did not within one second and the default unit was

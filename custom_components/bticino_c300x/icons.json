@@ -54,6 +54,12 @@
       },
       "ring": {
         "default": "mdi:doorbell-video"
+      },
+      "door": {
+        "default": "mdi:door-open"
+      },
+      "stair_light": {
+        "default": "mdi:stairs"
       }
     },
     "select": {

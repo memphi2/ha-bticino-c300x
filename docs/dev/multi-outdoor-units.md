@@ -260,7 +260,8 @@ All carry the 2.x envelope (`event_id`, `type`, `occurred_at`, `data`).
 
 Station device: display, ringer, answering machine, memos, codec, camera
 resolution, agent, maintenance, diagnostics, LED, announcements, stair light,
-activations, Home Call, and the station `ring` event entity (key `ring`,
+activations, Home Call, the `stair_light_event` event entity (event type
+`activated` on `stair_light.activated`), and the station `ring` event entity (key `ring`,
 event type `ring`, attributes `call_id` and `unit: null`): the indoor station
 ringing. It fires at once on `doorbell.pressed`, on every station, also with
 one unit.
@@ -272,6 +273,7 @@ Every outdoor unit, also the only one:
 | `event` | `doorbell` | device class `doorbell`, event type `ring`; attributes `call_id`, `unit`, `unit_name`, `attribution`, `camera_entity_id` (the media camera). |
 | `camera` | `camera` | The default unit's camera is the media camera (ring, answer, on-demand). Another unit's camera shows a still of the live picture while it has the current call (the station switches the picture to the caller), else its last visitor image. |
 | `button` | `door` | Unlocks this unit (`outdoor-units/{unit_id}/actions/unlock`). |
+| `event` | `door_event` | Event type `opened` on this unit's `door_unlock.started` (the agent names the unit of the lock address); attribute `call_id` while the unit has a call. |
 | `sensor` | `call` | `idle`, `ringing`, `answered`, `viewing`; attribute `call_id`. |
 | `image` | `last_visitor` | The latest retained image of a call of this unit. |
 

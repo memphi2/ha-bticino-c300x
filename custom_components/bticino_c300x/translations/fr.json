@@ -1398,6 +1398,26 @@
             }
           }
         }
+      },
+      "door": {
+        "name": "Porte",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "opened": "Ouverte"
+            }
+          }
+        }
+      },
+      "stair_light": {
+        "name": "Lumière d'escalier",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "activated": "Allumée"
+            }
+          }
+        }
       }
     },
     "media_player": {

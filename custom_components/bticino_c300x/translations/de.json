@@ -1398,6 +1398,26 @@
             }
           }
         }
+      },
+      "door": {
+        "name": "Tür",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "opened": "Geöffnet"
+            }
+          }
+        }
+      },
+      "stair_light": {
+        "name": "Treppenlicht",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "activated": "Eingeschaltet"
+            }
+          }
+        }
       }
     },
     "media_player": {

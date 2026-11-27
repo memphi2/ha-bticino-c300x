@@ -1398,6 +1398,26 @@
             }
           }
         }
+      },
+      "door": {
+        "name": "Porta",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "opened": "Aperta"
+            }
+          }
+        }
+      },
+      "stair_light": {
+        "name": "Luce scale",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "activated": "Accesa"
+            }
+          }
+        }
       }
     },
     "media_player": {

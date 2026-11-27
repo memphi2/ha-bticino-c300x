@@ -6,9 +6,9 @@ Several outdoor units on one station (issue #53). This release changes
 devices, entities and services; a Repair lists what to redo after the update.
 
 - **Every outdoor unit is its own device** below the station, also when there
-  is only one. It has a **Doorbell ring event**, a **Door unlock** button, a **Call**
-  sensor (`idle`, `ringing`, `answered`, `viewing`), a **Last visitor** image
-  and a camera. The station takes the names of its units from its own
+  is only one. It has a **Doorbell ring event**, a **Door** event, a **Door
+  unlock** button, a **Call** sensor (`idle`, `ringing`, `answered`,
+  `viewing`), a **Last visitor** image and a camera. The station takes the names of its units from its own
   configuration; a unit that is not configured appears with its first ring.
 - The existing doorbell camera, doorbell ring event and door button move to
   the device of the default outdoor unit. Their entity IDs and history stay;
@@ -22,6 +22,10 @@ devices, entities and services; a Repair lists what to redo after the update.
   notification. Both carry the same `call_id`, also when the visitor presses
   again during the call; both fire again then. The ring event no longer has the
   `video_available` attribute.
+- New **Door** event on every outdoor unit (`opened`) and **Stair light**
+  event on the station (`activated`). They fire with the station's own bus
+  message, whatever opened the door or switched on the light: the button, the
+  station, the BTicino app. A door opened during a call carries its `call_id`.
 - The card follows the current call: it shows the calling unit's name, and its
   door button opens the unit that rang.
 - **Blueprints** start from the **Doorbell ring event** of the outdoor unit you

@@ -13,9 +13,10 @@ devices, entities and services; a Repair lists what to redo after the update.
 - The existing doorbell camera, doorbell ring event and door button move to
   the device of the default outdoor unit. Their entity IDs and history stay;
   their displayed names now start with the unit's name instead of the
-  station's. Every **Door unlock** button has the attributes `lock_id` and
-  `lock_name`; on the default unit they keep their 3.0 values, another unit
-  shows its lock's bus address.
+  station's. The **Door unlock** button's attribute `lock_id` (`default`) is
+  replaced by `lock_address`, the bus address of the unit's lock (for example
+  `20`); `lock_name` is that lock's name, else the unit's name. Every unit's
+  button has both.
 - A unit's **Doorbell ring event** fires once the station has named the
   calling unit (about 0.3 s after the ring, at most 1 s), also when the
   station has only one unit. A unit that rings for the first time gets its

@@ -346,32 +346,33 @@ def test_door_button_opens_its_own_unit() -> None:
     assert button.device_info["identifiers"] == {("bticino_c300x", "c300x-0123456789ab:unit:22_1")}
 
 
-def test_door_buttons_name_their_lock_like_the_3_0_door_button() -> None:
+def test_every_door_button_names_its_lock_the_same_way() -> None:
     entry = _entry({"default_unit": "20", "units": [
         {"id": "20", "where": "20", "name": "Gate", "default": True},
         {"id": "21", "where": "21", "name": ""},
         {"id": "22_1", "where": "22#1", "lock_where": "23", "name": "Garage"},
     ]})
+    # The agent's own lock entry: not an address, so it names no unit's lock.
     entry.runtime_data.capabilities["locks"] = {
         "supported": True, "default_id": "default", "locks": [{"id": "default", "name": "Main door"}],
     }
     units = entry.runtime_data.calls.units
-    attributes = {
-        unit_id: C300XUnitDoorButton(entry, units[unit_id]).extra_state_attributes  # type: ignore[arg-type]
-        for unit_id in units
+
+    def attributes() -> dict[str, Any]:
+        return {
+            unit_id: C300XUnitDoorButton(entry, units[unit_id]).extra_state_attributes  # type: ignore[arg-type]
+            for unit_id in units
+        }
+
+    # The default unit is no special case: the lock's bus address and the unit's name.
+    assert attributes() == {
+        "20": {"lock_address": "20", "lock_name": "Gate"},
+        "21": {"lock_address": "21", "lock_name": None},
+        "22_1": {"lock_address": "23", "lock_name": "Garage"},
     }
-    # The default unit keeps exactly what 3.0 showed, so 3.0 templates keep
-    # working; another unit its lock's bus address.
-    assert attributes == {
-        "20": {"lock_id": "default", "lock_name": "Main door"},
-        "21": {"lock_id": "21", "lock_name": "21"},
-        "22_1": {"lock_id": "23", "lock_name": "Garage"},
-    }
-    # A lock the agent reports for another unit keeps its id and name.
+    # A name the agent reports for a lock address is that lock's name.
     entry.runtime_data.capabilities["locks"]["locks"].append({"id": "23", "name": "Garage gate"})
-    assert C300XUnitDoorButton(entry, units["22_1"]).extra_state_attributes == {  # type: ignore[arg-type]
-        "lock_id": "23", "lock_name": "Garage gate",
-    }
+    assert attributes()["22_1"] == {"lock_address": "23", "lock_name": "Garage gate"}
 
 
 def test_units_learned_later_get_their_entities(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -100,38 +100,31 @@ def test_openwebnet_local_action_events_are_deduplicated_before_dispatch() -> No
 
 
 def test_lock_activation_run_emits_unlock_events_and_dedupes_echoes() -> None:
-    text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
-    activation_body = _function_body(text, "handle_activation_run")
-    event_body = _function_body(text, "dispatch_lock_activation_event")
+    src = ROOT / "native_agent" / "src"
+    routes = (src / "http_activations.c").read_text(encoding="utf-8")
+    http = (src / "http.c").read_text(encoding="utf-8")
+    activation_body = _function_body(routes, "activation_run")
+    event_body = _function_body(routes, "lock_event")
+    remember_body = _function_body(routes, "remember")
+    wiring_body = _function_body(http, "activation_routes")
+    emit_body = _function_body(http, "emit_activation_event")
 
     assert 'strcmp(activation->type, "lock") == 0' in activation_body
-    assert (
-        'dispatch_lock_activation_event(\n'
-        "            config,\n"
-        "            runtime,\n"
-        "            activation,\n"
-        '            "door_unlock.started",\n'
-        "            press\n"
-        "        );"
-    ) in activation_body
-    assert (
-        'dispatch_lock_activation_event(\n'
-        "                config,\n"
-        "                runtime,\n"
-        "                activation,\n"
-        '                "door_unlock.ended",\n'
-        "                release\n"
-        "            );"
-    ) in activation_body
+    assert 'lock_event(routes, activation, "door_unlock.started", press);' in activation_body
+    assert 'lock_event(routes, activation, "door_unlock.ended", release);' in activation_body
+    # The events follow a frame the bus took, never a failed send.
+    assert activation_body.index("reply_bus_error(client_fd, error);") < activation_body.index(
+        'lock_event(routes, activation, "door_unlock.started", press);'
+    )
     assert '\\"source\\":\\"activation\\"' in event_body
     assert '\\"activation_id\\":%s' in event_body
-    assert (
-        "c300x_local_action_event_remember(\n"
-        "        &runtime->local_action_events,"
-    ) in event_body
-    assert event_body.index("c300x_local_action_event_remember") < event_body.index(
-        "dispatch_event(config, runtime, event_type, event_data, 0);"
+    # The echo of the agent's own frame is remembered before the event goes out.
+    assert event_body.index("remember(routes, type, activation->address);") < event_body.index(
+        "emit(routes, type, data);"
     )
+    assert "c300x_local_action_event_remember(routes->local_events, type, address," in remember_body
+    assert "&runtime->local_action_events, emit_activation_event, runtime" in wiring_body
+    assert "dispatch_event(runtime->config, runtime, type, data, 0);" in emit_body
 
 
 def test_udp_event_socket_never_blocks_the_loop() -> None:

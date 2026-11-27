@@ -430,18 +430,29 @@ def _services_yaml() -> dict[str, Any]:
     )
 
 
+class _Device:
+    """A device registry entry: one config entry, as HA 2026.10 has it."""
+
+    def __init__(self, identifiers: set[tuple[str, str]], config_entry_id: str) -> None:
+        self.identifiers = identifiers
+        self.config_entry_id = config_entry_id
+
+    @property
+    def config_entries(self) -> set[str]:
+        # Deprecated in HA (warning, removed in 2027.10): reading it is a bug.
+        raise AssertionError("DeviceEntry.config_entries is deprecated")
+
+
 def _targets(monkeypatch: pytest.MonkeyPatch, entities: dict[str, Any] | None = None) -> None:
     """Two stations, "one" with an outdoor unit device, as HA's registries see them."""
 
     from custom_components.bticino_c300x import service_target
 
     devices = {
-        "station-one": types.SimpleNamespace(identifiers={(DOMAIN, "c300x-000000000001")}, config_entries={"one"}),
-        "unit-one-21": types.SimpleNamespace(
-            identifiers={(DOMAIN, "c300x-000000000001:unit:21")}, config_entries={"one"},
-        ),
-        "station-two": types.SimpleNamespace(identifiers={(DOMAIN, "c300x-000000000002")}, config_entries={"two"}),
-        "foreign": types.SimpleNamespace(identifiers={("other", "x")}, config_entries={"foreign-entry"}),
+        "station-one": _Device({(DOMAIN, "c300x-000000000001")}, "one"),
+        "unit-one-21": _Device({(DOMAIN, "c300x-000000000001:unit:21")}, "one"),
+        "station-two": _Device({(DOMAIN, "c300x-000000000002")}, "two"),
+        "foreign": _Device({("other", "x")}, "foreign-entry"),
     }
     monkeypatch.setattr(service_target.dr, "async_get", lambda _hass: types.SimpleNamespace(async_get=devices.get))
     monkeypatch.setattr(

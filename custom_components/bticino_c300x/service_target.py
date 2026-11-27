@@ -95,11 +95,11 @@ def resolve_service_target(hass: HomeAssistant, call: ServiceCall) -> ServiceTar
          if domain == DOMAIN and _UNIT_MARK in value),
         None,
     )
-    for entry_id in device.config_entries:
-        entry = hass.config_entries.async_get_entry(entry_id)
-        if entry is None or entry.domain != DOMAIN:
-            continue
-        if entry.state is not ConfigEntryState.LOADED:
-            raise service_validation_error("entry_not_loaded")
-        return ServiceTarget(entry, unit_id)
-    raise service_validation_error("unknown_entry")
+    # A device belongs to one config entry (DeviceEntry.config_entries is
+    # deprecated and goes in HA 2027.10).
+    entry = hass.config_entries.async_get_entry(device.config_entry_id)
+    if entry is None or entry.domain != DOMAIN:
+        raise service_validation_error("unknown_entry")
+    if entry.state is not ConfigEntryState.LOADED:
+        raise service_validation_error("entry_not_loaded")
+    return ServiceTarget(entry, unit_id)

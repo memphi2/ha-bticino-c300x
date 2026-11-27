@@ -42,6 +42,7 @@ struct client {
 };
 
 static struct client clients[GOP_CLIENTS];
+static enum c300x_media_gop_source feeding = C300X_MEDIA_GOP_ONDEMAND;
 
 static void forward_raw(const unsigned char *packet, size_t len)
 {
@@ -58,7 +59,7 @@ static void forward_raw(const unsigned char *packet, size_t len)
         c300x_rtsp_writer_retain(client->writer);
         count++;
     }
-    c300x_media_gop_forward(targets, count, packet, len);
+    c300x_media_gop_forward(feeding, targets, count, packet, len);
     assert(gop.bytes <= C300X_MEDIA_GOP_CACHE_BYTES);
     assert(gop.count <= C300X_MEDIA_GOP_CACHE_PACKETS);
 }
@@ -285,7 +286,7 @@ static void stale(void)
     leave(0);
     /* A session end drops the cache as well. */
     send_frame(&station, true, 20);
-    c300x_media_gop_reset();
+    c300x_media_gop_reset(C300X_MEDIA_GOP_ONDEMAND);
     assert(gop.data == NULL && !gop.group);
     join(1);
     send_frame(&station, false, 2);
@@ -397,6 +398,63 @@ static void slow(void)
     leave(0);
 }
 
+/* A ring and an on-demand view deliver at the same time: the clients stay on
+ * the stream they have, and each session's end resets only its own cache. */
+static void two_sources(void)
+{
+    struct station ring = {.ssrc = 0x1111, .ts = 1000, .seq = 100};
+    struct station view = {.ssrc = 0x2222, .ts = 900000, .seq = 30000};
+    join(0);
+    feeding = C300X_MEDIA_GOP_RING;
+    send_frame(&ring, true, 3);
+    for (int frame = 0; frame < 4; frame++) {
+        feeding = C300X_MEDIA_GOP_ONDEMAND;
+        send_frame(&view, frame == 0, 2);
+        feeding = C300X_MEDIA_GOP_RING;
+        send_frame(&ring, false, 2);
+    }
+    size_t count = receive(&clients[0], rx, MAX_RX);
+    assert(count == 6 + 4 * 3 && assert_clean_start(rx, count, 1) == 3);
+    assert(rx[0].ssrc == 0x1111);
+    /* An on-demand session that ends meanwhile leaves the ring's cache. */
+    c300x_media_gop_reset(C300X_MEDIA_GOP_ONDEMAND);
+    assert(gop.group && gop.data != NULL);
+    /* The ring ends: the view takes over at its next IDR, the client's
+     * numbering goes on. */
+    struct rx last = rx[count - 1];
+    c300x_media_gop_reset(C300X_MEDIA_GOP_RING);
+    feeding = C300X_MEDIA_GOP_ONDEMAND;
+    send_frame(&view, false, 2);
+    assert(receive(&clients[0], rx, MAX_RX) == 0);
+    send_frame(&view, true, 2);
+    send_frame(&view, false, 2);
+    count = receive(&clients[0], rx, MAX_RX);
+    assert(count == 5 + 3 && assert_clean_start(rx, count, 1) == 2);
+    assert(rx[0].seq == (uint16_t)(last.seq + 1) && rx[0].ssrc == last.ssrc);
+    /* A ring ending now leaves the view's cache: a new client starts with it
+     * at once, the first one goes on. */
+    c300x_media_gop_reset(C300X_MEDIA_GOP_RING);
+    assert(gop.group && gop.data != NULL);
+    join(1);
+    send_frame(&view, false, 2);
+    count = receive(&clients[1], rx, MAX_RX);
+    assert(count == 5 + 3 + 3 && assert_clean_start(rx, count, 3) == 2);
+    assert(receive(&clients[0], rx, MAX_RX) == 3);
+    /* A source silent for a second gives way to the other one. */
+    clock_ms += 1100;
+    feeding = C300X_MEDIA_GOP_RING;
+    send_frame(&ring, true, 2);
+    assert(gop.group && gop.ssrc == 0x1111);
+    count = receive(&clients[0], rx, MAX_RX);
+    assert(count == 5 && rx[0].nal == 9 && rx[1].nal == 7);
+    feeding = C300X_MEDIA_GOP_ONDEMAND;
+    send_frame(&view, false, 2);
+    assert(receive(&clients[0], rx, MAX_RX) == 0 && gop.ssrc == 0x1111);
+    c300x_media_gop_reset(C300X_MEDIA_GOP_RING);
+    leave(0);
+    leave(1);
+}
+
 static atomic_bool reader_stop;
 
 /* A client on a slow link: 1 KiB every 2 ms, into what receive() parses. */
@@ -495,7 +553,7 @@ static void malformed(void)
     packet[12] = 0x18;
     packet[13] = 0xff;
     forward_raw(packet, 20);                 /* STAP-A sizes beyond the end */
-    c300x_media_gop_forward(NULL, 0, NULL, 0);
+    c300x_media_gop_forward(feeding, NULL, 0, NULL, 0);
     assert(receive(&clients[0], rx, MAX_RX) == 0);
     assert(open_fds() == before);
     leave(0);
@@ -503,7 +561,7 @@ static void malformed(void)
 
 static void no_memory(void)
 {
-    c300x_media_gop_reset();
+    c300x_media_gop_reset(C300X_MEDIA_GOP_ONDEMAND);
     fail_malloc = true;
     struct station station = {.ssrc = 7, .ts = 1, .seq = 1};
     join(0);
@@ -527,10 +585,11 @@ int main(int argc, char **argv)
     else if (strcmp(argv[1], "loss") == 0) loss();
     else if (strcmp(argv[1], "slow") == 0) slow();
     else if (strcmp(argv[1], "slow_burst") == 0) slow_burst();
+    else if (strcmp(argv[1], "two_sources") == 0) two_sources();
     else if (strcmp(argv[1], "malformed") == 0) malformed();
     else if (strcmp(argv[1], "no_memory") == 0) no_memory();
     else return 2;
-    c300x_media_gop_reset();
+    c300x_media_gop_reset(C300X_MEDIA_GOP_ONDEMAND);
     puts("ok");
     return 0;
 }

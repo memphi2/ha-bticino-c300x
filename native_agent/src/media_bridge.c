@@ -1767,7 +1767,8 @@ static void forward_rtsp_packet(media_bridge_t *bridge, const unsigned char *pac
 }
 
 /* Video goes through the keyframe group cache: each client starts at an IDR. */
-static void forward_rtsp_video_packet(media_bridge_t *bridge, const unsigned char *packet, int packet_len) {
+static void forward_rtsp_video_packet(media_bridge_t *bridge, enum c300x_media_gop_source source,
+                                      const unsigned char *packet, int packet_len) {
     rtsp_send_target_t targets[C300X_VIDEO_RING_PREVIEW_MAX_RTSP_CLIENTS];
 
     if (bridge == NULL || packet == NULL || packet_len <= 0) {
@@ -1779,7 +1780,7 @@ static void forward_rtsp_video_packet(media_bridge_t *bridge, const unsigned cha
     if (target_count > 0) {
         c300x_video_bridge_rtp_packet(bridge->video);
     }
-    c300x_media_gop_forward(targets, target_count, packet, (size_t)packet_len);
+    c300x_media_gop_forward(source, targets, target_count, packet, (size_t)packet_len);
 }
 
 static bool rtsp_audio_payload_is_speex_8khz(unsigned char payload_type) {
@@ -1985,7 +1986,7 @@ static void drain_ring_srtp_socket(
                     | ((uint32_t)packet[10] << 8)
                     | (uint32_t)packet[11];
             }
-            forward_rtsp_video_packet(bridge, packet, packet_len);
+            forward_rtsp_video_packet(bridge, C300X_MEDIA_GOP_RING, packet, packet_len);
         }
         from_len = sizeof(from);
     }
@@ -2450,7 +2451,7 @@ static void handle_ring_invite(
         remote_contact_uri,
         &srtp
     );
-    c300x_media_gop_reset();
+    c300x_media_gop_reset(C300X_MEDIA_GOP_RING);
     c300x_audio_level_session_boundary();
 
 cleanup:
@@ -4635,7 +4636,7 @@ static void drain_relay_video_packets(media_bridge_t *bridge, int rtp_fd) {
         if (n <= 0) {
             return;
         }
-        forward_rtsp_video_packet(bridge, packet, (int)n);
+        forward_rtsp_video_packet(bridge, C300X_MEDIA_GOP_ONDEMAND, packet, (int)n);
     }
 }
 
@@ -5162,7 +5163,7 @@ static void stop_media_session_locked(bool close_client, bool explicit_stop) {
 
     if (relay_started) {
         pthread_join(g_bridge.relay_thread, NULL);
-        c300x_media_gop_reset();
+        c300x_media_gop_reset(C300X_MEDIA_GOP_ONDEMAND);
         c300x_audio_level_session_boundary();
     }
     if (talkback_started) {

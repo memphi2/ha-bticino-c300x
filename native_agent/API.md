@@ -1028,7 +1028,10 @@ a complete group it gets no video until the next keyframe; audio starts at
 once. A client whose connection cannot take the group within 200 ms (all
 clients starting at the same moment share that time) starts at the next
 keyframe instead, so a slow client never holds up the others' video and
-audio for longer. Each client has its own continuous RTP sequence numbers and timestamps,
+audio for longer. When a ring's call and an on-demand view deliver video at the
+same time, the clients stay on the stream that came first until its session
+ends or it pauses for a second, then start at the other's next keyframe; the
+end of one session never drops the other's keyframe group. Each client has its own continuous RTP sequence numbers and timestamps,
 also when the station's stream restarts. The agent reads the station's stream
 from the first media command of an on-demand start.
 

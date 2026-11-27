@@ -70,6 +70,8 @@ static struct {
      * group: the cache starts with an IDR access unit. */
     bool au_clean, group, stream;
     unsigned epoch, group_serial;
+    /* The source the cache and the clients follow, 0 for none yet. */
+    unsigned source;
     uint32_t group_ts, ssrc, last_ts;
     uint16_t next_seq;
     uint8_t payload_type;
@@ -219,6 +221,19 @@ static bool cache_note(const unsigned char *packet, size_t len, const struct rtp
     return true;
 }
 
+/* A ring and an on-demand view can deliver at the same time: the cache and
+ * the clients stay with the source that came first until it is reset or has
+ * sent nothing for GOP_IDLE_MS. A change is a new stream: every client waits
+ * for its IDR, with its numbering going on. */
+static bool follows(unsigned source, long long now)
+{
+    if (gop.source == source) return true;
+    if (gop.source != 0 && now - gop.last_ms <= GOP_IDLE_MS) return false;
+    gop.source = source;
+    gop.stream = false;
+    return true;
+}
+
 /* Maps the client's next packet, with this sequence number and timestamp, so
  * its numbering goes on; a client's first packet keeps the station's. */
 static void anchor(struct gop_client *client, uint16_t seq, uint32_t ts, uint32_t ssrc, long long now)
@@ -315,15 +330,15 @@ static void deliver(const rtsp_send_target_t *target, const unsigned char *packe
     client->skip_group = gop.group_serial;
 }
 
-void c300x_media_gop_forward(const rtsp_send_target_t *targets, size_t count,
-                             const unsigned char *packet, size_t packet_len)
+void c300x_media_gop_forward(enum c300x_media_gop_source source, const rtsp_send_target_t *targets,
+                             size_t count, const unsigned char *packet, size_t packet_len)
 {
     struct rtp_view view;
     long long now = c300x_monotonic_ms();
     long long burst = 0;
     pthread_mutex_lock(&gop.mutex);
     bool usable = packet != NULL && rtp_view(packet, packet_len, &view)
-        && cache_note(packet, packet_len, &view, now);
+        && follows((unsigned)source, now) && cache_note(packet, packet_len, &view, now);
     for (size_t index = 0; index < count; index++) {
         if (usable) deliver(&targets[index], packet, packet_len, &view, now, &burst);
         close(targets[index].fd);
@@ -332,9 +347,14 @@ void c300x_media_gop_forward(const rtsp_send_target_t *targets, size_t count,
     pthread_mutex_unlock(&gop.mutex);
 }
 
-void c300x_media_gop_reset(void)
+void c300x_media_gop_reset(enum c300x_media_gop_source source)
 {
     pthread_mutex_lock(&gop.mutex);
+    if (gop.source != (unsigned)source) {
+        pthread_mutex_unlock(&gop.mutex);
+        return;
+    }
+    gop.source = 0;
     free(gop.data);
     gop.data = NULL;
     gop.alloc_failed = false;

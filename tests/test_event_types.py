@@ -6,7 +6,6 @@ from pathlib import Path
 from custom_components.bticino_c300x.event_types import (
     HA_EVENT_TYPES,
     agent_event_key,
-    normalize_event_type,
     payload_event_key,
 )
 
@@ -18,24 +17,6 @@ EVENT_CALL_RE = re.compile(
     r"c300x_copy_string)\s*\((?P<args>.*?)\);",
     re.DOTALL,
 )
-
-
-def test_normalize_event_type_handles_canonical_agent_events() -> None:
-    assert normalize_event_type("doorbell.pressed") == "doorbell_pressed"
-    assert normalize_event_type("doorbell_pressed") == "doorbell_pressed"
-    assert normalize_event_type("agent.restarted") == "agent_restarted"
-    assert normalize_event_type("doorbell.media.closed") == "doorbell_media_closed"
-    assert normalize_event_type("stair_light.released") == "stair_light_released"
-    assert normalize_event_type("activation.executed") == "activation_executed"
-    assert normalize_event_type("home_call.ended") == "home_call_ended"
-    assert normalize_event_type("ringer.volume_changed") == "ringer_volume_changed"
-    assert normalize_event_type("memos.changed") == "memos_changed"
-    assert normalize_event_type("system.metrics_changed") == "system_metrics_changed"
-    assert normalize_event_type("agent.diagnostics_changed") == "agent_diagnostics_changed"
-    assert (
-        normalize_event_type("answering_machine.messages_changed")
-        == "answering_machine_messages_changed"
-    )
 
 
 def test_agent_event_key_reads_only_the_bus_event_type() -> None:
@@ -50,7 +31,17 @@ def test_agent_event_key_reads_only_the_bus_event_type() -> None:
 
 
 def test_payload_event_key_reads_the_agents_type() -> None:
-    assert payload_event_key({"type": "stair_light.released"}) == "stair_light_released"
+    for agent, key in HA_EVENT_TYPES.items():
+        assert payload_event_key({"type": agent}) == key
+    # Only the agent's dotted "type": no other field, spelling or nesting.
+    for payload in (
+        {"type": "stair_light_released"}, {"type": "Stair_Light.Released"},
+        {"type": "stair_light:released"}, {"type": "stair light.released"},
+        {"event": "stair_light.released"}, {"event_type": "stair_light.released"},
+        {"event_key": "stair_light_released"}, {"data": {"type": "stair_light.released"}},
+        {"type": None}, {},
+    ):
+        assert payload_event_key(payload) is None, payload
 
 
 def test_native_agent_event_literals_are_mapped_to_ha_event_types() -> None:

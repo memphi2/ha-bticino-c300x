@@ -81,9 +81,7 @@ from custom_components.bticino_c300x.webhook import (  # noqa: E402
     _async_handle_agent_event,
     _async_handle_webhook,
     _event_payload,
-    _event_type_value,
     _is_snapshot_payload,
-    _normalize_event_type,
     _optional_bool,
     _optional_int,
     async_register_agent_event_webhook,
@@ -209,36 +207,6 @@ def test_event_payload_rejects_oversized_body_via_read_limit(
     )
 
     assert asyncio.run(_event_payload(request)) == {}
-
-
-def test_event_type_value_prefers_payload_aliases() -> None:
-    payload = {"type": "doorbell.pressed"}
-
-    assert _event_type_value(payload) == "doorbell_pressed"
-
-
-def test_event_type_value_prefers_nested_alias() -> None:
-    payload = {"data": {"event_type": "ringer.unmuted", "mode": "enabled"}}
-
-    assert _event_type_value(payload) == "ringer_unmuted"
-
-
-def test_event_type_value_handles_stair_light_event_from_namespace() -> None:
-    payload = {"event_type": "stair_light.released"}
-
-    assert _event_type_value(payload) == "stair_light_released"
-
-
-def test_normalize_event_type_aliases_do_not_raise() -> None:
-    assert _normalize_event_type("agent.restarted") == "agent_restarted"
-    assert _normalize_event_type("agent") == ""
-    assert _normalize_event_type("") == ""
-    assert _normalize_event_type(None) == ""
-
-
-def test_normalize_event_type_includes_stair_light_activation() -> None:
-    assert _normalize_event_type("stair_light.activated") == "stair_light_activated"
-    assert _normalize_event_type("stair_light.released") == "stair_light_released"
 
 
 def test_event_payload_rejects_non_post_or_invalid_json() -> None:
@@ -700,6 +668,34 @@ def test_agent_event_webhook_rejects_unauthorized_or_unsupported_events() -> Non
 
     assert unauthorized.status == 401
     assert unsupported.status == 400
+    assert hass.bus.events == []
+
+
+def test_agent_event_webhook_reads_only_the_agents_dotted_type() -> None:
+    hass = _FakeHass()
+    event_state = C300XEventState()
+    entry = SimpleNamespace(
+        entry_id="entry-1",
+        title="C300X",
+        data={CONF_EVENT_WEBHOOK_TOKEN: "event-token"},
+        options={},
+        runtime_data=SimpleNamespace(event_state=event_state),
+    )
+
+    for payload in (
+        {"type": "ringer_muted"}, {"type": "Ringer Muted"}, {"type": "ringer:muted"},
+        {"event": "ringer.muted"}, {"event_type": "ringer.muted"},
+        {"event_key": "ringer_muted"}, {"data": {"type": "ringer.muted"}},
+    ):
+        response = asyncio.run(
+            _async_handle_agent_event(
+                hass,  # type: ignore[arg-type]
+                entry,  # type: ignore[arg-type]
+                event_state,
+                _FakeRequest("event-token", payload),  # type: ignore[arg-type]
+            )
+        )
+        assert response.status == 400, payload
     assert hass.bus.events == []
 
 
@@ -1768,7 +1764,7 @@ def test_a_snapshot_schedules_the_read_that_brings_the_items_back(event, key, ta
         )
         request = _FakeRequest(
             "event-token",
-            {"event": event, "snapshot": True, "data": {key: {"available": True, "total": 1}}},
+            {"type": event, "snapshot": True, "data": {key: {"available": True, "total": 1}}},
         )
         response = await _async_handle_agent_event(
             hass,  # type: ignore[arg-type]

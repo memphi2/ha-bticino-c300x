@@ -63,7 +63,7 @@ def test_delayed_media_closed_event_cannot_close_replacement_session(monkeypatch
             async_create_task=asyncio.create_task,
         )
         monkeypatch.setattr(webhook, "resolve_doorbell_camera_entity_id", lambda *_: "camera.review")
-        request = delayed_request({"event": "doorbell_media_closed"}, entered, release)
+        request = delayed_request({"type": "doorbell.media.closed"}, entered, release)
         pending = asyncio.create_task(webhook._async_handle_agent_event(hass, entry, old.event_state, request))
         camera = None
         try:
@@ -124,8 +124,8 @@ def test_delayed_media_closed_event_cannot_close_replacement_session(monkeypatch
 
 
 @pytest.mark.parametrize("event_type,handler", [
-    ("system_metrics_changed", "_apply_system_metrics_event"),
-    ("agent_diagnostics_changed", "apply_agent_diagnostics_event"),
+    ("system.metrics_changed", "_apply_system_metrics_event"),
+    ("agent.diagnostics_changed", "apply_agent_diagnostics_event"),
 ])
 def test_delayed_diagnostic_event_cannot_write_replacement_runtime(monkeypatch, event_type, handler):
     async def run():
@@ -134,7 +134,7 @@ def test_delayed_diagnostic_event_cannot_write_replacement_runtime(monkeypatch, 
         entry = entry_for(old)
         apply_event = Mock(return_value=True)
         monkeypatch.setattr(webhook, handler, apply_event)
-        request = delayed_request({"event": event_type}, entered, release)
+        request = delayed_request({"type": event_type}, entered, release)
         pending = asyncio.create_task(webhook._async_handle_agent_event(None, entry, old.event_state, request))
         try:
             await asyncio.wait_for(entered.wait(), 1)

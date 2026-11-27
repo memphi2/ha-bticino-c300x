@@ -1,4 +1,4 @@
-"""Canonical C300X event type mappings and normalization helpers."""
+"""The agent's event types and their stable Home Assistant keys."""
 
 from __future__ import annotations
 
@@ -55,40 +55,6 @@ HA_EVENT_TYPES: dict[str, str] = {
 }
 SUPPORTED_HA_EVENT_TYPES = frozenset(HA_EVENT_TYPES.values())
 
-# The fields the agent's push may name its event in (inbound only).
-_PAYLOAD_EVENT_KEYS = (
-    "event_key",
-    "event_type_key",
-    "type",
-    "event_type",
-    "event",
-    "event_value",
-)
-
-
-def normalize_event_type(value: Any) -> str | None:
-    """Normalize any raw callback event value into a canonical HA event key."""
-
-    if value is None:
-        return None
-    key = _normalize_event_key(str(value))
-    if not key:
-        return None
-    if key in SUPPORTED_HA_EVENT_TYPES:
-        return key
-
-    mapped = HA_EVENT_TYPES.get(key)
-    if mapped is not None:
-        return mapped
-
-    if "_" in key:
-        dotted = key.replace("_", ".")
-        mapped = HA_EVENT_TYPES.get(dotted)
-        if mapped is not None:
-            return mapped
-
-    return None
-
 
 def agent_event_key(data: Mapping[str, Any]) -> str | None:
     """The key of a bticino_c300x_agent_event_received event: its event_type."""
@@ -98,27 +64,7 @@ def agent_event_key(data: Mapping[str, Any]) -> str | None:
 
 
 def payload_event_key(payload: Mapping[str, Any]) -> str | None:
-    """The key of the agent's push, from its root or nested payload."""
+    """The key of the agent's push: its "type", in the agent's dotted form."""
 
-    normalized = _payload_key(payload)
-    if normalized is not None:
-        return normalized
-    nested = payload.get("data")
-    if isinstance(nested, Mapping):
-        return _payload_key(nested)
-    return None
-
-
-def _payload_key(data: Mapping[str, Any]) -> str | None:
-    for key in _PAYLOAD_EVENT_KEYS:
-        normalized = normalize_event_type(data.get(key))
-        if normalized is not None:
-            return normalized
-    return None
-
-
-def _normalize_event_key(value: str) -> str:
-    normalized = value.strip().lower()
-    if not normalized:
-        return ""
-    return normalized.replace(":", ".").replace(" ", "_")
+    value = payload.get("type")
+    return HA_EVENT_TYPES.get(value) if isinstance(value, str) else None

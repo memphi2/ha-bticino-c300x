@@ -55,7 +55,7 @@ from .display_settings import async_set_display_setting
 from .doorbell_state import raw_doorbell_state_value
 from .entity import entry_config_value
 from .entry_types import BticinoC300XConfigEntry
-from .event_types import normalize_event_type, payload_event_key
+from .event_types import payload_event_key
 from .executor import (
     async_execute_action,
     async_execute_alarm_command,
@@ -350,7 +350,7 @@ async def _async_handle_agent_event(
         or getattr(getattr(runtime_data, "resources", None), "closed", False)
     ):
         return _json_error("entry_unloaded", status=503)
-    event_type = _normalize_event_type(_event_type_value(payload))
+    event_type = payload_event_key(payload)
     if not event_type:
         return _json_error("unsupported_event", status=400)
 
@@ -739,16 +739,6 @@ def _video_event_data(
     if camera_entity_id is not None:
         event_data["camera_entity_id"] = camera_entity_id
     return event_data
-
-
-def _normalize_event_type(value: Any) -> str:
-    return normalize_event_type(value) or ""
-
-
-def _event_type_value(payload: dict[str, Any]) -> Any:
-    if not isinstance(payload, dict):
-        return ""
-    return payload_event_key(payload) or ""
 
 
 def _optional_bool(value: Any) -> bool | None:

@@ -54,6 +54,21 @@ HANGUP = {
 }
 
 
+class _DoorOpenedTrigger:
+    """The wait trigger on the station's Door events; its template runs in
+    test_the_phone_alert_stops_when_a_door_of_the_station_opens."""
+
+    def __eq__(self, other: object) -> bool:
+        return (
+            isinstance(other, dict) and set(other) == {"id", "platform", "value_template"}
+            and other["id"] == "door_unlock" and other["platform"] == "template"
+            and "door_events" in other["value_template"]
+        )
+
+
+DOOR_OPENED_TRIGGER = _DoorOpenedTrigger()
+
+
 def test_blueprints_are_valid_automation_blueprints() -> None:
     expected = {
         "calendar_display_reminder.yaml",
@@ -279,24 +294,7 @@ def test_android_ring_call_blueprint_opens_dashboard_from_notification() -> None
             "event_type": "mobile_app_notification_action",
             "event_data": {"action": "{{ hangup_action }}"},
         },
-        {
-            "id": "door_unlock",
-            "platform": "event",
-            "event_type": "bticino_c300x_agent_event_received",
-            "event_data": {
-                "event_key": "door_unlock_started",
-                "entry_id": "{{ entry_id }}",
-            },
-        },
-        {
-            "id": "door_unlock_action",
-            "platform": "event",
-            "event_type": "bticino_c300x_action_received",
-            "event_data": {
-                "action_id": "door_unlock",
-                "entry_id": "{{ entry_id }}",
-            },
-        },
+        DOOR_OPENED_TRIGGER,
     ]
     assert services == ["notify_service", "notify_service"]
     assert answer_services[:3] == [
@@ -381,24 +379,7 @@ def test_ios_ring_call_blueprint_uses_unique_actions_and_event_entry_id() -> Non
             "event_type": "mobile_app_notification_action",
             "event_data": {"action": "{{ hangup_action }}"},
         },
-        {
-            "id": "door_unlock",
-            "platform": "event",
-            "event_type": "bticino_c300x_agent_event_received",
-            "event_data": {
-                "event_key": "door_unlock_started",
-                "entry_id": "{{ entry_id }}",
-            },
-        },
-        {
-            "id": "door_unlock_action",
-            "platform": "event",
-            "event_type": "bticino_c300x_action_received",
-            "event_data": {
-                "action_id": "door_unlock",
-                "entry_id": "{{ entry_id }}",
-            },
-        },
+        DOOR_OPENED_TRIGGER,
     ]
     assert answer_sequence[1] == {
         "service": "bticino_c300x.answer_call", "target": CALL_TARGET, "data": CALL_DATA,
@@ -485,35 +466,9 @@ def test_ring_call_blueprints_stop_the_phone_ringing_when_the_door_opens() -> No
         ]
         default_sequence = data["action"][choose_index]["default"]
 
-        assert door_triggers == [
-            {
-                "id": "door_unlock",
-                "platform": "event",
-                "event_type": "bticino_c300x_agent_event_received",
-                "event_data": {
-                    "event_key": "door_unlock_started",
-                    "entry_id": "{{ entry_id }}",
-                },
-            }
-        ], filename
-
-        # Home Assistant's own unlock is heard directly as well, so the alert
-        # stops even when the device's event arrives late or not at all.
-        assert [
-            trigger
-            for trigger in wait_triggers
-            if trigger.get("id") == "door_unlock_action"
-        ] == [
-            {
-                "id": "door_unlock_action",
-                "platform": "event",
-                "event_type": "bticino_c300x_action_received",
-                "event_data": {
-                    "action_id": "door_unlock",
-                    "entry_id": "{{ entry_id }}",
-                },
-            }
-        ], filename
+        # The Door events of the station's units, whatever opened the door.
+        assert door_triggers == [DOOR_OPENED_TRIGGER], filename
+        assert "action_received" not in str(data) and "agent_event_received" not in str(data), filename
 
         # No branch matches a door-unlock trigger, so it lands here.
         assert [step["service"] for step in default_sequence] == [
@@ -532,6 +487,97 @@ def test_ring_call_blueprints_stop_the_phone_ringing_when_the_door_opens() -> No
         # The Ring Call keeps running: opening the door does not decide whether
         # someone still wants to talk to the visitor.
         assert "hangup_call" not in str(default_sequence), filename
+
+
+@pytest.mark.parametrize(("filename", "choose_index"), [("doorbell_call_android.yaml", 4), ("doorbell_call_ios.yaml", 3)])
+def test_the_phone_alert_stops_when_a_door_of_the_station_opens(
+    tmp_path: Path, filename: str, choose_index: int,
+) -> None:
+    """Run by Home Assistant: the Door events of the ringing station end the
+    wait, whatever opened the door. Another station's door, a reload of a Door
+    entity or a Door without an event yet do not; the branches then leave the
+    trigger to the default, which clears the alert."""
+
+    import asyncio
+    from types import MappingProxyType
+
+    from homeassistant import bootstrap, config_entries, core, loader
+    from homeassistant.helpers import entity_registry as er
+    from homeassistant.helpers.entity import entity_sources
+    from homeassistant.helpers.template import Template
+    from homeassistant.helpers.trigger import (
+        async_initialize_triggers,
+        async_validate_trigger_config,
+    )
+
+    blueprint = _blueprint(filename)
+    opened_1, opened_2 = "2026-11-26T10:00:00.000+00:00", "2026-11-26T10:05:00.000+00:00"
+
+    async def run() -> None:
+        hass = core.HomeAssistant(str(tmp_path))
+        hass.config.skip_pip = True
+        loader.async_setup(hass)
+        hass.config_entries = config_entries.ConfigEntries(hass, {})
+        await bootstrap.async_load_base_functionality(hass)
+        registry = er.async_get(hass)
+        for entry_id in ("station-1", "station-2"):
+            entry = config_entries.ConfigEntry(
+                domain="bticino_c300x", data={}, title=entry_id, source="user", version=1, minor_version=1,
+                options={}, unique_id=None, discovery_keys=MappingProxyType({}), subentries_data=None,
+                entry_id=entry_id,
+            )
+            hass.config_entries._entries[entry_id] = entry  # noqa: SLF001
+        for object_id, entry_id, types, state in (
+            ("gate_door", "station-1", ["opened"], opened_1),
+            ("garden_door", "station-1", ["opened"], "unknown"),
+            ("gate_doorbell", "station-1", ["ring"], opened_1),
+            ("other_door", "station-2", ["opened"], opened_1),
+        ):
+            entity = registry.async_get_or_create(
+                "event", "bticino_c300x", object_id, suggested_object_id=object_id,
+                config_entry=hass.config_entries.async_get_entry(entry_id),
+            )
+            entity_sources(hass)[entity.entity_id] = {"domain": "bticino_c300x", "custom_component": True}
+            hass.states.async_set(entity.entity_id, state, {"event_types": types})
+
+        variables: dict[str, Any] = {"entry_id": "station-1"}
+        for name in ("door_events", "door_states"):
+            variables[name] = Template(blueprint["variables"][name], hass).async_render(variables)
+        assert sorted(variables["door_events"]) == ["event.garden_door", "event.gate_door"]
+
+        door = [item for item in blueprint["action"][choose_index - 1]["wait_for_trigger"] if item.get("id") == "door_unlock"]
+        fired: list[dict[str, Any]] = []
+
+        async def action(run_variables: dict[str, Any], context: Any = None) -> None:
+            fired.append(run_variables["trigger"])
+
+        remove = await async_initialize_triggers(
+            hass, await async_validate_trigger_config(hass, door), action,
+            "automation", "phone", lambda *args, **kwargs: None, variables=variables,
+        )
+        for entity_id, state in (
+            ("event.other_door", opened_2),
+            ("event.gate_doorbell", opened_2),
+            ("event.gate_door", "unavailable"), ("event.gate_door", opened_1),
+            ("event.garden_door", "unavailable"), ("event.garden_door", "unknown"),
+        ):
+            hass.states.async_set(entity_id, state, {"event_types": ["opened"]})
+            await hass.async_block_till_done()
+        assert fired == [], filename
+        hass.states.async_set("event.garden_door", opened_2, {"event_types": ["opened"]})
+        await hass.async_block_till_done()
+        assert [item["id"] for item in fired] == ["door_unlock"], filename
+
+        for branch in blueprint["action"][choose_index]["choose"]:
+            template = Template(branch["conditions"][0]["value_template"], hass)
+            assert template.async_render({
+                "wait": {"trigger": fired[0]}, "answer_action": "answer", "hangup_action": "hangup",
+            }) is False, filename
+        assert remove is not None
+        remove()
+        await hass.async_stop(force=True)
+
+    asyncio.run(run())
 
 
 def test_android_ring_call_commands_are_sent_as_urgent_messages() -> None:
@@ -626,7 +672,7 @@ def test_phone_action_ids_use_real_script_run_contexts(tmp_path):
                         for trigger in node.get("wait_for_trigger", []):
                             if trigger.get("event_type") == "mobile_app_notification_action":
                                 waits.append(trigger["event_data"]["action"])
-                        if "value_template" in node:
+                        if "value_template" in node and "platform" not in node:
                             conditions.append(node["value_template"])
                         for value in node.values():
                             collect_contracts(value, waits, conditions)

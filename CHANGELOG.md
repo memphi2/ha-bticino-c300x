@@ -32,7 +32,8 @@ devices, entities and services; a Repair lists what to redo after the update.
   select (or the **Station ring** for the fastest reaction) and answer, hang
   up and record that unit's call. Automations made from the ring blueprints
   need the outdoor unit selected again; the calendar reminder and the strict
-  phrase decision take the station device instead of an entry ID. Copies of
+  phrase decision take the station device instead of an entry ID. The phone
+  alerts stop ringing on a **Door** event of the station. Copies of
   the blueprints that you edited are not replaced; import them again.
 - **Services take a target** (the station or an outdoor unit, as a device or
   entity) instead of `entry_id`. `answer_doorbell_call` and

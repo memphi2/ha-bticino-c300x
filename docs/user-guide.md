@@ -624,6 +624,8 @@ unit). Phone alerts and captures run only while readiness is `ready` or
 
 Both phone alerts need **Forwarding** set to **Home Assistant** and the Companion
 App notify service of the phone, for example `notify.mobile_app_your_phone`.
+The alert stops ringing when a **Door** event of the station fires, whatever
+opened the door; the call itself goes on.
 
 - **Android:** a high-priority notification. **Answer** calls
   `bticino_c300x.answer_call` for this call, swaps the ringing notification for a

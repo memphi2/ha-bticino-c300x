@@ -129,6 +129,18 @@ variables:
     {{ ns.entity }}
   camera_entity: "{{ state_attr(doorbell_event, 'camera_entity_id') or '' }}"
   entry_id: "{{ config_entry_id(doorbell_event) or '' }}"
+  # The Door events of this station's outdoor units, and their last event
+  # times when the ring came in.
+  door_events: >-
+    {% set ns = namespace(entities=[]) %}
+    {% for entity_id in integration_entities('bticino_c300x') %}
+      {% if entity_id.startswith('event.') and config_entry_id(entity_id) == entry_id
+            and 'opened' in (state_attr(entity_id, 'event_types') or []) %}
+        {% set ns.entities = ns.entities + [entity_id] %}
+      {% endif %}
+    {% endfor %}
+    {{ ns.entities }}
+  door_states: "{{ door_events | map('states') | list }}"
   dashboard_path: !input dashboard_path
   title: !input title
   message: !input message
@@ -211,31 +223,27 @@ action:
         event_type: mobile_app_notification_action
         event_data:
           action: "{{ hangup_action }}"
-      # Someone let the visitor in -- from the phone, the C300X itself or any
-      # other lock control. The entry_id filter keeps a second C300X from
-      # silencing this one.
+      # Someone let the visitor in -- from the phone, the station, the app or
+      # any other lock control: a Door event of this station fires. A Door
+      # entity that comes back after a reload keeps its time and is no opening.
       - id: door_unlock
-        platform: event
-        event_type: bticino_c300x_agent_event_received
-        event_data:
-          event_key: door_unlock_started
-          entry_id: "{{ entry_id }}"
-      # The same unlock as Home Assistant reports it the moment its own unlock
-      # call returns, so the alert does not depend on the device's event
-      # reaching Home Assistant.
-      - id: door_unlock_action
-        platform: event
-        event_type: bticino_c300x_action_received
-        event_data:
-          action_id: door_unlock
-          entry_id: "{{ entry_id }}"
+        platform: template
+        value_template: >-
+          {% set ns = namespace(opened=false) %}
+          {% for entity_id in door_events %}
+            {% set state = states(entity_id) %}
+            {% if state not in ['unknown', 'unavailable'] and state != door_states[loop.index0] %}
+              {% set ns.opened = true %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.opened }}
     timeout: "{{ notification_timeout_seconds | int(60) }}"
     continue_on_timeout: true
   - choose:
       - conditions:
           - condition: template
             value_template: >-
-              {{ wait.trigger is not none
+              {{ wait.trigger is not none and wait.trigger.event is defined
                  and wait.trigger.event.data.action == answer_action }}
         sequence:
           - service: bticino_c300x.answer_call
@@ -289,7 +297,7 @@ action:
           - if:
               - condition: template
                 value_template: >-
-                  {{ wait.trigger is not none
+                  {{ wait.trigger is not none and wait.trigger.event is defined
                      and wait.trigger.event.data.action == hangup_action }}
             then:
               # The call may have ended meanwhile; nothing is left to hang up then.
@@ -309,7 +317,7 @@ action:
       - conditions:
           - condition: template
             value_template: >-
-              {{ wait.trigger is not none
+              {{ wait.trigger is not none and wait.trigger.event is defined
                  and wait.trigger.event.data.action == hangup_action }}
         sequence:
           # The call may have ended meanwhile; nothing is left to hang up then.

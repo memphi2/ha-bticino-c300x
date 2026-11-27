@@ -170,3 +170,56 @@ def test_only_the_profile_tells_the_stations_apart():
         if pattern.search(line) and '**({"qt5_overlay": status["qt5_overlay"]}' not in line
     )
     assert found == []
+
+
+def _stored(model, info=None, *, runtime=True):
+    entry = SimpleNamespace(data={device_profile.STATION_MODEL: model} if model else {})
+    if runtime:
+        entry.runtime_data = SimpleNamespace(agent_info=info, qml_patch_status=None)
+    return entry
+
+
+OFFLINE = {"model": None, "display_kind": None, "capabilities": {}, "offline_error": "down"}
+
+
+@pytest.mark.parametrize("runtime", [True, False])
+def test_an_entry_whose_agent_did_not_answer_stays_the_station_it_named(runtime):
+    # An offline start, and an entry without runtime data after a failed setup.
+    assert entry_profile(_stored("C100X", OFFLINE, runtime=runtime)) == C100X
+    assert entry_is_c100x(_stored("C100X", OFFLINE, runtime=runtime))
+    # Reauth, options and reconfigure name the model and offer its fields by it.
+    from custom_components.bticino_c300x.model_names import entry_model
+
+    assert entry_model(_stored("C100X", OFFLINE, runtime=runtime)) == "C100X"
+    assert entry_profile(_stored("C300X", OFFLINE, runtime=runtime)) == C300X_QT4
+    # Without a kept model the entry behaves as before it was kept.
+    assert entry_profile(_stored(None, OFFLINE, runtime=runtime)) == C300X_QT4
+
+
+def test_the_live_answer_wins_over_the_kept_model():
+    assert entry_profile(_stored("C100X", {"model": "C300X", "display_kind": "qt5_rcc"})) == C300X_QT5
+    assert entry_profile(_stored("C300X", {"model": "C100X", "display_kind": "qt5_ondisk"})) == C100X
+    kept = _stored("C300X", OFFLINE)
+    kept.runtime_data.qml_patch_status = {"qt5_overlay": "active"}
+    assert entry_profile(kept) == C300X_QT5
+
+
+def test_the_entry_keeps_the_model_the_agent_names_and_follows_a_change():
+    updates = []
+
+    def update(target, *, data):
+        updates.append(data)
+        target.data = data
+
+    hass = SimpleNamespace(config_entries=SimpleNamespace(async_update_entry=update))
+    entry = SimpleNamespace(data={"host": "station"})
+    for setup in (OFFLINE, None, {}, {"model": "C100X", "display_kind": "qt5_ondisk"},
+                  {"model": "C100X"}, OFFLINE, {"model": "C300X", "display_kind": "qt4_ondisk"}):
+        device_profile.remember_station_model(hass, entry, setup)
+    assert updates == [
+        {"host": "station", device_profile.STATION_MODEL: "C100X"},
+        {"host": "station", device_profile.STATION_MODEL: "C300X"},
+    ]
+    assert device_profile.station_model_data({"display_kind": "qt5_ondisk"}) == {
+        device_profile.STATION_MODEL: "C100X"}
+    assert device_profile.station_model_data(OFFLINE) == {}

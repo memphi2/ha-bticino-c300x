@@ -73,6 +73,7 @@ from .device_activations import (
     activation_items_match,
     desired_activation_items,
 )
+from .device_profile import STATION_MODEL, remember_station_model
 from .device_user import (
     device_user_bootstrap_needed,
     device_user_bootstrap_satisfied,
@@ -82,6 +83,7 @@ from .display_patch_sync import async_settle_display_setting, display_setting_pe
 from .display_settings import DISPLAY_SETTING_KEYS, display_settings
 from .display_support import (
     entry_display_supported,
+    entry_is_c100x,
     remember_display_support,
     setup_is_c100x,
 )
@@ -258,6 +260,7 @@ class C300XRuntimeManager:
                 c100x=setup_is_c100x(self.setup_data),
             )
             remember_display_support(self.hass, self.entry, self.setup_data)
+            remember_station_model(self.hass, self.entry, self.setup_data)
 
         if self.connection_state.available:
             self.agent_update_state = compare_agent_bundle(
@@ -546,6 +549,8 @@ def _entry_update_listener(
         data.pop(CONF_AGENT_UPDATE_QML_PENDING, None)
         data.pop(CONF_DISPLAY_FOLLOWUP_PENDING, None)
         data.pop(CONF_DISPLAY_SETTING_PENDING, None)
+        # A loaded entry reads the model from its agent; the kept one changes nothing.
+        data.pop(STATION_MODEL, None)
         data.pop(CONF_HOMEASSISTANT_MEDIA_USER_BOOTSTRAPPED, None)
         data.pop(CONF_FRONTEND_CARD_SETUP_DISMISSED, None)
         data.pop(CONF_FRONTEND_CARD_SETUP_REPAIR_VERSION, None)
@@ -673,6 +678,9 @@ def _async_remove_stale_gui_dependent_entities(
 ) -> None:
     """Remove stale HA entities for C300X GUI functions that are currently gated."""
 
+    if entry_is_c100x(entry):
+        # Created while the agent of a C100X entry had not named its model yet.
+        _async_remove_registered_entities(hass, entry, (("button", "reload_gui"),))
     # The same predicate the button platform creates them with. With the strict
     # one, an entry that predates the device-UI option but has an active patch
     # had its buttons removed here and re-added a moment later on every setup,
@@ -687,16 +695,24 @@ def _async_remove_stale_gui_dependent_entities(
         if not isinstance(status, dict) or status.get("patched") is not False:
             return
 
+    _async_remove_registered_entities(hass, entry, _GUI_DEPENDENT_ENTITY_KEYS)
+
+
+def _async_remove_registered_entities(
+    hass: HomeAssistant,
+    entry: BticinoC300XConfigEntry,
+    keys: tuple[tuple[str, str], ...],
+) -> None:
     import homeassistant.helpers.entity_registry as er
 
-    # Local like the registry import above: pulling the entity layer in at
+    # Local like the registry import: pulling the entity layer in at
     # module scope changes when Home Assistant's entity module is first
     # imported, which is load-order sensitive.
     from .entity import entry_entity_unique_id
 
     registry = er.async_get(hass)
     states = getattr(hass, "states", None)
-    for platform, key in _GUI_DEPENDENT_ENTITY_KEYS:
+    for platform, key in keys:
         entity_id = registry.async_get_entity_id(
             platform,
             DOMAIN,

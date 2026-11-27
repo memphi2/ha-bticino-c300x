@@ -105,3 +105,26 @@ def test_no_model_specific_media_consent_is_left():
     root = Path(__file__).resolve().parents[1] / "custom_components" / "bticino_c300x"
     assert not (root / "media_consent.py").exists()
     assert not any("media_consent" in path.read_text(encoding="utf-8") for path in root.glob("*.py"))
+
+
+@pytest.mark.parametrize(("info", "kept"), [
+    (C100X_INFO, {"station_model": "C100X"}),
+    (C300X_INFO, {"station_model": "C300X"}),
+    # The installer's read alone, when the agent's answer did not come.
+    ({"model": "C100X", "display_kind": "qt5_ondisk", "capabilities": {}}, {"station_model": "C100X"}),
+    ({}, {}),
+], ids=["c100x", "c300x", "installer", "unknown"])
+def test_a_new_entry_keeps_the_model_its_setup_found(monkeypatch, info, kept):
+    flow = setup_flow(monkeypatch, info)
+    flow._setup_connection = {"name": "Door", "agent_host": "station.invalid", "agent_port": 8091}
+    flow.async_set_unique_id = AsyncMock()
+    monkeypatch.setattr(flow, "_async_validate_setup_identity", AsyncMock(return_value={}))
+    monkeypatch.setattr(flow, "_abort_if_unique_id_configured", lambda: None)
+    monkeypatch.setattr(flow, "async_create_entry", lambda **values: values)
+    feature_data, errors = config_flow._feature_input({CONF_VIDEO_ENABLED: False})
+    assert not errors
+
+    created = asyncio.run(flow._async_create_setup_entry(feature_data))
+
+    assert {key: created["data"][key] for key in kept} == kept
+    assert ("station_model" in created["data"]) is bool(kept)

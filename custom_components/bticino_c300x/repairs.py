@@ -73,7 +73,7 @@ from .device_installer import (
     async_ensure_installer_dependencies,
     async_install_device_agent,
 )
-from .device_profile import NOT_A_BTICINO_STATION
+from .device_profile import NOT_A_BTICINO_STATION, remember_station_model
 from .device_ssh_login import (
     INVALID_SSH_KEY,
     SSH_PASSWORD_LOGIN_DISABLED,
@@ -929,6 +929,7 @@ async def _async_apply_repaired_agent_setup(
     if not isinstance(capabilities, dict):
         capabilities = {}
     entry.runtime_data.agent_info = setup_data
+    remember_station_model(hass, entry, setup_data)
     entry.runtime_data.capabilities = gate_capabilities(
         capabilities,
         doorbell_video_enabled=bool(entry_config_value(entry, CONF_VIDEO_ENABLED, False)),

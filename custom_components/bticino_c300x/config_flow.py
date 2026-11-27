@@ -217,6 +217,7 @@ from .device_installer import (
     async_ensure_installer_dependencies,
     async_install_device_agent,
 )
+from .device_profile import station_model_data
 from .discovery_move import async_follow_proven_move
 from .display_patch_sync import async_mark_display_setting
 from .display_support import (
@@ -925,6 +926,7 @@ class BticinoC300XConfigFlow(ModelTextConfigFlow, config_flow_auth.AuthFlowSteps
                 **self._setup_connection,
                 **feature_data,
                 **({DISPLAY_SUPPORTED: display_supported} if display_supported is not None else {}),
+                **station_model_data(self._setup_agent_info),
                 CONF_WEBHOOK_ID: secrets.token_urlsafe(24),
                 CONF_SHARED_SECRET: secrets.token_urlsafe(32),
                 CONF_EVENT_WEBHOOK_ID: secrets.token_urlsafe(24),

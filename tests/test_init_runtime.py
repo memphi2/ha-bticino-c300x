@@ -148,6 +148,8 @@ def test_async_setup_registers_frontend_services_and_websocket(
         "frontend_card_setup_repair_version",
         # Removed once a new entry applied its Display setting.
         "display_setting_pending",
+        # The model the agent named last; a loaded entry reads its agent.
+        "station_model",
     ],
 )
 def test_payload_recovery_marker_does_not_reload_active_update(marker) -> None:
@@ -2361,3 +2363,66 @@ def test_display_patch_apply_sends_the_stored_home_page_layout(data, options, ex
     entry = SimpleNamespace(options=options, data=data, runtime_data=SimpleNamespace(api=api))
     asyncio.run(_apply_full_patch_action(entry)())
     api.async_apply_qml_patch.assert_awaited_once_with(dynamic_homepage=expected)
+
+
+@pytest.mark.parametrize(("data", "info", "removed"), [
+    # The model the agent named last, and the live answer.
+    ({"station_model": "C100X"}, {"model": None, "display_kind": None}, ["button.reload_gui"]),
+    ({}, {"model": "C100X", "display_kind": "qt5_ondisk"}, ["button.reload_gui"]),
+    ({"station_model": "C300X"}, {"model": None, "display_kind": None}, []),
+    ({}, {"model": None, "display_kind": None}, []),
+    ({}, {"model": "C300X", "display_kind": "qt5_rcc"}, []),
+])
+def test_a_c100x_entry_loses_the_display_reload_button_of_an_offline_start(
+    monkeypatch, data, info, removed,
+) -> None:  # noqa: ANN001
+    import homeassistant.helpers.entity_registry as entity_registry
+
+    class FakeRegistry:
+        def __init__(self) -> None:
+            self.removed: list[str] = []
+
+        def async_get_entity_id(self, platform: str, domain: str, unique_id: str) -> str | None:
+            return "button.reload_gui" if unique_id == "entry-1_reload_gui" else None
+
+        def async_remove(self, entity_id: str) -> None:
+            self.removed.append(entity_id)
+
+    registry = FakeRegistry()
+    monkeypatch.setattr(entity_registry, "async_get", lambda _hass: registry)
+    hass = SimpleNamespace(states=SimpleNamespace(async_remove=lambda _entity_id: None))
+    entry = _entry(data=data, options={CONF_DEVICE_UI_ENABLED: True})
+    entry.runtime_data = SimpleNamespace(agent_info=info, qml_patch_status={}, capabilities={})
+    monkeypatch.setattr(runtime_manager, "entry_device_ui_enabled_or_patch_active", lambda _entry: True)
+
+    runtime_manager._async_remove_stale_gui_dependent_entities(hass, entry)
+
+    assert registry.removed == removed
+
+
+@pytest.mark.parametrize("answer", [
+    {"model": "C100X", "display_kind": "qt5_ondisk", "capabilities": {}},
+    api_errors.C300XAgentApiError("offline"),
+])
+def test_setup_keeps_the_model_the_agent_names(monkeypatch, answer) -> None:  # noqa: ANN001
+    import custom_components.bticino_c300x.agent_update as agent_update
+
+    hass, updates = _hass_with_config_updates()
+    entry = _entry(data={"station_model": "C300X"})
+    manager = runtime_manager.C300XRuntimeManager(hass, entry)
+    manager.api = SimpleNamespace(async_validate_setup=AsyncMock(
+        side_effect=answer if isinstance(answer, Exception) else None,
+        return_value=None if isinstance(answer, Exception) else answer,
+    ))
+    monkeypatch.setattr(runtime_manager, "_async_start_setup_recovery", lambda *_args: lambda: None)
+    monkeypatch.setattr(agent_update, "async_load_packaged_bundle_metadata", AsyncMock(return_value={}))
+    monkeypatch.setattr(agent_update, "compare_agent_bundle", lambda *_args, **_kwargs: None)
+
+    asyncio.run(manager.async_validate_agent())
+
+    expected = "C300X" if isinstance(answer, Exception) else "C100X"
+    assert entry.data["station_model"] == expected
+    assert updates == ([] if isinstance(answer, Exception) else [
+        {"data": {"station_model": "C300X", "device_display_supported": False}},
+        {"data": {"station_model": "C100X", "device_display_supported": False}},
+    ])

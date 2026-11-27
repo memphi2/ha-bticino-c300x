@@ -201,6 +201,15 @@ static void test_chip(void)
     assert(c300x_audio_chip_current_db(&db) && db == 12);
     put("mark", "junk\n", 0644);
     assert(!c300x_audio_chip_current_db(&db) && db == 0);
+    /* A mark that exists but does not parse (empty, half written): the live
+     * value tells what the chip adds. */
+    put("sout", "13\n", 0644);
+    put("mark", "", 0644);
+    assert(c300x_audio_chip_current_db(&db) && db == 6);
+    put("mark", "junk\n", 0644);
+    assert(c300x_audio_chip_current_db(&db) && db == 6);
+    put("sout", "11\n", 0644);
+    assert(c300x_audio_chip_current_db(&db) && db == 0);
 
     /* Stock: the stub comes back and a raised call is lowered now. */
     put("mark", "15\n", 0644);

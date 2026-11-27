@@ -26,7 +26,9 @@
 #endif
 
 /* The HAL runs it as root at every audio state change and expects exit 1,
- * like the stub. The states the vendor stub lists, apart from OFF, IP_EU and
+ * like the stub. The mark comes whole (renamed into place) and before the
+ * raise: the agent reads the live value while it is there, so a mark without
+ * the raise yet counts 0 dB, never the other way round. The states the vendor stub lists, apart from OFF, IP_EU and
  * IP_IU, load a profile with its own gain; anything else (FAKE, an empty or
  * unknown state) gets the profile's 11 back, so nothing leaves it raised. */
 static const char hook_template[] =
@@ -36,7 +38,7 @@ static const char hook_template[] =
     "M=${C300X_SOUT_MARK:-/run/c300x-sout-raised}\n"
     "put() { \"$A\" -q -c 0 cset \"name='" SOUT_CONTROL "'\" \"$1\" >/dev/null 2>&1; }\n"
     "case \"$1\" in\n"
-    "EN_AUDIO_IP_EU) put \"$V\" && echo \"$V\" > \"$M\";;\n"
+    "EN_AUDIO_IP_EU) echo \"$V\" > \"$M.new\" && mv -f \"$M.new\" \"$M\" && put \"$V\" || rm -f \"$M\" \"$M.new\";;\n"
     "EN_AUDIO_BEEP|EN_AUDIO_PASSTHR|EN_AUDIO_PASSTHR_INT|EN_AUDIO_IP|EN_AUDIO_RINGING|EN_AUDIO_RINGING_LOC"
     "|EN_AUDIO_PLAY_LOC|EN_AUDIO_PLAY_LOC_SCS|EN_AUDIO_REC_SCS|EN_AUDIO_REC_MIC) rm -f \"$M\";;\n"
     "*) [ ! -e \"$M\" ] || put 11; rm -f \"$M\";;\n"
@@ -202,16 +204,22 @@ static int read_mark(int *value)
 
 int c300x_audio_chip_current_db(int *db)
 {
-    int marked;
+    int marked = 0;
+    int parsed;
     int value;
 
     *db = 0;
-    if (!read_mark(&marked)) {
-        return access(mark_path(), F_OK) != 0;
+    if (access(mark_path(), F_OK) != 0) {
+        return 1;
     }
     /* The live value wins: a level changed during the call is not in the
-     * chip before the next state change. */
+     * chip before the next state change. A mark caught half written still
+     * says the hook raised the gain. */
+    parsed = read_mark(&marked);
     if (!read_sout(&value)) {
+        if (!parsed) {
+            return 0;
+        }
         value = marked;
     }
     *db = (value - C300X_AUDIO_CHIP_STOCK_SOUT) * C300X_AUDIO_CHIP_DB_PER_STEP;

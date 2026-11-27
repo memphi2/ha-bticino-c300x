@@ -1079,9 +1079,12 @@ Side effects on a Classe 300X with the audio chip lever (`chip_lever` is not
 `unsupported`): a door level above stock writes the agent's version of the
 vendor's empty `/home/root/demo/Audio_State.sh`, which the vendor audio driver
 runs at every audio state change. In the state for the app and Home Assistant
-(`EN_AUDIO_IP_EU`) it raises `ZL0 Sout Gain Volume` from the profile's 11 by
-one step (about 3 dB) per 3 dB of door level and marks that in
-`/run/c300x-sout-raised`. The other states the vendor stub lists load a profile
+(`EN_AUDIO_IP_EU`) it marks the raise in `/run/c300x-sout-raised` (written
+whole, then renamed into place) and then raises `ZL0 Sout Gain Volume` from
+the profile's 11 by one step (about 3 dB) per 3 dB of door level; without the
+mark it raises nothing. While the mark is there the agent reads the control's
+live value, so a mark whose raise has not happened yet counts 0 dB, and a mark
+that cannot be parsed still counts the live value. The other states the vendor stub lists load a profile
 with its own gain and only drop the mark; `EN_AUDIO_OFF`, `EN_AUDIO_IP_IU` and
 any other state (`FAKE`, an empty or unknown argument), which load no profile
 of their own, set 11 again while the mark is there. The vendor file is backed up once

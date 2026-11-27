@@ -82,9 +82,14 @@ def test_hook_raises_only_the_app_state_and_puts_the_profile_value_back(
     hook = _hook(level_binary, 3, tmp_path)
     log = tmp_path / "amixer.log"
     amixer = tmp_path / "amixer"
-    amixer.write_text(f'#!/bin/sh\nprintf "%s\\n" "$*" >> "{log}"\n')
-    amixer.chmod(0o755)
     mark = tmp_path / "raised"
+    seen = tmp_path / "seen"
+    # Also notes the mark as it is at each write.
+    amixer.write_text(
+        f'#!/bin/sh\nprintf "%s\\n" "$*" >> "{log}"\n'
+        f'cat "{mark}" >> "{seen}" 2>/dev/null || echo none >> "{seen}"\n'
+    )
+    amixer.chmod(0o755)
     env = {**os.environ, "C300X_AMIXER": str(amixer), "C300X_SOUT_MARK": str(mark)}
 
     def run(state: str) -> list[str]:
@@ -97,6 +102,9 @@ def test_hook_raises_only_the_app_state_and_puts_the_profile_value_back(
     assert run("EN_AUDIO_OFF") == []
     assert run("EN_AUDIO_IP_EU") == ["-q -c 0 cset name='ZL0 Sout Gain Volume' 14"]
     assert mark.read_text() == "14\n"
+    # The mark was there, whole, before the gain went up, and nothing is left over.
+    assert seen.read_text() == "14\n"
+    assert sorted(path.name for path in tmp_path.iterdir() if path.name.startswith("raised")) == ["raised"]
     # No profile of its own: the value of IP_PE.cr comes back.
     assert run("EN_AUDIO_IP_IU") == ["-q -c 0 cset name='ZL0 Sout Gain Volume' 11"]
     assert not mark.exists()
@@ -123,3 +131,8 @@ def test_hook_raises_only_the_app_state_and_puts_the_profile_value_back(
     amixer.write_text("#!/bin/sh\nexit 1\n")
     run("EN_AUDIO_IP_EU")
     assert not mark.exists()
+    assert not (tmp_path / "raised.new").exists()
+    # Without a mark the agent could not know: no raise then.
+    amixer.write_text(f'#!/bin/sh\nprintf "%s\\n" "$*" >> "{log}"\n')
+    env["C300X_SOUT_MARK"] = str(tmp_path / "missing" / "raised")
+    assert run("EN_AUDIO_IP_EU") == []

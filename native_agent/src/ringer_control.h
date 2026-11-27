@@ -2,6 +2,7 @@
 #define C300X_RINGER_CONTROL_H
 
 #include <poll.h>
+#include "picture_control.h"
 
 #define C300X_RINGER_CONTROL_POLL_FDS 2
 #define C300X_RINGER_CONTROL_TIMEOUT_MS 5000
@@ -26,6 +27,8 @@ struct c300x_ringer_control {
     void *apply_ctx;
     char id[33];
     struct c300x_ringer_command command;
+    struct picture_command picture;
+    int picture_supported;
     /* The GUI's own mute flag as last seen: -1 unknown. */
     int gui_muted;
     int sync_wanted;
@@ -33,7 +36,10 @@ struct c300x_ringer_control {
     long long sync_deadline_ms;
 };
 
+void c300x_gui_picture_request(struct c300x_ringer_control *control, int fd, struct picture_command command);
+
 void c300x_ringer_control_init(struct c300x_ringer_control *control);
+int c300x_gui_supports_picture(const struct c300x_ringer_control *control);
 /* Parse a GUI query after caller authorization; zero retains the connection. */
 int c300x_ringer_control_next(
     struct c300x_ringer_control *control, int fd, const char *query,

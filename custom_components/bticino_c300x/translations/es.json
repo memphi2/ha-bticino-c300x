@@ -2073,7 +2073,7 @@
   "services": {
     "camera_picture": {
       "name": "Ajustar la imagen de la cámara",
-      "description": "Lee los tres ajustes de la imagen en directo, o indica un control y un valor (de 0 a 100 % en pasos de 10) para cambiar uno. Requiere un vídeo de llamada de timbre activo o un vídeo a petición. Un cambio se conserva para esa placa exterior, como en el propio menú de la estación. Los archivos multimedia guardados no cambian.",
+      "description": "Lee los tres ajustes de la imagen en directo, o indica un control y un valor (de 0 a 100 % en pasos de 10) para cambiar uno. Requiere el agente del dispositivo actualizado y un vídeo de llamada de timbre activo o un vídeo a petición con valores de origen y rangos verificados. Los archivos multimedia guardados no cambian.",
       "fields": {
         "control": {
           "name": "Control"

@@ -33,7 +33,7 @@ C100X device (issue #51). **No**: not offered on that model.
 | Live video, Ring Call, talkback | Yes | In test |
 | Home Call | Yes | In test |
 | Forwarding select | Yes | In test |
-| Picture controls | Yes, kept per outdoor unit; checked offline only | In test; kept per outdoor unit |
+| Picture controls | Ring Call; on-demand video on 1.7.19, 2.0.2 and 3.0.6 (TVP5150 boards), tested on 1.7.19 | In test; the station's day ranges |
 | Camera quality (size, bit rate, frame rate) | Yes; 3.0.6 only the low stream | In test; low stream only |
 | Camera resolution select, 960x576 | 1.7.x and 2.0.2; 960x576 on 1.7.19 and 2.0.2 only | No: the station sends only the low stream |
 | Visitor images, Ring capture | Yes | In test |

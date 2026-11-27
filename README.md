@@ -134,7 +134,7 @@ same card serves a C100X.
 | Ring Call | Set **Forwarding** to **Home Assistant**. When someone rings, the card shows the picture; press **Answer**, later **Hang Up**. With **Smartphone**, calls go to the Door Entry app instead. |
 | Home Call | Audio-only call from Home Assistant to the station display. |
 | Talkback | Speak through the browser microphone. Needs HTTPS or Home Assistant Cloud and microphone permission. |
-| Picture controls | Brightness, contrast and colour saturation during a Ring Call or live video. Changes are kept, like in the station's own menu, for each outdoor unit; checked offline only. On the C100X 1.5.8 in test. Saved media stays unchanged. |
+| Picture controls | Brightness, contrast and colour saturation during a Ring Call, and for on-demand video once the station reads them back live. Tested on 1.7.19; 2.0.2 and 3.0.6 are checked offline only. On TVP5150 boards (every 3.0.6 station) they may only work during a Ring Call until the station has written the contrast once after a start.  On the C100X 1.5.8 in test. Saved media stays unchanged. |
 
 Talking in Home Assistant's own camera view is optional and off by default
 (Home Assistant 2026.11+, **Two-way audio** in Labs and the option **Talk

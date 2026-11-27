@@ -2073,7 +2073,7 @@
   "services": {
     "camera_picture": {
       "name": "Kamerabild einstellen",
-      "description": "Liest alle drei Bildwerte. Zum Ändern einen Regler und einen Wert (0 bis 100 % in Zehnerschritten) angeben. Erfordert ein aktives Klingelvideo oder Livevideo auf Abruf. Eine Änderung bleibt für diese Außenstelle erhalten, wie im eigenen Menü der Station. Gespeicherte Medien bleiben unverändert.",
+      "description": "Liest alle drei Bildwerte. Zum Ändern einen Regler und einen Wert (0 bis 100 % in Zehnerschritten) angeben. Erfordert den aktualisierten Geräteagenten und ein aktives Klingelvideo oder Livevideo auf Abruf mit bestätigten Quellwerten und Wertebereichen. Gespeicherte Medien bleiben unverändert.",
       "fields": {
         "control": {
           "name": "Regler"

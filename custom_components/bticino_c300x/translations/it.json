@@ -2073,7 +2073,7 @@
   "services": {
     "camera_picture": {
       "name": "Regola immagine",
-      "description": "Legge le tre impostazioni dell’immagine in diretta. Per modificarne una, indica il controllo e il valore (da 0 a 100% a passi di 10). Richiede una videochiamata in corso dal posto esterno oppure un video su richiesta attivo. Una modifica resta salvata per quel posto esterno, come nel menu del posto interno. I contenuti salvati restano invariati.",
+      "description": "Legge le tre impostazioni dell’immagine in diretta. Per modificarne una, indica il controllo e il valore (da 0 a 100% a passi di 10). Richiede l’agente aggiornato e una videochiamata in corso dal posto esterno oppure un video su richiesta attivo con valori e intervalli verificati alla sorgente. I contenuti salvati restano invariati.",
       "fields": {
         "control": {
           "name": "Controllo"

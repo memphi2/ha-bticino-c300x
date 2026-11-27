@@ -168,14 +168,12 @@ ADDED_SINCE_2_10_0 = frozenset({
 # Texts of 2.10.0 that read differently now: the SSH package message names the
 # package and the way out, the service name lost the model (neutral names), the
 # SSH forms name the optional private key and the services ask for a target
-# instead of an entry id (3.1.0); a picture change is kept per outdoor unit
-# (3.1.0).
+# instead of an entry id (3.1.0).
 CHANGED_SINCE_2_10_0 = frozenset({
     "config/error/installer_dependency_missing",
     "config/step/bootstrap_install/description",
     "exceptions/entry_id_required/message",
     "issues/device_agent_update_required/fix_flow/step/ssh_install/description",
-    "services/camera_picture/description",
     "services/capture_doorbell_call/name",
     # The activation type "light" is now "actuator" (3.1.0).
     "config/step/reconfigure_device_activation_item/data_description/device_activation_item_type",
@@ -251,11 +249,11 @@ REMOVED_SINCE_2_10_0 = frozenset({
 # ones, per file:
 #   json.dumps({"a/b/c": text}, sort_keys=True, ensure_ascii=False)
 DIGESTS_2_10_0 = {
-    "base": "50e239e2d705050f956a5a1fa901cacf322eb1741946d463357a056483932658",
-    "en": "50e239e2d705050f956a5a1fa901cacf322eb1741946d463357a056483932658",
-    "de": "d86320ce9cfffc3207159ae9da8b5f35e188023d8f9b3596af4281651bab42b0",
-    "it": "d1edbfb02e14fa59b58c19863b28bc8bcde5cf1c461c157a36d3c8069514631e",
-    "fr": "9785052b358010d146c1ad7e5acbc93a43224e5cdaffe806b4d9d84237cbb5a1",
+    "base": "a93db20c64e018fecb9432106543d62e1ca4a565cf620b3d73f7bebf23cf6e94",
+    "en": "a93db20c64e018fecb9432106543d62e1ca4a565cf620b3d73f7bebf23cf6e94",
+    "de": "3aba5a59dac3f41cf7b4f86a2df2e894e9d22990f45523ee85dbacca969cc77b",
+    "it": "1d1cb897dc0117386a63fa2a79398d77e85b3aeeb25e8e95d3a770f69b0606ca",
+    "fr": "a5d79b14df33f2608f36b5019493b0f2b3fb19bdec2b4a186614653e4476277d",
 }
 
 

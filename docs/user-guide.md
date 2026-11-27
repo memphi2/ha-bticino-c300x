@@ -120,20 +120,24 @@ saved recordings and snapshots are never recoloured.
 While the sliders panel is open, the card hides the play, mute and volume
 controls under it; they return when the panel closes.
 
-- **When:** during a Ring Call, an answered call or on-demand video; start
-  live video first. Opening the sliders does not answer.
-- **Changes are kept, like in the station's own menu.** The station stores
-  them for the outdoor unit you are watching and uses them for every later
-  ring and live view of that unit; each unit keeps its own values. Home
-  Assistant changes them through the station's own messages, the same way
-  its display does, and shows the values the station reports back.
-- **Classe 300X:** 1.7.19, 2.0.2 and 3.0.6. Each setting has eleven steps,
-  so every slider position is one of the station's own. Keeping the changes
-  is checked offline only, against the station's own programs.
-- **Classe 100X:** in test in issue #51. In the dark the station uses its
-  night values for the same setting, as with its own menu. Its menu also has
-  steps between the 10 % marks; the sliders then show the nearest 10 % step,
-  and moving one sets the 10 % step.
+- **Ring Call:** uses the stock controls of the video call. Opening the sliders
+  does not answer.
+- **On-demand video:** start live video first; the sliders icon appears about
+  two seconds later. On firmware 1.7.19, 2.0.2 (either video decoder),
+  3.0.6 (TVP5150 boards only) and the Classe 100X on 1.5.8 the agent checks
+  during the session whether the video source offers all three settings. A slider move writes only that
+  setting and succeeds only after reading the exact value back; otherwise the
+  old value is put back. On a TVP5150 board contrast reads back from the
+  driver's own copy, so a contrast write the decoder missed goes unnoticed.
+  That copy reads 0 after a station start until the station itself writes
+  the contrast once; until then the sliders icon does not appear for
+  on-demand video, and the controls may only work during a Ring Call
+  (through the display). Every 3.0.6 station has a TVP5150. Tested on
+  1.7.19; 2.0.2 and 3.0.6 are checked offline only. Changes last until the
+  video ends; the station starts each video with its own values.
+- **Classe 100X:** in test in issue #51. The percentages are the station's own day settings. In the
+  dark the station switches to its night values, and its own menu has steps
+  between the 10 % marks; the sliders then show the nearest 10 % step.
 
 Automations use `bticino_c300x.camera_picture` in an active session: omit
 `control` and `value` to read, or send both (for example `control: contrast`,

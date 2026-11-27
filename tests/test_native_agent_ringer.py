@@ -170,23 +170,64 @@ def test_no_gui_never_performs_half_a_write(lab: Lab) -> None:
     assert lab.device.frames == []
 
 
-def test_picture_requests_never_reach_the_ringer_gui(lab: Lab) -> None:
-    """Picture settings go to the station's own frames; the ringer GUI only mutes."""
-    gui = lab.request(lab.ui_port, GUI_PATH + "?picture=1", headers={"X-C300X-GUI": "ringer-v1"})
-    api_get(lab.ui_port, "/ui/events/status", authorized=False)
+def test_picture_controls_use_gui_readback_without_affecting_mute(lab: Lab) -> None:
     path = "/api/v1/video/picture"
     headers = {"Authorization": "Bearer " + TOKEN}
-    # The host is no supported station: refused before any frame.
-    assert response(lab.request(lab.api_port, path, headers=headers), 409)["error"] == "picture_controls_unavailable"
-    assert lab.device.frames == []
-    assert api_get(lab.api_port, "/api/v1/capabilities")["capabilities"]["camera_picture"]["supported"] is False
-    post = lab.post({"muted": True})
+
+    def listen(query: str = "") -> HTTPConnection:
+        conn = lab.request(lab.ui_port, GUI_PATH + "?picture=1" + query, headers={"X-C300X-GUI": "ringer-v1"})
+        api_get(lab.ui_port, "/ui/events/status", authorized=False)
+        return conn
+
+    response(lab.request(lab.api_port, path), 401)
+    response(lab.request(lab.api_port, path, headers=headers), 503)
+    gui = listen()
+    for name in ("read", "brightness", "contrast", "saturation"):
+        payload = None if name == "read" else {"control": name, "value": 60}
+        pending = lab.request(lab.api_port, path, headers=headers, payload=payload)
+        command = response(gui)
+        assert command["picture"] == name and "muted" not in command
+        gui = listen("&picture_id=" + command["id"] + "&brightness=60&contrast=60&saturation=60")
+        assert response(pending) == {"ok": True, "brightness": 60, "contrast": 60, "saturation": 60}
+    response(lab.request(lab.api_port, path, headers=headers, payload={"control": "brightness", "value": True}), 400)
+    pending = lab.request(lab.api_port, path, headers=headers, payload={"control": "contrast", "value": 40})
     command = response(gui)
-    assert command["muted"] is True and "picture" not in command
-    lab.device.muted = True
-    lab.next(command["id"], True)
-    send_udp_event(lab.udp_port, "*#8**33*0##")
-    assert response(post)["muted"] is True
+    listen("&picture_id=" + command["id"] + "&brightness=60&contrast=60&saturation=60")
+    assert response(pending, 409)["error"] == "picture_not_applied"
+    assert lab.device.frames == []
+
+
+def test_picture_support_tracks_gui_protocol_not_call_state(lab: Lab) -> None:
+    def assert_support(expected: bool) -> None:
+        caps = api_get(lab.api_port, "/api/v1/capabilities")["capabilities"]
+        status = api_get(lab.api_port, "/api/v1/video/doorbell/status")
+        assert caps["camera_picture"]["supported"] is expected
+        assert status["bridge"]["picture_controls_supported"] is expected
+        assert status["window_available"] is False
+
+    assert_support(False)
+    gui = lab.request(lab.ui_port, GUI_PATH + "?picture=1", headers={"X-C300X-GUI": "ringer-v1"})
+    api_get(lab.ui_port, "/ui/events/status", authorized=False)
+    assert_support(True)
+    # Even with no call, a read goes to the patched GUI. Its negative call-state
+    # reply must not turn off the capability or require another capability probe.
+    path = "/api/v1/video/picture"
+    headers = {"Authorization": "Bearer " + TOKEN}
+    pending = lab.request(lab.api_port, path, headers=headers)
+    command = response(gui)
+    assert_support(True)
+    gui = lab.request(lab.ui_port, GUI_PATH + "?picture=1&picture_id=" + command["id"],
+                      headers={"X-C300X-GUI": "ringer-v1"})
+    assert response(pending, 409)["error"] == "picture_controls_unavailable"
+    assert_support(True)
+    gui.close()
+    deadline = time.monotonic() + 2
+    while api_get(lab.api_port, "/api/v1/diagnostics")["ringer_gui_ready"]:
+        assert time.monotonic() < deadline
+    assert_support(False)
+    lab.next()  # Old core GUI reconnects without picture=1.
+    assert_support(False)
+    assert response(lab.request(lab.api_port, path, headers=headers), 503)["error"] == "picture_gui_unavailable"
 
 
 def test_idle_gui_does_not_poll_write_or_wake_the_agent(lab: Lab) -> None:

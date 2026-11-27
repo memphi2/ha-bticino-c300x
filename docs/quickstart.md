@@ -42,6 +42,9 @@ Everything works as on `1.7.x` and `2.0.2`, with these differences:
 - **Camera:** the station sends only its low-resolution stream, with other
   sizes, bit rates and frame rates; there is no **Camera resolution** select
   and no 960x576 ([Stream Settings](user-guide.md#stream-settings)).
+- **Picture controls:** until the station has written the contrast once after
+  a start, they may only work during a Ring Call
+  ([Picture Controls](user-guide.md#picture-controls)).
 - **Sound:** the station already uses PCMU from the factory, so **Audio codec**
   needs no change.
 - **Display pages:** the same pages and buttons, loaded into the station's

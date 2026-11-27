@@ -26,6 +26,9 @@ devices, entities and services; a Repair lists what to redo after the update.
   event on the station (`activated`). They fire with the station's own bus
   message, whatever opened the door or switched on the light: the button, the
   station, the BTicino app. A door opened during a call carries its `call_id`.
+- Opening a door from Home Assistant no longer fires
+  `bticino_c300x_action_received` (the stair light never did); use the
+  **Door** event, which fires however the door was opened.
 - The card follows the current call: it shows the calling unit's name, and its
   door button opens the unit that rang.
 - **Blueprints** start from the **Doorbell ring event** of the outdoor unit you

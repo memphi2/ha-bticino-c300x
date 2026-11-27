@@ -340,7 +340,8 @@ def test_door_button_opens_its_own_unit() -> None:
     button.hass = SimpleNamespace(bus=SimpleNamespace(async_fire=lambda *args: fired.append(args)))
     asyncio.run(button.async_press())
     assert calls == [("22_1", None)]
-    assert fired[0][1]["unit_id"] == "22_1"
+    # The station's frame fires the Door event; no action_received.
+    assert fired == []
     assert button.unique_id == "c300x-0123456789ab_unit_22_1_door"
     assert button.device_info["identifiers"] == {("bticino_c300x", "c300x-0123456789ab:unit:22_1")}
 

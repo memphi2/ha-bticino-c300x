@@ -300,8 +300,9 @@ listen to it. Its `event_type` is the stable key; `unit` and `call_id` are
 `null` while not known (a door frame names its unit also outside a call),
 `device_id` is the unit's device, else the station's. Automations should
 trigger on the event entities.
-`bticino_c300x_action_received` for a door carries `unit_id` and `call_id`
-instead of `lock_id`.
+`bticino_c300x_action_received` is fired for configured actions only, not
+for a door or the stair light: their bus frames fire the Door and Stair light
+event entities, whatever opened the door.
 
 The media camera's attributes tell the card about the current call:
 `call_id`, `call_state`, `call_unit`, `call_unit_name` and `door_entity_id`

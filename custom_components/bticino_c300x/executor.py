@@ -273,19 +273,12 @@ async def async_unlock_door(
     """Open an outdoor unit's lock; ``current`` is the calling unit, else the default one.
 
     With ``call_id`` the agent opens only while that call belongs to the unit.
+    Like the stair light it fires no action_received: the station's own frame
+    fires the unit's Door event, whatever opened the door.
     """
 
     result = await entry.runtime_data.api.async_unlock_outdoor_unit(unit_id, call_id)
     unit = result.get("unit") if isinstance(result.get("unit"), str) else unit_id
-    hass.bus.async_fire(
-        EVENT_ACTION_RECEIVED,
-        {
-            "entry_id": entry.entry_id,
-            "action_id": DASHBOARD_ENTITY_DOOR_UNLOCK,
-            "unit_id": unit,
-            "call_id": call_id,
-        },
-    )
     return {"ok": True, "action_id": DASHBOARD_ENTITY_DOOR_UNLOCK, "unit_id": unit}
 
 

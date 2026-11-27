@@ -2188,17 +2188,19 @@ def test_async_unlock_door_opens_the_calling_outdoor_unit() -> None:
     # "current": the agent opens the unit of the current call and names it.
     assert result == {"ok": True, "action_id": DASHBOARD_ENTITY_DOOR_UNLOCK, "unit_id": "21"}
     assert entry.runtime_data.api.unlock_calls == ["current"]
-    assert hass.bus.events == [
-        (
-            "bticino_c300x_action_received",
-            {
-                "entry_id": "entry-1",
-                "action_id": DASHBOARD_ENTITY_DOOR_UNLOCK,
-                "unit_id": "21",
-                "call_id": None,
-            },
-        )
-    ]
+    # No action_received: the door, like the stair light, is no action-map
+    # action; the station's frame fires the unit's Door event.
+    assert hass.bus.events == []
+
+
+def test_the_station_buttons_fire_no_action_received() -> None:
+    hass = FakeHass()
+    entry = FakeEntry(data={})
+
+    run(async_execute_dashboard_action(hass, entry, DASHBOARD_ENTITY_DOOR_UNLOCK))
+    run(async_execute_dashboard_action(hass, entry, "stair_light"))
+    run(async_unlock_door(hass, entry, "21", "0badc0de-1"))
+    assert hass.bus.events == []
 
 
 def test_async_dashboard_payload_uses_main_page_for_status_and_actions_page() -> None:

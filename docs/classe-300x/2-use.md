@@ -1,12 +1,10 @@
 # Classe 300X: Use
 
+**Step 2 of 5:** [1. Setup](1-setup.md) | **2. Use** | [3. Station display](3-display.md) |
+[4. Troubleshooting](4-troubleshooting.md) | [5. Update and removal](5-update-and-removal.md) | [Reference](../reference.md)
+
 This page explains daily use: the card, calls, the door, messages, sound,
 picture, visitor images and notifications.
-
-Pages: [1. Setup](1-setup.md) | [3. Station display](3-display.md) |
-[4. Troubleshooting](4-troubleshooting.md) |
-[5. Update and removal](5-update-and-removal.md) |
-[Reference](../reference.md)
 
 ## Doorbell Card
 
@@ -278,3 +276,5 @@ call; talk there.
 
 For your own automations, use the **Doorbell ring event** entity or the
 events in the [Reference](../reference.md#events).
+
+**Next: [3. Station display](3-display.md)**

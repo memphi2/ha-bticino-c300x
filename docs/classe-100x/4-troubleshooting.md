@@ -1,13 +1,12 @@
 # Classe 100X: Troubleshooting
 
+**Step 4 of 5:** [1. Setup](1-setup.md) | [2. Use](2-use.md) | [3. Station display](3-display.md) |
+**4. Troubleshooting** | [5. Update and removal](5-update-and-removal.md)
+
 This page lists problems that only occur on a Classe 100X. For the card,
 calls, sound, picture and network, use the
 [Classe 300X troubleshooting](../classe-300x/4-troubleshooting.md); it
 applies to the Classe 100X as well.
-
-Pages: [1. Setup](1-setup.md) | [2. Use](2-use.md) |
-[3. Station display](3-display.md) |
-[5. Update and removal](5-update-and-removal.md)
 
 ## Setup and Update
 
@@ -39,3 +38,5 @@ own programs. Go back as described in
 [5. Update and removal](5-update-and-removal.md#go-back-to-the-original-station)
 and report in [issue #51](https://github.com/memphi2/ha-bticino-c300x/issues/51)
 with a photo of the screen, the versions and the diagnostics.
+
+**Next: [5. Update and removal](5-update-and-removal.md)**

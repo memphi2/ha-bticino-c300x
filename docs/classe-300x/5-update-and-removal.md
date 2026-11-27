@@ -1,11 +1,10 @@
 # Classe 300X: Update and Removal
 
+**Step 5 of 5:** [1. Setup](1-setup.md) | [2. Use](2-use.md) | [3. Station display](3-display.md) |
+[4. Troubleshooting](4-troubleshooting.md) | **5. Update and removal**
+
 This page explains how to update, how to handle the agent's keys and how to
 remove the integration and the device agent.
-
-Pages: [1. Setup](1-setup.md) | [2. Use](2-use.md) |
-[3. Station display](3-display.md) |
-[4. Troubleshooting](4-troubleshooting.md)
 
 ## Update
 
@@ -155,3 +154,5 @@ If a step fails, the removal stops and keeps the agent and its backups. Steps
 that already ran are not always undone. In most cases it starts the agent
 again so you can retry; the message says what to do. Do not delete recovery
 files by hand.
+
+**Back to the [overview](../../README.md#start-here)**

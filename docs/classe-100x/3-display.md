@@ -1,11 +1,10 @@
 # Classe 100X: Station Display
 
+**Step 3 of 5:** [1. Setup](1-setup.md) | [2. Use](2-use.md) | **3. Station display** |
+[4. Troubleshooting](4-troubleshooting.md) | [5. Update and removal](5-update-and-removal.md)
+
 This page explains how to switch on the Home Assistant pages on the Classe
 100X display and how to use them with the station's keys.
-
-Pages: [1. Setup](1-setup.md) | [2. Use](2-use.md) |
-[4. Troubleshooting](4-troubleshooting.md) |
-[5. Update and removal](5-update-and-removal.md)
 
 <table>
   <tr>
@@ -79,3 +78,5 @@ Display notices wake the screen without a tone. Text memos are not shown.
 
 Press **Restore original display**, or turn off **Home Assistant pages on the
 display**. The station reboots once and shows its original display.
+
+**Next: [4. Troubleshooting](4-troubleshooting.md)**

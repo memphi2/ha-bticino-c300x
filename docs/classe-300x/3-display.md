@@ -1,11 +1,10 @@
 # Classe 300X: Station Display
 
+**Step 3 of 5:** [1. Setup](1-setup.md) | [2. Use](2-use.md) | **3. Station display** |
+[4. Troubleshooting](4-troubleshooting.md) | [5. Update and removal](5-update-and-removal.md)
+
 This page explains the Home Assistant pages on the station's own display and
 how to set them up.
-
-Pages: [1. Setup](1-setup.md) | [2. Use](2-use.md) |
-[4. Troubleshooting](4-troubleshooting.md) |
-[5. Update and removal](5-update-and-removal.md)
 
 <table>
   <tr>
@@ -223,3 +222,5 @@ at start with the buttons in place; the other pages are checked offline only.
   stays as shipped.
 - If the station keeps restarting after an install or update, follow
   [Troubleshooting](4-troubleshooting.md#the-station-keeps-restarting-firmware-306).
+
+**Next: [4. Troubleshooting](4-troubleshooting.md)**

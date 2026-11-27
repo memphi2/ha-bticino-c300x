@@ -706,3 +706,35 @@ def test_the_card_documentation_link_opens_an_existing_section():
         page = page.removeprefix("/blob/main/") or "README.md"
         assert (ROOT / page).is_file(), (name, page)
         assert anchor in _heading_anchors(ROOT / page), (name, url)
+
+
+GUIDE_STEPS = ("1-setup.md", "2-use.md", "3-display.md", "4-troubleshooting.md",
+               "5-update-and-removal.md")
+
+
+@pytest.mark.parametrize("model", ["classe-300x", "classe-100x"])
+@pytest.mark.parametrize("step", range(1, len(GUIDE_STEPS) + 1))
+def test_every_guide_page_says_its_step_and_ends_with_the_next_one(model, step):
+    """A reader of page 1 must see that the guide goes on, and where."""
+
+    text = (DOCS / model / GUIDE_STEPS[step - 1]).read_text(encoding="utf-8")
+    top = text.split("\n## ", 1)[0]
+    assert f"**Step {step} of {len(GUIDE_STEPS)}:**" in top
+    for other, name in enumerate(GUIDE_STEPS, 1):
+        if other != step:
+            assert f"]({name})" in top, name
+    last = text.rstrip().rsplit("\n", 1)[1]
+    if step < len(GUIDE_STEPS):
+        assert re.fullmatch(rf"\*\*Next: \[{step + 1}\. [^]]+\]\({GUIDE_STEPS[step]}\)\*\*", last), last
+    else:
+        assert last == "**Back to the [overview](../../README.md#start-here)**"
+    assert "start-here" in _heading_anchors(ROOT / "README.md")
+
+
+def test_the_readme_lists_the_five_steps_of_each_model():
+    start = (ROOT / "README.md").read_text(encoding="utf-8").split("## Start Here\n", 1)[1]
+    start = start.split("\n## ", 1)[0]
+    assert "five steps per model" in start
+    for model in ("classe-300x", "classe-100x"):
+        for name in GUIDE_STEPS:
+            assert f"](docs/{model}/{name})" in start, (model, name)

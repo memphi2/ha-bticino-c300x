@@ -35,8 +35,16 @@ You need:
 
 ## Start Here
 
-- **[Classe 300X: start here](docs/classe-300x/1-setup.md)**
-- **[Classe 100X: start here](docs/classe-100x/1-setup.md)**
+The guide has five steps per model. Read them in order; every page ends with
+a link to the next step.
+
+| Step | Classe 300X | Classe 100X |
+| --- | --- | --- |
+| 1 | **[Setup](docs/classe-300x/1-setup.md)** | **[Setup](docs/classe-100x/1-setup.md)** |
+| 2 | [Use](docs/classe-300x/2-use.md) | [Use](docs/classe-100x/2-use.md) |
+| 3 | [Station display](docs/classe-300x/3-display.md) | [Station display](docs/classe-100x/3-display.md) |
+| 4 | [Troubleshooting](docs/classe-300x/4-troubleshooting.md) | [Troubleshooting](docs/classe-100x/4-troubleshooting.md) |
+| 5 | [Update and removal](docs/classe-300x/5-update-and-removal.md) | [Update and removal](docs/classe-100x/5-update-and-removal.md) |
 
 ## Features
 

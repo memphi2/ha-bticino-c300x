@@ -1,12 +1,10 @@
 # Classe 100X: Use
 
+**Step 2 of 5:** [1. Setup](1-setup.md) | **2. Use** | [3. Station display](3-display.md) |
+[4. Troubleshooting](4-troubleshooting.md) | [5. Update and removal](5-update-and-removal.md) | [Reference](../reference.md)
+
 This page lists what works on a Classe 100X and where it differs from the
 Classe 300X.
-
-Pages: [1. Setup](1-setup.md) | [3. Station display](3-display.md) |
-[4. Troubleshooting](4-troubleshooting.md) |
-[5. Update and removal](5-update-and-removal.md) |
-[Reference](../reference.md)
 
 ## What Works
 
@@ -67,3 +65,5 @@ After the [display activation](3-display.md) the Notify action
 (`notify.bticino_c300x`) works with `display` only. The notice wakes the
 screen without a tone; a positive `sound_duration`, `tts` and `led` are
 refused.
+
+**Next: [3. Station display](3-display.md)**

@@ -1,11 +1,10 @@
 # Classe 300X: Setup
 
+**Step 1 of 5:** **1. Setup** | [2. Use](2-use.md) | [3. Station display](3-display.md) |
+[4. Troubleshooting](4-troubleshooting.md) | [5. Update and removal](5-update-and-removal.md)
+
 This page takes a Classe 300X from SSH access to a working doorbell card in
 Home Assistant.
-
-Next pages: [2. Use](2-use.md) | [3. Station display](3-display.md) |
-[4. Troubleshooting](4-troubleshooting.md) |
-[5. Update and removal](5-update-and-removal.md)
 
 ## Requirements
 
@@ -168,3 +167,5 @@ Everything works as on `1.7.x` and `2.0.2`, with these differences:
 On a `3.0.6` station, Ring Call, the camera at its factory size, the door and
 activations ran with earlier releases, and the display pages loaded at start.
 The rest is checked offline only.
+
+**Next: [2. Use](2-use.md)**

@@ -1,11 +1,10 @@
 # Classe 300X: Troubleshooting
 
+**Step 4 of 5:** [1. Setup](1-setup.md) | [2. Use](2-use.md) | [3. Station display](3-display.md) |
+**4. Troubleshooting** | [5. Update and removal](5-update-and-removal.md)
+
 This page helps when the card, calls, sound, picture or the station display
 do not work.
-
-Pages: [1. Setup](1-setup.md) | [2. Use](2-use.md) |
-[3. Station display](3-display.md) |
-[5. Update and removal](5-update-and-removal.md)
 
 Start every check with the **Media readiness** sensor and **Settings >
 Repairs**.
@@ -186,3 +185,5 @@ Open an issue at <https://github.com/memphi2/ha-bticino-c300x/issues> with:
 
 Do not include keys, passwords, private addresses, recordings or network
 captures.
+
+**Next: [5. Update and removal](5-update-and-removal.md)**

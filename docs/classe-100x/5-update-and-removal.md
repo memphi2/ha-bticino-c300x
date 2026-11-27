@@ -1,11 +1,10 @@
 # Classe 100X: Update and Removal
 
+**Step 5 of 5:** [1. Setup](1-setup.md) | [2. Use](2-use.md) | [3. Station display](3-display.md) |
+[4. Troubleshooting](4-troubleshooting.md) | **5. Update and removal**
+
 This page explains how to update a Classe 100X and how to bring the station
 back to its original state.
-
-Pages: [1. Setup](1-setup.md) | [2. Use](2-use.md) |
-[3. Station display](3-display.md) |
-[4. Troubleshooting](4-troubleshooting.md)
 
 ## Update
 
@@ -49,3 +48,5 @@ backup over `/`.
 
 To remove the entry and the package from Home Assistant, follow
 [Remove the integration](../classe-300x/5-update-and-removal.md#remove-the-integration).
+
+**Back to the [overview](../../README.md#start-here)**

@@ -843,6 +843,11 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
         return self.async_create_entry(data={})
 
 
+# The init script waits up to 20 s for a slow agent shutdown before SIGKILL,
+# then starts the new agent; one try per second covers both.
+_AGENT_RESTART_WAIT_ATTEMPTS = 35
+
+
 async def _async_wait_for_agent_after_update(
     api: Any,
     *,
@@ -855,7 +860,7 @@ async def _async_wait_for_agent_after_update(
     saw_stale_setup = False
     if initial_delay > 0:
         await asyncio.sleep(initial_delay)
-    for attempt in range(12):
+    for attempt in range(_AGENT_RESTART_WAIT_ATTEMPTS):
         try:
             setup_data = cast(dict[str, Any], await api.async_validate_setup())
             if target_bundle is None or _agent_setup_matches_bundle(
@@ -866,7 +871,7 @@ async def _async_wait_for_agent_after_update(
             saw_stale_setup = True
         except Exception as err:  # noqa: BLE001 - retry during controlled restart
             last_error = err
-        if attempt < 11:
+        if attempt < _AGENT_RESTART_WAIT_ATTEMPTS - 1:
             await asyncio.sleep(1)
     if last_error is not None and not saw_stale_setup:
         raise last_error

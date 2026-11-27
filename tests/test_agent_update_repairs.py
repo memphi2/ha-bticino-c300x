@@ -2649,6 +2649,40 @@ def test_wait_for_agent_after_update_retries_until_setup_succeeds(
     assert sleeps == [0.5, 1, 1]
 
 
+def test_wait_for_agent_after_update_outwaits_the_init_scripts_stop(
+    monkeypatch,
+) -> None:
+    import custom_components.bticino_c300x.repairs as repairs
+
+    init = (
+        Path(__file__).resolve().parents[1]
+        / "custom_components/bticino_c300x/device_agent/init/c300x-native-agent"
+    ).read_text(encoding="utf-8")
+    polls = int(re.search(r'wait_gone "\$pid" (\d+)', init).group(1))
+    # A hung agent is killed only after the stop's polls of 100 ms; the new
+    # agent then needs a few seconds to start.
+    answer_after = polls // 10 + 5
+
+    class SlowRestartApi:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def async_validate_setup(self) -> dict[str, Any]:
+            self.calls += 1
+            if self.calls < answer_after:
+                raise C300XAgentApiError("restarting")
+            return {"version": "3.0.0"}
+
+    async def fake_sleep(_delay: float) -> None:
+        return None
+
+    monkeypatch.setattr(repairs.asyncio, "sleep", fake_sleep)
+    api = SlowRestartApi()
+
+    assert asyncio.run(_async_wait_for_agent_after_update(api)) == {"version": "3.0.0"}
+    assert api.calls == answer_after
+
+
 def test_wait_for_agent_after_update_raises_last_error(
     monkeypatch,
 ) -> None:

@@ -1550,8 +1550,8 @@ write finishes it (see QML Patch).
 Graceful agent shutdown during a QML write sends that `SIGTERM` once, as the
 first step of its clean-up, and waits up to the same 15 seconds before
 `SIGKILL` at the end of it; that request is closed without an answer. The init
-script's own stop sends `SIGKILL` to the agent after 5 seconds (50 waits of
-100 ms); the script, in
+script's own stop sends `SIGKILL` to the agent after 20 seconds (200 waits
+of 100 ms), so that grace ends first; the script, in
 a process group of its own, has its signal by then and still finishes its
 rollback. A write cut off even so is finished at the next agent start.
 

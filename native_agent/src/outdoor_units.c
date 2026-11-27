@@ -5,6 +5,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "door_contact.h"
 #include "json_util.h"
 #include "string_util.h"
 
@@ -285,10 +286,12 @@ const struct c300x_outdoor_unit *c300x_outdoor_units_default(const struct c300x_
         ? &units->items[units->default_index] : NULL;
 }
 
-int c300x_outdoor_units_json(const struct c300x_outdoor_units *units, char *out, size_t out_len)
+int c300x_outdoor_units_json(const struct c300x_outdoor_units *units, const struct c300x_door_contacts *doors,
+                             long long now, char *out, size_t out_len)
 {
     size_t used = 0;
     char name[C300X_JSON_QUOTED_LEN(C300X_UNIT_NAME_LEN)];
+    char door[64];
     const struct c300x_outdoor_unit *fallback = c300x_outdoor_units_default(units);
 
     if (!c300x_appendf(out, out_len, &used, "{\"ok\":true,\"default_unit\":\"%s\",\"archive\":\"%s\",\"units\":[",
@@ -297,12 +300,13 @@ int c300x_outdoor_units_json(const struct c300x_outdoor_units *units, char *out,
     }
     for (int index = 0; index < units->count; index++) {
         const struct c300x_outdoor_unit *unit = &units->items[index];
-        if (!c300x_appendf(out, out_len, &used,
+        if (!c300x_door_contact_json(c300x_door_contacts_find(doors, unit->id), now, door, sizeof(door))
+            || !c300x_appendf(out, out_len, &used,
                 "%s{\"id\":\"%s\",\"where\":\"%s\",\"action_where\":\"%s\",\"lock_where\":\"%s\","
-                "\"name\":%s,\"source\":\"%s\",\"default\":%s}",
+                "\"name\":%s,\"source\":\"%s\",\"default\":%s,\"door\":%s}",
                 index > 0 ? "," : "", unit->id, unit->where, unit->action_where, unit->lock_where,
                 c300x_json_string(unit->name, name, sizeof(name)), unit->source,
-                index == units->default_index ? "true" : "false")) {
+                index == units->default_index ? "true" : "false", door)) {
             return 0;
         }
     }

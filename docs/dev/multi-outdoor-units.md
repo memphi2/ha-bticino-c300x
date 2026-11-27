@@ -206,15 +206,29 @@ Capabilities report `api_version: "2"` and `capabilities.outdoor_units: true`,
   "archive": "ok",
   "units": [
     {"id": "20", "where": "20#2", "action_where": "20", "lock_where": "20",
-     "name": "Gate", "source": "archive", "default": true},
+     "name": "Gate", "source": "archive", "default": true,
+     "door": {"state": "closed", "age_ms": 5300}},
     {"id": "21", "where": "21", "action_where": "21", "lock_where": "21",
-     "name": "", "source": "seen", "default": false}
+     "name": "", "source": "seen", "default": false, "door": null}
   ]
 }
 ```
 
 `archive`: `ok`, `empty`, `missing` or `unreadable`. `name` is empty when the
 station has none.
+
+`door`: `null` for a unit without a door contact, else its state (`open`,
+`closed`, `null` while no door frame came since the agent started) and
+`age_ms` since its last change (`null` with it). bt_vct sends
+`*8*66*<where>##` when a unit's door opens and `*8*65*<where>##` when it
+closes, only from a unit wired with a contact; `<where>` is the plain
+address, built like the caller frame's (`20`, `21`). A frame maps to its unit
+like a caller frame: the default unit by its plain or its qualified address,
+an unknown address adds a `seen` unit. Once a door frame of a unit was seen
+the unit has a contact, kept across agent restarts in `outdoor-units-doors`
+next to the agent's configuration; the station has no query for the state,
+so it is unknown after a restart until the next frame. Same frame and sender
+(bt_vct) on 1.7.19, 2.0.2, 3.0.6 and C100X 1.5.8.
 
 ### `GET /api/v1/calls`
 
@@ -295,6 +309,7 @@ All carry the 2.x envelope (`event_id`, `type`, `occurred_at`, `data`).
 | `call.view_started` | `call_id`, `unit` (a view frame `*8*1#5#4#<where>*…##` opened a view) |
 | `call.ended` | `call_id`, `unit`, `kind`, `reason` |
 | `station.call_state` | `code`, `state` (see Station call state; `null` for a code without a proven meaning), on every change |
+| `door.opened`, `door.closed` | `unit`, `where`, `raw`; on a change of the unit's door state. The first door frame of a unit also sends `outdoor_units.changed`. |
 | `doorbell.view_requested` | adds `call_id` and `unit` when the frame names the unit |
 | `door_unlock.started`, `door_unlock.ended` | add `unit` when the address is a unit's lock, and `call_id` of its live call |
 | `outdoor_units.changed` | `count`; Home Assistant reads `GET /api/v1/outdoor-units` again |

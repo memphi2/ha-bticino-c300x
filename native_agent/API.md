@@ -1370,7 +1370,16 @@ Capabilities report `api_version: "2"`, `capabilities.outdoor_units` and
 `capabilities.calls`.
 
 - `GET /api/v1/outdoor-units`: the units (`id`, `where`, `action_where`,
-  `lock_where`, `name`, `source`, `default`), `default_unit` and `archive`.
+  `lock_where`, `name`, `source`, `default`, `door`), `default_unit` and
+  `archive`. `door` is `null` for a unit without a door contact, else
+  `{"state": "open"|"closed"|null, "age_ms": N|null}`: the state and the
+  time since its last change, `null` while no frame came since the agent
+  started. A unit has a door contact once a door frame of it was seen
+  (bt_vct: `*8*66*<where>##` opened, `*8*65*<where>##` closed, `<where>`
+  the plain unit address such as `20`; a frame of a unit not known yet adds
+  it as `seen`); the agent keeps that in `outdoor-units-doors` next to its
+  configuration. The station has no query for the state. `500
+  out_of_memory` when the agent cannot allocate the answer.
 - `GET /api/v1/calls`: `boot_id` (drawn at agent start), `current_call_id`,
   `caller_frames_ignored`, `station_state` and live calls plus calls ended in
   the last 60 s. `station_state` is the station's own call state from its
@@ -1412,8 +1421,10 @@ Capabilities report `api_version: "2"`, `capabilities.outdoor_units` and
 
 Events: `doorbell.pressed` carries `call_id`, `unit` and `attribution`; new are
 `call.caller_identified`, `call.answered`, `call.view_started`, `call.ended`,
-`station.call_state` (`code`, `state` as above, on every change) and
-`outdoor_units.changed`; `door_unlock.*` and `doorbell.view_requested`
+`station.call_state` (`code`, `state` as above, on every change),
+`door.opened` and `door.closed` (`unit`, `where`, `raw`; on a change of the
+unit's door state, the first frame of a unit also sends
+`outdoor_units.changed`) and `outdoor_units.changed`; `door_unlock.*` and `doorbell.view_requested`
 carry `unit` and `call_id` when they belong to a unit.
 
 ### `POST /api/v1/calls/doorbell/actions/capture`

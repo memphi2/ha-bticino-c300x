@@ -1224,6 +1224,34 @@ static void ondemand_units(void) {
     close(fd);
 }
 
+/* Door contact frames of bt_vct (*8*66 opened, *8*65 closed) on the
+ * multicast: per unit, repeats change nothing; the first frame of a unit
+ * gives it a contact (outdoor_units.changed). A frame with the qualified
+ * address of the default unit is that unit. */
+static void door_contacts(void) {
+    char data[4096];
+
+    assert(calls_api("GET", "/api/v1/outdoor-units", "", data, sizeof(data)) == 200);
+    assert(strstr(data, "\"id\":\"20\"") && strstr(data, "\"door\":null"));
+    bus("*8*66*20##");
+    wait_event("door.opened", 1, data, sizeof(data));
+    assert(strcmp(data, "{\"unit\":\"20\",\"where\":\"20\",\"raw\":\"*8*66*20##\"}") == 0);
+    assert(count_events("outdoor_units.changed") == 1);
+    bus("*8*66*20##");
+    bus("*8*65*20#2##");
+    wait_event("door.closed", 1, data, sizeof(data));
+    assert(strstr(data, "\"unit\":\"20\",\"where\":\"20#2\""));
+    assert(count_events("door.opened") == 1);
+    bus("*8*66*21##");
+    wait_event("door.opened", 2, data, sizeof(data));
+    assert(strstr(data, "\"unit\":\"21\",\"where\":\"21\""));
+    assert(calls_api("GET", "/api/v1/outdoor-units", "", data, sizeof(data)) == 200);
+    assert(strstr(data, "\"id\":\"20\",\"where\":\"20#2\""));
+    assert(strstr(data, "\"default\":true,\"door\":{\"state\":\"closed\",\"age_ms\":"));
+    assert(strstr(data, "\"id\":\"21\",\"where\":\"21\"") && strstr(data, "\"source\":\"seen\",\"default\":false,\"door\":{\"state\":\"open\""));
+    assert(count_events("door.closed") == 1 && count_events("call.caller_identified") == 0);
+}
+
 int main(int argc, char **argv) {
     assert(argc == 2);
     alarm(60);
@@ -1287,6 +1315,7 @@ int main(int argc, char **argv) {
     else if (strcmp(argv[1], "lifecycle_ha_answer_station_hangup") == 0) lifecycle_ha_answer_station_hangup();
     else if (strcmp(argv[1], "lifecycle_ondemand_view") == 0) lifecycle_ondemand_view();
     else if (strcmp(argv[1], "ondemand_units") == 0) ondemand_units();
+    else if (strcmp(argv[1], "door_contacts") == 0) door_contacts();
     else if (strcmp(argv[1], "refused_answer_then_station") == 0) refused_answer_then_station();
     else if (strcmp(argv[1], "display_answer_without_preview") == 0) display_answer_without_preview();
     else if (strcmp(argv[1], "app_answer_end_frame_first") == 0) app_answer_end_frame_first();

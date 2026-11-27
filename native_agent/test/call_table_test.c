@@ -10,6 +10,7 @@
 
 #include "../src/activation_discovery.h"
 #include "../src/call_table.h"
+#include "../src/door_contact.h"
 #include "../src/outdoor_units.h"
 
 static char types[64][40];
@@ -415,8 +416,8 @@ static void timeouts_and_json(void)
     expect(nth("call.ended", 1), "\"reason\":\"timeout\"");
     tick(C300X_CALL_RINGING_TIMEOUT_MS + C300X_CALL_ENDED_KEEP_MS);
     assert(c300x_calls_timeout_ms(&calls, 200000) == -1);
-    assert(c300x_outdoor_units_json(&units, json, sizeof(json)));
-    expect(json, "\"default_unit\":\"20\",\"archive\":\"missing\",\"units\":[{\"id\":\"20\",\"where\":\"20\",\"action_where\":\"20\",\"lock_where\":\"20\",\"name\":\"\",\"source\":\"default\",\"default\":true}]");
+    assert(c300x_outdoor_units_json(&units, NULL, 0, json, sizeof(json)));
+    expect(json, "\"default_unit\":\"20\",\"archive\":\"missing\",\"units\":[{\"id\":\"20\",\"where\":\"20\",\"action_where\":\"20\",\"lock_where\":\"20\",\"name\":\"\",\"source\":\"default\",\"default\":true,\"door\":null}]");
     for (int index = 0; index < 20; index++) {
         ring_with_caller(200000 + index * 5000, "*8*9#1#4*20##");
         c300x_calls_end(&calls, &sink, calls.items[0].state == C300X_CALL_RINGING ? calls.items[0].id : "", "hangup", 0);
@@ -530,9 +531,9 @@ static void default_unit_keeps_its_id(void)
     assert(units.count == 3 && units.default_index == 0);
     assert(strcmp(units.items[0].id, "20") == 0 && strcmp(units.items[0].where, "20#2") == 0);
     assert(strcmp(units.items[0].source, "archive") == 0 && strcmp(units.items[0].action_where, "20") == 0);
-    assert(c300x_outdoor_units_json(&units, json, sizeof(json)));
+    assert(c300x_outdoor_units_json(&units, NULL, 0, json, sizeof(json)));
     expect(json, "\"default_unit\":\"20\",\"archive\":\"ok\",\"units\":[{\"id\":\"20\",\"where\":\"20#2\","
-                 "\"action_where\":\"20\",\"lock_where\":\"20\",\"name\":\"Haust\xc3\xbcr\",\"source\":\"archive\",\"default\":true},"
+                 "\"action_where\":\"20\",\"lock_where\":\"20\",\"name\":\"Haust\xc3\xbcr\",\"source\":\"archive\",\"default\":true,\"door\":null},"
                  "{\"id\":\"21\"");
     assert(strstr(json, "20_2") == NULL);
     /* Caller and view frames of the door name that unit, never a second one. */
@@ -739,12 +740,70 @@ static void station_states(void)
     assert(calls.idle_ms == -1);
 }
 
+/* Door contact frames: *8*66*<where>## opened, *8*65*<where>## closed.
+ * bt_vct writes the address as the caller frame's (20, 21: never #2). */
+static void door_contacts(void)
+{
+    struct c300x_door_contacts doors, loaded;
+    char where[C300X_UNIT_WHERE_LEN], json[2048], path[256];
+    int open = -1;
+    FILE *file;
+
+    assert(c300x_door_frame_parse("*8*66*20##", &open, where, sizeof(where)) && open == 1 && strcmp(where, "20") == 0);
+    assert(c300x_door_frame_parse("*8*65*20#2##", &open, where, sizeof(where)) && open == 0 && strcmp(where, "20#2") == 0);
+    assert(!c300x_door_frame_parse("*8*67*20##", &open, where, sizeof(where)));
+    assert(!c300x_door_frame_parse("*8*650*20##", &open, where, sizeof(where)));
+    assert(!c300x_door_frame_parse("*8*65*##", &open, where, sizeof(where)));
+    assert(!c300x_door_frame_parse("*8*65*2a##", &open, where, sizeof(where)));
+    assert(!c300x_door_frame_parse("*8*65*20#", &open, where, sizeof(where)));
+    assert(!c300x_door_frame_parse("*8*65*1234567890123456789012345##", &open, where, sizeof(where)));
+    assert(!c300x_door_frame_parse(NULL, &open, where, sizeof(where)));
+
+    memset(&doors, 0, sizeof(doors));
+    assert(c300x_door_contacts_note(&doors, "20", 1, 1000) == 2);
+    assert(c300x_door_contacts_note(&doors, "20", 1, 1100) == 0);
+    assert(c300x_door_contacts_note(&doors, "20", 0, 1200) == 1);
+    assert(c300x_door_contacts_note(&doors, "29_15", 1, 1300) == 2);
+    assert(c300x_door_contacts_find(&doors, "21") == NULL);
+    assert(c300x_door_contact_json(c300x_door_contacts_find(&doors, "20"), 1500, json, sizeof(json)));
+    assert(strcmp(json, "{\"state\":\"closed\",\"age_ms\":300}") == 0);
+    assert(c300x_door_contact_json(NULL, 1500, json, sizeof(json)) && strcmp(json, "null") == 0);
+    assert(!c300x_door_contact_json(c300x_door_contacts_find(&doors, "20"), 1500, json, 8));
+
+    /* The contact survives a restart, its state does not. */
+    snprintf(path, sizeof(path), "%s/doors-%d", getenv("TMPDIR") ? getenv("TMPDIR") : "/var/tmp", (int)getpid());
+    assert(c300x_door_contacts_save(&doors, path));
+    file = fopen(path, "a");
+    assert(file != NULL && fputs("bad id\n../x\n20\n", file) >= 0 && fclose(file) == 0);
+    memset(&loaded, 0, sizeof(loaded));
+    c300x_door_contacts_load(&loaded, path);
+    assert(unlink(path) == 0);
+    assert(loaded.count == 2 && strcmp(loaded.items[1].unit, "29_15") == 0);
+    assert(c300x_door_contact_json(c300x_door_contacts_find(&loaded, "20"), 1500, json, sizeof(json)));
+    assert(strcmp(json, "{\"state\":null,\"age_ms\":null}") == 0);
+    assert(c300x_door_contacts_note(&loaded, "20", 1, 2000) == 1);
+
+    reset(ARCHIVE_SAMPLE);
+    assert(c300x_outdoor_units_json(&units, &doors, 1500, json, sizeof(json)));
+    expect(json, "\"default\":true,\"door\":{\"state\":\"closed\",\"age_ms\":300}},{\"id\":\"21\"");
+    expect(json, "\"id\":\"21\",\"where\":\"21\"");
+    assert(strstr(strstr(json, "\"id\":\"21\""), "\"door\":null") != NULL);
+
+    for (int index = 0; index < C300X_MAX_OUTDOOR_UNITS - 2; index++) {
+        char unit[16];
+        snprintf(unit, sizeof(unit), "%d", 30 + index % 60);
+        assert(c300x_door_contacts_note(&doors, unit, 1, 3000) == 2);
+    }
+    assert(c300x_door_contacts_note(&doors, "99", 1, 3000) == -1);
+}
+
 int main(int argc, char **argv)
 {
     static const struct { const char *name; void (*run)(void); } cases[] = {
         {"single_unit_capture", single_unit_capture},
         {"station_activations", station_activations},
         {"station_states", station_states},
+        {"door_contacts", door_contacts},
         {"unanswered_capture", unanswered_capture},
         {"station_answer", station_answer},
         {"app_answer_end_frame_first", app_answer_end_frame_first},

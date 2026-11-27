@@ -5,6 +5,8 @@
 
 #include "station_archive.h"
 
+struct c300x_door_contacts;
+
 #define C300X_MAX_OUTDOOR_UNITS 16
 #define C300X_UNIT_PATH_LEN 256
 
@@ -48,6 +50,10 @@ int c300x_outdoor_units_note_caller(struct c300x_outdoor_units *units, const cha
 int c300x_outdoor_units_save_seen(const struct c300x_outdoor_units *units, const char *path);
 void c300x_outdoor_units_load_seen(struct c300x_outdoor_units *units, const char *path);
 const struct c300x_outdoor_unit *c300x_outdoor_units_default(const struct c300x_outdoor_units *units);
-int c300x_outdoor_units_json(const struct c300x_outdoor_units *units, char *out, size_t out_len);
+/* Worst case: every unit with a name of escaped characters and a door. */
+#define C300X_OUTDOOR_UNITS_JSON_SIZE (C300X_MAX_OUTDOOR_UNITS * 640 + 128)
+/* doors may be NULL: no unit has a door contact. */
+int c300x_outdoor_units_json(const struct c300x_outdoor_units *units, const struct c300x_door_contacts *doors,
+                             long long now, char *out, size_t out_len);
 
 #endif

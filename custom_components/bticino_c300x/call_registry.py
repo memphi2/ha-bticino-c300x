@@ -221,6 +221,8 @@ def units_to_stored(payload: OutdoorUnitsPayload) -> dict[str, Any]:
                 "id": unit.id, "where": unit.where, "action_where": unit.action_where,
                 "lock_where": unit.lock_where, "name": unit.name, "source": unit.source,
                 "default": unit.default,
+                # The contact, not its state: that is unknown until the agent reports it.
+                "door": {"state": None, "age_ms": None} if unit.door is not None else None,
             }
             for unit in payload.units
         ],

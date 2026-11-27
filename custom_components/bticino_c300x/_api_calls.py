@@ -5,7 +5,13 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from .agent_contracts import Call, CallsPayload, OutdoorUnit, OutdoorUnitsPayload
+from .agent_contracts import (
+    Call,
+    CallsPayload,
+    DoorContact,
+    OutdoorUnit,
+    OutdoorUnitsPayload,
+)
 from .api_errors import C300XAgentApiResponseError
 
 # The agent's own limits: a where of digits and '#', a call id of
@@ -14,6 +20,7 @@ _UNIT_ID = re.compile(r"^[0-9][0-9_]{0,22}$")
 _WHERE = re.compile(r"^[0-9][0-9#]{0,22}$")
 _CALL_ID = re.compile(r"^[0-9a-f]{8}-[0-9]{1,10}$")
 _CALL_STATES = frozenset({"ringing", "answered", "viewing", "ended"})
+_DOOR_STATES = frozenset({"open", "closed"})
 
 
 def valid_unit_id(value: Any) -> str | None:
@@ -30,6 +37,19 @@ def valid_call_id(value: Any) -> str | None:
 
 def _text(value: Any, limit: int = 64) -> str:
     return value.strip()[:limit] if isinstance(value, str) else ""
+
+
+def _door_contact(value: Any) -> DoorContact | None:
+    """``door``: null without a contact, else ``{"state": open|closed|null, "age_ms"}``."""
+
+    if not isinstance(value, dict):
+        return None
+    state = value.get("state")
+    age = value.get("age_ms")
+    return DoorContact(
+        state=state if state in _DOOR_STATES else None,
+        age_ms=age if isinstance(age, int) and not isinstance(age, bool) and age >= 0 else None,
+    )
 
 
 def normalize_outdoor_units(data: Any) -> OutdoorUnitsPayload:
@@ -56,6 +76,7 @@ def normalize_outdoor_units(data: Any) -> OutdoorUnitsPayload:
             name=_text(item.get("name")),
             source=_text(item.get("source"), 16) or "seen",
             default=item.get("default") is True,
+            door=_door_contact(item.get("door")),
         ))
     default_unit = valid_unit_id(data.get("default_unit"))
     if default_unit is None or all(unit.id != default_unit for unit in units):

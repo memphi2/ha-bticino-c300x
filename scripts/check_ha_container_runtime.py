@@ -78,7 +78,7 @@ async def _async_check_events() -> None:
                                 "doorbell_events": True, "locks": True, "touch_tone": True,
                             }))
     unit = OutdoorUnit(id="21", where="21", action_where="21", lock_where="21",
-                       name="Front gate", source="config", default=True)
+                       name="Front gate", source="config", default=True, door=None)
     for language in ("en", "de", "fr", "it"):
         hass = Mock(
             spec=["data", "config", "async_add_executor_job"],

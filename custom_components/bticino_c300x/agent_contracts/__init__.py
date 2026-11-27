@@ -4,6 +4,7 @@ from .base import AgentContract
 from .calls import (
     Call,
     CallsPayload,
+    DoorContact,
     HomeCallStatus,
     OutdoorUnit,
     OutdoorUnitsPayload,
@@ -23,6 +24,7 @@ __all__ = [
     "CallsPayload",
     "AuthConfigStatus",
     "CapabilityPayload",
+    "DoorContact",
     "DoorbellVideoStatus",
     "FirewallStatus",
     "ForwardingStatus",

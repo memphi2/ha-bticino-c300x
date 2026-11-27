@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .base import AgentContract
 
@@ -48,8 +48,25 @@ class HomeCallStatus(AgentContract):
 
 
 @dataclass(frozen=True, slots=True)
+class DoorContact:
+    """A unit's door contact: ``state`` ``open`` or ``closed``, None while unknown.
+
+    The state is unknown since the agent started until the next door frame;
+    ``age_ms`` is the time since its last change. Two contacts compare equal
+    whatever their state: a unit changes when it gains a contact, not when
+    its door opens.
+    """
+
+    state: str | None = field(compare=False)
+    age_ms: int | None = field(compare=False)
+
+
+@dataclass(frozen=True, slots=True)
 class OutdoorUnit:
-    """One outdoor unit of the station; ``id`` is its where with '_' for '#'."""
+    """One outdoor unit of the station; ``id`` is its where with '_' for '#'.
+
+    ``door`` is None for a unit without a door contact.
+    """
 
     id: str
     where: str
@@ -58,6 +75,7 @@ class OutdoorUnit:
     name: str
     source: str
     default: bool
+    door: DoorContact | None
 
 
 @dataclass(frozen=True, slots=True, eq=False)

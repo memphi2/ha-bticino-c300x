@@ -294,3 +294,40 @@ def test_units_read_after_a_failed_setup_read_reload_for_the_migration(
     reloads.clear()
     assert asyncio.run(call_sync.async_refresh_units(hass, entry))  # type: ignore[arg-type]
     assert reloads == []
+
+
+def test_a_unit_door_contact_is_parsed_and_only_its_presence_changes_the_unit() -> None:
+    """``door``: null without a contact, else its state (open, closed, null) and age."""
+
+    def units(door_20: Any, door_21: Any = None) -> Any:
+        return normalize_outdoor_units({"default_unit": "20", "units": [
+            {"id": "20", "where": "20", "name": "Gate", "default": True, "door": door_20},
+            {"id": "21", "where": "21", "name": "", "door": door_21},
+        ]})
+
+    payload = units({"state": "open", "age_ms": 1200}, {"state": None, "age_ms": None})
+    gate, side = payload.units
+    assert (gate.door.state, gate.door.age_ms) == ("open", 1200)
+    assert (side.door.state, side.door.age_ms) == (None, None)
+    assert units(None).units[0].door is None
+    for malformed in ({"state": "ajar", "age_ms": -1}, {"state": True, "age_ms": True}):
+        door = units(malformed).units[0].door
+        assert (door.state, door.age_ms) == (None, None)
+    assert units("open").units[0].door is None
+
+    registry = C300XCallRegistry()
+    assert registry.set_units(units(None)) is True
+    # A unit gains a contact: the unit changed (an entity is due).
+    assert registry.set_units(units({"state": None, "age_ms": None})) is True
+    # Its door opens: the units are the same, the registry has the new state.
+    assert registry.set_units(units({"state": "open", "age_ms": 5})) is False
+    assert registry.units["20"].door.state == "open"
+
+    # The entry keeps the contact, not a state that is stale after a restart.
+    stored = units_to_stored(units({"state": "open", "age_ms": 5}))
+    assert stored["units"][0]["door"] == {"state": None, "age_ms": None}
+    assert stored["units"][1]["door"] is None
+    restored = units_from_stored(stored)
+    assert restored is not None
+    assert restored.units[0].door is not None and restored.units[0].door.state is None
+    assert restored.units[1].door is None

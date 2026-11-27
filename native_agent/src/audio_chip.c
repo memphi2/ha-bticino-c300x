@@ -24,6 +24,11 @@
 #ifndef STOCK_HOOK_SHA256
 #define STOCK_HOOK_SHA256 "358cd68c78aa70569e9ec4546afa8c4ff33227f4bf21d8a586ae93a3a0a15aa8"
 #endif
+/* What goes back when the backup of the stub is lost or broken: no vendor
+ * bytes in the agent, only the stub's behaviour (exit 1 for every state, no
+ * mixer change). It counts as stock from then on. The stock file is 0775. */
+#define NEUTRAL_STUB "#!/bin/sh\nexit 1\n"
+#define STUB_MODE 0775
 #ifndef IP_PROFILE_SHA256
 #define IP_PROFILE_SHA256 "03d9dfe656d6d2fc7b367cae47e0b0f01e73ed801fda219ded15e5341488b6bc"
 #endif
@@ -85,6 +90,12 @@ static int sha_matches(const char *data, size_t len, const char *expected)
         && strcmp(hex, expected) == 0;
 }
 
+static int is_stub(const char *data, size_t len)
+{
+    return sha_matches(data, len, STOCK_HOOK_SHA256)
+        || (len == sizeof(NEUTRAL_STUB) - 1 && memcmp(data, NEUTRAL_STUB, len) == 0);
+}
+
 /* The level a hook of ours carries, 0 when its V= line is not one. */
 static int hook_steps(const char *data)
 {
@@ -111,7 +122,7 @@ static enum c300x_audio_hook_state classify(const char *data, size_t len, int *s
 
     *steps = 0;
     *current = 0;
-    if (sha_matches(data, len, STOCK_HOOK_SHA256)) {
+    if (is_stub(data, len)) {
         return C300X_AUDIO_HOOK_STOCK;
     }
     if (strlen(data) != len || strncmp(data, "#!", 2) != 0 || strstr(data, "\n" HOOK_MARKER) == NULL) {
@@ -271,13 +282,14 @@ static int write_hook(const char *data, size_t len, const char *backup, char *er
         set_err(error, error_len, "remount_rw_failed");
         return 0;
     }
-    /* The source is the verified stub: an older, other backup gives way. */
+    /* The source is the verified stub: an older, other backup gives way.
+     * The hook keeps the mode of the file it replaces. */
     ok = backup == NULL
         || (c300x_device_file_mkdir_p(c300x_device_file_backup_dir())
             && c300x_device_file_copy(hook_path(), backup));
     if (!ok) {
         set_err(error, error_len, "backup_failed");
-    } else if (!(ok = c300x_device_file_write_mode(hook_path(), data, len, 0755))) {
+    } else if (!(ok = c300x_device_file_write_mode(hook_path(), data, len, STUB_MODE))) {
         set_err(error, error_len, "write_failed");
     }
     /* Written is written: a busy root closes at the next boot. */
@@ -285,7 +297,7 @@ static int write_hook(const char *data, size_t len, const char *backup, char *er
     return ok;
 }
 
-/* The backup must be the vendor stub: never put anything else back. */
+/* The backup must be the stub: never put anything else back. */
 static int read_stock_backup(char **data, size_t *len)
 {
     char backup[512];
@@ -293,7 +305,7 @@ static int read_stock_backup(char **data, size_t *len)
     if (!hook_backup_path(backup, sizeof(backup)) || !c300x_device_file_read(backup, data, len, NULL)) {
         return 0;
     }
-    if (!sha_matches(*data, *len, STOCK_HOOK_SHA256)) {
+    if (!is_stub(*data, *len)) {
         free(*data);
         *data = NULL;
         return 0;
@@ -322,12 +334,13 @@ static int restore_stub(char *error, size_t error_len)
     if (c300x_audio_chip_hook_state(NULL) != C300X_AUDIO_HOOK_OURS) {
         return 1;
     }
-    if (!read_stock_backup(&stock, &stock_len)) {
-        set_err(error, error_len, "hook_backup_invalid");
-        return 0;
+    /* A lost backup never keeps our hook in place: the neutral stub. */
+    if (read_stock_backup(&stock, &stock_len)) {
+        ok = write_hook(stock, stock_len, NULL, error, error_len);
+        free(stock);
+    } else {
+        ok = write_hook(NEUTRAL_STUB, sizeof(NEUTRAL_STUB) - 1, NULL, error, error_len);
     }
-    ok = write_hook(stock, stock_len, NULL, error, error_len);
-    free(stock);
     if (ok) {
         lower_raised_gain();
     }
@@ -338,8 +351,6 @@ int c300x_audio_chip_apply(int steps, char *error, size_t error_len)
 {
     char hook[HOOK_MAX];
     char backup[512];
-    char *stock = NULL;
-    size_t stock_len = 0;
     size_t hook_len;
     int current = 0;
     int exact = 0;
@@ -360,12 +371,6 @@ int c300x_audio_chip_apply(int steps, char *error, size_t error_len)
         set_err(error, error_len, state == C300X_AUDIO_HOOK_MISSING ? "hook_missing" : "hook_foreign");
         return 0;
     }
-    /* Ours without a valid backup could never be undone. */
-    if (state == C300X_AUDIO_HOOK_OURS && !read_stock_backup(&stock, &stock_len)) {
-        set_err(error, error_len, "hook_backup_invalid");
-        return 0;
-    }
-    free(stock);
     hook_len = c300x_audio_chip_render_hook(steps, hook, sizeof(hook));
     if (hook_len == 0 || !hook_backup_path(backup, sizeof(backup))) {
         set_err(error, error_len, "render_failed");

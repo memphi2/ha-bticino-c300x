@@ -238,16 +238,22 @@ def test_uninstall_puts_the_vendor_audio_state_stub_back(device: dict[str, str],
     assert hook.read_bytes() == STUB
 
 
-def test_uninstall_keeps_files_without_the_stub_in_the_hook_backup(
-    device: dict[str, str], our_hook: bytes
+# What a lost or broken backup gives back: the stub's behaviour, no vendor bytes.
+NEUTRAL_STUB = b"#!/bin/sh\nexit 1\n"
+
+
+@pytest.mark.parametrize("backup", [b"#!/bin/sh\n", None], ids=["invalid", "missing"])
+def test_uninstall_puts_a_neutral_stub_back_without_the_stub_in_the_hook_backup(
+    device: dict[str, str], our_hook: bytes, backup: bytes | None
 ) -> None:
     hook = Path(device["C300X_AUDIO_STATE_HOOK"])
     hook.write_bytes(our_hook)
-    (Path(device["C300X_AUDIO_BACKUP_DIR"]) / "Audio_State.sh").write_text("#!/bin/sh\n")
-    result = _remove(device)
-    _assert_kept(device, result)
-    assert "Failed to restore the audio state hook: hook_backup_invalid" in result.stderr
-    assert hook.read_bytes() == our_hook
+    hook.chmod(0o775)
+    if backup is not None:
+        (Path(device["C300X_AUDIO_BACKUP_DIR"]) / "Audio_State.sh").write_bytes(backup)
+    _assert_removed(device, _remove(device))
+    assert hook.read_bytes() == NEUTRAL_STUB
+    assert hook.stat().st_mode & 0o777 == 0o775
 
 
 def test_uninstall_leaves_a_foreign_audio_state_hook_alone(device: dict[str, str]) -> None:

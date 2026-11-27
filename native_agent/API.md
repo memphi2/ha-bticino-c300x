@@ -1096,7 +1096,11 @@ root filesystem is writable only for the write. The agent's own hook is a
 own and is rewritten to the current version on the next level change. A level change rewrites the
 file; `door_level_db: 0` puts the vendor stub back and lowers a gain a running
 call still has. A hook that is neither is never touched. Removing the agent
-puts the vendor stub back; without a valid backup the removal stops.
+puts the vendor stub back. When the backup is missing or is not a stub, the
+agent writes a neutral stub instead (`#!/bin/sh` and `exit 1`, the vendor
+stub's behaviour without its text) with the file's mode kept (0775 on the
+stock firmware); the neutral stub counts as the vendor stub from then on, so a
+lost backup never blocks a level change or the removal.
 
 `audio_level` fields:
 
@@ -1107,7 +1111,7 @@ puts the vendor stub back; without a valid backup the removal stops.
   level, vendor stub in place), `not_installed`, `unsupported` (no ZL38005
   lever: another model, an unknown `IP_PE.cr`, no `amixer` or no readable
   control; the door level is applied in software), `hook_foreign`,
-  `hook_missing`, `hook_backup_invalid` or `write_failed`.
+  `hook_missing` or `write_failed`.
 - `door_level_path`: where the door level went in the last audio: `chip`,
   `software`, `chip_and_software` (a level changed during a call), or `none`
   for a stock door level. Before any audio it names the prepared path.

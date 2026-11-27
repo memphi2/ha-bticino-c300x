@@ -156,6 +156,8 @@ static void test_gain_bounds(void)
 }
 
 static const char stub[] = "#!/bin/bash\ncase \"$1\" in\n*) ;;\nesac\nexit 1\n";
+/* What a lost backup gives back. */
+static const char neutral[] = "#!/bin/sh\nexit 1\n";
 
 static void reset_device(void)
 {
@@ -226,17 +228,31 @@ static void test_chip(void)
     assert(c300x_audio_chip_apply(0, error, sizeof(error)));
     assert(strcmp(get("Audio_State.sh"), "#!/bin/sh\necho mine\n") == 0);
 
-    /* Ours without the stub in the backup: nothing else is put back. */
+    /* Ours without the stub in the backup: the backup is never put back,
+     * the neutral stub is, with the file's mode; it counts as stock. */
     reset_device();
     assert(c300x_audio_chip_apply(1, error, sizeof(error)));
     put("backup/Audio_State.sh", "#!/bin/sh\nexit 0\n", 0644);
-    assert(!c300x_audio_chip_apply(0, error, sizeof(error)) && strcmp(error, "hook_backup_invalid") == 0);
-    assert(!c300x_audio_chip_apply(3, error, sizeof(error)) && strcmp(error, "hook_backup_invalid") == 0);
-    assert(strstr(get("Audio_State.sh"), "\nV=12\n") != NULL);
-    assert(!c300x_audio_chip_remove_patches(error, sizeof(error)));
-    put("backup/Audio_State.sh", stub, 0644);
+    assert(c300x_audio_chip_apply(3, error, sizeof(error)));
+    assert(strstr(get("Audio_State.sh"), "\nV=14\n") != NULL);
+    put("mark", "14\n", 0644);
+    put("sout", "14\n", 0644);
+    assert(c300x_audio_chip_apply(0, error, sizeof(error)));
+    assert(strcmp(get("Audio_State.sh"), neutral) == 0);
+    assert(stat(path, &st) == 0 && (st.st_mode & 0777) == 0775);
+    assert(atoi(get("sout")) == 11 && !exists("mark"));
+    assert(c300x_audio_chip_hook_state(&steps) == C300X_AUDIO_HOOK_STOCK);
+    /* From the neutral stub: installed and put back like the vendor's. */
+    assert(c300x_audio_chip_apply(2, error, sizeof(error)));
+    assert(strcmp(get("backup/Audio_State.sh"), neutral) == 0);
     assert(c300x_audio_chip_remove_patches(error, sizeof(error)));
-    assert(strcmp(get("Audio_State.sh"), stub) == 0);
+    assert(strcmp(get("Audio_State.sh"), neutral) == 0);
+    /* No backup at all. */
+    assert(c300x_audio_chip_apply(2, error, sizeof(error)));
+    drop("backup/Audio_State.sh");
+    assert(c300x_audio_chip_remove_patches(error, sizeof(error)));
+    assert(strcmp(get("Audio_State.sh"), neutral) == 0);
+    assert(stat(path, &st) == 0 && (st.st_mode & 0777) == 0775);
     assert(!c300x_audio_chip_apply(5, error, sizeof(error)));
 
     /* A hook of ours from another agent version: known by its marker line,

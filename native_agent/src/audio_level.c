@@ -76,7 +76,7 @@ int c300x_audio_level_valid(int door_level_db, int fine_gain_db)
 
 static const char *lever_error(const char *error)
 {
-    static const char *const known[] = {"hook_foreign", "hook_missing", "hook_backup_invalid"};
+    static const char *const known[] = {"hook_foreign", "hook_missing"};
     for (size_t index = 0; index < sizeof(known) / sizeof(known[0]); index++) {
         if (strcmp(error, known[index]) == 0) {
             return known[index];

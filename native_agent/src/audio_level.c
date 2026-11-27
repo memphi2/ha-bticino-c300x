@@ -10,8 +10,16 @@
 #include <string.h>
 
 /* How often the packet path looks at the chip while sound flows: the HAL
- * changes the state, and with it the chip's gain, at its own time. */
+ * changes the state, and with it the chip's gain, at its own time, mostly
+ * around the start of the sound. For CHIP_START_MS after a start every packet
+ * looks (bursts at most every CHIP_START_CHECK_MS), later every CHIP_CHECK_MS.
+ * A start is a session boundary or the first packet after AUDIO_GAP_MS of
+ * none. Before the hook has raised the gain the chip has no mark and a look
+ * is one access(); with the mark it is one tmpfs read and one ALSA ioctl. */
 #define CHIP_CHECK_MS 500
+#define CHIP_START_MS 2000
+#define CHIP_START_CHECK_MS 10
+#define AUDIO_GAP_MS 100
 
 static pthread_mutex_t level_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t set_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -23,9 +31,13 @@ static struct {
     int hook_ours;
     int observed;
     int chip_db;
-    /* Counts every set(): a chip read begun before one is stale. */
+    /* Counts every set() and session boundary: a chip read begun before
+     * one is stale. */
     unsigned generation;
     long long chip_checked_ms;
+    /* 0: no sound since the last session boundary. */
+    long long audio_start_ms;
+    long long last_audio_ms;
     const char *lever;
     struct c300x_audio_gain gain;
 } level = {.lever = "unsupported"};
@@ -156,19 +168,38 @@ size_t c300x_audio_level_json(char *out, size_t out_len)
     return written > 0 && (size_t)written < out_len ? (size_t)written : 0;
 }
 
-/* Reads the chip outside the lock, at most every CHIP_CHECK_MS. A set()
- * meanwhile wins: its result was read with the old hook and is dropped; the
- * next packet reads again. */
+void c300x_audio_level_session_boundary(void)
+{
+    ensure_init();
+    pthread_mutex_lock(&level_lock);
+    level.last_audio_ms = 0;
+    level.chip_checked_ms = 0;
+    level.chip_db = 0;
+    level.generation++;
+    rebuild_locked();
+    pthread_mutex_unlock(&level_lock);
+}
+
+/* Reads the chip outside the lock, as often as the start of the sound needs.
+ * A set() or boundary meanwhile wins: the result was read with the old state
+ * and is dropped; the next packet reads again. */
 static void refresh_chip(void)
 {
     long long now = c300x_monotonic_ms();
+    long long interval;
     int check;
     int ours;
     int chip_db = 0;
     unsigned generation;
 
     pthread_mutex_lock(&level_lock);
-    check = level.chip_checked_ms == 0 || now - level.chip_checked_ms >= CHIP_CHECK_MS;
+    if (level.last_audio_ms == 0 || now - level.last_audio_ms >= AUDIO_GAP_MS) {
+        level.audio_start_ms = now;
+        level.chip_checked_ms = 0;
+    }
+    level.last_audio_ms = now;
+    interval = now - level.audio_start_ms < CHIP_START_MS ? CHIP_START_CHECK_MS : CHIP_CHECK_MS;
+    check = level.chip_checked_ms == 0 || now - level.chip_checked_ms >= interval;
     if (check) {
         level.chip_checked_ms = now;
     }

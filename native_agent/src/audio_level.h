@@ -28,6 +28,9 @@ size_t c300x_audio_level_json(char *out, size_t out_len);
  * encoded to PCMU. apply 0 leaves the level alone (calls with the home). */
 void c300x_audio_level_pcmu(unsigned char *data, size_t len, int apply);
 void c300x_audio_level_to_pcmu(const int16_t *samples, unsigned char *out, size_t count, int apply);
+/* A doorbell media session with the door level starts or ends: the next
+ * packet reads the chip at once and starts the frequent reads. */
+void c300x_audio_level_session_boundary(void);
 int c300x_audio_level_remove_patches(char *error, size_t error_len);
 
 #endif

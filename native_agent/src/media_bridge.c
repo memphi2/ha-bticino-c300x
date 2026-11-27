@@ -2213,6 +2213,7 @@ static void ring_media_loop(
             bridge->ring_answer_requested = false;
             pthread_cond_broadcast(&bridge->ready_cond);
             pthread_mutex_unlock(&bridge->mutex);
+            c300x_audio_level_session_boundary();
             c300x_video_bridge_ring_media_started(bridge->video, 1);
             c300x_video_dispatch_event(bridge->video, "doorbell.view_requested", "{}", 0);
             answered = true;
@@ -2450,6 +2451,7 @@ static void handle_ring_invite(
         &srtp
     );
     c300x_media_gop_reset();
+    c300x_audio_level_session_boundary();
 
 cleanup:
     pthread_mutex_lock(&bridge->mutex);
@@ -5020,6 +5022,7 @@ static bool start_media_session(media_bridge_t *bridge) {
     bridge->picture_session++;
     pthread_mutex_unlock(&bridge->mutex);
 
+    c300x_audio_level_session_boundary();
     c300x_video_bridge_media_started(bridge->video, true);
     c300x_video_dispatch_event(bridge->video, "doorbell.view_requested", "{}", 0);
     pthread_mutex_unlock(&media_lifecycle_mutex);
@@ -5160,6 +5163,7 @@ static void stop_media_session_locked(bool close_client, bool explicit_stop) {
     if (relay_started) {
         pthread_join(g_bridge.relay_thread, NULL);
         c300x_media_gop_reset();
+        c300x_audio_level_session_boundary();
     }
     if (talkback_started) {
         pthread_join(talkback_thread, NULL);

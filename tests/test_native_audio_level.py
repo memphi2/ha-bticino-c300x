@@ -45,7 +45,7 @@ def level_binary(request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPa
     return build_level_binary(tmp_path_factory.mktemp("audio-level") / "audio-level", sanitize=request.param)
 
 
-CASES = ["gain", "gain_bounds", "chip", "level"]
+CASES = ["gain", "gain_bounds", "chip", "level", "timing"]
 
 
 @pytest.mark.parametrize("case", CASES)

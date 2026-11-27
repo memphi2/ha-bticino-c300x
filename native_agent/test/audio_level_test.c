@@ -8,9 +8,15 @@
 /* The chip read of audio_level.c, with a set() that can come in while it
  * runs outside the lock. */
 int chip_read_racing(int *db);
+long long test_clock(void);
 #define c300x_audio_chip_current_db chip_read_racing
+#define c300x_monotonic_ms test_clock
 #include "../src/audio_level.c"
+#undef c300x_monotonic_ms
 #undef c300x_audio_chip_current_db
+
+static long long clock_ms = 1000000;
+long long test_clock(void) { return clock_ms; }
 
 #include <sys/stat.h>
 
@@ -427,6 +433,120 @@ static void test_level(void)
     assert(pass(1000) == c300x_pcmu_decode(c300x_pcmu_encode(2818)));
 }
 
+/* One door call at +6 dB with the chip lever: packets every step ms from
+ * the start, the hook marks and raises the chip at raise_at ms (the gain lag
+ * ms after the mark) and, with lower_at >= 0, lowers it again then (OFF).
+ * Returns how many packets after a change still carried the old software
+ * share; *window gets the longest time from a change to the first packet
+ * with the right share. */
+static int call_late_packets(int step, int raise_at, int lag, int lower_at, int boundary, long long *window)
+{
+    const int16_t full = c300x_pcmu_decode(c300x_pcmu_encode(1995));
+    const int16_t chip = c300x_pcmu_decode(c300x_pcmu_encode(1000));
+    long long changed = -1;
+    long long start;
+    int raised = 0;
+    int marked = 0;
+    int late = 0;
+
+    *window = 0;
+    if (boundary) {
+        c300x_audio_level_session_boundary();
+    }
+    start = clock_ms;
+    for (int at = 0; at <= 3000; at += step) {
+        clock_ms = start + at;
+        if (!marked && at >= raise_at) {
+            put("mark", "13\n", 0644);
+            marked = 1;
+        }
+        if (!raised && marked && at >= raise_at + lag && (lower_at < 0 || at < lower_at)) {
+            put("sout", "13\n", 0644);
+            raised = 1;
+            changed = start + raise_at + lag;
+        }
+        if (raised && lower_at >= 0 && at >= lower_at) {
+            put("sout", "11\n", 0644);
+            drop("mark");
+            raised = 0;
+            marked = 2;
+            changed = start + lower_at;
+        }
+        if (pass(1000) == (raised ? chip : full)) {
+            if (changed >= 0 && clock_ms - changed > *window) {
+                *window = clock_ms - changed;
+            }
+            changed = -1;
+        } else {
+            late++;
+        }
+    }
+    clock_ms += 1000;
+    return late;
+}
+
+/* When the HAL runs the hook against the packets: no packet gets the door
+ * level twice or not at all at the start of a call, back to back or not. */
+static void test_timing(void)
+{
+    long long window;
+    long long worst = 0;
+    int late;
+
+    reset_device();
+    assert(c300x_audio_level_set(6, 0));
+    clock_ms += 1000;
+    /* Packets 20 ms apart: the first packet after the raise, at any moment
+     * in the first 2 s, has the chip's share. */
+    for (int raise_at = 0; raise_at <= 1980; raise_at += 3) {
+        assert(call_late_packets(20, raise_at, 0, -1, raise_at % 2, &window) == 0);
+        worst = window > worst ? window : worst;
+        drop("mark");
+        put("sout", "11\n", 0644);
+    }
+    assert(worst <= 20);
+    fprintf(stderr, "start window, 20 ms packets: %lld ms\n", worst);
+    /* Bursts 5 ms apart: at most one look per 10 ms, so one packet late. */
+    worst = 0;
+    for (int raise_at = 0; raise_at <= 1980; raise_at += 7) {
+        assert(call_late_packets(5, raise_at, 3, -1, 0, &window) <= 1);
+        worst = window > worst ? window : worst;
+        drop("mark");
+        put("sout", "11\n", 0644);
+    }
+    assert(worst <= 10);
+    fprintf(stderr, "start window, 5 ms packets: %lld ms\n", worst);
+    /* The mark comes before the raise: in between nothing is counted twice. */
+    assert(call_late_packets(20, 100, 60, -1, 1, &window) == 0);
+    drop("mark");
+    put("sout", "11\n", 0644);
+
+    /* A lowering during the first 2 s (the HAL leaves the state). */
+    assert(call_late_packets(20, 0, 0, 1500, 1, &window) == 0 && window <= 20);
+
+    /* Back to back: a call raised to its end, the HAL lowers the chip (OFF)
+     * and the next call starts 30 ms later with a session boundary: its first
+     * packet has the full share, nothing of the last call's chip is left. */
+    assert(call_late_packets(20, 0, 0, -1, 1, &window) == 0);
+    clock_ms -= 1000 - 30;
+    drop("mark");
+    put("sout", "11\n", 0644);
+    assert(call_late_packets(20, 400, 0, -1, 1, &window) == 0 && window <= 20);
+    /* Without a boundary, a pause of AUDIO_GAP_MS (100 ms) does the same. */
+    clock_ms -= 1000 - 100;
+    drop("mark");
+    put("sout", "11\n", 0644);
+    assert(call_late_packets(20, 300, 0, -1, 0, &window) == 0 && window <= 20);
+    drop("mark");
+    put("sout", "11\n", 0644);
+    /* Later in a call the reads are every 500 ms: the window there. */
+    late = call_late_packets(20, 2500, 0, -1, 0, &window);
+    assert(late <= 25 && window <= 500);
+    fprintf(stderr, "after 2 s: %d packets, %lld ms\n", late, window);
+    drop("mark");
+    put("sout", "11\n", 0644);
+}
+
 int main(int argc, char **argv)
 {
     char path[640];
@@ -459,6 +579,8 @@ int main(int argc, char **argv)
         test_chip();
     } else if (strcmp(argv[2], "level") == 0) {
         test_level();
+    } else if (strcmp(argv[2], "timing") == 0) {
+        test_timing();
     } else {
         return 2;
     }

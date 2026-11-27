@@ -1116,7 +1116,9 @@ lost backup never blocks a level change or the removal.
   `software`, `chip_and_software` (a level changed during a call), or `none`
   for a stock door level. Before any audio it names the prepared path.
 - `chip_gain_db`: what the chip adds right now, read from the control while
-  sound flows (at most every 500 ms); 0 outside a raised call.
+  sound flows: at every packet (at most every 10 ms) for the first 2 s after
+  a call starts (a session start or end, or the first packet after 100 ms
+  without one), every 500 ms after that; 0 outside a raised call.
 - `software_gain_db`: what the software stage applies.
 
 ### `POST /api/v1/video/doorbell/actions/activate`

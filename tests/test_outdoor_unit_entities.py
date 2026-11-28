@@ -16,6 +16,9 @@ from homeassistant.components.event import EventEntity
 
 from custom_components.bticino_c300x import call_sync, identity_migration, unit_entity
 from custom_components.bticino_c300x._api_calls import normalize_outdoor_units
+from custom_components.bticino_c300x._api_normalize import normalize_activations
+from custom_components.bticino_c300x.button import C300XDeviceActivationButton
+from custom_components.bticino_c300x.button import async_setup_entry as button_setup
 from custom_components.bticino_c300x.call_registry import C300XCallRegistry
 from custom_components.bticino_c300x.const import (
     CONF_OUTDOOR_UNITS,
@@ -383,6 +386,87 @@ def test_every_door_button_names_its_lock_the_same_way() -> None:
     # A name the agent reports for a lock address is that lock's name.
     entry.runtime_data.capabilities["locks"]["locks"].append({"id": "23", "name": "Garage gate"})
     assert attributes()["22_1"] == {"lock_address": "23", "lock_name": "Garage gate"}
+
+
+# The test station's archive.xml: the units Haustür (0#2), Garten (1) and
+# Garage (2), and in <obj cid="10050"> their locks Haustür, Gartentor and Garagentor.
+STATION = {"default_unit": "20", "units": [
+    {"id": "20", "where": "20#2", "name": "Haustür", "default": True},
+    {"id": "21", "where": "21", "name": "Garten"},
+    {"id": "22", "where": "22", "name": "Garage"},
+]}
+
+
+def _activation(item_id: str, name: str, kind: str, address: str | None, source: str = "station",
+                unit: str | None = None) -> dict[str, Any]:
+    return {"id": item_id, "name": name, "type": kind, "addressMode": "manual", "address": address,
+            "source": source, "executable": True, "unit": unit}
+
+
+def _buttons(entry: _Entry, *items: dict[str, Any]) -> list[Any]:
+    """The buttons of an entry whose agent lists these activations."""
+
+    payload = normalize_activations({"enabled": True, "items": list(items)})
+
+    async def activations() -> dict[str, Any]:
+        return payload
+
+    entry.runtime_data.api = SimpleNamespace(async_activations=activations)
+    added: list[Any] = []
+    asyncio.run(button_setup(SimpleNamespace(), entry, added.extend))  # type: ignore[arg-type]
+    return added
+
+
+def test_the_lock_of_an_outdoor_unit_is_only_that_units_door_button() -> None:
+    import json
+    from pathlib import Path
+
+    locks = [
+        _activation("station_lock_20", "Haustür", "lock", "20", unit="20"),
+        _activation("station_lock_21", "Gartentor", "lock", "21", unit="21"),
+        _activation("station_lock_22", "Garagentor", "lock", "22", unit="22"),
+    ]
+    others = [
+        _activation("front_lock", "Front lock", "lock", "26", source="config"),
+        _activation("station_lock_27", "Panel lock", "lock", "27"),
+        # The agent named a unit Home Assistant does not know (yet).
+        _activation("station_lock_23", "Side gate", "lock", "23", unit="23"),
+        _activation("station_actuator_25", "Generic", "actuator", "25"),
+        _activation("chime", "Chime", "generic", None, source="config"),
+        _activation("evening", "Evening", "scenario", None, source="config"),
+    ]
+    entry = _entry(STATION)
+    entry.runtime_data.capabilities = {"locks": True, "activations": {"supported": True}}
+    added = _buttons(entry, *locks, *others)
+
+    station = {button._activation_id: button for button in added if isinstance(button, C300XDeviceActivationButton)}
+    assert set(station) == {item["id"] for item in others}
+    assert station["station_actuator_25"].icon == "mdi:electric-switch"
+    doors = {button.unit_id: button for button in added if isinstance(button, C300XUnitDoorButton)}
+    assert set(doors) == {"20", "21", "22"}
+    # The lock's name as on the station's display; a lock named like its unit
+    # keeps Door unlock, since the displayed name starts with the unit's.
+    assert {unit: getattr(door, "_attr_name", None) for unit, door in doors.items()} == {
+        "20": None, "21": "Gartentor", "22": "Garagentor",
+    }
+    assert {door.translation_key for door in doors.values()} == {"door"}
+    assert doors["21"].unique_id == "c300x-0123456789ab_unit_21_door"
+    assert {unit: door.extra_state_attributes for unit, door in doors.items()} == {
+        "20": {"lock_address": "20", "lock_name": "Haustür"},
+        "21": {"lock_address": "21", "lock_name": "Gartentor"},
+        "22": {"lock_address": "22", "lock_name": "Garagentor"},
+    }
+    icons_file = Path(__file__).parents[1] / "custom_components" / "bticino_c300x" / "icons.json"
+    icons = json.loads(icons_file.read_text(encoding="utf-8"))
+    assert icons["entity"]["button"]["door"] == {"default": "mdi:lock-open-variant"}
+
+    # Without door buttons the locks stay on the station.
+    entry = _entry(STATION)
+    entry.runtime_data.capabilities = {"activations": {"supported": True}}
+    added = _buttons(entry, *locks)
+    assert {button._activation_id for button in added if isinstance(button, C300XDeviceActivationButton)} == {
+        item["id"] for item in locks
+    }
 
 
 def test_units_learned_later_get_their_entities(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any
 
@@ -17,6 +18,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from .agent_contracts import OutdoorUnit
 from .api_errors import C300XAgentApiError
+from .call_sync import entry_call_registry
 from .capabilities import locks_for_capabilities
 from .config_snapshots import snapshot_options
 from .entry_types import BticinoC300XConfigEntry
@@ -95,6 +97,35 @@ class C300XUnitDoorContactBinarySensor(C300XUnitEntity, BinarySensorEntity):
         return None if state is None else state == "open"
 
 
+def door_lock_unit(entry: BticinoC300XConfigEntry, activation: Mapping[str, Any]) -> str | None:
+    """The known outdoor unit whose door lock this activation is, else None.
+
+    That unit's door button opens the lock and has its name; the lock gets
+    no button of its own on the station.
+    """
+
+    registry = entry_call_registry(entry)
+    unit = activation.get("unit")
+    if activation.get("type") != "lock" or registry is None or unit not in registry.units:
+        return None
+    return str(unit)
+
+
+def _lock_name(entry: BticinoC300XConfigEntry, unit: OutdoorUnit) -> str | None:
+    """The name of this unit's lock: its activation's, as on the station's display.
+
+    Else the name the agent reports for the lock's address.
+    """
+
+    activations = getattr(entry.runtime_data, "activations", None)
+    items = activations.get("items") if isinstance(activations, dict) else None
+    for item in items if isinstance(items, list) else []:
+        if isinstance(item, dict) and item.get("name") and door_lock_unit(entry, item) == unit.id:
+            return str(item["name"])
+    locks = locks_for_capabilities(getattr(entry.runtime_data, "capabilities", {}))
+    return next((lock["name"] for lock in locks if lock["id"] == unit.lock_where), None)
+
+
 class C300XUnitDoorButton(C300XUnitEntity, ButtonEntity):
     """Opens the lock of this outdoor unit."""
 
@@ -102,20 +133,19 @@ class C300XUnitDoorButton(C300XUnitEntity, ButtonEntity):
 
     def __init__(self, entry: BticinoC300XConfigEntry, unit: OutdoorUnit) -> None:
         C300XUnitEntity.__init__(self, entry, unit, "door")
+        name = _lock_name(entry, unit)
+        # Door unlock without a name, and for a lock with the unit's own
+        # name: the displayed name starts with the unit's.
+        if name and name != unit.name:
+            self._attr_name = name
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """The same for every unit: its lock's bus address and that lock's name.
-
-        The name is the one the agent reports for that address, else the
-        unit's name.
-        """
+        """The same for every unit: its lock's bus address and that lock's name, else the unit's."""
 
         registry = self._calls
         unit = registry.units.get(self.unit_id, self._unit) if registry is not None else self._unit
-        locks = locks_for_capabilities(getattr(self._entry.runtime_data, "capabilities", {}))
-        name = next((lock["name"] for lock in locks if lock["id"] == unit.lock_where), None)
-        return {"lock_address": unit.lock_where, "lock_name": name or unit.name or None}
+        return {"lock_address": unit.lock_where, "lock_name": _lock_name(self._entry, unit) or unit.name or None}
 
     async def async_press(self) -> None:
         from .executor import async_unlock_door

@@ -123,7 +123,7 @@ Outdoor unit entities:
 | Door | event | Fires `opened` when the station reports this unit's lock opened, whatever opened it. | In test |
 | Doorbell camera | camera | Only on the default unit. Live picture and calls of every unit; the latest visitor image when idle. | In test |
 | Camera | camera | On every other unit. A still picture while this unit has the current call, else its latest visitor image. | In test |
-| Door unlock | button | Opens this unit's door; attributes `lock_address` (for example `20`) and `lock_name`. | In test |
+| Door unlock | button | Opens this unit's door lock and has the lock's name from the station, as on its display (for example **Gartentor**). Attributes `lock_address` (for example `20`) and `lock_name`. | In test |
 | Call | sensor | `idle`, `ringing`, `answered` or `viewing`; attributes `call_id`, `attribution`, `answered_by`. | In test |
 | Door contact | binary sensor | Only on a unit wired with a door contact; appears with the unit's first door message. Unknown after an agent restart until the door opens or closes again. | In test |
 | Last visitor | image | The latest visitor image of a call of this unit. | In test |
@@ -154,7 +154,7 @@ Station entities:
 | Display patch | switch | Display pages on or off. | No |
 | API firewall patch, IPv6 firewall patch | switch | No IPv6 switch on `3.0.6`. | In test |
 | Native MQTT bridge, Legacy MQTT bridge | switch | Local MQTT. | In test |
-| Stair light, one per activation | button | The doors are on the outdoor units. An activation has the attributes `activation_id`, `activation_type`, `address_mode`, `address`, `source` (`config` or `station`) and `unit` (the outdoor unit a station lock opens). | In test |
+| Stair light, one per activation | button | The lock of an outdoor unit is that unit's **Door unlock**, not an activation of the station. An activation has the attributes `activation_id`, `activation_type`, `address_mode`, `address`, `source` (`config` or `station`) and `unit`. | In test |
 | Stop doorbell video | button | Ends a stream. | In test |
 | Reboot, Restart device agent, Remove device agent | button | Maintenance. | In test |
 | Reload device display | button | Restarts the station's display. | No |

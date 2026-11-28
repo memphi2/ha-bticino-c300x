@@ -172,7 +172,7 @@ default unit. Areas, floors, labels and `all` are refused.
 | Action | Does | Main fields |
 | --- | --- | --- |
 | `activate_doorbell_video` | Starts live video of the targeted unit, else of the unit of the current call, else of the default unit. | `audio` |
-| `answer_call`, `hangup_call` | Answers or ends the current Ring Call; without a ring, `hangup_call` ends a running view. With `call_id`, a call that is over or no longer current is refused, and with an outdoor unit as target a call of another unit; nothing is sent then. Right after a ring a unit target waits until the station has named the calling unit (at most about 1 s). | `call_id` |
+| `answer_call`, `hangup_call` | Answers or ends the current Ring Call; without a ring, `hangup_call` ends a view that Home Assistant started. A view that the station's display or the BTicino app holds is refused with "The station is busy with a call", and nothing is sent. With `call_id`, a call that is over or no longer current is refused, and with an outdoor unit as target a call of another unit; nothing is sent then. Right after a ring a unit target waits until the station has named the calling unit (at most about 1 s). | `call_id` |
 | `start_home_call`, `stop_home_call` | Home Call to the station display. | `duration_seconds` |
 | `camera_picture` | Reads or sets brightness, contrast, saturation during live video. | `control`, `value` (0-100, steps of 10) |
 | `alarm_command` | Sends a command to the Alarmo panel. | `command`, `code`, `force` |

@@ -154,7 +154,7 @@ Station entities:
 | Display patch | switch | Display pages on or off. | No |
 | API firewall patch, IPv6 firewall patch | switch | No IPv6 switch on `3.0.6`. | In test |
 | Native MQTT bridge, Legacy MQTT bridge | switch | Local MQTT. | In test |
-| Stair light, one per activation | button | The lock of an outdoor unit is that unit's **Door unlock**, not an activation of the station. An activation has the attributes `activation_id`, `activation_type`, `address_mode`, `address`, `source` (`config` or `station`) and `unit`. | In test |
+| Stair light, one per activation | button | **Stair light** switches the station's stair light; a stair light activation at another address has a button of its own. The lock of an outdoor unit is that unit's **Door unlock**, not an activation of the station. An activation has the attributes `activation_id`, `activation_type`, `address_mode`, `address`, `source` (`config` or `station`) and `unit`. | In test |
 | Stop doorbell video | button | Ends a stream. | In test |
 | Reboot, Restart device agent, Remove device agent | button | Maintenance. | In test |
 | Reload device display | button | Restarts the station's display. | No |

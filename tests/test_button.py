@@ -33,9 +33,14 @@ from custom_components.bticino_c300x.capabilities import (
     memo_delete_supported,
 )  # noqa: E402
 from custom_components.bticino_c300x.const import (  # noqa: E402
+    CONF_DEVICE_ACTIVATION_MODE,
+    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
+    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
     CONF_DEVICE_UI_ENABLED,
     CONF_MAINTENANCE_TOKEN,
     CONF_VIDEO_ENABLED,
+    DEVICE_ACTIVATION_MODE_AUTO,
+    DEVICE_ACTIVATION_MODE_MANUAL,
 )
 from custom_components.bticino_c300x.data import C300XRuntimeResources
 from custom_components.bticino_c300x.qml_patch import (  # noqa: E402
@@ -593,6 +598,54 @@ def test_activation_buttons_are_created_from_agent_discovery() -> None:
         assert api.activation_calls == ["front_lock"]
 
     asyncio.run(_run())
+
+
+def test_the_station_has_one_stair_light_button() -> None:
+    def stair_light(item_id: str, address: str, source: str) -> dict[str, Any]:
+        return {"id": item_id, "name": item_id, "type": "stair_light", "address_mode": "manual",
+                "address": address, "source": source, "executable": True, "unit": None}
+
+    def buttons(options: dict[str, Any], *items: dict[str, Any], stair_light_supported: bool = True) -> list[Any]:
+        class _Api(_FakeMemoApi):
+            async def async_activations(self) -> dict[str, Any]:
+                return {"enabled": True, "supported": True, "items": list(items)}
+
+        capabilities: dict[str, Any] = {"activations": {"supported": True}}
+        if stair_light_supported:
+            capabilities["stair_light"] = {"supported": True, "default_address": ""}
+        entry = _FakeEntry(options=options, runtime_data=_FakeRuntimeData(capabilities=capabilities, api=_Api()))
+        entities: list[Any] = []
+        asyncio.run(async_setup_entry(_FakeHass(), entry, entities.extend))  # type: ignore[arg-type]
+        return entities
+
+    def activations(entities: list[Any]) -> dict[str, str | None]:
+        return {
+            entity._activation_id: entity.icon
+            for entity in entities
+            if isinstance(entity, C300XDeviceActivationButton)
+        }
+
+    porch = stair_light("porch", "15", "config")
+    # Automatic: the station's own stair light is where the agent switches
+    # the Stair light button's light.
+    automatic = buttons(
+        {CONF_DEVICE_ACTIVATION_MODE: DEVICE_ACTIVATION_MODE_AUTO},
+        stair_light("station_stair_light", "11", "station"), porch,
+    )
+    assert sum(isinstance(entity, C300XStairLightButton) for entity in automatic) == 1
+    assert activations(automatic) == {"porch": "mdi:lightbulb-on"}
+    # Manual: the generated item is at the address the user set.
+    manual = buttons(
+        {CONF_DEVICE_ACTIVATION_MODE: DEVICE_ACTIVATION_MODE_MANUAL,
+         CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P: "01", CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N: "02"},
+        stair_light("stair_light", "12", "config"), porch,
+    )
+    assert sum(isinstance(entity, C300XStairLightButton) for entity in manual) == 1
+    assert activations(manual) == {"porch": "mdi:lightbulb-on"}
+    # Without the Stair light button the station's light keeps its own.
+    alone = buttons({}, stair_light("station_stair_light", "11", "station"), stair_light_supported=False)
+    assert not any(isinstance(entity, C300XStairLightButton) for entity in alone)
+    assert activations(alone) == {"station_stair_light": "mdi:lightbulb-on"}
 
 
 def test_activation_discovery_ignores_agent_failures() -> None:

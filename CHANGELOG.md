@@ -131,14 +131,15 @@ Outdoor units and calls:
 
 Activations:
 
-- **Activations from the station.** The actuators and the stair light that
-  the station is set up with get activation buttons, read from the station's
-  own configuration like its display does. The settings list them under
-  **From the station**, next to the **Manual** ones; a manual activation of
-  the same type and address replaces the station's.
+- **Activations from the station.** The actuators that the station is set
+  up with get activation buttons, read from the station's own configuration
+  like its display does. The settings list them under **From the station**,
+  next to the **Manual** ones; a manual activation of the same type and
+  address replaces the station's.
 - **The door button of an outdoor unit has its lock's name** from the
-  station, as on its display (for example **Gartentor**); the lock gets no
-  second button on the station.
+  station, as on its display (for example **Gartentor**). Neither a lock of
+  an outdoor unit nor the station's stair light gets a second button on the
+  station.
 - The stair light is released 100 ms after it is switched on, as the
   station's display does.
 

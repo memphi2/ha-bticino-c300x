@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   c300xResolveEntity, c300xRelatedEntity, c300xDeviceActionEntity, c300xEntryId,
-  C300X_CAMERA_OBJECT_ID, C300X_MEDIA_READINESS_OBJECT_ID,
+  C300X_CAMERA_KEY, C300X_MEDIA_READINESS_KEY,
 } from "../../custom_components/bticino_c300x/frontend/c300x-entity-resolver.js";
 import { C300XCardActions } from "../../custom_components/bticino_c300x/frontend/c300x-card-actions.js";
 
@@ -14,9 +14,9 @@ for (const snapshot of ["enabled", "disabled"]) {
   hass.callService = async (...args) => { calls.push(args); };
   for (const [index, expected] of contract.expected.entries()) {
     const config = { entry_id: expected.entry_id };
-    assert.equal(c300xResolveEntity(hass, config, "camera", C300X_CAMERA_OBJECT_ID), expected.doorbell_camera);
+    assert.equal(c300xResolveEntity(hass, config, "camera", C300X_CAMERA_KEY), expected.doorbell_camera);
     assert.equal(c300xEntryId(hass, config, expected.doorbell_camera), expected.entry_id);
-    assert.equal(c300xRelatedEntity(hass, config, "sensor", C300X_MEDIA_READINESS_OBJECT_ID, "readiness_entity"), expected.media_readiness);
+    assert.equal(c300xRelatedEntity(hass, config, "sensor", C300X_MEDIA_READINESS_KEY, "readiness_entity"), expected.media_readiness);
     assert.equal(hass.states[expected.doorbell_camera].attributes.media_primary_action, "start_stream");
     const card = { _hass: hass, _deviceActionEntity: (key) => c300xDeviceActionEntity(hass, config, key),
       _clearNotice() {}, _updateState() {} };

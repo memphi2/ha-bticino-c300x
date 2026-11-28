@@ -65,7 +65,7 @@ async def _async_check_events() -> None:
     from homeassistant.helpers import translation
 
     from custom_components.bticino_c300x.agent_contracts import OutdoorUnit
-    from custom_components.bticino_c300x.const import DOMAIN
+    from custom_components.bticino_c300x.const import CONF_STATION_ID, DOMAIN
     from custom_components.bticino_c300x.event import (
         C300XStationRingEventEntity,
         C300XUnitDoorbellEventEntity,
@@ -73,7 +73,9 @@ async def _async_check_events() -> None:
 
     integration = ROOT / "custom_components" / DOMAIN
     metadata = SimpleNamespace(file_path=integration, has_translations=True, name="BTicino C300X")
-    entry = SimpleNamespace(entry_id="container-test", title="C300X", data={}, options={},
+    # An entry from 3.1.0 on stores the station id that names its entities.
+    entry = SimpleNamespace(entry_id="container-test", title="C300X",
+                            data={CONF_STATION_ID: "c300x-0123456789ab"}, options={},
                             runtime_data=SimpleNamespace(agent_info={}, capabilities={
                                 "doorbell_events": True, "locks": True, "touch_tone": True,
                             }))

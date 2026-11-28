@@ -70,12 +70,13 @@ def test_display_action_body_is_bound_to_its_runtime(transition):
                 assert hass.services.async_call.call_args.args == (
                     "light", "toggle", {"entity_id": "light.entry"},
                 )
-                hass.bus.async_fire.assert_called_once()
             else:
                 assert response.status == 503
                 assert json.loads(response.text) == {"ok": False, "error": "entry_unloaded"}
                 hass.services.async_call.assert_not_called()
-                hass.bus.async_fire.assert_not_called()
+            # A display tile command fires no event of its own: the switched
+            # entity's state change and the service call's context show it.
+            hass.bus.async_fire.assert_not_called()
         finally:
             release.set()
             task.cancel()

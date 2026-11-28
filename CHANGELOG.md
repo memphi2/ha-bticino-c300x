@@ -118,6 +118,9 @@ devices, entities and services; a Repair lists what to redo after the update.
   when its end message was lost (`call_ended` reason `station_idle`), and a
   call that the answering machine takes is answered with `answered_by`
   `answering_machine`.
+- **Classe 300X2 recognised.** Setup, the agent reinstall and the SSH Repair
+  now tell a Classe 300X2 apart and install nothing on it: it is not
+  supported yet. Before, it was taken for a Classe 300X.
 - The native agent changed; an agent update is required. Until the agent
   update Repair has run, the integration shows no entities: the devices and
   entities move to the outdoor units with that update.

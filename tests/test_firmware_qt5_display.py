@@ -251,8 +251,10 @@ def test_the_installer_names_the_display_like_the_agent():
     assert device.commands == [
         "test -e /usr/lib/libQt5Core.so.5 && echo qt5 || echo qt4; "
         "test -e /home/bticino/bin/gui/BtClass100 && echo c100x || echo c300x; "
-        "sed -n 's:.*<webserver_type>[[:space:]]*\\(C[13]00X\\)[[:space:]]*</webserver_type>.*:named-\\1:p' "
-        "/home/bticino/sp/dbfiles_ws.xml 2>/dev/null | sed -n 1p"
+        "sed -n -e 's:.*<webserver_type>[[:space:]]*\\(C[13]00X\\)[[:space:]]*</webserver_type>.*:named-\\1:p' "
+        "-e 's:.*<webserver_type>[[:space:]]*\\(C3X2\\)[[:space:]]*</webserver_type>.*:named-\\1:p' "
+        "/home/bticino/sp/dbfiles_ws.xml 2>/dev/null | sed -n 1p; "
+        "echo machine-$(uname -m 2>/dev/null)"
     ]
     assert installer._device_display_kind(_Device(qt5=False)) == "qt4_ondisk"
     assert installer._device_display_kind(_Device(qt5=True, c100x=True)) == "qt5_ondisk"

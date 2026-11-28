@@ -1296,8 +1296,15 @@ int main(int argc, char **argv) {
     assert(runtime->video != NULL);
     c300x_video_set_event_callback(runtime->video, dispatch_video_event, runtime);
     c300x_video_set_ring_receiver_enabled(runtime->video, 1);
+    /* The fake station knows the ring leg when the REGISTER arrives; the
+     * agent is registered once it has read the 200 OK. A ring in between
+     * finds no ring receiver and reports no video, as on a station whose
+     * agent is still starting. */
     long long deadline = __real_c300x_monotonic_ms() + WAIT_MS;
-    while (atomic_load(&ring_fd) < 0) {
+    struct c300x_video_status ready;
+    for (;;) {
+        status(&ready);
+        if (atomic_load(&ring_fd) >= 0 && ready.ring_registered) break;
         assert(__real_c300x_monotonic_ms() < deadline);
         usleep(10000);
     }

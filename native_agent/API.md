@@ -145,7 +145,8 @@ answer, hangup, home call start and stop) run one at a time each, in the order
 they arrived; the others wait for their turn with the connection open. Three
 requests may wait in all. One more is answered `openwebnet_busy` (502) or
 `media_busy` (503): nothing was sent or changed, and the request can be
-repeated. A request that had to wait and whose caller has closed the
+repeated. `GET /api/v1/calls` is answered without the station's call state
+instead. A request that had to wait and whose caller has closed the
 connection meanwhile, also only its sending side, is not run and answered
 `client_gone`; of the media actions this applies to the three that start
 something, a stop still runs unless a new request needed its place. A
@@ -1385,7 +1386,9 @@ Capabilities report `api_version: "2"`, `capabilities.outdoor_units` and
   the last 60 s. `station_state` is the station's own call state from its
   frame `*#8**35*<code>*0*0##` (`{"code", "state", "age_ms"}`), `null` until
   one was seen; while none was seen the first request asks the station
-  (`*#8**35##`) once. `state` by `code`: `0` `idle`, `1` `setup` (a ring or
+  (`*#8**35##`) once. A request that finds every OpenWebNet waiting place
+  taken is not refused: it is answered without asking (`station_state:
+  null` while none was seen), and a later request asks. `state` by `code`: `0` `idle`, `1` `setup` (a ring or
   view is set up), `2` `ringing` (the ringtone plays), `3` `viewing` (a view
   without a ring), `4` `waiting` (the ringtone is over, timed out or muted,
   and the call still waits), `6` `conversation`, `7` `answering_machine`

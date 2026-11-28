@@ -45,6 +45,10 @@ int c300x_openwebnet_async_deferred(const struct c300x_openwebnet_async *async);
 /* After the handler: an error name when its command was not sent at all and
  * the request is to be answered with it, else NULL. */
 const char *c300x_openwebnet_async_refusal(const struct c300x_openwebnet_async *async);
+/* In the handler, after a call that was refused: the handler answers the
+ * request itself, without that call, and nothing waits. Zero when there
+ * was no refusal. */
+int c300x_openwebnet_async_drop_refusal(struct c300x_openwebnet_async *async);
 /* deferred: the request runs again, here or for the media worker. */
 void c300x_openwebnet_async_end(struct c300x_openwebnet_async *async, int deferred);
 /* The request of this client is over, however it ended. */

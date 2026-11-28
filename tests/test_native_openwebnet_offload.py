@@ -566,6 +566,28 @@ def test_the_station_is_asked_for_its_call_state_once(lab: Lab) -> None:
     assert lab.bus.frames == ["*#8**35##"]
 
 
+def test_the_calls_are_listed_while_the_bus_queue_is_full(lab: Lab) -> None:
+    # Asking the station for its call state is no reason to refuse the list:
+    # with every waiting place taken it comes without the state, and a later
+    # request asks the station.
+    lab.bus.hold(PRESS)
+    unlock = lab.start(UNLOCK, post=True)
+    assert lab.bus.seen.wait(5)
+    waiting = [lab.start("/api/v1/answering-machine") for _ in range(3)]
+    lab.health_ms()
+
+    calls = finish(lab.start("/api/v1/calls"))
+    assert (calls["ok"], calls["station_state"], calls["calls"]) == (True, None, [])
+    assert lab.bus.frames == [PRESS]
+
+    lab.bus.gate.set()
+    assert finish(unlock)["ok"] is True
+    for conn in waiting:
+        assert finish(conn)["ok"] is True
+    assert api_get(lab.api_port, "/api/v1/calls")["station_state"]["state"] == "idle"
+    assert lab.bus.frames == [PRESS, RELEASE, *["*#8**40##"] * 3, "*#8**35##"]
+
+
 def test_a_refused_unit_unlock_leaves_the_running_one_alone(lab: Lab) -> None:
     # Another unlock while the press is out is refused for its unknown unit:
     # the running one still releases its own door and names its unit.

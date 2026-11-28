@@ -451,7 +451,8 @@ static void unlock(int client_fd, const struct c300x_call_routes *routes, const 
 
 /* The station's call state is sent on changes only: once, while none was
  * seen since the agent started, the station is asked. Zero: the request
- * runs again with the answer. */
+ * runs again with the answer. With the OpenWebNet queue full the list goes
+ * out without the state, and a later request asks. */
 static int ask_station_state(const struct c300x_call_routes *routes)
 {
     struct c300x_call_hub *hub = routes->hub;
@@ -466,7 +467,9 @@ static int ask_station_state(const struct c300x_call_routes *routes)
         return 1;
     }
     if (!c300x_openwebnet_send(hub->config, "*#8**35##", reply, sizeof(reply), error, sizeof(error))) {
-        if (c300x_openwebnet_deferred()) return 0;
+        if (c300x_openwebnet_deferred()) {
+            return routes->openwebnet != NULL && c300x_openwebnet_async_drop_refusal(routes->openwebnet);
+        }
     } else if (c300x_station_state_parse(reply, &code) && hub->calls.station_state == C300X_STATION_STATE_UNKNOWN) {
         media_state(hub, &media);
         c300x_calls_station(&hub->calls, &hub->sink, &media, code, c300x_monotonic_ms());

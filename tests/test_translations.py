@@ -967,3 +967,55 @@ def test_the_outdoor_units_repair_names_what_replaces_the_removed_parts() -> Non
         assert not re.search(rf"\b{re.escape(types['actuator'])}\b", light_steps[0]), path.name
         assert texts["selector"]["device_activation_mode"]["options"]["automatic"] in text, path.name
         assert texts["entity"]["event"]["ring"]["name"] in text, path.name
+
+
+def test_the_outdoor_units_repair_names_the_moved_and_removed_agent_event_fields() -> None:
+    # Besides event_key: the top-level address moved into data, and the
+    # translated event_* fields are gone, as the changelog says.
+    for path in [INTEGRATION / "strings.json", *sorted(TRANSLATIONS.glob("*.json"))]:
+        text = _load_json(path)["issues"]["outdoor_units_breaking_change"]["description"]
+        step = next((line for line in text.splitlines() if "data.address" in line), "")
+        assert step.startswith("- bticino_c300x_agent_event_received"), path.name
+        for name in ("address", "event,", "event_name", "event_label_*"):
+            assert name in step, (path.name, name)
+
+
+# The word for the target, as target_unsupported asks for it, and the old
+# word for an entry.
+_TARGET_WORDS = {
+    "strings": ("target", "entry"), "en": ("target", "entry"), "de": ("Ziel", "Eintrag"),
+    "fr": ("cible", "entrée"), "it": ("obiettivo", "voce"), "es": ("destino", "entrada"),
+}
+
+
+def test_an_unknown_target_is_reported_as_a_target() -> None:
+    # service_target.py raises it for an entity of another integration, an
+    # entity without a device and a device that is gone; none is an entry.
+    for path in [INTEGRATION / "strings.json", *sorted(TRANSLATIONS.glob("*.json"))]:
+        exceptions = _load_json(path)["exceptions"]
+        message = exceptions["unknown_entry"]["message"]
+        target, entry = _TARGET_WORDS[path.stem]
+        assert target in exceptions["target_unsupported"]["message"], path.name
+        assert target in message.lower() or target in message, path.name
+        assert entry not in message, path.name
+
+
+def test_french_calls_the_outdoor_unit_poste_exterieur() -> None:
+    # "platine" is the station in the French texts since 2.10.0; the outdoor
+    # unit must not read almost the same.
+    from custom_components.bticino_c300x.capabilities import EVENT_LABELS
+
+    texts = (TRANSLATIONS / "fr.json").read_text(encoding="utf-8")
+    for text in (texts, *EVENT_LABELS["fr"].values()):
+        assert "platine de rue" not in text.lower() and "platines de rue" not in text.lower()
+    assert _load_json(TRANSLATIONS / "fr.json")["device"]["outdoor_unit"]["name"] == "Poste extérieur {unit}"
+    assert EVENT_LABELS["fr"]["call_caller_identified"].startswith("Poste extérieur")
+
+
+def test_italian_names_a_ring_with_one_word() -> None:
+    events = _load_json(TRANSLATIONS / "it.json")["entity"]["event"]
+    unit = events["doorbell_event"]["state_attributes"]["event_type"]["state"]["ring"]
+    station = events["ring"]["state_attributes"]["event_type"]["state"]["ring"]
+    assert unit == station == "Suono"
+    assert events["ring"]["name"].startswith(station)
+    assert "squillo" not in (TRANSLATIONS / "it.json").read_text(encoding="utf-8").lower()

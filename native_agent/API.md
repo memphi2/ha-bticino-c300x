@@ -1405,7 +1405,7 @@ Capabilities report `api_version: "2"`, `capabilities.outdoor_units` and
   a hang-up stops (an answer of a view gets `409 call_not_ringing`). A call id
   that is unknown, ended or not current gets `409 call_not_current` with
   `current_call_id`; nothing reaches the station. Success bodies are those of
-  the 2.x unscoped routes, which are gone.
+  the 3.0 unscoped routes, which are gone.
 - `POST /api/v1/outdoor-units/{unit_id}/actions/unlock`, `{unit_id}` may be
   `current`; optional body `{"call_id": "..."}`, which must be a call of that
   unit, live or ended less than 60 s ago (else `409 call_not_current`).

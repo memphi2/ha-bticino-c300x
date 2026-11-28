@@ -808,3 +808,14 @@ def test_the_blueprint_docs_name_the_devices_the_blueprints_take():
     assert "outdoor unit" in decision
     assert "**Door** event of the station" not in use
     assert "**Door** event of one of the station's outdoor units" in use
+
+
+def test_the_events_example_uses_the_entity_id_home_assistant_generates():
+    # A unit device "Front gate" and its ring event, as Home Assistant names it.
+    from homeassistant.util import slugify
+
+    strings = json.loads((ROOT / "custom_components/bticino_c300x/strings.json").read_text(encoding="utf-8"))
+    entity_id = f"event.{slugify('Front gate ' + strings['entity']['event']['doorbell_event']['name'])}"
+    events = section("reference.md", "Events")
+    ids = re.findall(r"entity_id: (event\.\S+)", events)
+    assert ids and set(ids) == {entity_id}

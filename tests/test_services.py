@@ -147,6 +147,7 @@ class _FakeApi:
         self.activate_video_calls: list[bool] = []
         self.activate_video_units: list[str | None] = []
         self.call_ids: list[tuple[str, str | None]] = []
+        self.call_targets: list[tuple[str, str | None, str | None]] = []
         self.stop_video_calls = 0
         self.doorbell_video_status: dict[str, Any] = {
             "media_owner": "idle",
@@ -213,6 +214,10 @@ class _FakeApi:
     ) -> dict[str, Any]:
         self.doorstation_audio_level_calls.append((door_level_db, fine_gain_db))
         return {"ok": True}
+
+    async def async_call_action_target(self, call_id: str | None, action: str, *, unit: str | None = None) -> str:
+        self.call_targets.append((action, call_id, unit))
+        return call_id if call_id is not None else "0badc0de-2"
 
     async def async_hangup_doorbell_call(self, call_id: str | None = None, *, unit: str | None = None) -> dict[str, Any]:
         self.hangup_doorbell_call_calls += 1
@@ -556,9 +561,10 @@ def test_the_cards_station_target_leaves_a_call_of_any_unit_to_its_call_id(monke
             sent.append(("answer", call_id, unit))
             return await super().async_answer_doorbell_call(call_id, unit=unit)
 
-        async def async_hangup_doorbell_call(self, call_id: str | None = None, *, unit: str | None = None) -> dict[str, Any]:
-            sent.append(("hangup", call_id, unit))
-            return await super().async_hangup_doorbell_call(call_id, unit=unit)
+        async def async_call_action_target(self, call_id: str | None, action: str, *, unit: str | None = None) -> str:
+            # The hang-up checks its call first, then sends it by id alone.
+            sent.append((action, call_id, unit))
+            return await super().async_call_action_target(call_id, action, unit=unit)
 
     async def _run() -> None:
         hass = _FakeHass([_FakeEntry(
@@ -1140,6 +1146,10 @@ def test_hangup_doorbell_call_service_prepares_stop_before_agent_hangup() -> Non
         calls: list[str] = []
 
         class _RecordingApi(_FakeApi):
+            async def async_call_action_target(self, call_id: str | None, action: str, *, unit: str | None = None) -> str:
+                calls.append("check_call")
+                return await super().async_call_action_target(call_id, action, unit=unit)
+
             async def async_hangup_doorbell_call(
                 self, call_id: str | None = None, *, unit: str | None = None,
             ) -> dict[str, Any]:
@@ -1167,7 +1177,8 @@ def test_hangup_doorbell_call_service_prepares_stop_before_agent_hangup() -> Non
         handler = hass.services.handlers[(DOMAIN, SERVICE_HANGUP_CALL)]
         await handler(types.SimpleNamespace(data={}))
 
-        assert calls == ["prepare_stop", "agent_hangup"]
+        assert calls == ["check_call", "prepare_stop", "agent_hangup"]
+        assert api.call_ids == [("hangup", "0badc0de-2")]
         assert api.hangup_doorbell_call_calls == 1
 
     asyncio.run(_run())

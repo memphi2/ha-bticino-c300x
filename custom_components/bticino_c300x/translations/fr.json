@@ -1693,13 +1693,13 @@
       "message": "L’enregistrement à la demande nécessite des médias libres. Fermez les autres flux vidéo ou appels, puis réessayez."
     },
     "entry_id_required": {
-      "message": "Plusieurs stations BTicino C300X/C100X existent : sélectionnez une station ou une platine de rue comme cible."
+      "message": "Plusieurs stations BTicino C300X/C100X existent : sélectionnez une station ou un poste extérieur comme cible."
     },
     "target_ambiguous": {
-      "message": "Sélectionnez une seule cible : une station BTicino C300X/C100X ou l'une de ses platines de rue (appareil ou entité)."
+      "message": "Sélectionnez une seule cible : une station BTicino C300X/C100X ou l'un de ses postes extérieurs (appareil ou entité)."
     },
     "target_unsupported": {
-      "message": "Sélectionnez comme cible une station ou une platine de rue BTicino C300X/C100X (appareil ou entité) ; les pièces, étages, étiquettes et « all » ne sont pas pris en charge."
+      "message": "Sélectionnez comme cible une station ou un poste extérieur BTicino C300X/C100X (appareil ou entité) ; les pièces, étages, étiquettes et « all » ne sont pas pris en charge."
     },
     "invalid_action_id": {
       "message": "L'ID d'action est invalide."
@@ -1726,7 +1726,7 @@
       "message": "L'ID d'action {action_id} n'est pas configure."
     },
     "unknown_entry": {
-      "message": "L'entrée BTicino C300X/C100X sélectionnée n'existe pas."
+      "message": "La cible n'est pas une station ou un poste extérieur BTicino C300X/C100X, ou elle n'existe plus."
     },
     "entry_not_loaded": {
       "message": "L'entrée BTicino C300X/C100X n'est pas chargée. Activez-la ou attendez qu'elle ait démarré."
@@ -1747,16 +1747,16 @@
       "message": "La commande de l'alarme a été refusée. Vérifiez son état et son intégration pour plus de détails."
     },
     "call_unit_pending": {
-      "message": "La station n'a pas encore indiqué la platine de rue qui sonne. Rien n'a été envoyé à la station ; réessayez dans un instant."
+      "message": "La station n'a pas encore indiqué le poste extérieur qui sonne. Rien n'a été envoyé à la station ; réessayez dans un instant."
     },
     "call_not_current": {
       "message": "Cet appel est terminé ou n'est pas l'appel en cours. Rien n'a été envoyé à la station."
     },
     "unknown_unit": {
-      "message": "La station n'a pas cette platine de rue."
+      "message": "La station n'a pas ce poste extérieur."
     },
     "unit_video_unsupported": {
-      "message": "La station ne peut pas afficher de vidéo à la demande de cette platine de rue."
+      "message": "La station ne peut pas afficher de vidéo à la demande de ce poste extérieur."
     }
   },
   "issues": {
@@ -1974,8 +1974,8 @@
       }
     },
     "outdoor_units_breaking_change": {
-      "title": "Entités de sonnette déplacées vers les platines de rue",
-      "description": "{entry_title} affiche désormais chaque platine de rue comme appareil propre sous la station. La caméra de sonnette, l'événement de sonnette et le bouton de porte sont passés à l'appareil de la platine de rue par défaut ; leurs identifiants d'entité et leur historique restent. Merci de refaire ces étapes :\n\n- Important : l'événement bticino_c300x_agent_event_received n'a plus event_key, les automatisations qui filtrent dessus (par exemple event_key: doorbell_pressed) ne se déclenchent donc plus. Remplacer event_key par event_type (event_type: doorbell_pressed).\n- Automatisations de blueprint : sélectionner à nouveau la platine de rue (son événement de sonnette). Les blueprints \"BTicino Calendar display reminder\" et \"BTicino strict phrase decision\" demandent désormais l'appareil de la station ou de la porte.\n- answer_doorbell_call et hangup_doorbell_call s'appellent désormais answer_call et hangup_call. Chaque service prend une cible (la station ou une platine de rue) au lieu de entry_id. evaluate_ring_analysis ne prend plus lock_id : il ouvre la porte de la platine de rue qui a sonné.\n- Les services unlock_door, stair_light, stop_doorbell_video, reboot, reload_gui, run_device_activation et delete_latest_* n'existent plus : appuyer plutôt sur les boutons correspondants (button.press). Pour un éclairage d'escalier à une adresse propre, ajouter une activation de type Éclairage d'escalier et appuyer sur son bouton.\n- Notifications : le champ mode n'existe plus ; régler plutôt dans data les interrupteurs display, tts et led.\n- Le capteur d'état de sonnette n'existe plus : utiliser le capteur d'appel de la platine de rue. L'entité \"Événement appareil\" n'existe plus : utiliser l'événement Porte de la platine de rue, l'événement Lumière d'escalier de la station ou l'événement bticino_c300x_agent_event_received, dont event_type est désormais une clé fixe (par exemple ringer_muted). L'événement bticino_c300x_action_received n'existe plus : réagir à l'entité commandée ou aux événements Porte et Lumière d'escalier.\n- Boutons Ouvrir la porte : l'attribut lock_id est remplacé par lock_address (l'adresse bus de la serrure) et lock_name.\n- L'événement de sonnette d'une platine de rue se déclenche dès que la station a nommé la platine qui appelle, jusqu'à 1 s après la sonnerie ; pour la réaction la plus rapide, utilisez l'événement Sonnerie du poste intérieur. Ses attributs event_key, event et video_available n'existent plus, pas plus que les champs de l'événement de la station qu'il reprenait (comme entry_id, event_at et event_label_*) ; il a call_id, unit et last_ring_at.\n- Les activations de type Lumière n'existent plus : la mise à jour les a supprimées. Les actionneurs et l'éclairage d'escalier de la station viennent désormais de la station elle-même.\n- Adresse de l'éclairage d'escalier Automatique : l'éclairage d'escalier est désormais commandé à l'adresse propre de la station au lieu de 10.\n\nIgnorez ce message une fois terminé."
+      "title": "Entités de sonnette déplacées vers les postes extérieurs",
+      "description": "{entry_title} affiche désormais chaque poste extérieur comme appareil propre sous la station. La caméra de sonnette, l'événement de sonnette et le bouton de porte sont passés à l'appareil du poste extérieur par défaut ; leurs identifiants d'entité et leur historique restent. Merci de refaire ces étapes :\n\n- Important : l'événement bticino_c300x_agent_event_received n'a plus event_key, les automatisations qui filtrent dessus (par exemple event_key: doorbell_pressed) ne se déclenchent donc plus. Remplacer event_key par event_type (event_type: doorbell_pressed).\n- bticino_c300x_agent_event_received : le champ address de premier niveau est désormais data.address ; event, event_type_key, event_name, event_value, event_label et event_label_* n'existent plus.\n- Automatisations de blueprint : sélectionner à nouveau le poste extérieur (son événement de sonnette). Les blueprints \"BTicino Calendar display reminder\" et \"BTicino strict phrase decision\" demandent désormais l'appareil de la station ou de la porte.\n- answer_doorbell_call et hangup_doorbell_call s'appellent désormais answer_call et hangup_call. Chaque service prend une cible (la station ou un poste extérieur) au lieu de entry_id. evaluate_ring_analysis ne prend plus lock_id : il ouvre la porte du poste extérieur qui a sonné.\n- Les services unlock_door, stair_light, stop_doorbell_video, reboot, reload_gui, run_device_activation et delete_latest_* n'existent plus : appuyer plutôt sur les boutons correspondants (button.press). Pour un éclairage d'escalier à une adresse propre, ajouter une activation de type Éclairage d'escalier et appuyer sur son bouton.\n- Notifications : le champ mode n'existe plus ; régler plutôt dans data les interrupteurs display, tts et led.\n- Le capteur d'état de sonnette n'existe plus : utiliser le capteur d'appel du poste extérieur. L'entité \"Événement appareil\" n'existe plus : utiliser l'événement Porte du poste extérieur, l'événement Lumière d'escalier de la station ou l'événement bticino_c300x_agent_event_received, dont event_type est désormais une clé fixe (par exemple ringer_muted). L'événement bticino_c300x_action_received n'existe plus : réagir à l'entité commandée ou aux événements Porte et Lumière d'escalier.\n- Boutons Ouvrir la porte : l'attribut lock_id est remplacé par lock_address (l'adresse bus de la serrure) et lock_name.\n- L'événement de sonnette d'un poste extérieur se déclenche dès que la station a nommé le poste extérieur qui appelle, jusqu'à 1 s après la sonnerie ; pour la réaction la plus rapide, utilisez l'événement Sonnerie du poste intérieur. Ses attributs event_key, event et video_available n'existent plus, pas plus que les champs de l'événement de la station qu'il reprenait (comme entry_id, event_at et event_label_*) ; il a call_id, unit et last_ring_at.\n- Les activations de type Lumière n'existent plus : la mise à jour les a supprimées. Les actionneurs et l'éclairage d'escalier de la station viennent désormais de la station elle-même.\n- Adresse de l'éclairage d'escalier Automatique : l'éclairage d'escalier est désormais commandé à l'adresse propre de la station au lieu de 10.\n\nIgnorez ce message une fois terminé."
     }
   },
   "selector": {
@@ -2106,7 +2106,7 @@
   },
   "device": {
     "outdoor_unit": {
-      "name": "Platine de rue {unit}"
+      "name": "Poste extérieur {unit}"
     }
   }
 }

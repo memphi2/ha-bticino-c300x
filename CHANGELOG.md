@@ -6,11 +6,7 @@
 reads the station's own activations, call state and door contacts.
 Everything below is new against 3.0.0. The release changes devices,
 entities, services and events; after the update a Repair, **Doorbell
-entities moved to outdoor unit devices**, lists what to redo. The station
-messages it reads were taken from captures of a Classe 300X with firmware
-1.7.19 with one and with three outdoor units; firmware 2.0.2 and 3.0.6, the
-door contact and the Classe 100X are checked offline against their original
-files.
+entities moved to outdoor unit devices**, lists what to redo.
 
 Breaking changes:
 
@@ -29,11 +25,11 @@ Breaking changes:
 - **Doorbell ring event:** it now fires when the station has named the
   calling unit, about 0.3 s after the ring and at most 1 s. For the fastest
   reaction use the new **Station ring** event. The attributes `event_key`,
-  `event` and `video_available` are gone, and so are the station event's
-  fields that the ring carried along (`entry_id`, `event_at`,
-  `event_label_<language>` and the other `event_*` names). It carries
-  `call_id`, `unit`, `unit_name` and `attribution`; `last_ring_at` and
-  `camera_entity_id` stay.
+  `event` and `video_available` are gone, and so are all other fields of
+  the station event that the ring carried along (for example `entry_id`,
+  `event_at` and `event_label_<language>`). It carries `call_id`, `unit`,
+  `unit_name` and `attribution`; `last_ring_at` and `camera_entity_id`
+  stay.
 - **Removed entities:** the **Doorbell state** sensor (use the outdoor unit's
   **Call** sensor) and the diagnostic **Device event** entity (use the event
   entities or `bticino_c300x_agent_event_received`).

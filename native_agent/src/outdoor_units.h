@@ -10,9 +10,9 @@ struct c300x_door_contacts;
 #define C300X_MAX_OUTDOOR_UNITS 16
 #define C300X_UNIT_PATH_LEN 256
 
-/* One outdoor unit. where is the caller frame's address (20#2), action_where
- * the plain address its lock and video use (20), id the where with '_' for
- * '#'. Strings, never numbers. */
+/* One outdoor unit. where is the caller frame's address (20#2), also the
+ * DEVADDR of its on-demand video, action_where the plain address its lock
+ * is found by (20), id the where with '_' for '#'. Strings, never numbers. */
 struct c300x_outdoor_unit {
     char id[C300X_UNIT_WHERE_LEN];
     char where[C300X_UNIT_WHERE_LEN];

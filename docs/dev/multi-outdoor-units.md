@@ -27,8 +27,10 @@ On the multicast path every frame arrives up to three times within ~0.3 s.
 logic; on 2.0.2, 3.0.6 and the C100X the frame was not yet captured.
 
 A unit behind an apartment interface (BTicino 346850) reports `20#2` in the
-caller frame, but its lock and video use the plain `20`
-(`*8*19*20##`, `a=DEVADDR:20`).
+caller frame, but its lock uses the plain `20` (`*8*19*20##`). On-demand video
+of such a unit, when it is not the default unit, sends its full address
+(`a=DEVADDR:20#2`, see Video); whether the station shows that unit for it is
+not verified on a station yet.
 
 ## Identity
 
@@ -39,8 +41,9 @@ caller frame, but its lock and video use the plain `20`
 | Call | `call_id` = `<boot_id>-<seq>`: `boot_id` is 8 hex characters drawn at agent start, `seq` counts from 1. Never reused within a boot; a new boot never repeats an old `boot_id` in practice. |
 
 - `where` is a string, never a number: `20#2` and `20` are different units.
-- `action_where` is the address used for unlock and video: `where` up to the
-  first `#` (`20#2` -> `20`).
+- `action_where` is the address the unit's lock is found by: `where` up to
+  the first `#` (`20#2` -> `20`). On-demand video of a unit other than the
+  default one uses the full `where` (see Video).
 - Home Assistant devices:
   - station: identifiers `{(bticino_c300x, <station_id>)}`, connections
     `{(mac, <mac>)}` when `station_id` carries the MAC (`c300x-` and twelve

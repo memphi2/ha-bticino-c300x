@@ -384,7 +384,9 @@ event entities, whatever opened the door.
 
 The media camera's attributes tell the card about the current call:
 `call_id`, `call_state`, `call_unit`, `call_unit_name` and `door_entity_id`
-(the door button of the call's unit, else of the default unit).
+(the door button of the call's unit, else of the default unit; none while
+the ring call's unit is not known yet, so the card's door button is disabled
+until the caller frame or the default fallback names it).
 
 ### Card
 

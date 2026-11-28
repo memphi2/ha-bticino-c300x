@@ -696,6 +696,52 @@ test("a call of another outdoor unit is answered, hung up and opened through the
   } finally { card.disconnectedCallback(); }
 });
 
+test("while the ringing unit is not known the door button is disabled and presses nothing", async () => {
+  const registry = installFakeDom();
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?pending-unit-door-test");
+  const card = new (registry.get("c300x-doorbell-call-card"))();
+  const camera = "camera.bticino_c300x_doorbell_camera";
+  card.setConfig({ entity: camera });
+  const hass = fakeHass();
+  hass.devices = {
+    station: { config_entry_id: "entry-1" },
+    "unit-20": { config_entry_id: "entry-1", via_device_id: "station" },
+    "unit-21": { config_entry_id: "entry-1", via_device_id: "station" },
+  };
+  for (const [entityId, deviceId, translationKey] of [
+    [camera, "unit-20", "doorbell_camera"],
+    ["button.front_door", "unit-20", "door"],
+    ["button.gate_door", "unit-21", "door"],
+  ]) {
+    hass.entities[entityId] = { device_id: deviceId, platform: "bticino_c300x", translation_key: translationKey };
+    hass.states[entityId] ||= { state: "unknown", attributes: {} };
+  }
+  // A ring whose caller frame has not come yet: the camera names no door.
+  Object.assign(hass.states[camera].attributes, {
+    call_id: "0badc0de-3", call_state: "ringing", call_unit: null, door_entity_id: null,
+  });
+  const calls = [];
+  hass.callService = async (...args) => calls.push(args);
+  card.hass = hass;
+  try {
+    const door = card.shadowRoot.querySelector(".door-action");
+    assert.equal(door.disabled, true);
+    assert.equal(door.classList.contains("hidden"), false);
+    await door.dispatch("click");
+    assert.deepEqual(calls, []);
+    assert.equal(card._error, "");
+    // The caller frame names unit 21: the button opens its door.
+    hass.states[camera] = {
+      ...hass.states[camera],
+      attributes: { ...hass.states[camera].attributes, call_unit: "21", door_entity_id: "button.gate_door" },
+    };
+    card.hass = { ...hass };
+    assert.equal(door.disabled, false);
+    await door.dispatch("click");
+    assert.deepEqual(calls, [["button", "press", { entity_id: "button.gate_door" }]]);
+  } finally { card.disconnectedCallback(); }
+});
+
 test("a removed camera does not retain old state", async () => {
   const registry = installFakeDom();
   await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?registry-cache-test");

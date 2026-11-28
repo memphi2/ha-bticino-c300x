@@ -49,11 +49,20 @@ def async_add_unit_cameras(
 
 
 def current_call_attributes(hass: HomeAssistant | None, entry: BticinoC300XConfigEntry) -> dict[str, Any]:
-    """The current call and the door button that opens its unit (else the default unit's)."""
+    """The current call and the door button that opens its unit (else the default unit's).
+
+    While the ring call waits for its caller frame (about 300 ms, at most
+    the 1 s default fallback) its unit is not known: there is no door button
+    then. The default unit's button names its unit, so the agent's
+    ``call_unit_pending`` guard would not stop it opening another unit's door.
+    """
 
     registry = entry_call_registry(entry)
     call = registry.current_call if registry is not None else None
-    unit_id = (call.unit if call is not None else None) or default_unit_id(entry)
+    if call is not None and call.kind == "ring" and call.unit is None and call.attribution == "pending":
+        unit_id = None
+    else:
+        unit_id = (call.unit if call is not None else None) or default_unit_id(entry)
     door = None
     if hass is not None and unit_id is not None:
         door = er.async_get(hass).async_get_entity_id("button", DOMAIN, unit_unique_id(entry, unit_id, "door"))

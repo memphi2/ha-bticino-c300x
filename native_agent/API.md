@@ -1473,7 +1473,10 @@ Events: `doorbell.pressed` carries `call_id`, `unit` and `attribution`; new are
 `door.opened` and `door.closed` (`unit`, `where`, `raw`; on a change of the
 unit's door state, the first frame of a unit also sends
 `outdoor_units.changed`) and `outdoor_units.changed`; `door_unlock.*` and `doorbell.view_requested`
-carry `unit` and `call_id` when they belong to a unit.
+carry `unit` and `call_id` when they belong to a unit. `doorbell.media.closed`
+carries `kind` (`ring` for the close of the agent's ring leg or the bus end
+frame `*8*3#1#…`, else `view`) and `call_id`, the live call that media
+belongs to (the ring call, or the newest view), `null` when none is live.
 `call.caller_identified` (`call_id`, `unit`, `where`, `action_where`,
 `attribution`, `raw`) names the ring call's unit: its caller frame
 (`attribution: "caller_frame"`), else 1 s after the ring the default unit

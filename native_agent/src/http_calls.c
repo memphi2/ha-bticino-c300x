@@ -206,6 +206,26 @@ static int own_media(const char *data)
     return strcmp(data, C300X_VIDEO_EVENT_RING) == 0 ? 'r' : strcmp(data, C300X_VIDEO_EVENT_VIEW) == 0 ? 'v' : 0;
 }
 
+/* A media close of a view, not of the ring. The bus ends a ring call with
+ * *8*3#1#, a view with *8*3#5#; its video off (*7*0*##) follows either and
+ * ends no ring. */
+static int closed_view(const char *data, int own)
+{
+    return own != 0 ? own == 'v' : data == NULL || strstr(data, "\"raw\":\"*8*3#1#") == NULL;
+}
+
+/* doorbell.media.closed with the kind of media that closed and its call. */
+static int closed_fields(const struct c300x_call_hub *hub, const char *data, int own, char *out, size_t out_len)
+{
+    int view = closed_view(data, own);
+    const struct c300x_call *call = c300x_calls_media_call(&hub->calls, view);
+    char fields[80];
+
+    snprintf(fields, sizeof(fields), "\"kind\":\"%s\",\"call_id\":%s%s%s", view ? "view" : "ring",
+             call ? "\"" : "null", call ? call->id : "", call ? "\"" : "");
+    return append_fields(data, fields, out, out_len);
+}
+
 static int hub_event(struct c300x_call_hub *hub, const char *type, const char *data, int own,
                      char *out, size_t out_len)
 {
@@ -246,6 +266,9 @@ static int hub_event(struct c300x_call_hub *hub, const char *type, const char *d
         const struct c300x_call *call = c300x_calls_current(&hub->calls);
         return call != NULL && call->unit[0] != '\0' ? decorate(data, call->unit, call->id, out, out_len) : 1;
     }
+    if (strcmp(type, "doorbell.media.closed") == 0) {
+        return closed_fields(hub, data, own, out, out_len);
+    }
     return 1;
 }
 
@@ -268,9 +291,7 @@ void c300x_call_hub_media_closed(struct c300x_call_hub *hub, const char *data, i
     struct c300x_call_media media;
     int own = data != NULL ? own_media(data) : 0;
     int from_bus = data != NULL && strstr(data, "\"raw\"") != NULL;
-    /* The bus ends a ring call with *8*3#1#, a view with *8*3#5#; its video
-     * off (*7*0*##) follows either and ends no ring. */
-    int view = own != 0 ? own == 'v' : data == NULL || strstr(data, "\"raw\":\"*8*3#1#") == NULL;
+    int view = closed_view(data, own);
 
     if (hub != NULL) {
         media_state(hub, &media);

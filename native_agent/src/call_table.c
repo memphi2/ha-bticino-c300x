@@ -476,6 +476,12 @@ const struct c300x_call *c300x_calls_current(const struct c300x_calls *calls)
     return call != NULL ? call : live_view(mutable_calls, NULL);
 }
 
+const struct c300x_call *c300x_calls_media_call(const struct c300x_calls *calls, int view)
+{
+    struct c300x_calls *mutable_calls = (struct c300x_calls *)calls;
+    return view ? live_view(mutable_calls, NULL) : ring_call(mutable_calls);
+}
+
 const struct c300x_call *c300x_calls_live_for_unit(const struct c300x_calls *calls, const char *unit)
 {
     struct c300x_calls *mutable_calls = (struct c300x_calls *)calls;

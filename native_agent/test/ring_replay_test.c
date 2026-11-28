@@ -749,7 +749,7 @@ static void lifecycle_ha_answer_ha_hangup(void) {
 /* Capture 13:37:27-13:38:35: the display answers; the agent's ring leg is
  * cancelled while the display call goes on until its end frame. */
 static void lifecycle_station_answer_station_hangup(void) {
-    char data[4096], id[32];
+    char data[4096], id[32], path[96];
     int preview;
     ring_with_caller(id, &preview);
     bus("*8*84*11##");
@@ -762,6 +762,8 @@ static void lifecycle_station_answer_station_hangup(void) {
     assert(strstr(data, id) && strstr(data, "\"answered_by\":\"station\""));
     wait_event("doorbell.media.closed", 1, data, sizeof(data));
     assert(payload_external(data));
+    snprintf(path, sizeof(path), "{\"kind\":\"ring\",\"call_id\":\"%s\",", id);
+    assert(strncmp(data, path, strlen(path)) == 0);
     close(preview);
     bus("*8*100#1#4*20##");
     usleep(300000);
@@ -773,6 +775,10 @@ static void lifecycle_station_answer_station_hangup(void) {
     assert(strstr(data, id) && strstr(data, "\"reason\":\"media_closed\""));
     assert_current("");
     assert(atomic_load(&station_byes) == 0);
+    /* The display call's bus end frame is the ring's close. */
+    wait_event("doorbell.media.closed", 2, data, sizeof(data));
+    snprintf(path, sizeof(path), "{\"raw\":\"*8*3#1#4*411##\",\"kind\":\"ring\",\"call_id\":\"%s\",", id);
+    assert(strncmp(data, path, strlen(path)) == 0);
 }
 
 /* c300x-ha-device-20260616-000849: HA answers; 60 s later the station ends
@@ -1088,13 +1094,14 @@ static void view_state6_during_bus_ring(void) {
 /* HA views, a visitor rings (bus only), HA stops its view: the view call
  * ends, the ring call rings on until its own end (here the station's idle). */
 static void view_close_keeps_ring(void) {
-    char data[4096], id[32];
+    char data[4096], id[32], view[32], fields[96];
     atomic_store(&station_busy, 0);
     assert(c300x_video_activate(runtime->video, 1, NULL));
     int fd = rtsp_open();
     assert(rtsp_play(fd, "/doorbell") == 200);
     bus("*8*1#5#4#20*11##");
-    wait_event("call.view_started", 1, NULL, 0);
+    wait_event("call.view_started", 1, data, sizeof(data));
+    call_id_of(data, view);
     bus("*8*1#1#4#21*11##");
     bus("*8*9#1#4*21##");
     wait_event("call.caller_identified", 1, data, sizeof(data));
@@ -1103,8 +1110,10 @@ static void view_close_keeps_ring(void) {
     wait_byes(1);
     wait_event("call.ended", 1, data, sizeof(data));
     assert(strstr(data, "\"kind\":\"view\"") && strstr(data, id) == NULL);
+    /* The close names its media and its call: the view's, not the ring's. */
     wait_event("doorbell.media.closed", 1, data, sizeof(data));
-    assert(strstr(data, "\"media\"") == NULL);
+    snprintf(fields, sizeof(fields), "{\"kind\":\"view\",\"call_id\":\"%s\",", view);
+    assert(strstr(data, "\"media\"") == NULL && strncmp(data, fields, strlen(fields)) == 0);
     usleep(2000000);
     assert(count_events("call.ended") == 1 && count_events("call.answered") == 0);
     assert_current(id);
@@ -1382,6 +1391,7 @@ static void single_unit_as_3_0_0(void) {
         strip_key(data, "call_id");
         strip_key(data, "unit");
         strip_key(data, "attribution");
+        strip_key(data, "kind");
         printf("event %s %s\n", event_types[i], data);
     }
     pthread_mutex_unlock(&events_mutex);

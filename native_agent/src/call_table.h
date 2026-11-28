@@ -109,6 +109,9 @@ int c300x_calls_timeout_ms(const struct c300x_calls *calls, long long now);
 const struct c300x_call *c300x_calls_find(const struct c300x_calls *calls, const char *call_id);
 /* The live ring call, else the newest view. */
 const struct c300x_call *c300x_calls_current(const struct c300x_calls *calls);
+/* The live call a media close of the ring (view 0) or of a view (view 1)
+ * belongs to: the ring call, the newest view; NULL when none is live. */
+const struct c300x_call *c300x_calls_media_call(const struct c300x_calls *calls, int view);
 const struct c300x_call *c300x_calls_live_for_unit(const struct c300x_calls *calls, const char *unit);
 int c300x_calls_is_current(const struct c300x_calls *calls, const char *call_id);
 /* Unlock with a call id: that unit's call, live or ended within the keep time. */

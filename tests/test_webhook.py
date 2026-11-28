@@ -1072,10 +1072,7 @@ def test_events_reach_the_bus_while_the_entry_waits_for_its_station_id(monkeypat
         assert config_entry_id == "entry-1"
         return SimpleNamespace(id=devices[identifier]) if identifier in devices else None
 
-    registry_stub = SimpleNamespace(
-        async_get_device_by_identifier=by_identifier,
-        async_get_device=lambda *, identifiers: by_identifier(next(iter(identifiers)), "entry-1"),
-    )
+    registry_stub = SimpleNamespace(async_get_device_by_identifier=by_identifier)
     monkeypatch.setattr(unit_entity.dr, "async_get", lambda _hass: registry_stub)
     monkeypatch.setattr(call_sync, "async_dispatcher_send", lambda *args: None)
     monkeypatch.setattr(webhook_module, "resolve_doorbell_camera_entity_id", lambda _hass, _entry: None)

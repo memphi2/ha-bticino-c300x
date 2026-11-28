@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 
+import pytest
 from homeassistant import bootstrap, config_entries, core, loader
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
@@ -285,3 +287,29 @@ def test_setup_removes_the_merged_unit_device_before_the_platforms(tmp_path: Pat
         await hass.async_stop(force=True)
 
     asyncio.run(run())
+
+
+def test_a_station_event_finds_its_device_without_the_deprecated_lookup(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture,
+) -> None:
+    # device_registry.async_get_device is deprecated and stops working in
+    # 2027.8; the lookup goes by identifier within the entry.
+    from custom_components.bticino_c300x import unit_entity
+
+    async def run() -> None:
+        hass = await _hass(tmp_path)
+        entry = _entry(hass, {"host": "door", CONF_STATION_ID: OLD}, identity_migration.ENTRY_VERSION)
+        unit_entity.async_register_unit_device(hass, entry, UNITS.units[0])
+        devices = dr.async_get(hass)
+        station = devices.async_get_device_by_identifier((DOMAIN, OLD), entry.entry_id)
+        gate = devices.async_get_device_by_identifier((DOMAIN, f"{OLD}:unit:20"), entry.entry_id)
+        assert station is not None and gate is not None
+        assert unit_entity.event_device_id(hass, entry, "20") == gate.id
+        # A unit that has no device yet, and an event without a unit.
+        assert unit_entity.event_device_id(hass, entry, "21") == station.id
+        assert unit_entity.event_device_id(hass, entry, None) == station.id
+        await hass.async_stop(force=True)
+
+    with caplog.at_level(logging.WARNING):
+        asyncio.run(run())
+    assert not [record for record in caplog.records if "async_get_device`" in record.getMessage()]

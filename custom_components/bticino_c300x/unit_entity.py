@@ -84,7 +84,7 @@ def event_device_id(hass: HomeAssistant, entry: BticinoC300XConfigEntry, unit_id
         # A unit that rang for the first time has no device yet.
         identifiers.insert(0, unit_device_identifier(entry, unit_id))
     for identifier in identifiers:
-        device = devices.async_get_device(identifiers={identifier})
+        device = devices.async_get_device_by_identifier(identifier, entry.entry_id)
         if device is not None:
             return device.id
     return None

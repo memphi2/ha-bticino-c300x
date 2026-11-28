@@ -415,11 +415,11 @@ def test_a_station_event_belongs_to_its_unit_device_else_to_the_station(monkeypa
         ("bticino_c300x", "c300x-0123456789ab"): "device-station",
     }
 
-    def get_device(*, identifiers: set[tuple[str, str]]) -> Any:
-        (identifier,) = identifiers
+    def get_device(identifier: tuple[str, str], config_entry_id: str) -> Any:
+        assert config_entry_id == "entry-1"
         return SimpleNamespace(id=devices[identifier]) if identifier in devices else None
 
-    monkeypatch.setattr(unit_entity.dr, "async_get", lambda _hass: SimpleNamespace(async_get_device=get_device))
+    monkeypatch.setattr(unit_entity.dr, "async_get", lambda _hass: SimpleNamespace(async_get_device_by_identifier=get_device))
     entry = _entry(THREE)
     assert unit_entity.event_device_id(None, entry, "21") == "device-21"  # type: ignore[arg-type]
     # A unit that rang for the first time has no device yet.

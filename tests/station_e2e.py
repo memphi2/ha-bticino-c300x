@@ -55,7 +55,9 @@ PROFILES: dict[str, dict[str, Any]] = {
 }
 FIRMWARES = tuple(PROFILES)
 
-_STATION_PATH = re.compile(r"(?<![\w./-])(/home/bticino|/etc/|/usr/lib/)")
+_STATION_PATH = re.compile(
+    r"(?<![\w./-])(/home/bticino|/etc/|/usr/lib/|/sys/class/net/|/proc/sys/kernel/hostname)"
+)
 
 INIT_SCRIPT = f"""#!/bin/sh
 DEFAULT_AGENT_DIR="{AGENT_DIR}"
@@ -168,6 +170,11 @@ class Station:
         user, password = factory_ssh_login(model)
         station.accounts[user] = Account(password)
         station.write("/home/bticino/sp/dbfiles_ws.xml", f"<webserver_type>{model}</webserver_type>\n")
+        # The station's own network facts, which name it (station_identity.py).
+        digits = device_id.removeprefix("c300x-")
+        station.write("/sys/class/net/eth0/address", ":".join(digits[i:i + 2] for i in range(0, 12, 2)) + "\n")
+        station.write("/sys/class/net/lo/address", "00:00:00:00:00:00\n")
+        station.write("/proc/sys/kernel/hostname", "BTicino\n")
         for name in station.profile["files"]:
             station.write(name, "")
         station.write("/etc/network/if-pre-up.d/iptables", "#!/bin/sh\n", mode=0o755)

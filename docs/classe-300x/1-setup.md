@@ -20,12 +20,9 @@ nothing on it.
 
 ## Enable SSH on the Station
 
-The integration cannot root a stock station. This project provides no firmware
-images and no rooting instructions. Use one of these tools:
-
-- [fquinto/bticinoClasse300x](https://github.com/fquinto/bticinoClasse300x) (C300X `1.7.x`)
-- [davemajor/c300x-root](https://github.com/davemajor/c300x-root) (C300X `2.0.2` and `3.0.6`)
-- [davemajor/bticino-c300x-usb-root](https://github.com/davemajor/bticino-c300x-usb-root) (C300X `3.0.6` over USB, with SSH key login)
+The integration needs root access to the station over SSH. It cannot root a
+stock station itself, and this project provides no firmware images, no tools and
+no rooting instructions.
 
 Enable nothing but SSH: no camera, MQTT or other extras. Flashing can brick
 the station; you do it at your own risk and without warranty.
@@ -73,8 +70,8 @@ below leave the model out.
    - **SSH user**: `root` or `root2`, never `bticino2`.
    - **SSH password**, or **SSH private key (optional)** with its **Key
      passphrase (optional)**. Paste the key as text. Firmware `1.7.x` and
-     `2.0.2` take RSA or ECDSA keys, `3.0.6` also Ed25519. With davemajor's USB
-     root, use the key it set up.
+     `2.0.2` take RSA or ECDSA keys, `3.0.6` also Ed25519. If your SSH access
+     was set up with a key, use that key.
 3. Wait until the installation is done. Home Assistant checks first that the
    host is a BTicino station and writes nothing to any other device. The SSH
    login is used once and not stored.

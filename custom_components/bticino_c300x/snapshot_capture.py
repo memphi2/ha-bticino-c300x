@@ -17,7 +17,7 @@ from .api_errors import C300XAgentApiConnectionError, C300XAgentApiError
 from .config_snapshots import snapshot_options
 from .const import EVENT_AGENT_EVENT_RECEIVED
 from .entity import entry_video_enabled, supports_capability
-from .event_payload import agent_event_key
+from .event_payload import agent_event_key, ring_media_closed
 from .snapshot_store import MAX_SNAPSHOT_BYTES
 
 if TYPE_CHECKING:
@@ -96,6 +96,8 @@ class SnapshotCapture:
         self.identity: str | None = None
         self.stream_key: str | None = None
         self.ring_seen = False
+        # The call of the ring this cycle belongs to, when the agent named it.
+        self.ring_call: str | None = None
         self.last_ring: str | None = None
         self.visitor_id: str | None = None
         self.unsubscribe: Any = None
@@ -117,7 +119,11 @@ class SnapshotCapture:
         if event.data.get("entry_id") != self.manager.entry.entry_id:
             return
         key = agent_event_key(event.data)
-        if key in {"doorbell_media_closed", "agent_restarted"}:
+        if key == "agent_restarted" or (
+            # A view that closes while the visitor rings keeps the ring's image.
+            key == "doorbell_media_closed"
+            and (not self.ring_seen or ring_media_closed(event.data, self.ring_call))
+        ):
             self.cancel()
         elif key == "doorbell_pressed":
             stamp = event.data.get("source_event_id") or event.data.get("event_at")
@@ -134,6 +140,7 @@ class SnapshotCapture:
                 self.visitor_id = visitor
             self._request(visitor)
             self.ring_seen = True
+            self.ring_call = event.data.get("call_id")
         elif key == "doorbell_view_requested":
             self._request()
 
@@ -186,6 +193,7 @@ class SnapshotCapture:
         self.identity = None
         self.stream_key = None
         self.ring_seen = False
+        self.ring_call = None
         self.pending = None
         if self.task is not None and not self.task.done():
             self.task.cancel()

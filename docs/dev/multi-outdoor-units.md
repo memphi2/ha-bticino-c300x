@@ -353,7 +353,7 @@ All carry the 3.0 envelope (`event_id`, `type`, `occurred_at`, `data`).
 | `station.call_state` | `code`, `state` (see Station call state; `null` for a code without a proven meaning), on every change |
 | `door.opened`, `door.closed` | `unit`, `where`, `raw`; on a change of the unit's door state. The first door frame of a unit also sends `outdoor_units.changed`. |
 | `doorbell.view_requested` | adds `call_id` and `unit` when the frame names the unit |
-| `doorbell.media.closed` | adds `kind` (`ring` or `view`: whose media closed, see End of a call) and `call_id` of the live call it belongs to (the ring call, or the newest view; `null` when none is live). The visitor journal ends a visit only on the close of its ring. |
+| `doorbell.media.closed` | adds `kind` (`ring` or `view`: whose media closed, see End of a call) and `call_id` of the live call it belongs to (the ring call, or the newest view; `null` when none is live). The visitor journal ends a visit, and the visitor image its capture, only on the close of its ring. |
 | `door_unlock.started`, `door_unlock.ended` | add `unit` when the address is a unit's lock, and `call_id` of its live call |
 | `outdoor_units.changed` | `count`; Home Assistant reads `GET /api/v1/outdoor-units` again |
 

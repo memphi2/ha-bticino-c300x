@@ -631,3 +631,45 @@ def test_a_conversion_that_runs_out_of_time_is_not_blamed_on_the_agent(tmp_path,
         manager.close()
 
     asyncio.run(run())
+
+
+def test_a_view_that_closes_during_a_ring_keeps_the_rings_image(tmp_path, monkeypatch):
+    # doorbell.media.closed says whose media closed (kind, call_id): a live
+    # view that ends while the visitor rings, or another ring's media, leaves
+    # the ring's image; the ring's own close and an agent restart end it.
+    def send(manager, key, stamp, call_id=None, media=None):
+        manager.capture._event(SimpleNamespace(data={
+            "entry_id": "one", "event_type": key, "event_at": stamp, "call_id": call_id,
+            "data": {"kind": media} if media else {},
+        }))
+
+    async def run():
+        manager = setup(tmp_path, monkeypatch)
+        api = manager.entry.runtime_data.api.async_doorbell_snapshot
+        send(manager, "doorbell_pressed", "ring", "0badc0de-2")
+        send(manager, "doorbell_media_closed", "view", "0badc0de-3", "view")
+        send(manager, "doorbell_media_closed", "view-unnamed", None, "view")
+        send(manager, "doorbell_media_closed", "other-ring", "0badc0de-1", "ring")
+        await drain(manager)
+        api.assert_awaited_once()
+        assert len(manager.store.items(14)) == 1
+        assert manager.capture.identity is not None
+        send(manager, "doorbell_media_closed", "ring-close", "0badc0de-2", "ring")
+        assert manager.capture.identity is None
+        # A ring whose call the agent did not name ends with its close, as before.
+        send(manager, "doorbell_pressed", "ring-2")
+        assert manager.capture.identity is not None
+        send(manager, "doorbell_media_closed", "ring-2-close", "0badc0de-4", "ring")
+        assert manager.capture.identity is None
+        # An agent restart ends the ring; a view's own close ends the view's image.
+        send(manager, "doorbell_pressed", "ring-3", "0badc0de-5")
+        send(manager, "agent_restarted", "restart")
+        assert manager.capture.identity is None
+        send(manager, "doorbell_view_requested", "view-2", "0badc0de-6")
+        assert manager.capture.identity is not None
+        send(manager, "doorbell_media_closed", "view-2-close", "0badc0de-6", "view")
+        assert manager.capture.identity is None
+        await drain(manager)
+        manager.close()
+
+    asyncio.run(run())

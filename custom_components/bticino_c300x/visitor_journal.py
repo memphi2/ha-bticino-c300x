@@ -17,7 +17,7 @@ from ._api_calls import valid_call_id, valid_unit_id
 from .capture_history import CLOCK_TOLERANCE, CaptureHistory
 from .config_snapshots import snapshot_options
 from .const import DOMAIN, EVENT_AGENT_EVENT_RECEIVED
-from .event_payload import agent_event_key
+from .event_payload import agent_event_key, ring_media_closed
 from .snapshot_identity import describe_snapshot, valid_snapshot
 
 MAX_VISITS = 1000
@@ -144,8 +144,8 @@ class VisitorJournal:
         ):
             # Another call ended (a superseded ring, a second unit): this visit goes on.
             return
-        elif kind == "doorbell_media_closed" and (
-            _closed_media(data) == "view" or _other_call(self.records.get(active or ""), data.get("call_id"))
+        elif kind == "doorbell_media_closed" and not ring_media_closed(
+            data, self.records.get(active or "", {}).get("call_id")
         ):
             # A view's media closed, or another ring's: the ring's visit goes on.
             return
@@ -289,20 +289,6 @@ class VisitorJournal:
             await self.store.async_save(self._saved_payload())
         except OSError:
             _LOGGER.warning("Could not persist C300X visitor journal", exc_info=True)
-
-
-def _closed_media(data: Mapping[str, Any]) -> Any:
-    """``ring`` or ``view``: the media whose close doorbell.media.closed reports."""
-
-    payload = data.get("data")
-    return payload.get("kind") if isinstance(payload, Mapping) else None
-
-
-def _other_call(record: Mapping[str, Any] | None, call_id: Any) -> bool:
-    """The event names a call, and not the one of this visit."""
-
-    own = record.get("call_id") if record is not None else None
-    return call_id is not None and own is not None and call_id != own
 
 
 def _validated_record(raw: Any) -> dict[str, Any] | None:

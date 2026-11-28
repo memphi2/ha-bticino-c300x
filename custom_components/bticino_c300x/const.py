@@ -18,6 +18,8 @@ CONF_DISPLAY_SETTING_PENDING = "display_setting_pending"
 # Display steps the agent update or install owes on the Qt 5 display: True
 # with the full Display patch, False with the core hook only.
 CONF_DISPLAY_FOLLOWUP_PENDING = "display_followup_pending"
+# A new installation on firmware 1.7.x/2.0.2 switches to PCMU at its first start.
+CONF_INSTALL_PCMU_PENDING = "install_pcmu_pending"
 CONF_REINSTALL_AGENT = "reinstall_agent"
 CONF_ALARM_ENTITY_ID = "alarm_entity_id"
 CONF_ALARM_PAGE_ENTITY_ID = "alarm_page_entity_id"

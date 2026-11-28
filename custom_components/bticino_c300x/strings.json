@@ -805,6 +805,9 @@
       "c100x_confirmation_required": "Tick the box to set up the Classe 100X, or close this dialog to leave the station unchanged.",
       "not_a_bticino_station": "The device at this address is not a BTicino station. Nothing was written to it. Check the address.",
       "c3x2_not_supported": "This station is a Classe 300X2. It is recognised, but not supported yet. Nothing was installed or written to it."
+    },
+    "create_entry": {
+      "pcmu_restart": "As soon as no call or stream is running, the {model} restarts once to switch its sound to PCMU. Until it is back, its entities are unavailable; then they connect again by themselves."
     }
   },
   "options": {

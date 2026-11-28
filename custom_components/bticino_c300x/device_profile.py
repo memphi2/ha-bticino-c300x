@@ -92,6 +92,18 @@ class DeviceProfile:
     def camera_fixed(self) -> bool:
         return self.camera == CAMERA_FIXED
 
+    @property
+    def installs_pcmu(self) -> bool:
+        """A new installation switches the sound to PCMU, with one station restart.
+
+        The C300X with the Qt 4 display (firmware 1.7.x and 2.0.x) runs Speex
+        from the factory. Firmware 3.0.x runs PCMU from the factory, a C100X
+        stays on Speex, and a station whose model name and display program
+        disagree is left as it is.
+        """
+
+        return self.model == C300X and self.display == QT4_ONDISK and self.model_confirmed
+
 
 def _profile(
     c100x: bool, qt5: bool, camera: Any = None, *, confirmed: bool = True,

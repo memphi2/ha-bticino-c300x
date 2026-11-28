@@ -37,6 +37,7 @@ def test_delayed_stop_never_escapes_runtime(kind, invalidate, wait_at):
                     async_doorbell_video_status=AsyncMock(return_value={}),
                     async_stop_doorbell_video=AsyncMock(),
                     async_stop_home_call=AsyncMock(),
+                    async_call_action_target=AsyncMock(return_value="0badc0de-2"),
                     async_hangup_doorbell_call=AsyncMock(),
                 ),
                 resources=C300XRuntimeResources(),

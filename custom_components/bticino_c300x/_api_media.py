@@ -176,10 +176,21 @@ class _ApiMediaMixin(_C300XApiCore):
 
         return await self._call_action(call_id, "hangup", unit)
 
+    async def async_call_action_target(
+        self, call_id: str | None, action: str, *, unit: str | None = None,
+    ) -> str:
+        """Return the call ``action`` (answer, hangup) goes to; nothing is sent.
+
+        That is ``call_id`` or the current call, and only when it is the
+        current call, of ``unit`` when given; else C300XCallNotCurrentError.
+        While the ringing unit is not known yet, asked again until it is.
+        """
+
+        return await _when_unit_known(lambda: self._action_call_id(call_id, action, unit))
+
     async def _call_action(self, call_id: str | None, action: str, unit: str | None) -> dict[str, Any]:
         if call_id is None or unit is not None:
-            requested = call_id
-            call_id = await _when_unit_known(lambda: self._action_call_id(requested, action, unit))
+            call_id = await self.async_call_action_target(call_id, action, unit=unit)
         data = await self._request_json(
             "POST", f"/api/v1/calls/{quote(call_id, safe='')}/actions/{action}",
         )
@@ -202,9 +213,9 @@ class _ApiMediaMixin(_C300XApiCore):
         if (unit is not None and call is not None and wanted == current and call.kind == "ring"
                 and call.unit is None and call.attribution == "pending"):
             raise C300XCallUnitPendingError("the ringing unit is not known yet", _UNIT_PENDING_MAX_MS)
-        if unit is not None and (call is None or call.unit != unit):
-            # Another unit's call, or one that is not the current call.
-            raise C300XCallNotCurrentError("the call is not this unit's", current)
+        if wanted != current or (unit is not None and (call is None or call.unit != unit)):
+            # Over, not the current call, or another unit's: the agent refuses it too.
+            raise C300XCallNotCurrentError("the call is not current or not this unit's", current)
         if call_id is None and action == "answer" and call is not None and call.kind == "view":
             raise C300XCallNotCurrentError("the current call is a view", current)
         return wanted

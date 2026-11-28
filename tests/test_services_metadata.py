@@ -22,7 +22,9 @@ def test_services_target_devices_or_entities_instead_of_entry_ids() -> None:
     assert "entry_id" not in "".join(sections.values())
     for name, text in sections.items():
         if name != "run_ring_wyoming_analysis":
-            assert "\n  target:\n    device:\n      integration: bticino_c300x\n" in text, name
+            # hassfest refuses filters on a target's device; the entity filter also offers the devices.
+            assert "\n  target:\n    entity:\n      integration: bticino_c300x\n" in text, name
+            assert "\n    device:\n" not in text, name
 
 
 def test_services_yaml_exposes_doorbell_video_activation() -> None:

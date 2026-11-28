@@ -2,8 +2,6 @@ show_display_notification:
   name: Show display notification
   description: Create or replace a temporary native-display notification. Messages are cleared on HA restart or integration reload; this does not wake the display.
   target:
-    device:
-      integration: bticino_c300x
     entity:
       integration: bticino_c300x
   fields:
@@ -55,8 +53,6 @@ dismiss_display_notification:
   name: Dismiss display notification
   description: Remove a notification by its stable ID. This does not resolve the underlying physical condition.
   target:
-    device:
-      integration: bticino_c300x
     entity:
       integration: bticino_c300x
   fields:
@@ -70,8 +66,6 @@ run_action:
   name: Run action
   description: Run one configured action by its allowlisted action id.
   target:
-    device:
-      integration: bticino_c300x
     entity:
       integration: bticino_c300x
   fields:
@@ -86,8 +80,6 @@ alarm_command:
   name: Send alarm command
   description: Send an alarm command to the configured alarm control panel entity.
   target:
-    device:
-      integration: bticino_c300x
     entity:
       integration: bticino_c300x
   fields:
@@ -122,8 +114,6 @@ camera_picture:
   name: Adjust camera picture
   description: Read all three live picture settings, or supply a control and a value (0 to 100% in steps of 10) to change one. Requires the updated device agent and an active Ring Call video or on-demand video with verified source values and ranges. Saved media is unchanged.
   target:
-    device:
-      integration: bticino_c300x
     entity:
       integration: bticino_c300x
   fields:
@@ -143,8 +133,6 @@ activate_doorbell_video:
   name: Activate doorbell video
   description: Start or renew the doorbell video session through the local device agent. Use this from automations to pre-warm the camera when the doorbell rings.
   target:
-    device:
-      integration: bticino_c300x
     entity:
       integration: bticino_c300x
   fields:
@@ -160,8 +148,6 @@ answer_call:
   name: Answer call
   description: Answer a call at the station through the local device agent. Without a call ID it answers the current call. Media playback still needs a browser, recorder or other media consumer.
   target:
-    device:
-      integration: bticino_c300x
     entity:
       integration: bticino_c300x
   fields:
@@ -176,8 +162,6 @@ hangup_call:
   name: Hang up call
   description: Hang up a call at the station through the local device agent. Without a call ID it hangs up the current call.
   target:
-    device:
-      integration: bticino_c300x
     entity:
       integration: bticino_c300x
   fields:
@@ -192,8 +176,6 @@ capture_doorbell_call:
   name: Capture doorbell video
   description: Record a short MP4 on Home Assistant. Ring mode requires an incoming doorbell call; on-demand mode records without ringing when media is idle. The MP4 defaults to /media/c300x/; optional WAV and JPEG files default to /config/c300x/.
   target:
-    device:
-      integration: bticino_c300x
     entity:
       integration: bticino_c300x
   fields:
@@ -299,8 +281,6 @@ evaluate_ring_analysis:
   name: Evaluate ring analysis
   description: Evaluate a local ring transcription JSON result and optionally open the door only on a strict phrase match. This service does not run AI itself.
   target:
-    device:
-      integration: bticino_c300x
     entity:
       integration: bticino_c300x
   fields:
@@ -340,8 +320,6 @@ start_home_call:
   name: Start home call
   description: Start a local audio Home Call to the station through the local device agent.
   target:
-    device:
-      integration: bticino_c300x
     entity:
       integration: bticino_c300x
   fields:
@@ -359,8 +337,6 @@ stop_home_call:
   name: Stop home call
   description: Stop the active local Home Call through the local device agent.
   target:
-    device:
-      integration: bticino_c300x
     entity:
       integration: bticino_c300x
 
@@ -368,8 +344,6 @@ play_latest_video_message:
   name: Play latest video message
   description: Play the latest stored answering-machine video message on a media player.
   target:
-    device:
-      integration: bticino_c300x
     entity:
       integration: bticino_c300x
   fields:
@@ -385,8 +359,6 @@ play_latest_voice_memo:
   name: Play latest voice memo
   description: Play the latest stored manual voice memo on a media player.
   target:
-    device:
-      integration: bticino_c300x
     entity:
       integration: bticino_c300x
   fields:
@@ -402,8 +374,6 @@ write_text_memo:
   name: Write text memo
   description: Create a local manual text memo on the station. The memo is written only when this service is called.
   target:
-    device:
-      integration: bticino_c300x
     entity:
       integration: bticino_c300x
   fields:

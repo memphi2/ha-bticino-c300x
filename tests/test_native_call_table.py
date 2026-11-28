@@ -21,6 +21,7 @@ CASES = (
     "two_units_within_one_second",
     "caller_missing",
     "caller_late",
+    "answered_before_caller_wait",
     "stale_call_id",
     "rings_of_one_session",
     "hangup_reason",

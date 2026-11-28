@@ -15,10 +15,10 @@ files.
 Breaking changes:
 
 - **Run the agent update Repair.** The native agent changed. Until the
-  Repair has run, the integration shows no entities and
-  `bticino_c300x_agent_event_received` carries no `device_id`; rings and other
-  station events still reach automations. With the Repair the devices and
-  entities move to the outdoor units.
+  Repair has run, the integration's entities are unavailable and the
+  `device_id` of `bticino_c300x_agent_event_received` is `null`; rings and
+  other station events still reach automations. With the Repair the devices
+  and entities move to the outdoor units.
 - **Outdoor units are devices.** The doorbell camera, the doorbell ring event
   and the door button move to the device of the default outdoor unit. Their
   entity IDs and history stay; their displayed names now start with the
@@ -28,8 +28,12 @@ Breaking changes:
   `lock_name` is that lock's name, else the unit's name.
 - **Doorbell ring event:** it now fires when the station has named the
   calling unit, about 0.3 s after the ring and at most 1 s. For the fastest
-  reaction use the new **Station ring** event. The attribute
-  `video_available` is gone.
+  reaction use the new **Station ring** event. The attributes `event_key`,
+  `event` and `video_available` are gone, and so are the station event's
+  fields that the ring carried along (`entry_id`, `event_at`,
+  `event_label_<language>` and the other `event_*` names). It carries
+  `call_id`, `unit`, `unit_name` and `attribution`; `last_ring_at` and
+  `camera_entity_id` stay.
 - **Removed entities:** the **Doorbell state** sensor (use the outdoor unit's
   **Call** sensor) and the diagnostic **Device event** entity (use the event
   entities or `bticino_c300x_agent_event_received`).
@@ -59,7 +63,9 @@ Breaking changes:
   `device_id`, `unit`, `call_id`, `event_at` and `data`. The fields `event`,
   `event_key`, `event_type_key`, `event_name`, `event_value`, `event_label`,
   `event_label_<language>` and the top-level `address` (now in `data`) are
-  gone.
+  gone. **Automations that filter on `event_key` (for example `event_key:
+  doorbell_pressed`) no longer fire: replace `event_key` with `event_type`
+  (`event_type: doorbell_pressed`).**
 - **Blueprints:** automations made from the ring blueprints need the
   **Doorbell** input (the outdoor unit's ring event, or the **Station ring**)
   selected again. The calendar reminder takes the **Door station** device
@@ -94,7 +100,8 @@ Outdoor units and calls:
 - **Calls have an ID.** `answer_call` and `hangup_call` take an optional
   `call_id`: a call that is over, no longer current or of another unit than
   the target is refused and nothing is sent to the station. A unit target
-  answers or hangs up only that unit's call.
+  answers or hangs up only that unit's call; right after a ring it waits
+  until the station has named the calling unit (at most about 1 s).
 - **The card follows the call:** it shows the calling unit's name, and its
   door button opens the unit that rang.
 - **Live view of every outdoor unit:** `activate_doorbell_video` with an

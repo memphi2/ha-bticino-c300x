@@ -1046,6 +1046,45 @@ static void view_during_bus_ring(void) {
     close(fd);
 }
 
+/* Only the bus rings, HA opens the live view of the ringing unit: the
+ * station reports that view as every on-demand view in the captures
+ * (c300x-app-ondemand-20260613-124656, c300x-ha-card-2click-ondemand-
+ * 20260621-181353): view frame, 3, *8*2#5#, then 6. That 6 answers no
+ * ring; the display's answer frame still does. */
+static void view_state6_during_bus_ring(void) {
+    char data[4096], id[32];
+    atomic_store(&station_busy, 0);
+    bus("*8*1#1#4#21*11##");
+    bus("*#8**35*1*0*0##");
+    bus("*8*9#1#4*21##");
+    wait_event("call.caller_identified", 1, data, sizeof(data));
+    call_id_of(data, id);
+    assert(calls_api("POST", "/api/v1/video/doorbell/actions/activate", "{}", data, sizeof(data)) == 200);
+    int fd = rtsp_open();
+    assert(rtsp_play(fd, "/doorbell") == 200);
+    wait_event("doorbell.view_requested", 1, NULL, 0);
+    bus("*8*1#5#4#21*11##");
+    bus("*#8**35*3*0*0##");
+    bus("*8*2#5#4*11##");
+    bus("*#8**35*6*0*0##");
+    wait_event("station.call_state", 3, data, sizeof(data));
+    assert(strstr(data, "\"code\":6"));
+    usleep(300000);
+    assert(count_events("call.answered") == 0);
+    assert(calls_api("GET", "/api/v1/calls", "", data, sizeof(data)) == 200);
+    assert(strstr(data, "\"kind\":\"ring\",\"state\":\"ringing\""));
+    assert_current(id);
+    /* After the view's start transition (3.5 s), in which an answer frame is
+     * taken for the view's own. */
+    atomic_store(&clock_offset, 4000);
+    bus("*8*2#1#4*11##");
+    wait_event("call.answered", 1, data, sizeof(data));
+    assert(strstr(data, id) && strstr(data, "\"answered_by\":\"station\""));
+    c300x_video_stop(runtime->video);
+    wait_byes(1);
+    close(fd);
+}
+
 /* HA views, a visitor rings (bus only), HA stops its view: the view call
  * ends, the ring call rings on until its own end (here the station's idle). */
 static void view_close_keeps_ring(void) {
@@ -1655,6 +1694,7 @@ int main(int argc, char **argv) {
     else if (strcmp(argv[1], "display_view_hangup") == 0) display_view_hangup();
     else if (strcmp(argv[1], "display_answered_hangup") == 0) display_answered_hangup();
     else if (strcmp(argv[1], "bus_ring_hangup_during_view") == 0) bus_ring_hangup_during_view();
+    else if (strcmp(argv[1], "view_state6_during_bus_ring") == 0) view_state6_during_bus_ring();
     else if (strcmp(argv[1], "view_close_keeps_ring") == 0) view_close_keeps_ring();
     else if (strcmp(argv[1], "display_view_end_keeps_ring") == 0) display_view_end_keeps_ring();
     else if (strcmp(argv[1], "boot_id_at_start") == 0) boot_id_at_start();

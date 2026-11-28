@@ -157,7 +157,7 @@ the captures and from the vendor functions that send each value:
 | `2` | `ringing` | with the caller frame, while the ringtone plays |
 | `3` | `viewing` | a view without a ring |
 | `4` | `waiting` | about 2.5 s after `2` with the ringtone's end (`*7*59#8…`), or when the ringer is muted; the call still waits |
-| `6` | `conversation` | the display, the app or Home Assistant answered (`*8*2#…`) |
+| `6` | `conversation` | the display, the app or Home Assistant answered (`*8*2#…`), also an on-demand view (`*8*2#5#…`) |
 | `7` | `answering_machine` | it took the unanswered call (`*8*67*<unit>##`) |
 | `8` | `greeting` | it plays the greeting (`*7*58#…` audio path) |
 | `9` | `recording` | it records the visitor; a saved message follows the end (`*8*96#1#0*##`) |
@@ -197,7 +197,7 @@ not a call.
 | `doorbell.pressed` | Opens the ring call, or belongs to the live one (see Ring timing). |
 | `doorbell.view_requested` of the ring (`*8*2#1#…`, or the agent's answer of its ring leg) | The ring call is `answered`: `answered_by: "ha"` for the agent's answer, which it gives Home Assistant only, else `"station"` (display or app). In which order the display's frames and the ring leg's close come does not matter. The `doorbell.view_requested` of the agent's on-demand view answers nothing. |
 | `doorbell.media.closed` of the ring whose payload still reports the station's own media | The ringing call is `answered` by the station. |
-| Station state `6` (conversation) | The ringing call is `answered`: `"ha"` while Home Assistant answered the ring leg, else `"station"`. |
+| Station state `6` (conversation) | The ringing call is `answered`: `"ha"` while Home Assistant answered the ring leg, else `"station"`. Not while the agent's own on-demand view runs and it has no ring leg: every on-demand view reports `3`, then `6` after `*8*2#5#…` (captures `c300x-app-ondemand-20260613-124656`, `c300x-ha-card-2click-ondemand-20260621-181353`); the answer frame `*8*2#1#…` still answers. |
 | Station state `7` (answering machine) | The ringing call is `answered` (`"answering_machine"`). |
 | View frame `*8*1#5#4#<where>*…##` | Opens a `viewing` call of that unit; a view of another unit ends the one before (`reason: "superseded"`). |
 

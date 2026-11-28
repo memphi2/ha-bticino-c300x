@@ -1404,7 +1404,10 @@ Capabilities report `api_version: "2"`, `capabilities.outdoor_units` and
   or the answer frame `*8*2#1#…` comes (`answered_by` `ha` while Home
   Assistant answered the ring leg, else `station`), when it reports `7`
   (`answering_machine`) and when the agent answers its ring leg for Home
-  Assistant (`ha`). An on-demand view during a ring answers nothing. A
+  Assistant (`ha`). An on-demand view during a ring answers nothing: every
+  on-demand view reports `3`, then `6` (after `*8*2#5#…`), so `6` answers
+  no ring while the agent's own on-demand view runs and it has no ring leg;
+  the answer frame `*8*2#1#…` still does. A
   media close ends only its own call: the close of the agent's ring leg or
   the bus end frame `*8*3#1#…` the ring call, the close of the agent's
   on-demand view, the bus end frame `*8*3#5#…` or `*7*0*##` a view call; a

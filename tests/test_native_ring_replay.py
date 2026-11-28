@@ -35,7 +35,7 @@ CASES = {
     "door_contacts": 0, "unit_switch_during_play": 2, "unviewable_unit_during_view": 1,
     "lost_first_register": 0, "view_during_bus_ring": 1, "agent_answer_is_ha": 0,
     "view_close_keeps_ring": 1, "display_view_end_keeps_ring": 0, "display_view_hangup": 0,
-    "display_answered_hangup": 0, "bus_ring_hangup_during_view": 1,
+    "display_answered_hangup": 0, "bus_ring_hangup_during_view": 1, "view_state6_during_bus_ring": 1,
 }
 
 

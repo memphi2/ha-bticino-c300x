@@ -84,7 +84,9 @@ const struct c300x_call *c300x_calls_ring(struct c300x_calls *calls, const struc
 void c300x_calls_frame(struct c300x_calls *calls, const struct c300x_call_sink *sink,
                        const char *frame, long long now);
 /* The station's call state (*#8**35, repeats ignored): its conversation or
- * its answering machine answers the ringing call; once it is idle, a call
+ * its answering machine answers the ringing call, the conversation not while
+ * the agent's own on-demand view runs without its ring leg (that view
+ * reports it too); once it is idle, a call
  * that was live then and that no media close ended within the settle time
  * ends with station_idle. */
 void c300x_calls_station(struct c300x_calls *calls, const struct c300x_call_sink *sink,

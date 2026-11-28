@@ -917,6 +917,25 @@ static void station_states(void)
     expect(nth("call.answered", 1), "\"answered_by\":\"ha\"");
     media.ring_leg = media.ha_answered = 0;
 
+    /* Only the bus rings and HA's on-demand view runs: every view reports
+     * 3, then 6 (c300x-app-ondemand-20260613-124656), which answers no ring.
+     * The display's answer frame does. */
+    reset(NULL);
+    ring_with_caller(0, "*8*9#1#4*21##");
+    media.agent = 1;
+    station("*#8**35*3*0*0##", 2000);
+    station("*#8**35*6*0*0##", 2600);
+    assert(count("call.answered") == 0 && count("station.call_state") == 2);
+    answer_seen(9000);
+    expect(nth("call.answered", 1), "\"unit\":\"21\",\"answered_by\":\"station\"");
+    /* With the ring leg up, 6 is the ring's conversation. */
+    reset(NULL);
+    ring_with_caller(0, "*8*9#1#4*21##");
+    media.agent = media.ring_leg = 1;
+    station("*#8**35*6*0*0##", 6000);
+    expect(nth("call.answered", 1), "\"answered_by\":\"station\"");
+    memset(&media, 0, sizeof(media));
+
     /* A ring after the station went idle, before its own setup state: the
      * old idle ends nothing; an unknown state is reported raw. */
     reset(NULL);

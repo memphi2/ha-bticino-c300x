@@ -283,6 +283,12 @@ void c300x_calls_station(struct c300x_calls *calls, const struct c300x_call_sink
     snprintf(data, sizeof(data), "{\"code\":%d,\"state\":%s%s%s}", code, name ? "\"" : "", name ? name : "null",
              name ? "\"" : "");
     emit(sink, "station.call_state", data);
+    /* Every on-demand view reports 3, then 6: during the agent's own view
+     * without its ring leg, 6 is that view's; the display's answer frame
+     * still answers the ring. */
+    if (code == 6 && media->agent && !media->ring_leg) {
+        return;
+    }
     if (call != NULL && call->state == C300X_CALL_RINGING && (code == 6 || code == 7)) {
         c300x_calls_answered(calls, sink, call->id,
                              code == 7 ? "answering_machine" : media->ha_answered ? "ha" : "station", now);

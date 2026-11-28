@@ -6,11 +6,7 @@
 reads the station's own activations, call state and door contacts.
 Everything below is new against 3.0.0. The release changes devices,
 entities, services and events; after the update a Repair, **Doorbell
-entities moved to outdoor unit devices**, lists what to redo. The station
-messages it reads were taken from captures of a Classe 300X with firmware
-1.7.19 with one and with three outdoor units; firmware 2.0.2 and 3.0.6, the
-door contact and the Classe 100X are checked offline against their original
-files.
+entities moved to outdoor unit devices**, lists what to redo.
 
 Breaking changes:
 

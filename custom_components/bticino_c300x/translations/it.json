@@ -125,7 +125,7 @@
         "data_description": {
           "device_activation_item_id": "Lettere, cifre, _ e -, al massimo 32 caratteri. Ogni ID si usa una sola volta.",
           "device_activation_item_name": "Nome del pulsante in Home Assistant, al massimo 63 caratteri.",
-          "device_activation_item_type": "Cosa attiva l'indirizzo: una serratura, un attuatore come l'apertura di un cancello o la luce scale.",
+          "device_activation_item_type": "Cosa attiva l'indirizzo: una serratura, un attuatore come un apricancello o la luce scale.",
           "device_activation_item_address": "Indirizzo nell'impianto a cui viene inviata l'attivazione (OpenWebNet \"where\"), al massimo 31 caratteri."
         }
       },
@@ -254,7 +254,7 @@
         "data_description": {
           "device_activation_item_id": "Lettere, cifre, _ e -, al massimo 32 caratteri. Ogni ID si usa una sola volta.",
           "device_activation_item_name": "Nome del pulsante in Home Assistant, al massimo 63 caratteri.",
-          "device_activation_item_type": "Cosa attiva l'indirizzo: una serratura, un attuatore come l'apertura di un cancello o la luce scale.",
+          "device_activation_item_type": "Cosa attiva l'indirizzo: una serratura, un attuatore come un apricancello o la luce scale.",
           "device_activation_item_address": "Indirizzo nell'impianto a cui viene inviata l'attivazione (OpenWebNet \"where\"), al massimo 31 caratteri."
         }
       },
@@ -927,7 +927,7 @@
         "data_description": {
           "device_activation_item_id": "Lettere, cifre, _ e -, al massimo 32 caratteri. Ogni ID si usa una sola volta.",
           "device_activation_item_name": "Nome del pulsante in Home Assistant, al massimo 63 caratteri.",
-          "device_activation_item_type": "Cosa attiva l'indirizzo: una serratura, un attuatore come l'apertura di un cancello o la luce scale.",
+          "device_activation_item_type": "Cosa attiva l'indirizzo: una serratura, un attuatore come un apricancello o la luce scale.",
           "device_activation_item_address": "Indirizzo nell'impianto a cui viene inviata l'attivazione (OpenWebNet \"where\"), al massimo 31 caratteri."
         }
       },
@@ -1555,7 +1555,7 @@
         "name": "Stato di chiamata della stazione",
         "state": {
           "idle": "Inattivo",
-          "setup": "Impostazione",
+          "setup": "Instaurazione",
           "ringing": "Squilla",
           "viewing": "Visione",
           "waiting": "In attesa",

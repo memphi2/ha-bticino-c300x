@@ -125,7 +125,7 @@
         "data_description": {
           "device_activation_item_id": "Lettres, chiffres, _ et -, 32 caractères au plus. Chaque ID ne sert qu'une fois.",
           "device_activation_item_name": "Nom du bouton dans Home Assistant, 63 caractères au plus.",
-          "device_activation_item_type": "Ce que l'adresse déclenche : une serrure de porte, un actionneur comme une ouverture de portail ou l'éclairage d'escalier.",
+          "device_activation_item_type": "Ce que l'adresse déclenche : une serrure de porte, un actionneur comme un ouvre-portail ou l'éclairage d'escalier.",
           "device_activation_item_address": "Adresse dans l'installation à laquelle l'activation est envoyée (OpenWebNet « where »), 31 caractères au plus."
         }
       },
@@ -254,7 +254,7 @@
         "data_description": {
           "device_activation_item_id": "Lettres, chiffres, _ et -, 32 caractères au plus. Chaque ID ne sert qu'une fois.",
           "device_activation_item_name": "Nom du bouton dans Home Assistant, 63 caractères au plus.",
-          "device_activation_item_type": "Ce que l'adresse déclenche : une serrure de porte, un actionneur comme une ouverture de portail ou l'éclairage d'escalier.",
+          "device_activation_item_type": "Ce que l'adresse déclenche : une serrure de porte, un actionneur comme un ouvre-portail ou l'éclairage d'escalier.",
           "device_activation_item_address": "Adresse dans l'installation à laquelle l'activation est envoyée (OpenWebNet « where »), 31 caractères au plus."
         }
       },
@@ -927,7 +927,7 @@
         "data_description": {
           "device_activation_item_id": "Lettres, chiffres, _ et -, 32 caractères au plus. Chaque ID ne sert qu'une fois.",
           "device_activation_item_name": "Nom du bouton dans Home Assistant, 63 caractères au plus.",
-          "device_activation_item_type": "Ce que l'adresse déclenche : une serrure de porte, un actionneur comme une ouverture de portail ou l'éclairage d'escalier.",
+          "device_activation_item_type": "Ce que l'adresse déclenche : une serrure de porte, un actionneur comme un ouvre-portail ou l'éclairage d'escalier.",
           "device_activation_item_address": "Adresse dans l'installation à laquelle l'activation est envoyée (OpenWebNet « where »), 31 caractères au plus."
         }
       },

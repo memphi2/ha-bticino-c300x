@@ -188,15 +188,21 @@ not a call.
 | --- | --- |
 | `doorbell.pressed` | Opens the ring call, or belongs to the live one (see Ring timing). |
 | `doorbell.view_requested` of the ring (`*8*2#1#…`, or the agent's answer of its ring leg) | The ring call is `answered`: `answered_by: "ha"` for the agent's answer, which it gives Home Assistant only, else `"station"` (display or app). In which order the display's frames and the ring leg's close come does not matter. The `doorbell.view_requested` of the agent's on-demand view answers nothing. |
-| `doorbell.media.closed` whose payload still reports the station's own media | A ringing call is `answered` by the station. |
+| `doorbell.media.closed` of the ring whose payload still reports the station's own media | The ringing call is `answered` by the station. |
 | Station state `6` (conversation) | The ringing call is `answered`: `"ha"` while Home Assistant answered the ring leg, else `"station"`. |
 | Station state `7` (answering machine) | The ringing call is `answered` (`"answering_machine"`). |
 | View frame `*8*1#5#4#<where>*…##` | Opens a `viewing` call of that unit; a view of another unit ends the one before (`reason: "superseded"`). |
 
+A media close belongs to the ring or to a view, never to both: the ring's
+is the close of the agent's ring leg or the bus end frame `*8*3#1#…`, a
+view's the close of the agent's on-demand view, the bus end frame
+`*8*3#5#…` or the video off `*7*0*##` that follows either end frame.
+
 | Source | Ends |
 | --- | --- |
-| `doorbell.media.closed` while ringing | The ring call, 1.5 s later, unless the display's or the app's answer frame comes in between (the app's end frame of the ring can come before its answer frame). |
-| `doorbell.media.closed` while answered by Home Assistant, or of a view | That call. |
+| `doorbell.media.closed` of the ring while ringing | The ring call, 1.5 s later, unless the display's or the app's answer frame comes in between (the app's end frame of the ring can come before its answer frame). |
+| `doorbell.media.closed` of the ring while answered by Home Assistant | That call. |
+| `doorbell.media.closed` of a view | That view; a ring call goes on. |
 | The bus end frame of a call answered on the station | That call. The close of the agent's own leg does not end it: the display call goes on. |
 | Hang-up through the API | That call (`reason: "hangup"`, also when the hang-up's own media close comes first). |
 | Station state `0` (idle) | A call that was live then and that nothing else ended within 1.5 s (`reason: "station_idle"`, or the reason of a media close that was waiting): a lost end frame keeps no call. |

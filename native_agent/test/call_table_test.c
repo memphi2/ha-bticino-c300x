@@ -110,9 +110,15 @@ static void station(const char *text, long long now)
 }
 static void tick(long long now) { c300x_calls_tick(&calls, &sink, &media, now); }
 static void answer_seen(long long now) { c300x_calls_answer_seen(&calls, &sink, &media, now); }
+/* The ring's media closed: the agent's ring leg, or the bus end frame *8*3#1#. */
 static void closed(int external, int from_bus, long long now)
 {
-    c300x_calls_media_closed(&calls, &sink, &media, external, from_bus, now);
+    c300x_calls_media_closed(&calls, &sink, &media, 0, external, from_bus, now);
+}
+/* A view's media closed: the agent's on-demand view, or the bus end frame *8*3#5#. */
+static void view_closed(int external, int from_bus, long long now)
+{
+    c300x_calls_media_closed(&calls, &sink, &media, 1, external, from_bus, now);
 }
 
 /* c300x-full-ring-20260704-145356: three ring copies, three caller copies. */
@@ -414,9 +420,9 @@ static void view_and_media_closed(void)
     media.agent = 1;
     tick(C300X_CALL_PROBE_MS);
     assert(count("call.ended") == 0);
-    closed(1, 1, 1500);
+    view_closed(1, 1, 1500);
     assert(count("call.ended") == 0);
-    closed(0, 0, 1660);
+    view_closed(0, 0, 1660);
     expect(nth("call.ended", 1), "\"kind\":\"view\",\"reason\":\"media_closed\"");
     /* A ring during a view is the current call; a view of another unit
      * ends the one before; a view whose media is gone ends at its check. */
@@ -429,6 +435,42 @@ static void view_and_media_closed(void)
     tick(3000 + C300X_CALL_PROBE_MS);
     expect(nth("call.ended", 3), "\"call_id\":\"8f3a1c2e-4\",\"unit\":\"21\",\"kind\":\"view\",\"reason\":\"media_closed\"");
     assert(c300x_calls_is_current(&calls, "8f3a1c2e-3"));
+}
+
+/* A close ends only the call whose media closed. HA's view during a bus
+ * ring (no ring leg) and the display's view of another unit during a ring:
+ * their ends end the view, the ring call rings on until its own end. */
+static void close_ends_its_own_call(void)
+{
+    reset(ARCHIVE_THREE);
+    frame("*8*1#5#4#20*11##", 0);
+    media.agent = 1;
+    ring(1000);
+    frame("*8*9#1#4*21##", 1300);
+    media.agent = 0;
+    view_closed(0, 0, 2000);
+    expect(nth("call.ended", 1), "\"call_id\":\"8f3a1c2e-1\",\"unit\":\"20\",\"kind\":\"view\"");
+    tick(2000 + C300X_CALL_SETTLE_MS);
+    assert(count("call.ended") == 1 && count("call.answered") == 0);
+    assert(c300x_calls_is_current(&calls, "8f3a1c2e-2"));
+    closed(0, 1, 5000);
+    tick(5000 + C300X_CALL_SETTLE_MS);
+    expect(nth("call.ended", 2), "\"call_id\":\"8f3a1c2e-2\",\"unit\":\"21\",\"kind\":\"ring\",\"reason\":\"media_closed\"");
+
+    reset(ARCHIVE_THREE);
+    frame("*8*1#5#4#20*11##", 0);
+    media.external = 1;
+    ring(1000);
+    frame("*8*9#1#4*21##", 1300);
+    view_closed(1, 1, 2000);
+    view_closed(0, 1, 2100);
+    expect(nth("call.ended", 1), "\"unit\":\"20\",\"kind\":\"view\",\"reason\":\"media_closed\"");
+    tick(2100 + C300X_CALL_SETTLE_MS);
+    assert(count("call.ended") == 1 && count("call.answered") == 0);
+    assert(c300x_calls_is_current(&calls, "8f3a1c2e-2"));
+    /* The ring's own close while the display still holds the media: the display answered. */
+    closed(1, 1, 4000);
+    expect(nth("call.answered", 1), "\"unit\":\"21\",\"answered_by\":\"station\"");
 }
 
 static void timeouts_and_json(void)
@@ -844,6 +886,7 @@ int main(int argc, char **argv)
         {"rings_of_one_session", rings_of_one_session},
         {"hangup_reason", hangup_reason},
         {"view_and_media_closed", view_and_media_closed},
+        {"close_ends_its_own_call", close_ends_its_own_call},
         {"timeouts_and_json", timeouts_and_json},
         {"plain_address_is_the_qualified_unit", plain_address_is_the_qualified_unit},
         {"seen_units_survive_restart", seen_units_survive_restart},

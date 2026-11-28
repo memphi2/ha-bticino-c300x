@@ -1046,6 +1046,53 @@ static void view_during_bus_ring(void) {
     close(fd);
 }
 
+/* HA views, a visitor rings (bus only), HA stops its view: the view call
+ * ends, the ring call rings on until its own end (here the station's idle). */
+static void view_close_keeps_ring(void) {
+    char data[4096], id[32];
+    atomic_store(&station_busy, 0);
+    assert(c300x_video_activate(runtime->video, 1, NULL));
+    int fd = rtsp_open();
+    assert(rtsp_play(fd, "/doorbell") == 200);
+    bus("*8*1#5#4#20*11##");
+    wait_event("call.view_started", 1, NULL, 0);
+    bus("*8*1#1#4#21*11##");
+    bus("*8*9#1#4*21##");
+    wait_event("call.caller_identified", 1, data, sizeof(data));
+    call_id_of(data, id);
+    c300x_video_stop(runtime->video);
+    wait_byes(1);
+    wait_event("call.ended", 1, data, sizeof(data));
+    assert(strstr(data, "\"kind\":\"view\"") && strstr(data, id) == NULL);
+    wait_event("doorbell.media.closed", 1, data, sizeof(data));
+    assert(strstr(data, "\"media\"") == NULL);
+    usleep(2000000);
+    assert(count_events("call.ended") == 1 && count_events("call.answered") == 0);
+    assert_current(id);
+    bus("*#8**35*0*0*0##");
+    wait_event("call.ended", 2, data, sizeof(data));
+    assert(strstr(data, id) && strstr(data, "\"reason\":\"station_idle\""));
+    close(fd);
+}
+
+/* The display views unit 20, unit 21 rings: the display's view end ends
+ * the view call only. */
+static void display_view_end_keeps_ring(void) {
+    char data[4096], id[32];
+    bus("*8*1#5#4#20*11##");
+    wait_event("call.view_started", 1, NULL, 0);
+    bus("*8*1#1#4#21*11##");
+    bus("*8*9#1#4*21##");
+    wait_event("call.caller_identified", 1, data, sizeof(data));
+    call_id_of(data, id);
+    bus("*8*3#5#4*411##");
+    wait_event("call.ended", 1, data, sizeof(data));
+    assert(strstr(data, "\"unit\":\"20\",\"kind\":\"view\""));
+    usleep(2000000);
+    assert(count_events("call.ended") == 1 && count_events("call.answered") == 0);
+    assert_current(id);
+}
+
 static void agent_answer_is_ha(void) {
     char data[4096], id[32];
     int preview;
@@ -1505,6 +1552,8 @@ int main(int argc, char **argv) {
     else if (strcmp(argv[1], "pending_unit_video") == 0) pending_unit_video();
     else if (strcmp(argv[1], "view_during_bus_ring") == 0) view_during_bus_ring();
     else if (strcmp(argv[1], "agent_answer_is_ha") == 0) agent_answer_is_ha();
+    else if (strcmp(argv[1], "view_close_keeps_ring") == 0) view_close_keeps_ring();
+    else if (strcmp(argv[1], "display_view_end_keeps_ring") == 0) display_view_end_keeps_ring();
     else if (strcmp(argv[1], "boot_id_at_start") == 0) boot_id_at_start();
     else if (strcmp(argv[1], "station_busy_bus_end") == 0) station_busy_case(true);
     else if (strcmp(argv[1], "station_busy_timeout") == 0) station_busy_case(false);

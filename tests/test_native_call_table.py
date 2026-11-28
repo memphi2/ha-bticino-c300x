@@ -26,6 +26,7 @@ CASES = (
     "rings_of_one_session",
     "hangup_reason",
     "view_and_media_closed",
+    "close_ends_its_own_call",
     "timeouts_and_json",
     "plain_address_is_the_qualified_unit",
     "seen_units_survive_restart",

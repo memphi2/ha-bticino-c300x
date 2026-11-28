@@ -257,13 +257,18 @@ int c300x_call_hub_event(struct c300x_call_hub *hub, const char *type, const cha
     return result;
 }
 
-void c300x_call_hub_media_closed(struct c300x_call_hub *hub, int station_holds_media, int from_bus)
+void c300x_call_hub_media_closed(struct c300x_call_hub *hub, const char *data, int station_holds_media)
 {
     struct c300x_call_media media;
+    int own = data != NULL ? own_media(data) : 0;
+    int from_bus = data != NULL && strstr(data, "\"raw\"") != NULL;
+    /* The bus ends a ring call with *8*3#1#, a view with *8*3#5#; its video
+     * off (*7*0*##) follows either and ends no ring. */
+    int view = own != 0 ? own == 'v' : data == NULL || strstr(data, "\"raw\":\"*8*3#1#") == NULL;
 
     if (hub != NULL) {
         media_state(hub, &media);
-        c300x_calls_media_closed(&hub->calls, &hub->sink, &media, station_holds_media, from_bus,
+        c300x_calls_media_closed(&hub->calls, &hub->sink, &media, view, station_holds_media, from_bus,
                                  c300x_monotonic_ms());
     }
 }

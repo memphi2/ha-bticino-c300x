@@ -51,10 +51,11 @@ void c300x_call_hub_frame(struct c300x_call_hub *hub, const char *frame);
  * reaches it only once the duplicate filter let it through. */
 int c300x_call_hub_event(struct c300x_call_hub *hub, const char *type, const char *data,
                          char *out, size_t out_len);
-/* doorbell.media.closed as it goes out; station_holds_media: its payload
- * still reports the station's own media (external_media_active); from_bus:
- * a bus end frame, not the close of the agent's own leg. */
-void c300x_call_hub_media_closed(struct c300x_call_hub *hub, int station_holds_media, int from_bus);
+/* doorbell.media.closed as it goes out; data: its data as it came, which
+ * names the media that closed (C300X_VIDEO_EVENT_RING, _VIEW, a bus end
+ * frame); station_holds_media: its payload still reports the station's own
+ * media (external_media_active). */
+void c300x_call_hub_media_closed(struct c300x_call_hub *hub, const char *data, int station_holds_media);
 int c300x_call_hub_timeout_ms(struct c300x_call_hub *hub);
 void c300x_call_hub_tick(struct c300x_call_hub *hub);
 

@@ -2146,7 +2146,7 @@ static void ring_call_cleanup(media_bridge_t *bridge) {
         shutdown_rtsp_clients_after_drain(bridge);
     }
     if (closed_owed) {
-        c300x_video_dispatch_event(bridge->video, "doorbell.media.closed", "{}", 0);
+        c300x_video_dispatch_event(bridge->video, "doorbell.media.closed", C300X_VIDEO_EVENT_RING, 0);
     }
 }
 
@@ -5299,14 +5299,14 @@ void c300x_media_session_stop(struct c300x_video *video) {
             ring_dispatch_closed
             && c300x_video_consume_media_closed_event(video)
         ) {
-            c300x_video_dispatch_event(video, "doorbell.media.closed", "{}", 0);
+            c300x_video_dispatch_event(video, "doorbell.media.closed", C300X_VIDEO_EVENT_RING, 0);
         }
         return;
     }
     stop_media_session(true, true);
     c300x_video_bridge_media_stopped(g_bridge.video);
     if (dispatch_closed && c300x_video_consume_media_closed_event(video)) {
-        c300x_video_dispatch_event(video, "doorbell.media.closed", "{}", 0);
+        c300x_video_dispatch_event(video, "doorbell.media.closed", C300X_VIDEO_EVENT_VIEW, 0);
     }
 }
 

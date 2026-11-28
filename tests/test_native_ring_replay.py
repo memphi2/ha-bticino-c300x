@@ -34,6 +34,7 @@ CASES = {
     "station_freed_before_486": 2, "station_freed_after_486": 2,
     "door_contacts": 0, "unit_switch_during_play": 2, "unviewable_unit_during_view": 1,
     "lost_first_register": 0, "view_during_bus_ring": 1, "agent_answer_is_ha": 0,
+    "view_close_keeps_ring": 1, "display_view_end_keeps_ring": 0,
 }
 
 

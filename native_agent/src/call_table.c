@@ -300,15 +300,20 @@ void c300x_calls_answer_seen(struct c300x_calls *calls, const struct c300x_call_
 }
 
 void c300x_calls_media_closed(struct c300x_calls *calls, const struct c300x_call_sink *sink,
-                              const struct c300x_call_media *media, int external, int from_bus, long long now)
+                              const struct c300x_call_media *media, int view, int external, int from_bus,
+                              long long now)
 {
     const char *reason = media->ha_hangup ? "hangup" : "media_closed";
 
     for (int index = 0; index < C300X_MAX_CALLS; index++) {
         struct c300x_call *call = &calls->items[index];
-        if (!live(call) || external) {
+        /* A view's close ends no ring, the ring's no view. */
+        if (!live(call) || call->view != view) {
+            continue;
+        }
+        if (external) {
             /* The station's media goes on: the display or the app has the call. */
-            if (live(call) && call->state == C300X_CALL_RINGING) {
+            if (call->state == C300X_CALL_RINGING) {
                 c300x_calls_answered(calls, sink, call->id, "station", now);
             }
             continue;

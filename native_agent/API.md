@@ -1428,7 +1428,10 @@ Capabilities report `api_version: "2"`, `capabilities.outdoor_units` and
   (only the ring's own video shows whatever unit is asked). A running view of another unit ends first
   (BYE, its cached frames dropped, `doorbell.media.closed`, the view call
   ends); the RTSP clients stay connected and get the new unit's view. The unit
-  stays selected for later streams until the next activation.
+  stays selected for later streams until the next activation. An activation
+  that waits for its media operation keeps the unit it started with: a ring
+  or a display view that comes meanwhile changes neither its unit nor its
+  answer.
 
 Events: `doorbell.pressed` carries `call_id`, `unit` and `attribution`; new are
 `call.caller_identified`, `call.answered`, `call.view_started`, `call.ended`,

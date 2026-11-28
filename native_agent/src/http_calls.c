@@ -513,6 +513,15 @@ static void video_activate(int client_fd, const struct c300x_call_routes *routes
     char unit_id[C300X_UNIT_WHERE_LEN] = "";
     struct c300x_call_hub *hub = routes->hub;
     long long now = c300x_monotonic_ms();
+    const struct c300x_video_control *control = routes->control;
+
+    /* Its activation is out already: a later pass takes the unit the first
+     * one chose, whatever call is current by then. */
+    if (control != NULL && control->worker.owner_fd == client_fd && control->job.op == C300X_VIDEO_CONTROL_ACTIVATE) {
+        c300x_http_doorbell_video_activate(client_fd, routes->control, routes->video, request,
+                                           control->job.where[0] != '\0' ? control->job.where : NULL);
+        return;
+    }
     int checked = c300x_json_string_field_checked(request->body, "unit", unit_id, sizeof(unit_id));
     /* Without a unit: the current call's, else the default. */
     int index = unit_index(hub, checked > 0 ? unit_id : "current", now);

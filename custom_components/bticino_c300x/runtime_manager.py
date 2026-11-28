@@ -394,27 +394,30 @@ class C300XRuntimeManager:
         from .identity import station_id_known
         from .identity_migration import (
             async_migrate_entry_identity,
+            async_remove_default_unit_camera,
             async_remove_merged_unit_devices,
             identity_migration_needed,
         )
 
         registry = self.entry.runtime_data.calls
         load_stored_units(self.entry, registry)
-        if not self.connection_state.available:
-            return
-        await async_refresh_units(self.hass, self.entry, during_setup=True)
-        await async_refresh_calls(self.hass, self.entry)
-        agent_station_id = self.setup_data.get("device_id")
-        if registry.default_unit is not None and identity_migration_needed(
-            self.entry, agent_station_id if isinstance(agent_station_id, str) else None,
-        ):
-            # Before the platforms build any entity: they take the new ids.
-            default_unit = registry.unit(registry.default_unit)
-            if default_unit is not None:
-                async_migrate_entry_identity(self.hass, self.entry, str(agent_station_id), default_unit)
-        if registry.loaded and station_id_known(self.entry):
-            # Before the platforms: a merged unit's old device must not take entities.
-            async_remove_merged_unit_devices(self.hass, self.entry, registry.units.values())
+        if self.connection_state.available:
+            await async_refresh_units(self.hass, self.entry, during_setup=True)
+            await async_refresh_calls(self.hass, self.entry)
+            agent_station_id = self.setup_data.get("device_id")
+            if registry.default_unit is not None and identity_migration_needed(
+                self.entry, agent_station_id if isinstance(agent_station_id, str) else None,
+            ):
+                # Before the platforms build any entity: they take the new ids.
+                default_unit = registry.unit(registry.default_unit)
+                if default_unit is not None:
+                    async_migrate_entry_identity(self.hass, self.entry, str(agent_station_id), default_unit)
+            if registry.loaded and station_id_known(self.entry):
+                # Before the platforms: a merged unit's old device must not take entities.
+                async_remove_merged_unit_devices(self.hass, self.entry, registry.units.values())
+        if registry.default_unit is not None and station_id_known(self.entry):
+            # Before the platforms: the media camera stands for the default unit.
+            async_remove_default_unit_camera(self.hass, self.entry, registry.default_unit)
 
     async def async_sync_activation_state(self) -> None:
         """Synchronize device activations before platform entity creation."""

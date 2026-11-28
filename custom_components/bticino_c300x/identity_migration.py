@@ -205,3 +205,23 @@ def async_remove_merged_unit_devices(
         _LOGGER.info("C300X entry %s: outdoor unit %s is one unit now; removed its device and %s",
                      entry.entry_id, unit_id, removed)
     return removed
+
+
+def async_remove_default_unit_camera(
+    hass: HomeAssistant, entry: BticinoC300XConfigEntry, default_unit_id: str,
+) -> str | None:
+    """Remove the default unit's own camera from the registry; returns its entity id.
+
+    The media camera stands for the default unit, which has no camera of its
+    own. A unit that had one before it became the default (the station
+    changed its default, the entry reloads) would keep it as an orphan.
+    """
+
+    entities = er.async_get(hass)
+    entity_id = entities.async_get_entity_id("camera", DOMAIN, unit_unique_id(entry, default_unit_id, "camera"))
+    if entity_id is None:
+        return None
+    entities.async_remove(entity_id)
+    _LOGGER.info("C300X entry %s: outdoor unit %s is the default unit now; removed its camera %s",
+                 entry.entry_id, default_unit_id, entity_id)
+    return entity_id

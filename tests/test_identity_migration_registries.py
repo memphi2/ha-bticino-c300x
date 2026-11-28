@@ -290,6 +290,71 @@ def test_setup_removes_the_merged_unit_device_before_the_platforms(tmp_path: Pat
     asyncio.run(run())
 
 
+@pytest.mark.parametrize("online", [True, False])
+def test_setup_removes_the_new_default_units_still_camera(tmp_path: Path, online: bool) -> None:
+    # The station's default unit changed from 20 to 21 and the entry reloads:
+    # the media camera moves to unit 21, so unit 21's own still camera goes
+    # before the platforms load; unit 20 gets a still camera and keeps it.
+    from types import SimpleNamespace
+
+    from custom_components.bticino_c300x._api_calls import normalize_calls
+    from custom_components.bticino_c300x.call_registry import (
+        C300XCallRegistry,
+        units_to_stored,
+    )
+    from custom_components.bticino_c300x.const import CONF_OUTDOOR_UNITS
+    from custom_components.bticino_c300x.runtime_manager import C300XRuntimeManager
+
+    moved = normalize_outdoor_units({"default_unit": "21", "units": [
+        {"id": "20", "where": "20", "name": "Gate"},
+        {"id": "21", "where": "21", "name": "Side door", "default": True},
+    ]})
+
+    class Api:
+        async def async_outdoor_units(self) -> Any:
+            return moved
+
+        async def async_calls(self) -> Any:
+            return normalize_calls({"calls": []})
+
+    async def run() -> None:
+        hass = await _hass(tmp_path)
+        try:
+            entry = _entry(hass, {
+                "host": "door", CONF_STATION_ID: OLD,
+                CONF_OUTDOOR_UNITS: units_to_stored(moved if not online else UNITS),
+            }, identity_migration.ENTRY_VERSION)
+            devices, entities = dr.async_get(hass), er.async_get(hass)
+            station = devices.async_get_or_create(config_entry_id=entry.entry_id, identifiers={(DOMAIN, OLD)})
+            units = {
+                unit_id: devices.async_get_or_create(
+                    config_entry_id=entry.entry_id, identifiers={(DOMAIN, f"{OLD}:unit:{unit_id}")},
+                    via_device_id=station.id,
+                )
+                for unit_id in ("20", "21")
+            }
+            media = _register(entities, entry, units["20"], "camera", f"{OLD}_doorbell_camera")
+            old_still = _register(entities, entry, units["21"], "camera", f"{OLD}_unit_21_camera")
+            capabilities = {"calls": True, "outdoor_units": True}
+            entry.runtime_data = SimpleNamespace(calls=C300XCallRegistry(), api=Api(), capabilities=capabilities)
+            manager = SimpleNamespace(
+                hass=hass, entry=entry, capabilities=capabilities,
+                connection_state=SimpleNamespace(available=online), setup_data={"device_id": OLD},
+            )
+
+            await C300XRuntimeManager.async_sync_calls(manager)  # type: ignore[arg-type]
+
+            assert entry.runtime_data.calls.default_unit == "21"
+            assert entities.async_get(old_still) is None
+            assert entities.async_get(media) is not None
+            # Once only: a second setup finds nothing to remove.
+            assert identity_migration.async_remove_default_unit_camera(hass, entry, "21") is None
+        finally:
+            await hass.async_stop(force=True)
+
+    asyncio.run(run())
+
+
 def test_a_station_event_finds_its_device_without_the_deprecated_lookup(
     tmp_path: Path, caplog: pytest.LogCaptureFixture,
 ) -> None:

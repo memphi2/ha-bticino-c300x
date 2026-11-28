@@ -55,7 +55,9 @@ not verified on a station yet.
   formats its own. The media camera is a station entity
   (`"<station_id>_doorbell_camera"`) on the default unit's device: when the
   station's default unit changes it stays the same entity, and the entry
-  reloads so that it moves to the new default unit's device.
+  reloads so that it moves to the new default unit's device. Before the
+  platforms load, setup removes the new default unit's still camera
+  (`"<station_id>_unit_<unit_id>_camera"`) from the registry.
 - Deleting and re-adding the config entry gives the same identifiers, so Home
   Assistant restores the devices' names, areas and the entities' ids.
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 from contextlib import AsyncExitStack
 from pathlib import Path
 from types import MappingProxyType
@@ -168,6 +169,8 @@ class RuntimeLab:
         assert not self.loop_errors, self.loop_errors
 
     async def add_entry(self, *, enabled_sensors=(), name="synthetic"):
+        # As the config flow does, the entry stores its station's id; one per lab station.
+        self.station_id = "c300x-" + hashlib.sha256(name.encode()).hexdigest()[:12]
         self.entry = config_entries.ConfigEntry(
             version=1,
             minor_version=2,
@@ -185,6 +188,7 @@ class RuntimeLab:
                 const.CONF_AGENT_HOST: "127.0.0.1",
                 const.CONF_AGENT_PORT: self.agent.server.port,
                 const.CONF_AGENT_TOKEN: TOKEN,
+                const.CONF_STATION_ID: self.station_id,
                 const.CONF_WEBHOOK_ID: f"{name}-display",
                 const.CONF_SHARED_SECRET: "synthetic-display-token",
                 const.CONF_EVENT_WEBHOOK_ID: f"{name}-events",
@@ -198,7 +202,7 @@ class RuntimeLab:
             er.async_get(self.hass).async_get_or_create(
                 "sensor",
                 const.DOMAIN,
-                f"{self.entry.entry_id}_{key}",
+                f"{self.station_id}_{key}",
                 config_entry=self.entry,
                 suggested_object_id=f"synthetic_{key}",
                 disabled_by=None,
@@ -219,7 +223,7 @@ class RuntimeLab:
 
     def entity(self, key, domain="sensor"):
         result = er.async_get(self.hass).async_get_entity_id(
-            domain, const.DOMAIN, f"{self.entry.entry_id}_{key}"
+            domain, const.DOMAIN, f"{self.station_id}_{key}"
         )
         assert result, (domain, key)
         return result

@@ -33,7 +33,7 @@ async def run(root: Path):
             ids = {}
             # 3.1.0: camera and door button belong to the outdoor unit's device.
             for domain, key, unique_key in (
-                ("camera", "doorbell_camera", f"unit_{UNIT}_camera"),
+                ("camera", "doorbell_camera", "doorbell_camera"),
                 ("button", "door_unlock", f"unit_{UNIT}_door"),
                 ("button", "stair_light", "stair_light"),
                 ("sensor", "media_readiness", "media_readiness"),

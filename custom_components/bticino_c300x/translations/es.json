@@ -1695,6 +1695,9 @@
     "entry_id_required": {
       "message": "Existe más de una estación BTicino C300X/C100X: selecciona como destino una estación o una placa exterior."
     },
+    "target_ambiguous": {
+      "message": "Selecciona un solo destino: una estación BTicino C300X/C100X o una de sus placas exteriores (dispositivo o entidad)."
+    },
     "target_unsupported": {
       "message": "Selecciona como destino una estación o una placa exterior BTicino C300X/C100X (dispositivo o entidad); las áreas, plantas, etiquetas y \"all\" no son compatibles."
     },

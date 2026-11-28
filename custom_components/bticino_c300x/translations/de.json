@@ -1695,6 +1695,9 @@
     "entry_id_required": {
       "message": "Es gibt mehrere Stationen von BTicino C300X/C100X: wähle eine Station oder Außenstelle als Ziel."
     },
+    "target_ambiguous": {
+      "message": "Wähle nur ein Ziel: eine Station von BTicino C300X/C100X oder eine ihrer Außenstellen (Gerät oder Entität)."
+    },
     "target_unsupported": {
       "message": "Wähle als Ziel eine Station oder Außenstelle von BTicino C300X/C100X (Gerät oder Entität); Bereiche, Etagen, Labels und „all“ werden nicht unterstützt."
     },

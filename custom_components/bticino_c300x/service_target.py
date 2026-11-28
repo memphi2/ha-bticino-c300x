@@ -86,7 +86,8 @@ def resolve_service_target(hass: HomeAssistant, call: ServiceCall) -> ServiceTar
             raise service_validation_error("entry_id_required")
         return ServiceTarget(entries[0], None)
     if len(device_ids) != 1:
-        raise service_validation_error("entry_id_required")
+        # Two stations, or a station and one of its units: the call names one.
+        raise service_validation_error("target_ambiguous")
     device = dr.async_get(hass).async_get(device_ids[0])
     if device is None:
         raise service_validation_error("unknown_entry")

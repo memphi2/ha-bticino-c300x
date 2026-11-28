@@ -1695,6 +1695,9 @@
     "entry_id_required": {
       "message": "Plusieurs stations BTicino C300X/C100X existent : sélectionnez une station ou une platine de rue comme cible."
     },
+    "target_ambiguous": {
+      "message": "Sélectionnez une seule cible : une station BTicino C300X/C100X ou l'une de ses platines de rue (appareil ou entité)."
+    },
     "target_unsupported": {
       "message": "Sélectionnez comme cible une station ou une platine de rue BTicino C300X/C100X (appareil ou entité) ; les pièces, étages, étiquettes et « all » ne sont pas pris en charge."
     },

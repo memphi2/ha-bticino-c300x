@@ -111,6 +111,7 @@ ADDED_SINCE_2_10_0 = frozenset({
     "entity/switch/maintenance_ssh/state_attributes/ssh_state/state/stopped",
     "exceptions/call_not_current/message",
     "exceptions/ssh_managed_externally/message",
+    "exceptions/target_ambiguous/message",
     "exceptions/target_unsupported/message",
     "exceptions/unit_video_unsupported/message",
     "exceptions/unknown_unit/message",

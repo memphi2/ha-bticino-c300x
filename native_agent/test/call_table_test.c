@@ -549,6 +549,41 @@ static void seen_units_survive_restart(void)
     assert(units.count == 3);
 }
 
+/* The qualifier the default unit learned from a caller frame (20#2, no
+ * archive) is kept with the seen units: after an agent restart the unit
+ * reports the same where, and an archive unit later takes its own. */
+static void default_qualifier_survives_restart(void)
+{
+    char path[] = "/var/tmp/c300x-seen-default-XXXXXX";
+    int changed;
+    int fd = mkstemp(path);
+    assert(fd >= 0);
+    close(fd);
+    reset(NULL);
+    assert(c300x_outdoor_units_note_caller(&units, "20#2", &changed) == 0 && changed);
+    assert(c300x_outdoor_units_note_caller(&units, "23", &changed) == 1 && changed);
+    assert(c300x_outdoor_units_save_seen(&units, path));
+    reset(NULL);
+    assert(strcmp(units.items[0].where, "20") == 0);
+    c300x_outdoor_units_load_seen(&units, path);
+    assert(units.count == 2 && units.default_index == 0);
+    assert(strcmp(units.items[0].id, "20") == 0 && strcmp(units.items[0].where, "20#2") == 0);
+    assert(strcmp(units.items[0].source, "default") == 0);
+    assert(strcmp(units.items[1].id, "23") == 0 && strcmp(units.items[1].source, "seen") == 0);
+    c300x_outdoor_units_load_seen(&units, path);
+    build(NULL, CONF);
+    assert(units.count == 2 && strcmp(units.items[0].where, "20#2") == 0);
+    assert(c300x_outdoor_units_note_caller(&units, "20", &changed) == 0 && !changed);
+    FILE *file = fopen(path, "w");
+    assert(file != NULL && fputs("20 20#3\n", file) >= 0 && fclose(file) == 0);
+    reset(ARCHIVE_THREE);
+    c300x_outdoor_units_load_seen(&units, path);
+    int gate = c300x_outdoor_units_find_id(&units, "20");
+    assert(gate == units.default_index && strcmp(units.items[gate].source, "archive") == 0);
+    assert(strcmp(units.items[gate].where, "20#2") == 0 && units.count == 3);
+    unlink(path);
+}
+
 /* archive.xml names outdoor units only in its outdoor-unit object (cid
  * 10050): the <ist> without cid. Locks (cid 10060), actuators (3008), the
  * stair light (2009), cameras and intercoms are none; an <ist> attribute it
@@ -910,6 +945,7 @@ int main(int argc, char **argv)
         {"timeouts_and_json", timeouts_and_json},
         {"plain_address_is_the_qualified_unit", plain_address_is_the_qualified_unit},
         {"seen_units_survive_restart", seen_units_survive_restart},
+        {"default_qualifier_survives_restart", default_qualifier_survives_restart},
         {"archive_objects_by_cid", archive_objects_by_cid},
         {"archive_cut_in_a_tag", archive_cut_in_a_tag},
         {"default_unit_keeps_its_id", default_unit_keeps_its_id},

@@ -30,6 +30,7 @@ CASES = (
     "timeouts_and_json",
     "plain_address_is_the_qualified_unit",
     "seen_units_survive_restart",
+    "default_qualifier_survives_restart",
     "archive_objects_by_cid",
     "archive_cut_in_a_tag",
     "default_unit_keeps_its_id",

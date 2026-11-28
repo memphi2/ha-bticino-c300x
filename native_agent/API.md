@@ -1374,7 +1374,9 @@ Capabilities report `api_version: "2"`, `capabilities.outdoor_units` and
 
 - `GET /api/v1/outdoor-units`: the units (`id`, `where`, `action_where`,
   `lock_where`, `name`, `source`, `default`, `door`), `default_unit` and
-  `archive`. `door` is `null` for a unit without a door contact, else
+  `archive`. The `seen` units and the full `where` that a unit without an
+  archive entry took from a caller frame are kept in `outdoor-units-seen`
+  next to the agent's configuration, so they survive an agent restart. `door` is `null` for a unit without a door contact, else
   `{"state": "open"|"closed"|null, "age_ms": N|null}`: the state and the
   time since its last change, `null` while no frame came since the agent
   started. A unit has a door contact once a door frame of it was seen

@@ -89,7 +89,8 @@ Sources, in this order:
    survive a restart. A unit known only by its plain address (the `default`
    unit, a `seen` unit) adopts the full `where` of the first caller frame
    with its `action_where` (its `unit_id` stays), instead of creating a
-   second unit.
+   second unit; the `default` unit's adopted `where` is kept in the same
+   file, so it too survives a restart.
 
 A frame names a unit by its full address (`20#2`, caller frames) or by its
 plain one (`20`, view frames). The plain address is the unit with that

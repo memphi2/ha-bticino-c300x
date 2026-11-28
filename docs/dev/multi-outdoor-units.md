@@ -303,7 +303,7 @@ selection stays for later streams until the next activation.
 | `409` | `call_not_current` | The `call_id` is unknown (also from an earlier boot), ended, or not the current call; for unlock: not that unit's call or ended more than 60 s ago. The body carries `current_call_id` (or `null`). Nothing is sent to the station. |
 | `404` | `unknown_unit` | No unit with that id. |
 | `409` | `call_unit_pending` | `current` (also a video request without `unit`) while the ring call's unit is not known yet: from the ring until its caller frame or the default fallback (1 s). The body carries the ring's `call_id` and `retry_after_ms` (1-1000), the time left until the fallback. Nothing is sent to the station. A video request that the ring's own video answers is not refused. |
-| `409` | `unit_video_unsupported` | On-demand video of a unit whose address the station does not view (not `2…`, or 96 and above before `#`). |
+| `409` | `unit_video_unsupported` | On-demand video of a unit whose address the station does not view (not `2…`, or 96 and above before `#`), also while a view runs, which goes on; only the ring's own video is shown whatever unit is asked. |
 | `400` | `invalid_call_id` | Empty or longer than 32 characters. |
 
 ### Events

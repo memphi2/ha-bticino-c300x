@@ -513,11 +513,11 @@ static void video_activate(int client_fd, const struct c300x_call_routes *routes
     int checked = c300x_json_string_field_checked(request->body, "unit", unit_id, sizeof(unit_id));
     /* Without a unit: the current call's, else the default. */
     int index = unit_index(hub, checked > 0 ? unit_id : "current", now);
-    const struct c300x_call *call = c300x_calls_current(&hub->calls);
+    /* Without video the request is answered video_unavailable. */
+    int ring = routes->video == NULL || ring_media_answers(routes);
 
     if (checked >= 0 && index == UNIT_PENDING) {
-        /* Without video the request is answered video_unavailable. */
-        if (routes->video != NULL && !ring_media_answers(routes)) {
+        if (!ring) {
             send_unit_pending(client_fd, hub, now);
             return;
         }
@@ -527,11 +527,12 @@ static void video_activate(int client_fd, const struct c300x_call_routes *routes
         c300x_http_send_json(client_fd, 404, "Not Found", "{\"ok\":false,\"error\":\"unknown_unit\"}\n");
         return;
     }
-    /* A ring shows its caller whatever unit is asked. On demand the default
-     * unit is the configured DEVADDR, as before; another unit's DEVADDR is
-     * its full address, which the station takes verbatim. */
+    /* The ring's media shows its caller whatever unit is asked; a view does
+     * not. On demand the default unit is the configured DEVADDR, as before;
+     * another unit's DEVADDR is its full address, which the station takes
+     * verbatim. */
     const char *where = hub->units.items[index].where;
-    if (index != hub->units.default_index && call == NULL && !c300x_media_devaddr_valid(where)) {
+    if (index != hub->units.default_index && !ring && !c300x_media_devaddr_valid(where)) {
         c300x_http_send_json(client_fd, 409, "Conflict", "{\"ok\":false,\"error\":\"unit_video_unsupported\"}\n");
         return;
     }

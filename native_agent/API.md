@@ -1421,7 +1421,8 @@ Capabilities report `api_version: "2"`, `capabilities.outdoor_units` and
   `21` or `20#2`) for any other. The station's bt_answering_machine sends a
   view for a DEVADDR that starts with `2` and whose number before `#` is below
   96 (`*8*4#1<own>*<DEVADDR>##`); another unit gets
-  `409 unit_video_unsupported`. A running view of another unit ends first
+  `409 unit_video_unsupported`, also while a view runs, which then goes on
+  (only the ring's own video shows whatever unit is asked). A running view of another unit ends first
   (BYE, its cached frames dropped, `doorbell.media.closed`, the view call
   ends); the RTSP clients stay connected and get the new unit's view. The unit
   stays selected for later streams until the next activation.

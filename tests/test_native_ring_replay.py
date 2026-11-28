@@ -31,7 +31,7 @@ CASES = {
     "abandoned_answer_then_station": 0, "view_is_current": 1,
     "station_busy_bus_end": 2, "station_busy_timeout": 2,
     "station_freed_before_486": 2, "station_freed_after_486": 2,
-    "door_contacts": 0, "unit_switch_during_play": 2,
+    "door_contacts": 0, "unit_switch_during_play": 2, "unviewable_unit_during_view": 1,
 }
 
 

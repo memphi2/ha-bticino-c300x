@@ -18,9 +18,14 @@ for it, at its end:
   saves after its recording state, sends it back to waiting. The routing
   program that the media-user setup replaced starts with that restart as
   well.
+- The mark stays until the restart was asked for, and every look and
+  request asks for it first: a codec the user chooses with the select
+  meanwhile drops it, and the switch then writes and restarts nothing.
 - A write that fails leaves the station on Speex and restarts nothing. The
-  mark goes before the restart is asked for, so no later start restarts the
-  station a second time.
+  mark goes once the restart was asked for, so no later start restarts the
+  station a second time; one that finds it after all, because Home
+  Assistant stopped during that request, writes PCMU again and restarts only
+  a station that still runs Speex.
 """
 
 from __future__ import annotations
@@ -110,8 +115,6 @@ async def async_switch_install_pcmu(
 ) -> None:
     """Write PCMU without a restart, then ask the agent for the one restart."""
 
-    from .agent_update import async_retry_update_maintenance_busy
-
     lock = entry_lock(entry.entry_id, "install_pcmu")
     if lock.locked():
         return
@@ -121,60 +124,82 @@ async def async_switch_install_pcmu(
         reason = _not_switched(entry)
         if reason is not None:
             _LOGGER.info("C300X stays on its audio codec: %s", reason)
-            _async_clear_mark(hass, entry)
-            return
-        api = entry.runtime_data.api
-        await _async_until_idle(api, poll_seconds)
-        try:
-            status = await async_retry_update_maintenance_busy(
-                lambda: api.async_apply_audio_codec(reboot=False)
-            )
-        except C300XAgentApiError as err:
-            _LOGGER.warning(
-                "C300X stays on Speex: the PCMU switch of the new installation failed: %s",
-                compact_error_text(err),
-            )
-            _async_clear_mark(hass, entry)
-            return
-        _async_clear_mark(hass, entry)
-        if not isinstance(status, Mapping):
-            _LOGGER.warning("C300X stays on Speex: the agent did not answer the PCMU switch")
-            return
-        async_dispatcher_send(hass, SIGNAL_AUDIO_CODEC_STATUS, entry.entry_id, status)
-        if status.get("configured_state", status.get("state")) != "pcmu":
-            _LOGGER.warning(
-                "C300X stays on Speex: the agent reports the codec %s after the PCMU switch",
-                status.get("configured_state", status.get("state")),
-            )
-            return
-        if status.get("reboot_required") is not True:
-            _LOGGER.info("C300X runs PCMU already; it does not restart")
+            async_drop_install_pcmu(hass, entry)
             return
         try:
-            await _async_restart_when_idle(api, poll_seconds)
-        except C300XAgentApiError as err:
-            _LOGGER.warning(
-                "C300X did not restart: PCMU is set and runs after the next restart of the station: %s",
-                compact_error_text(err),
-            )
+            await _async_switch(hass, entry, entry.runtime_data.api, poll_seconds)
+        except _CodecChosen:
+            _LOGGER.info("C300X keeps the audio codec chosen meanwhile; it does not restart for PCMU")
             return
-        _LOGGER.info("C300X restarts once to switch its sound to PCMU")
+        async_drop_install_pcmu(hass, entry)
+
+
+async def _async_switch(hass: HomeAssistant, entry: Any, api: Any, poll_seconds: float) -> None:
+    """Write, then ask for the restart; whatever way it returns, the mark is no longer owed."""
+
+    from .agent_update import async_retry_update_maintenance_busy
+
+    async def write() -> Any:
+        _still_owed(entry)
+        return await api.async_apply_audio_codec(reboot=False)
+
+    await _async_until_idle(entry, api, poll_seconds)
+    try:
+        status = await async_retry_update_maintenance_busy(write)
+    except C300XAgentApiError as err:
+        _LOGGER.warning(
+            "C300X stays on Speex: the PCMU switch of the new installation failed: %s",
+            compact_error_text(err),
+        )
+        return
+    if not isinstance(status, Mapping):
+        _LOGGER.warning("C300X stays on Speex: the agent did not answer the PCMU switch")
+        return
+    async_dispatcher_send(hass, SIGNAL_AUDIO_CODEC_STATUS, entry.entry_id, status)
+    if status.get("configured_state", status.get("state")) != "pcmu":
+        _LOGGER.warning(
+            "C300X stays on Speex: the agent reports the codec %s after the PCMU switch",
+            status.get("configured_state", status.get("state")),
+        )
+        return
+    if status.get("reboot_required") is not True:
+        _LOGGER.info("C300X runs PCMU already; it does not restart")
+        return
+    try:
+        await _async_restart_when_idle(entry, api, poll_seconds)
+    except C300XAgentApiError as err:
+        _LOGGER.warning(
+            "C300X did not restart: PCMU is set and runs after the next restart of the station: %s",
+            compact_error_text(err),
+        )
+        return
+    _LOGGER.info("C300X restarts once to switch its sound to PCMU")
 
 
 class _StationBusy(Exception):
     """A call or stream started again right before the restart was asked for."""
 
 
-async def _async_until_idle(api: Any, poll_seconds: float) -> None:
+class _CodecChosen(Exception):
+    """The user chose a codec meanwhile; the switch is no longer owed."""
+
+
+def _still_owed(entry: Any) -> None:
+    if not install_pcmu_pending(entry):
+        raise _CodecChosen
+
+
+async def _async_until_idle(entry: Any, api: Any, poll_seconds: float) -> None:
     """Return once no call or stream runs; the station is asked again every poll."""
 
     while True:
+        _still_owed(entry)
         if await _async_station_idle(api):
             return
         await asyncio.sleep(poll_seconds)
 
 
-async def _async_restart_when_idle(api: Any, poll_seconds: float) -> None:
+async def _async_restart_when_idle(entry: Any, api: Any, poll_seconds: float) -> None:
     """Ask for the restart once the station was idle on two looks in a row, one poll apart.
 
     The caller made the first look. The second comes right before each
@@ -188,14 +213,17 @@ async def _async_restart_when_idle(api: Any, poll_seconds: float) -> None:
     async def restart() -> Any:
         if not await _async_station_idle(api):
             raise _StationBusy
+        # Nothing is awaited between this and the request.
+        _still_owed(entry)
         return await api.async_reboot()
 
     while True:
         await asyncio.sleep(poll_seconds)
+        _still_owed(entry)
         try:
             await async_retry_update_maintenance_busy(restart)
         except _StationBusy:
-            await _async_until_idle(api, poll_seconds)
+            await _async_until_idle(entry, api, poll_seconds)
         else:
             return
 
@@ -235,6 +263,10 @@ async def _async_station_idle(api: Any) -> bool:
 
 
 @callback
-def _async_clear_mark(hass: HomeAssistant, entry: Any) -> None:
+def async_drop_install_pcmu(hass: HomeAssistant, entry: Any) -> None:
+    """The switch of the new installation is no longer owed: done, given up, or a codec was chosen."""
+
+    if not install_pcmu_pending(entry):
+        return
     data = {key: value for key, value in entry.data.items() if key != CONF_INSTALL_PCMU_PENDING}
     hass.config_entries.async_update_entry(entry, data=data)

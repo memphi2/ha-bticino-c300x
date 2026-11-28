@@ -633,6 +633,28 @@ def test_audio_codec_select_keeps_pending_until_the_reboot_lands() -> None:
     assert entry.runtime_data.event_state.audio_codec == "pcmu"
 
 
+@pytest.mark.parametrize(("option", "request_"), [("speex", "restore"), ("pcmu", "apply")])
+def test_a_codec_choice_drops_the_pcmu_switch_a_new_installation_still_owes(option, request_) -> None:
+    from custom_components.bticino_c300x.const import CONF_INSTALL_PCMU_PENDING
+
+    entry = _audio_codec_entry()
+    entry.data[CONF_INSTALL_PCMU_PENDING] = True
+    entity = C300XAudioCodecSelect(entry)  # type: ignore[arg-type]
+    updates: list[dict[str, Any]] = []
+
+    def update_entry(target: Any, *, data: dict[str, Any]) -> None:
+        updates.append(data)
+        target.data = data
+
+    entity.hass = SimpleNamespace(config_entries=SimpleNamespace(async_update_entry=update_entry))
+    asyncio.run(entity.async_select_option(option))
+    assert entry.runtime_data.api.audio_codec_calls == [(request_, True)]
+    assert CONF_INSTALL_PCMU_PENDING not in entry.data
+    # The next choice finds no mark and changes the entry no more.
+    asyncio.run(entity.async_select_option(option))
+    assert len(updates) == 1
+
+
 def test_audio_codec_select_unknown_option_is_ignored() -> None:
     entry = _audio_codec_entry()
     entity = C300XAudioCodecSelect(entry)  # type: ignore[arg-type]

@@ -37,6 +37,7 @@ from .entry_types import BticinoC300XConfigEntry
 from .event_payload import agent_event_key
 from .exceptions import home_assistant_error
 from .forwarding import coerce_forwarding_mode_state, forwarding_state_from_value
+from .install_pcmu import async_drop_install_pcmu
 from .select_camera_resolution import C300XCameraResolutionSelect
 
 if TYPE_CHECKING:
@@ -266,14 +267,17 @@ class C300XAudioCodecSelect(C300XEntity, SelectEntity):
 
         if not _audio_codec_select_allowed(self._entry):
             raise home_assistant_error("maintenance_action_not_supported", entry=self._entry)
+        if option not in self._attr_options:
+            return
+        # The user's choice wins over the PCMU switch a new installation still
+        # owes: that one then writes and restarts nothing.
+        async_drop_install_pcmu(self.hass, self._entry)
         api = self._entry.runtime_data.api
         try:
             if option == "pcmu":
                 status = await api.async_apply_audio_codec()
-            elif option == "speex":
-                status = await api.async_restore_audio_codec()
             else:
-                return
+                status = await api.async_restore_audio_codec()
         except C300XAgentApiError as err:
             raise HomeAssistantError("C300X audio codec change failed") from err
         self._apply_action_result(option, status)

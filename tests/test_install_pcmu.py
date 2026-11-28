@@ -345,6 +345,64 @@ def test_a_ring_while_the_restart_waits_for_the_agent_sends_it_back_to_waiting(m
     assert api.calls.count("reboot") == 1
 
 
+@pytest.mark.parametrize("moment", ["waiting", "write_busy", "before_restart", "restart_busy"])
+def test_a_codec_the_user_chooses_meanwhile_is_kept(monkeypatch, moment):
+    """The codec select drops the mark; the switch then writes and restarts nothing."""
+
+    api = _Api(busy=["ringing"] if moment == "waiting" else [])
+    entry = _entry(api=api)
+    hass = _hass()
+
+    def choose() -> None:
+        # What the select does with the choice (test_select).
+        api.calls.append("user")
+        data = {key: value for key, value in entry.data.items() if key != CONF_INSTALL_PCMU_PENDING}
+        hass.config_entries.async_update_entry(entry, data=data)
+
+    async def sleep(seconds: float) -> None:
+        api.calls.append(("sleep", seconds))
+        if moment in ("waiting", "before_restart"):
+            choose()
+
+    async def busy_retry_pause(_seconds: float) -> None:
+        choose()
+
+    write, reboot = api.async_apply_audio_codec, api.async_reboot
+    rejected = [C300XAgentApiConnectionError(_BUSY)]
+
+    async def apply(*, reboot: bool = True) -> dict[str, Any]:
+        if moment == "write_busy" and rejected:
+            api.calls.append(("busy", reboot))
+            raise rejected.pop()
+        return await write(reboot=reboot)
+
+    async def restart() -> dict[str, Any]:
+        if moment == "restart_busy" and rejected:
+            api.calls.append("busy")
+            raise rejected.pop()
+        return await reboot()
+
+    api.async_apply_audio_codec = apply  # type: ignore[method-assign]
+    api.async_reboot = restart  # type: ignore[method-assign]
+    monkeypatch.setattr(install_pcmu, "asyncio", SimpleNamespace(sleep=sleep))
+    monkeypatch.setattr("custom_components.bticino_c300x.agent_update.asyncio.sleep", busy_retry_pause)
+    monkeypatch.setattr(install_pcmu, "async_dispatcher_send", lambda *_args: None)
+    asyncio.run(install_pcmu.async_switch_install_pcmu(hass, entry, poll_seconds=30))
+    assert api.calls == {
+        "waiting": ["calls", "video", ("sleep", 30), "user"],
+        "write_busy": ["calls", "video", ("busy", False), "user"],
+        "before_restart": ["calls", "video", ("apply", False), ("sleep", 30), "user"],
+        "restart_busy": [
+            "calls", "video", ("apply", False), ("sleep", 30), "calls", "video", "busy", "user",
+            "calls", "video",
+        ],
+    }[moment]
+    assert "reboot" not in api.calls
+    # Only the choice changed the entry.
+    assert CONF_INSTALL_PCMU_PENDING not in entry.data
+    assert hass.config_entries.async_update_entry.call_count == 1
+
+
 def test_a_failed_restart_is_not_asked_for_again(monkeypatch, caplog):
     api = _Api(reboot_error=C300XAgentApiError("device agent request failed"))
     entry = _entry(api=api)

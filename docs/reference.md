@@ -12,6 +12,7 @@ confirmed on a device ([issue #51](https://github.com/memphi2/ha-bticino-c300x/i
 
 | Feature | Classe 300X | Classe 100X 1.5.8 |
 | --- | --- | --- |
+| Outdoor units as devices, door contact, station call state | Yes | In test |
 | Door unlock, stair light, activations | Yes | In test |
 | Live video, Ring Call, Home Call, talking | Yes | In test |
 | Forwarding select | Yes | In test |
@@ -109,8 +110,10 @@ offer actions from this list.
 ## Entities
 
 The station is one device. Every outdoor unit the station knows is its own
-device below it, also when there is only one. A unit that is not configured
-on the station appears with its first ring.
+device below it, also when there is only one. It takes the unit's name from
+the station's configuration, else **Outdoor unit** and its address (for
+example **Outdoor unit 21**). A unit that is not configured on the station
+appears with its first ring.
 
 Outdoor unit entities:
 
@@ -118,9 +121,10 @@ Outdoor unit entities:
 | --- | --- | --- | --- |
 | Doorbell ring event | event | Fires `ring` when a visitor rang at this unit, as soon as the station names the caller (about 0.3 s, at most 1 s). | In test |
 | Door | event | Fires `opened` when the station reports this unit's lock opened, whatever opened it. | In test |
-| Doorbell camera | camera | The default unit: live picture and calls; the latest visitor image when idle. Another unit: the latest visitor image of its calls. | In test |
-| Door unlock | button | Opens this unit's door. | In test |
-| Call | sensor | `idle`, `ringing`, `answered` or `viewing`; attribute `call_id`. | In test |
+| Doorbell camera | camera | Only on the default unit. Live picture and calls of every unit; the latest visitor image when idle. | In test |
+| Camera | camera | On every other unit. A still picture while this unit has the current call, else its latest visitor image. | In test |
+| Door unlock | button | Opens this unit's door; attributes `lock_address` (for example `20`) and `lock_name`. | In test |
+| Call | sensor | `idle`, `ringing`, `answered` or `viewing`; attributes `call_id`, `attribution`, `answered_by`. | In test |
 | Door contact | binary sensor | Only on a unit wired with a door contact; appears with the unit's first door message. Unknown after an agent restart until the door opens or closes again. | In test |
 | Last visitor | image | The latest visitor image of a call of this unit. | In test |
 
@@ -150,7 +154,7 @@ Station entities:
 | Display patch | switch | Display pages on or off. | No |
 | API firewall patch, IPv6 firewall patch | switch | No IPv6 switch on `3.0.6`. | In test |
 | Native MQTT bridge, Legacy MQTT bridge | switch | Local MQTT. | In test |
-| Stair light, one per activation | button | The doors are on the outdoor units. | In test |
+| Stair light, one per activation | button | The doors are on the outdoor units. An activation has the attributes `activation_id`, `activation_type`, `address_mode`, `address`, `source` (`config` or `station`) and `unit` (the outdoor unit a station lock opens). | In test |
 | Stop doorbell video | button | Ends a stream. | In test |
 | Reboot, Restart device agent, Remove device agent | button | Maintenance. | In test |
 | Reload device display | button | Restarts the station's display. | No |
@@ -159,11 +163,11 @@ Station entities:
 
 ## Actions
 
-All actions are `bticino_c300x.<name>`. They take a target: the station or an
-outdoor unit, as a device or one of its entities. With one station the target
-can be left out; with more than one it is required. A station target means
-the unit of the current call, else the default unit. Areas, floors, labels
-and `all` are refused.
+All actions are `bticino_c300x.<name>`. All but `run_ring_wyoming_analysis`
+take a target: one station or one outdoor unit, as a device or one of its
+entities. With one station the target can be left out; with more than one it
+is required. A station target means the unit of the current call, else the
+default unit. Areas, floors, labels and `all` are refused.
 
 | Action | Does | Main fields |
 | --- | --- | --- |
@@ -214,9 +218,7 @@ gets `notify.bticino_c300x_front_door`. Do not set `target`.
 - Popup, wake and tone only appear on the station's home page or Home
   Assistant page, never during a call or on the Alarm page.
 - Without any switch the call works as `display` and also lights the LED.
-- The `mode` field of earlier releases is gone; a call that still sends it is
-  refused. `display` becomes `display: true`, `speech` `tts: true`, `both`
-  `display: true` and `tts: true`, `led` `led: true`.
+- A call with a `mode` field is refused; use the switches.
 - Classe 100X: only `display`, without `sound_duration`.
 
 ## Recording Clips
@@ -316,8 +318,8 @@ device.
 | --- | --- |
 | `doorbell_pressed` | Someone rang. |
 | `call_caller_identified` | The station named the unit that rings. |
-| `call_answered`, `call_view_started`, `call_ended` | A call was answered (`data.answered_by`: `ha`, `station` or `answering_machine`), a view started, a call ended (`data.reason`). |
-| `station_call_state` | The station's own call state changed. |
+| `call_answered`, `call_view_started`, `call_ended` | A call was answered (`data.answered_by`: `ha`, `station` or `answering_machine`), a view started, a call ended (`data.reason`: `hangup`, `media_closed`, `superseded`, `station_idle` or `timeout`). |
+| `station_call_state` | The station's own call state changed (`data.state`, `data.code`). |
 | `outdoor_units_changed` | The station's outdoor units changed. |
 | `door_opened`, `door_closed` | The door contact of an outdoor unit changed. |
 | `doorbell_view_requested`, `doorbell_media_closed` | The camera view started or ended. |

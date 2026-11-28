@@ -187,7 +187,8 @@ def _station_program(rootfs: Path, name: str) -> Path | None:
 
 def _device_init(tmp_path: Path, source: str | None = None, firmware: str = "1.7.19"):
     import shutil
-    import socket
+
+    from native_agent.test.smoke import free_tcp_port
 
     rootfs = _device_rootfs(firmware)
     qemu, compiler = shutil.which("qemu-arm"), shutil.which("cc")
@@ -231,9 +232,7 @@ def _device_init(tmp_path: Path, source: str | None = None, firmware: str = "1.7
     script = tmp_path / "init"
     script.write_text(station_script(source or SCRIPT.read_text(), commands, rootfs))
     script.chmod(0o700)
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        port = probe.getsockname()[1]
+    port = free_tcp_port()
     log = tmp_path / "agent.log"
     # The station has no locale files; the emulator would read the host's.
     env = {**os.environ, "C300X_AGENT_DIR": str(tmp_path), "C300X_AGENT_ENV": str(tmp_path / "absent"),

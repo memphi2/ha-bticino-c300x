@@ -17,6 +17,15 @@
 
 #define WAIT_MS 4000
 
+/* The agent's ring leg waits AGENT_RING_REPLY_SECONDS for the 200 to its
+ * REGISTER and tries again AGENT_RING_RETRY_SECONDS later; the build passes both
+ * from media_bridge.c. A loaded host can miss the first answer, so the start
+ * waits for one lost attempt, the pause and the next attempt's answer. */
+#if !defined(AGENT_RING_REPLY_SECONDS) || !defined(AGENT_RING_RETRY_SECONDS)
+#error "build with the agent's -DAGENT_RING_REPLY_SECONDS and -DAGENT_RING_RETRY_SECONDS"
+#endif
+#define RING_REGISTERED_WAIT_MS ((AGENT_RING_REPLY_SECONDS + AGENT_RING_RETRY_SECONDS) * 1000 + WAIT_MS)
+
 /* ---- stubs for device-only functions (linked with --wrap) ---- */
 
 int __wrap_c300x_device_user_media_identity(const char *hint, struct c300x_device_user_identity *identity) {
@@ -135,6 +144,8 @@ static bool payload_external(const char *data) {
 
 static int sip_listen_fd = -1;
 static atomic_int ring_fd = -1;
+static atomic_int ring_registers;
+static atomic_int lose_ring_register;
 static atomic_int ondemand_invites;
 static atomic_int station_byes; /* BYEs the agent sent the station */
 static atomic_int station_busy = 1;
@@ -229,7 +240,10 @@ static void *station_connection(void *arg) {
         if (n <= 0) break;
         if (strncmp(message, "\r\n", 2) == 0) continue;
         if (strncmp(message, "REGISTER ", 9) == 0) {
-            if (strstr(message, "Call-ID: ha-ring-register") != NULL && !ring) {
+            bool ring_register = strstr(message, "Call-ID: ha-ring-register") != NULL;
+            if (ring_register) atomic_fetch_add(&ring_registers, 1);
+            if (ring_register && atomic_exchange(&lose_ring_register, 0)) continue;
+            if (ring_register && !ring) {
                 ring = true;
                 atomic_store(&ring_fd, fd);
             }
@@ -1355,8 +1369,17 @@ static void door_contacts(void) {
     assert(count_events("door.closed") == 1 && count_events("call.caller_identified") == 0);
 }
 
+/* The station never answers the first ring REGISTER, as on a loaded host
+ * where the 200 comes too late: the agent registers on its retry and the
+ * ring leg works. */
+static void lost_first_register(void) {
+    assert(atomic_load(&ring_registers) == 2);
+    unanswered();
+}
+
 int main(int argc, char **argv) {
     assert(argc == 2);
+    if (strcmp(argv[1], "lost_first_register") == 0) atomic_store(&lose_ring_register, 1);
     alarm(60);
     signal(SIGPIPE, SIG_IGN);
     static struct c300x_config config;
@@ -1376,10 +1399,14 @@ int main(int argc, char **argv) {
     pthread_t station;
     assert(pthread_create(&station, NULL, station_accept, NULL) == 0);
 
-    int probe = socket(AF_INET, SOCK_STREAM, 0);
+    /* A closed probe frees its port for any process on the host until the
+     * agent's RTSP listener binds it. Kept bound but not listening, with
+     * SO_REUSEADDR like that listener, the port stays out of every other
+     * bind and connect and the listener can still take it. */
+    int probe = socket(AF_INET, SOCK_STREAM, 0), reuse = 1;
+    assert(setsockopt(probe, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) == 0);
     assert(__real_bind(probe, (struct sockaddr *)&loopback, sizeof(loopback)) == 0);
     rtsp_port = bound_port(probe);
-    close(probe);
     config.video_rtsp_port = rtsp_port;
 
     udp_fd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -1402,7 +1429,7 @@ int main(int argc, char **argv) {
      * agent is registered once it has read the 200 OK. A ring in between
      * finds no ring receiver and reports no video, as on a station whose
      * agent is still starting. */
-    long long deadline = __real_c300x_monotonic_ms() + WAIT_MS;
+    long long deadline = __real_c300x_monotonic_ms() + RING_REGISTERED_WAIT_MS;
     struct c300x_video_status ready;
     for (;;) {
         status(&ready);
@@ -1416,6 +1443,7 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "display_answer") == 0) display_answer(false);
     else if (strcmp(argv[1], "display_answer_end_lost") == 0) display_answer(true);
     else if (strcmp(argv[1], "unanswered") == 0) unanswered();
+    else if (strcmp(argv[1], "lost_first_register") == 0) lost_first_register();
     else if (strcmp(argv[1], "ha_answer") == 0) ha_answer();
     else if (strcmp(argv[1], "single_unit_as_3_0_0") == 0) single_unit_as_3_0_0();
     else if (strcmp(argv[1], "two_units") == 0) two_units();

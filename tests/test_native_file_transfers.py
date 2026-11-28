@@ -67,6 +67,8 @@ def test_download_backpressure_capacity_disconnect_and_shutdown(native_binary, t
             "listen": {"host": "127.0.0.1", "apiPort": api_port, "uiPort": ui_port},
             "api": {"token": TOKEN},
             "openwebnet": {"host": "127.0.0.1", "port": own.server_address[1], "timeoutMs": 100},
+            # The host has no conf.xml with the station's own address.
+            "device": {"stairLightDefaultAddress": "11"},
             "activations": {"enabled": False, "autoDiscover": False},
             "events": {"udp": {"enabled": False}},
             "answeringMachine": {"messages": {"enabled": True, "root": str(messages), "watch": False}},
@@ -100,7 +102,8 @@ def test_download_backpressure_capacity_disconnect_and_shutdown(native_binary, t
                     slow.append(connection)
                 assert request(api_port, "/api/v1/health")[0] == 200
                 assert request(api_port, "/api/v1/stair-light/actions/activate", method="POST")[0] == 200
-                assert own.frames
+                stair = [frame for frame in own.frames if frame.startswith(("*8*21*", "*8*22*"))]
+                assert stair == ["*8*21*11##", "*8*22*11##"]
                 status, body = request(api_port, prefix + "message_2" + suffix)
                 assert status == 503 and json.loads(body)["error"] == "media_transfers_busy"
 

@@ -44,7 +44,9 @@ class Lab:
 
     def script(self, body):
         path = self.root / "job.sh"
-        path.write_text('#!/bin/sh\ncd "$(dirname "$0")" || exit 1\nprintf "%s" "$$" > started\n' + body)
+        # Written aside and renamed: a test that sees "started" reads the whole pid.
+        path.write_text('#!/bin/sh\ncd "$(dirname "$0")" || exit 1\n'
+                        'printf "%s" "$$" > started.tmp && mv started.tmp started\n' + body)
         path.chmod(0o700)
 
     def request(self, path=QML, payload=None, headers=None):

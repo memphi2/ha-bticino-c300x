@@ -9,6 +9,8 @@ from http.server import BaseHTTPRequestHandler
 import pytest
 import test_native_display_roundtrip as native_lab
 
+from native_agent.test import smoke
+
 
 def assert_bound(port):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
@@ -22,43 +24,14 @@ def test_native_ports_are_reserved_together_and_exclude_bound_mocks():
         mock_ports = [own.server_address[1], callback.server_address[1]]
         with native_lab._reserved_listener_ports() as native_ports:
             assert len({*mock_ports, *native_ports}) == 4
-            for port in (*mock_ports, *native_ports):
+            # Outside the ephemeral range no client connection can take them.
+            assert set(native_ports) <= set(smoke.listener_port_range())
+            for port in native_ports:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+                    probe.bind(("127.0.0.1", port))
+            for port in mock_ports:
                 assert_bound(port)
-        # Releasing native reservations must not release the mocks.
-        for port in native_ports:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
-                probe.bind(("127.0.0.1", port))
-        for port in mock_ports:
-            assert_bound(port)
     assert own.socket.fileno() == callback.socket.fileno() == -1
-
-
-def test_failed_second_reservation_closes_both_sockets(monkeypatch):
-    sockets = []
-    original_socket = socket.socket
-
-    class FailingSecondSocket(socket.socket):
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs)
-            sockets.append(self)
-
-        def bind(self, address):
-            if len(sockets) == 2 and self is sockets[1]:
-                with original_socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
-                    with pytest.raises(OSError) as caught:
-                        probe.bind(sockets[0].getsockname())
-                    assert caught.value.errno == errno.EADDRINUSE
-                raise OSError(errno.EADDRINUSE, "synthetic second bind failure")
-            return super().bind(address)
-
-    monkeypatch.setattr(native_lab.socket, "socket", FailingSecondSocket)
-    with (
-        pytest.raises(OSError, match="synthetic second bind failure"),
-        native_lab._reserved_listener_ports(),
-    ):
-        pytest.fail("The failed reservation must not yield")
-    assert len(sockets) == 2
-    assert all(sock.fileno() == -1 for sock in sockets)
 
 
 def test_mock_cleanup_runs_when_lab_setup_fails(monkeypatch):
@@ -98,8 +71,8 @@ def test_lab_binds_mocks_before_reservations_and_cleans_up_failed_process_start(
         assert len(servers) == 2
         with original_reservations() as ports:
             reserved_ports.extend(ports)
-            for port in (*ports, *(server.server_address[1] for server in servers)):
-                assert_bound(port)
+            for server in servers:
+                assert_bound(server.server_address[1])
             yield ports
 
     def fail_start(*args, **kwargs):

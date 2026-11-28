@@ -6,6 +6,7 @@ native_agent/test/ring_replay_test.c.
 """
 
 import hashlib
+import re
 import subprocess
 from pathlib import Path
 
@@ -32,11 +33,24 @@ CASES = {
     "station_busy_bus_end": 2, "station_busy_timeout": 2,
     "station_freed_before_486": 2, "station_freed_after_486": 2,
     "door_contacts": 0, "unit_switch_during_play": 2, "unviewable_unit_during_view": 1,
+    "lost_first_register": 0,
 }
+
+
+def ring_register_timing() -> tuple[int, int]:
+    """The ring leg's wait for the REGISTER answer and its retry pause, in seconds."""
+    source = (NATIVE / "src/media_bridge.c").read_text(encoding="utf-8")
+    registration = source[source.index("static bool send_ring_registration("):]
+    registration = registration[:registration.index("\n}\n")]
+    reply = re.findall(r"read_message\(fd, response, sizeof\(response\), (\d+)\)", registration)
+    retry = re.findall(r"^#define RING_RETRY_SECONDS (\d+)$", source, re.MULTILINE)
+    assert len(reply) == 1 and len(retry) == 1, "ring REGISTER timing moved in media_bridge.c"
+    return int(reply[0]), int(retry[0])
 
 
 @pytest.fixture(scope="module", params=[False, True], ids=["host", "asan-ubsan"])
 def replay_binary(request, tmp_path_factory):
+    reply_seconds, retry_seconds = ring_register_timing()
     sources = sorted(
         str(path) for path in (NATIVE / "src").glob("*.c")
         if path.name not in {"http.c", "main.c"}
@@ -48,6 +62,7 @@ def replay_binary(request, tmp_path_factory):
             "cc", "-std=c11", "-O1", "-g",
             "-D_DEFAULT_SOURCE", "-D_POSIX_C_SOURCE=200809L",
             "-ffunction-sections", "-fdata-sections", "-Wl,--gc-sections",
+            f"-DAGENT_RING_REPLY_SECONDS={reply_seconds}", f"-DAGENT_RING_RETRY_SECONDS={retry_seconds}",
             *(f"-Wl,--wrap={name}" for name in WRAPPED), *flags,
             str(NATIVE / "test/ring_replay_test.c"), *sources,
             "-pthread", "-ldl", "-o", str(binary),

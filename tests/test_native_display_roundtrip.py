@@ -3,7 +3,6 @@
 import asyncio
 import http.client
 import json
-import socket
 import subprocess
 import threading
 import time
@@ -23,6 +22,7 @@ from custom_components.bticino_c300x.executor import async_execute_dashboard_act
 from native_agent.test.smoke import (
     TOKEN,
     OpenWebNetServer,
+    free_tcp_ports,
     wait_for_health,
 )
 
@@ -31,14 +31,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 @contextmanager
 def _reserved_listener_ports():
-    """Keep both native listener ports bound until just before process startup."""
-    with (
-        socket.socket(socket.AF_INET, socket.SOCK_STREAM) as api,
-        socket.socket(socket.AF_INET, socket.SOCK_STREAM) as ui,
-    ):
-        api.bind(("127.0.0.1", 0))
-        ui.bind(("127.0.0.1", 0))
-        yield api.getsockname()[1], ui.getsockname()[1]
+    """Reserve both native listener ports outside the kernel's ephemeral range."""
+    yield free_tcp_ports(2)
 
 
 @contextmanager

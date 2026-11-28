@@ -34,9 +34,11 @@ Betas are versions like `3.1.0b1`. They are opt-in.
    **Redownload**, enable beta versions and pick the beta.
 3. Follow the [update steps](#update), including the agent update Repair.
 
-To leave the beta, pick the stable release the same way and run the agent
-update Repair again. A Home Assistant backup does not restore the agent on
-the station.
+To move from a beta to the stable release of the same line, for example from
+`3.1.0b1` to `3.1.0`, pick that release the same way and run the agent update
+Repair again. To leave a 3.1 beta for 3.0.x, follow
+[Going back from 3.1 to 3.0.x](#going-back-from-31-to-30x). A Home Assistant
+backup does not restore the agent on the station.
 
 ### Going Back from 3.1 to 3.0.x
 

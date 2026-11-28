@@ -316,13 +316,14 @@ The ring blueprints start from the **Doorbell ring event** of the outdoor
 unit you select and act on that unit's call. For the fastest reaction select
 the station's **Station ring** event instead: it fires at once with every
 ring, the unit's event as soon as the station names the caller (about 0.3 s,
-at most 1 s). The strict phrase decision and the calendar reminder take the
-station device.
+at most 1 s). The calendar reminder takes the station device. The strict
+phrase decision takes the station, which opens the door of the unit that
+called, or one outdoor unit.
 
 The phone alerts need **Forwarding** on **Home Assistant** and the Home
 Assistant Companion app on the phone. **Answer** opens the dashboard with the
-call; talk there. The alert stops ringing when a **Door** event of the
-station fires, whatever opened the door.
+call; talk there. The alert stops ringing when a **Door** event of one of
+the station's outdoor units fires, whatever opened the door.
 
 For your own automations, use the outdoor unit's **Doorbell ring event**,
 the **Station ring**, the **Door** and **Stair light** events, or the events

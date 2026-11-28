@@ -777,3 +777,29 @@ def test_the_private_c100x_backup_is_tester_material_not_a_setup_step():
         assert "pretest.tar" not in text, page
     setup = (DOCS / "classe-100x/1-setup.md").read_text(encoding="utf-8")
     assert "](../dev/c100x-device-test.md#make-a-private-backup)" in setup
+
+
+def test_leaving_a_beta_for_an_older_line_points_to_the_way_back():
+    """3.0.x cannot load a 3.1 entry: leaving a 3.1 beta for it is not a plain reinstall."""
+
+    page = DOCS / "classe-300x/5-update-and-removal.md"
+    beta = page.read_text(encoding="utf-8").split("### Beta Versions\n", 1)[1].split("\n### ", 1)[0]
+    flat = " ".join(beta.split())
+    assert "To leave the beta, pick the stable release" not in flat
+    assert "same line" in flat
+    assert "(#going-back-from-31-to-30x)" in flat
+    assert "going-back-from-31-to-30x" in _heading_anchors(page)
+
+
+def test_the_blueprint_docs_name_the_devices_the_blueprints_take():
+    """The strict phrase decision opens a station's or one unit's door; Door events are the units'."""
+
+    blueprint = (ROOT / "blueprints/automation/bticino_c300x/strict_phrase_decision.yaml").read_text(encoding="utf-8")
+    door = blueprint.split("\n    door:\n", 1)[1].split("\n    expected_phrase:", 1)[0]
+    assert "outdoor unit" in door and "integration: bticino_c300x" in door
+    assert "class C300XUnitDoorEventEntity(" in (ROOT / "custom_components/bticino_c300x/event.py").read_text()
+    use = " ".join((DOCS / "classe-300x/2-use.md").read_text(encoding="utf-8").split())
+    decision = use.split("The strict phrase decision", 1)[1].split(".", 1)[0]
+    assert "outdoor unit" in decision
+    assert "**Door** event of the station" not in use
+    assert "**Door** event of one of the station's outdoor units" in use

@@ -123,7 +123,7 @@ Outdoor unit entities:
 | Door | event | Fires `opened` when the station reports this unit's lock opened, whatever opened it. | In test |
 | Doorbell camera | camera | Only on the default unit. Live picture and calls of every unit; the latest visitor image when idle. | In test |
 | Camera | camera | On every other unit. A still picture while this unit has the current call, else its latest visitor image. | In test |
-| Door unlock | button | Opens this unit's door lock and has the lock's name from the station, as on its display (for example **Gartentor**). Attributes `lock_address` (for example `20`) and `lock_name`. | In test |
+| Door unlock | button | Opens this unit's door lock. Its name is that of the lock activation you added at the lock's address, else the station's name for the lock, as on its display (for example **Gartentor**); without a name, or with the unit's own name, **Door unlock**. Attributes `lock_address` (for example `20`) and `lock_name`. | In test |
 | Call | sensor | `idle`, `ringing`, `answered` or `viewing`; attributes `call_id`, `attribution`, `answered_by`. | In test |
 | Door contact | binary sensor | Only on a unit wired with a door contact; appears with the unit's first door message. Unknown after an agent restart until the door opens or closes again. | In test |
 | Last visitor | image | The latest visitor image of a call of this unit. | In test |

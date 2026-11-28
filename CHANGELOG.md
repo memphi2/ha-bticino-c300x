@@ -137,10 +137,12 @@ Activations:
   like its display does. The settings list them under **From the station**,
   next to the **Manual** ones; a manual activation of the same type and
   address replaces the station's.
-- **The door button of an outdoor unit has its lock's name** from the
-  station, as on its display (for example **Gartentor**). Neither a lock of
-  an outdoor unit nor the station's stair light gets a second button on the
-  station.
+- **The door button of an outdoor unit has its lock's name:** the name of
+  the lock activation you added at that lock's address, else the station's
+  name for the lock, as on its display (for example **Gartentor**). Without
+  a name, or with the unit's own name, it is **Door unlock**. Neither a lock
+  of an outdoor unit nor the station's stair light gets a second button on
+  the station.
 - The stair light is released 100 ms after it is switched on, as the
   station's display does.
 

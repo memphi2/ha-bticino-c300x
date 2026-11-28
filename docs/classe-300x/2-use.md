@@ -101,8 +101,10 @@ unit as target; the **Doorbell camera** then shows it.
 ## Door, Stair Light and Activations
 
 - **Door unlock** on an outdoor unit opens that unit's door. It has the
+  name of the lock activation you added at that lock's address, else the
   name the station gives that lock, as on its display (for example
-  **Gartentor**).
+  **Gartentor**). Without a name, or with the unit's own name, it is
+  **Door unlock**.
 - **Stair light** on the station switches the stair light.
 
 The actuators that the station itself is set up with become buttons of the

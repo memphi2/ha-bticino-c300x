@@ -155,8 +155,9 @@ The station is one device; each outdoor unit is a device below it
    rings.
 3. **Ring Call:** set the **Forwarding** select on the device page to
    **Home Assistant**. Ring at the door, then press **Answer** in the card.
-4. **Door:** press **Door unlock** on the outdoor unit's device page while
-   someone is at the door.
+4. **Door:** press the door button on the outdoor unit's device page while
+   someone is at the door: **Door unlock**, or the name of the unit's lock
+   (for example **Gartentor**).
 
 Talking to the door needs Home Assistant over HTTPS (or Home Assistant Cloud)
 and a browser that may use the microphone.

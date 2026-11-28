@@ -147,17 +147,17 @@ def test_the_generic_actuator_is_type_actuator_and_light_is_gone() -> None:
             normalize_device_activations([item])
 
 
-def test_stored_light_items_become_actuators() -> None:
+def test_stored_light_items_are_dropped_not_turned_into_actuators() -> None:
     from custom_components.bticino_c300x.device_activations import (
         activation_items_without_light,
     )
 
+    # As an actuator, a light at address 20 would open outdoor unit 20's door.
     stored = [
-        {"id": "gate", "name": "Gate", "type": "light", "addressMode": "manual", "address": "25"},
+        {"id": "lamp", "name": "Lamp", "type": "light", "addressMode": "manual", "address": "20"},
         {"id": "front", "name": "Front", "type": "lock", "addressMode": "manual", "address": "21"},
+        {"id": "hall", "name": "Hall", "type": "light", "addressMode": "manual", "address": "11"},
     ]
-    assert activation_items_without_light(stored) == [
-        {"id": "gate", "name": "Gate", "type": "actuator", "addressMode": "manual", "address": "25"},
-        stored[1],
-    ]
+    assert activation_items_without_light(stored) == [stored[1]]
+    assert activation_items_without_light([stored[0]]) == []
     assert activation_items_without_light(None) is None

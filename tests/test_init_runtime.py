@@ -2376,13 +2376,14 @@ def test_display_patch_apply_sends_the_stored_home_page_layout(data, options, ex
     api.async_apply_qml_patch.assert_awaited_once_with(dynamic_homepage=expected)
 
 
-def test_migrate_entry_turns_light_activations_into_actuators_once(
+def test_migrate_entry_drops_light_activations_once(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Activations stored as "light" become "actuator" in data and options, once."""
+    """Activations stored as "light" are removed from data and options, once."""
 
     monkeypatch.setattr(integration.secrets, "token_urlsafe", lambda n: f"token-{n}")
-    light = {"id": "gate", "name": "Gate", "type": "light", "addressMode": "manual", "address": "25"}
+    # As an actuator, a light at address 20 would open outdoor unit 20's door.
+    light = {"id": "lamp", "name": "Lamp", "type": "light", "addressMode": "manual", "address": "20"}
     lock = {"id": "front", "name": "Front", "type": "lock", "addressMode": "manual", "address": "21"}
 
     def migrate(minor: int) -> list[dict[str, Any]]:
@@ -2400,10 +2401,9 @@ def test_migrate_entry_turns_light_activations_into_actuators_once(
         assert asyncio.run(integration.async_migrate_entry(hass, entry)) is True
         return updates
 
-    actuator = {**light, "type": "actuator"}
     update, = migrate(3)
-    assert update["data"]["device_activations"] == [actuator, lock]
-    assert update["options"]["device_activations"] == [actuator]
+    assert update["data"]["device_activations"] == [lock]
+    assert update["options"]["device_activations"] == []
     assert update["minor_version"] == 4
     # An entry at the current minor version had its items migrated already.
     update, = migrate(4)

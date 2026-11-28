@@ -100,19 +100,19 @@ def activation_items_match(left: Sequence[Mapping[str, Any]], right: Any) -> boo
 
 
 def activation_items_without_light(value: Any) -> Any:
-    """Stored items of an entry before 3.1.0: the type "light" is now "actuator".
+    """Stored items of an entry before 3.1.0, without those of type "light".
 
-    "light" sent the stair-light frame at the item's address; the station's
-    generic actuator it meant is pressed with the lock frames (type
-    "actuator"). Id, name and address stay. Anything else is returned as is.
+    The type is gone: it sent the stair-light frame at the item's address, and
+    an actuator there would get the lock frames (address 20 is the door of
+    outdoor unit 20). The station's actuators and stair light come from the
+    station. Anything that is not a list is returned as is.
     """
 
     if not isinstance(value, list):
         return value
     return [
-        {**item, "type": "actuator"}
-        if isinstance(item, Mapping) and item.get("type") == "light" else item
-        for item in value
+        item for item in value
+        if not (isinstance(item, Mapping) and item.get("type") == "light")
     ]
 
 

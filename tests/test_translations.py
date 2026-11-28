@@ -923,6 +923,12 @@ _DEVICE_EVENT_NAMES = {
     "strings": "Device event", "en": "Device event", "de": "Geräteereignis",
     "fr": "Événement appareil", "it": "Evento dispositivo", "es": "Evento del dispositivo",
 }
+# The activations of the type that 3.1.0 removed, by 3.0.0's name for it.
+_LIGHT_ACTIVATIONS = {
+    "strings": "activations of type Light", "en": "activations of type Light",
+    "de": "Aktivierungen vom Typ Licht", "fr": "activations de type Lumière",
+    "it": "attivazioni di tipo Luce", "es": "activaciones de tipo Luz",
+}
 
 
 def test_the_outdoor_units_repair_names_what_replaces_the_removed_parts() -> None:
@@ -950,11 +956,14 @@ def test_the_outdoor_units_repair_names_what_replaces_the_removed_parts() -> Non
             assert name in text, (path.name, name)
         # The removed entity by the name users saw for it.
         assert f'"{_DEVICE_EVENT_NAMES[path.stem]}"' in text, path.name
-        # The risky one first: a Light activation that switched a light must
-        # become a Stair light; by the names the activation form shows.
+        # One step says that Light activations are gone. It names no Actuator:
+        # they did not become actuators, which would open a door at address 20.
         texts = _load_json(path)
         types = texts["selector"]["device_activation_item_type"]["options"]
-        first_step = text.split(":\n\n", 1)[1].split("\n", 1)[0]
-        assert types["actuator"] in first_step and types["stair_light"] in first_step, path.name
+        steps = text.split(":\n\n", 1)[1].split("\n\n", 1)[0].split("\n")
+        light = _LIGHT_ACTIVATIONS[path.stem].lower()
+        light_steps = [step for step in steps if light in step.lower()]
+        assert len(light_steps) == 1, path.name
+        assert not re.search(rf"\b{re.escape(types['actuator'])}\b", light_steps[0]), path.name
         assert texts["selector"]["device_activation_mode"]["options"]["automatic"] in text, path.name
         assert texts["entity"]["event"]["ring"]["name"] in text, path.name

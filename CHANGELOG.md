@@ -72,12 +72,9 @@ Breaking changes:
   and the strict phrase decision the **Door** device (station or outdoor
   unit) instead of an entry ID; `lock_id` is gone. Copies of the blueprints
   that you edited are not replaced; import them again.
-- **Activations: "Light" is now "Actuator".** An actuator is the station's
-  generic actuator ("Generic" on its display, for example a gate opener),
-  pressed and released like a door lock. Light activations become Actuator
-  activations with the update; ID, name, address and button stay. A Light
-  activation sent the stair light command: if you used one to switch a
-  light, set its type to **Stair light**.
+- **Activations: the type Light is gone.** The update removes your Light
+  activations. The station's actuators and stair light now come from the
+  station itself.
 - **Stair light address:** **Automatic** now switches the stair light at the
   station's own address, as its display does (before: the fixed address
   `10`). The **Manual (P and N)** address is used as before.

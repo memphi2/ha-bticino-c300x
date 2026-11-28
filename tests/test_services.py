@@ -537,6 +537,36 @@ def test_a_unit_target_names_the_unit_and_a_station_target_does_not(monkeypatch)
     asyncio.run(_run())
 
 
+def test_the_cards_station_target_leaves_a_call_of_any_unit_to_its_call_id(monkeypatch) -> None:  # noqa: ANN001
+    # The media camera sits on a unit's device: targeting it names that unit,
+    # so the card targets the station device instead (any unit's call).
+    _targets(monkeypatch, {"camera.media": types.SimpleNamespace(platform=DOMAIN, device_id="unit-one-21")})
+    sent: list[tuple[str, str | None, str | None]] = []
+
+    class _Api(_FakeApi):
+        async def async_answer_doorbell_call(self, call_id: str | None = None, *, unit: str | None = None) -> dict[str, Any]:
+            sent.append(("answer", call_id, unit))
+            return await super().async_answer_doorbell_call(call_id, unit=unit)
+
+        async def async_hangup_doorbell_call(self, call_id: str | None = None, *, unit: str | None = None) -> dict[str, Any]:
+            sent.append(("hangup", call_id, unit))
+            return await super().async_hangup_doorbell_call(call_id, unit=unit)
+
+    async def _run() -> None:
+        hass = _FakeHass([_FakeEntry(
+            _FakeRuntimeData(api=_Api(), capabilities={"doorbell_call": {"supported": True}}),
+            entry_id="one", data={CONF_VIDEO_ENABLED: True},
+        )])
+        await async_setup_services(hass)  # type: ignore[arg-type]
+        for service, action in ((SERVICE_ANSWER_CALL, "answer"), (SERVICE_HANGUP_CALL, "hangup")):
+            handler = hass.services.handlers[(DOMAIN, service)]
+            await handler(types.SimpleNamespace(data={"device_id": "station-one", "call_id": "0badc0de-2"}))
+            await handler(types.SimpleNamespace(data={"entity_id": "camera.media", "call_id": "0badc0de-2"}))
+            assert sent[-2:] == [(action, "0badc0de-2", None), (action, "0badc0de-2", "21")]
+
+    asyncio.run(_run())
+
+
 @pytest.mark.parametrize(
     "state", [ConfigEntryState.NOT_LOADED, ConfigEntryState.SETUP_RETRY, ConfigEntryState.SETUP_ERROR]
 )

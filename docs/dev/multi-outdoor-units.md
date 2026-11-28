@@ -386,8 +386,12 @@ live ring, a live on-demand view is the current call (`call_state:
 when the Stop doorbell video button is missing or disabled. It uses the
 media camera as before. Station buttons are found through the camera's
 device: the media camera sits on the default unit's device, whose
-`via_device_id` is the station. It has no unit selector and no per-unit video
-in 3.1.0 (that comes with phase D, later, needs a card concept).
+`via_device_id` is the station. Its services target that station device,
+never the camera: the camera's unit target would refuse another unit's call,
+while a station target leaves the check to the `call_id`, so a
+`call_not_current` hang-up means the call has ended. It has no unit selector
+and no per-unit video in 3.1.0 (that comes with phase D, later, needs a card
+concept).
 
 ### Services
 

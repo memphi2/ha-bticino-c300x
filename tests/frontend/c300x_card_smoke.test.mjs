@@ -620,12 +620,12 @@ test("call services use the camera device owner and reject missing or ambiguous 
   hass.callService = async (...args) => calls.push(args);
   card.hass = hass;
   await card._actions.answerDoorbellCall();
-  assert.deepEqual(calls, [["bticino_c300x", "answer_call", { entity_id: "camera.bticino_c300x_doorbell_camera" }]]);
+  assert.deepEqual(calls, [["bticino_c300x", "answer_call", { device_id: "device-1" }]]);
   hass.devices = { "device-1": { config_entries: ["entry-1"] } };
-  assert.deepEqual(card._serviceData(), { entity_id: "camera.bticino_c300x_doorbell_camera" });
+  assert.deepEqual(card._serviceData(), { device_id: "device-1" });
   // The card answers the call it shows.
   hass.states["camera.bticino_c300x_doorbell_camera"].attributes.call_id = "0badc0de-7";
-  assert.deepEqual(card._callData(), { entity_id: "camera.bticino_c300x_doorbell_camera", call_id: "0badc0de-7" });
+  assert.deepEqual(card._callData(), { device_id: "device-1", call_id: "0badc0de-7" });
   delete hass.states["camera.bticino_c300x_doorbell_camera"].attributes.call_id;
   for (const device of [undefined, { config_entries: ["entry-1", "entry-2"] }]) {
     hass.devices = { "device-1": device };
@@ -638,6 +638,62 @@ test("call services use the camera device owner and reject missing or ambiguous 
   card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera", entry_id: "entry-2" });
   await assert.rejects(card._actions.answerDoorbellCall(), /Camera device assignment unavailable/);
   assert.equal(calls.length, 1);
+});
+
+test("a call of another outdoor unit is answered, hung up and opened through the station", async () => {
+  const registry = installFakeDom();
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?other-unit-call-test");
+  const card = new (registry.get("c300x-doorbell-call-card"))();
+  const camera = "camera.bticino_c300x_doorbell_camera";
+  card.setConfig({ entity: camera });
+  const hass = fakeHass();
+  // The media camera sits on the default unit's device (20), below the station.
+  hass.devices = {
+    station: { config_entry_id: "entry-1" },
+    "unit-20": { config_entry_id: "entry-1", via_device_id: "station" },
+    "unit-21": { config_entry_id: "entry-1", via_device_id: "station" },
+  };
+  const unitOf = { "unit-20": "20", "unit-21": "21" };
+  const place = (entityId, deviceId, translationKey) => {
+    hass.entities[entityId] = { device_id: deviceId, platform: "bticino_c300x", translation_key: translationKey };
+    hass.states[entityId] ||= { state: "unknown", attributes: {} };
+  };
+  place(camera, "unit-20", "doorbell_camera");
+  place("sensor.bticino_c300x_media_readiness", "station", "media_readiness");
+  place("button.bticino_c300x_stop_doorbell_video", "station", "stop_doorbell_video");
+  place("button.front_door", "unit-20", "door");
+  place("button.gate_door", "unit-21", "door");
+  place("button.stair_light", "station", "stair_light");
+  // Unit 21 rings: the camera names its call and its door.
+  Object.assign(hass.states[camera].attributes, {
+    call_id: "0badc0de-2", call_unit: "21", door_entity_id: "button.gate_door",
+  });
+  const calls = [];
+  // As the integration resolves the target: a unit device takes only its own unit's call.
+  hass.callService = async (domain, service, data) => {
+    calls.push([service, data]);
+    const target = data.device_id || hass.entities[data.entity_id]?.device_id;
+    if (domain === "bticino_c300x" && unitOf[target] && unitOf[target] !== "21") {
+      throw Object.assign(new Error("not this unit's call"), { translation_key: "call_not_current" });
+    }
+  };
+  card.hass = hass;
+  try {
+    await card._actions.answerDoorbellCall();
+    assert.equal(await card._actions.hangupDoorbellCall({ closePeer: false }), true);
+    await card.shadowRoot.querySelector(".door-action").dispatch("click");
+    await card.shadowRoot.querySelector(".light-action").dispatch("click");
+    await card._actions.stopDoorbellVideo();
+    await card._actions.stopHomeCall();
+    assert.deepEqual(calls, [
+      ["answer_call", { device_id: "station", call_id: "0badc0de-2" }],
+      ["hangup_call", { device_id: "station", call_id: "0badc0de-2" }],
+      ["press", { entity_id: "button.gate_door" }],
+      ["press", { entity_id: "button.stair_light" }],
+      ["press", { entity_id: "button.bticino_c300x_stop_doorbell_video" }],
+      ["stop_home_call", { device_id: "station" }],
+    ]);
+  } finally { card.disconnectedCallback(); }
 });
 
 test("a removed camera does not retain old state", async () => {
@@ -1175,7 +1231,7 @@ test("a pending ring answer cannot start media on a reconfigured camera", async 
   let answer;
   const calls = [];
   hass.callService = (domain, service, data) => {
-    calls.push([service, data.entity_id]);
+    calls.push([service, data.device_id]);
     return new Promise((resolve) => { answer = resolve; });
   };
   card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera" });
@@ -1187,7 +1243,7 @@ test("a pending ring answer cannot start media on a reconfigured camera", async 
   answer();
   await answering;
 
-  assert.deepEqual(calls, [["answer_call", "camera.bticino_c300x_doorbell_camera"]]);
+  assert.deepEqual(calls, [["answer_call", "device-1"]]);
   assert.deepEqual(starts, []);
   assert.equal(card._lifecycle.doorbellAnswered, false);
   card.disconnectedCallback();
@@ -1205,7 +1261,7 @@ test("a pending ring hangup cannot stop or close a reconfigured camera", async (
   let hangup;
   const calls = [];
   hass.callService = async (domain, service, data) => {
-    calls.push([service, data.entity_id]);
+    calls.push([service, data.device_id || data.entity_id]);
     if (service === "hangup_call") await new Promise((resolve) => { hangup = resolve; });
   };
   card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera" });
@@ -1219,7 +1275,7 @@ test("a pending ring hangup cannot stop or close a reconfigured camera", async (
   await hangingUp;
 
   assert.deepEqual(calls, [
-    ["hangup_call", "camera.bticino_c300x_doorbell_camera"], ["press", "button.bticino_c300x_stop_doorbell_video"],
+    ["hangup_call", "device-1"], ["press", "button.bticino_c300x_stop_doorbell_video"],
   ]);
   assert.equal(closes, 0);
   card.disconnectedCallback();

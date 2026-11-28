@@ -2,7 +2,7 @@ import {
   C300X_TRANSLATIONS,
   c300xLocalize,
   c300xModelLabel,
-} from "./c300x-translations.js?v=c204135f526f29c4";
+} from "./c300x-translations.js?v=2eb167610eeb8831";
 import {
   C300X_CAMERA_KEY,
   C300X_CARD_TAG,
@@ -17,18 +17,19 @@ import {
   c300xRegistryEntityMatches,
   c300xRelatedEntity,
   c300xResolveEntity,
-} from "./c300x-entity-resolver.js?v=c204135f526f29c4";
+  c300xStationDeviceId,
+} from "./c300x-entity-resolver.js?v=2eb167610eeb8831";
 import {
   C300X_CARD_EDITOR_TAG,
   c300xDoorbellCardStubConfig,
-} from "./c300x-card-editor.js?v=c204135f526f29c4";
-import { C300XCardActions } from "./c300x-card-actions.js?v=c204135f526f29c4";
+} from "./c300x-card-editor.js?v=2eb167610eeb8831";
+import { C300XCardActions } from "./c300x-card-actions.js?v=2eb167610eeb8831";
 import {
   C300XCardLifecycleState,
   c300xAnsweredRingKey,
-} from "./c300x-card-lifecycle.js?v=c204135f526f29c4";
-import { c300xRingLifecycleActive } from "./c300x-ring-preview-state.js?v=c204135f526f29c4";
-import { C300X_DOORBELL_CARD_TEMPLATE } from "./c300x-card-template.js?v=c204135f526f29c4";
+} from "./c300x-card-lifecycle.js?v=2eb167610eeb8831";
+import { c300xRingLifecycleActive } from "./c300x-ring-preview-state.js?v=2eb167610eeb8831";
+import { C300X_DOORBELL_CARD_TEMPLATE } from "./c300x-card-template.js?v=2eb167610eeb8831";
 import {
   c300xCardViewModel,
   c300xIsHomeCallActive,
@@ -36,13 +37,13 @@ import {
   c300xMediaReadinessHasRepair,
   c300xMediaReadinessLabelKey,
   c300xMediaState,
-} from "./c300x-state-model.js?v=c204135f526f29c4";
-import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=c204135f526f29c4";
-import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=c204135f526f29c4";
-import { C300XStreamSnapshots } from "./c300x-stream-snapshots.js?v=c204135f526f29c4";
-import { C300XCardMedia } from "./c300x-card-media.js?v=c204135f526f29c4";
-import { c300xFollowPictureSize } from "./c300x-picture-frame.js?v=c204135f526f29c4";
-import { mediaStamp } from "./c300x-media-translations.js?v=c204135f526f29c4";
+} from "./c300x-state-model.js?v=2eb167610eeb8831";
+import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=2eb167610eeb8831";
+import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=2eb167610eeb8831";
+import { C300XStreamSnapshots } from "./c300x-stream-snapshots.js?v=2eb167610eeb8831";
+import { C300XCardMedia } from "./c300x-card-media.js?v=2eb167610eeb8831";
+import { c300xFollowPictureSize } from "./c300x-picture-frame.js?v=2eb167610eeb8831";
+import { mediaStamp } from "./c300x-media-translations.js?v=2eb167610eeb8831";
 
 const C300X_NOTICE_TIMEOUT_MS = 2000;
 const C300X_RING_ANSWER_LAUNCH_PARAM = "c300x_ring_answer";
@@ -1364,12 +1365,14 @@ class C300XDoorbellCallCard extends HTMLElement {
     return c300xEntryId(this._hass, this._config, this._resolvedCameraEntityId());
   }
 
+  // The station, not the camera: the camera sits on the default outdoor
+  // unit's device, and that target refuses a call of another unit.
   _serviceData() {
-    const entityId = this._resolvedCameraEntityId();
-    if (!this._entryId() || !entityId) {
+    const deviceId = c300xStationDeviceId(this._hass, this._resolvedCameraEntityId());
+    if (!this._entryId() || !deviceId) {
       throw new Error(this._label("device_unresolved"));
     }
-    return { entity_id: entityId };
+    return { device_id: deviceId };
   }
 
   // The call the card shows; the agent refuses a call that is no longer current.

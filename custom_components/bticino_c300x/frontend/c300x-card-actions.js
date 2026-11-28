@@ -219,7 +219,7 @@ export class C300XCardActions {
           } catch (_error) {
             return ok;
           }
-          if (currentTarget.entity_id === target?.data.entity_id) return ok;
+          if (currentTarget.device_id === target?.data.device_id) return ok;
         }
         await this.stopDoorbellVideo(target);
       } catch (err) {
@@ -310,7 +310,7 @@ export class C300XCardActions {
     try {
       await hass.callService("bticino_c300x", "hangup_call", target?.data || card._callData());
     } catch (err) {
-      // The call ended meanwhile: nothing left to hang up.
+      // The station target leaves the check to the call id: the call ended.
       if (err?.translation_key === "call_not_current") return ok;
       console.error("C300X ring-call hangup failed", err);
       if (isCurrent()) card._error = err?.message || `${err}`;

@@ -31,6 +31,12 @@ function c300xStationDevice(hass, deviceId) {
   return hass?.devices?.[deviceId]?.via_device_id || deviceId;
 }
 
+// A station target means the current call's unit; a unit device names that unit only.
+export function c300xStationDeviceId(hass, entityId) {
+  const deviceId = hass?.entities?.[entityId]?.device_id;
+  return deviceId ? c300xStationDevice(hass, deviceId) : "";
+}
+
 function c300xSameDevice(hass, camera, candidate) {
   if (camera?.device_id) {
     return !!candidate?.device_id

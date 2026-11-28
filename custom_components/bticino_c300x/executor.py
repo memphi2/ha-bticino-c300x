@@ -241,6 +241,16 @@ async def async_execute_alarm_command(
     }
 
 
+def user_stair_light_address(entry: BticinoC300XConfigEntry) -> str | None:
+    """The stair light's address the user set, else None: the agent takes its own."""
+
+    return user_stair_light_where(
+        entry_config_value(entry, CONF_DEVICE_ACTIVATION_MODE, ""),
+        entry_config_value(entry, CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P, ""),
+        entry_config_value(entry, CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N, ""),
+    )
+
+
 async def async_trigger_stair_light(
     hass: HomeAssistant,
     entry: BticinoC300XConfigEntry,
@@ -252,11 +262,7 @@ async def async_trigger_stair_light(
     takes its own and answers which one it used.
     """
 
-    target_address = address or user_stair_light_where(
-        entry_config_value(entry, CONF_DEVICE_ACTIVATION_MODE, ""),
-        entry_config_value(entry, CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P, ""),
-        entry_config_value(entry, CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N, ""),
-    )
+    target_address = address or user_stair_light_address(entry)
     result = await entry.runtime_data.api.async_stair_light(target_address)
     used = result.get("address")
     return {

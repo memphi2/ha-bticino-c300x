@@ -37,7 +37,7 @@
         "default": "mdi:trash-can-outline"
       },
       "door": {
-        "default": "mdi:door-open"
+        "default": "mdi:lock-open-variant"
       }
     },
     "camera": {

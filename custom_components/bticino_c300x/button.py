@@ -36,13 +36,13 @@ from .display_support import entry_is_c100x
 from .entity import C300XEntity, entry_video_enabled, supports_capability
 from .entry_types import BticinoC300XConfigEntry
 from .event_payload import agent_event_key
-from .executor import async_trigger_stair_light
+from .executor import async_trigger_stair_light, user_stair_light_address
 from .memos import latest_memo_id
 from .message_refresh import async_answering_machine_messages
 from .qml_patch import async_refresh_qml_patch_status
 from .stored_items import MEMO_ITEMS, VIDEO_MESSAGE_ITEMS, StoredItemsSpec
 from .unit_entity import async_track_outdoor_units
-from .unit_platforms import C300XUnitDoorButton
+from .unit_platforms import C300XUnitDoorButton, door_lock_unit
 from .use_cases.doorbell_video import DoorbellVideoUseCase
 from .video_messages import (
     latest_video_message_id,
@@ -67,7 +67,7 @@ async def async_setup_entry(
     capabilities = getattr(entry.runtime_data, "capabilities", {})
     if supports_capability(entry, "activations"):
         for activation in await _async_activation_items(entry):
-            if activation.get("executable") is True:
+            if activation.get("executable") is True and _station_button(entry, activation):
                 entities.append(C300XDeviceActivationButton(entry, activation))
     entities.append(C300XRebootButton(entry))
     entities.append(C300XRemoveAgentButton(entry))
@@ -536,6 +536,24 @@ async def _async_activation_items(entry: BticinoC300XConfigEntry) -> list[dict[s
     if not isinstance(items, list):
         return []
     return [item for item in items if isinstance(item, dict)]
+
+
+def _station_button(entry: BticinoC300XConfigEntry, activation: dict[str, Any]) -> bool:
+    """Whether an activation gets a button of its own on the station.
+
+    The lock of a known outdoor unit is that unit's door button. The light
+    the Stair light button switches is that button: the station's item is at
+    the address the agent takes without one, a configured item at the one
+    the user set. A stair light at another address keeps its button.
+    """
+
+    if activation.get("type") == "lock" and supports_capability(entry, "locks"):
+        return door_lock_unit(entry, activation) is None
+    if activation.get("type") == "stair_light" and supports_capability(entry, "stair_light"):
+        address = user_stair_light_address(entry)
+        return not (activation.get("source") == "station"
+                    or (address is not None and activation.get("address") == address))
+    return True
 
 
 def _activation_icon(activation_type: str) -> str:

@@ -1,6 +1,6 @@
 # Current Legal and Provenance Audit Snapshot
 
-Source review: 2026-11-27. Scope: integration and native agent `3.0.0`, the
+Source review: 2026-11-28. Scope: integration and native agent `3.1.0b1`, the
 joint package for the Classe 300X and the Classe 100X.
 The station settings panel and ring-call controls use the existing Qt runtime
 on the device. The package includes the project's QML, JavaScript, patch script

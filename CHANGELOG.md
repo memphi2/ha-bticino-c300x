@@ -1,6 +1,6 @@
 # Changelog
 
-## v3.1.0 - Unreleased
+## v3.1.0b1 - 2026-11-28
 
 3.1.0 shows every outdoor unit of a station as its own device (issue #53) and
 reads the station's own activations, call state and door contacts.

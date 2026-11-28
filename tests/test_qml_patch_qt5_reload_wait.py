@@ -17,6 +17,7 @@ import pytest
 from custom_components.bticino_c300x import media_watchdog
 from custom_components.bticino_c300x.api import C300XAgentApi
 from custom_components.bticino_c300x.button import C300XReloadGuiButton
+from custom_components.bticino_c300x.const import CONF_STATION_ID
 from custom_components.bticino_c300x.display_activation import gui_reload_kwargs
 
 QT4_STATUSES = [None, {}, {"patched": True, "core_patched": True, "gui_running": True},
@@ -37,7 +38,8 @@ def _entry(status: Any) -> SimpleNamespace:
     runtime = SimpleNamespace(api=_Api())
     if status is not None:
         runtime.qml_patch_status = status
-    return SimpleNamespace(runtime_data=runtime, entry_id="entry", title="Door", data={}, options={})
+    return SimpleNamespace(runtime_data=runtime, entry_id="entry", title="Door",
+                           data={CONF_STATION_ID: "c300x-0123456789ab"}, options={})
 
 
 def _timeouts(**kwargs: Any) -> list[object]:

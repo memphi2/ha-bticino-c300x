@@ -930,5 +930,18 @@ def test_the_outdoor_units_repair_names_what_replaces_the_removed_parts() -> Non
             "bticino_c300x_action_received",
             '"BTicino Calendar display reminder"',
             '"BTicino strict phrase decision"',
+            # The changed door button attributes and ring event attribute.
+            "lock_id",
+            "lock_address",
+            "lock_name",
+            "video_available",
         ):
             assert name in text, (path.name, name)
+        # The risky one first: a Light activation that switched a light must
+        # become a Stair light; by the names the activation form shows.
+        texts = _load_json(path)
+        types = texts["selector"]["device_activation_item_type"]["options"]
+        first_step = text.split(":\n\n", 1)[1].split("\n", 1)[0]
+        assert types["actuator"] in first_step and types["stair_light"] in first_step, path.name
+        assert texts["selector"]["device_activation_mode"]["options"]["automatic"] in text, path.name
+        assert texts["entity"]["event"]["ring"]["name"] in text, path.name

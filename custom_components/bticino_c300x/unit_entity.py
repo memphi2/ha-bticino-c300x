@@ -21,7 +21,12 @@ from .call_sync import entry_call_registry
 from .const import CONF_OUTDOOR_UNITS, DOMAIN
 from .entity import C300XEntity
 from .entry_types import BticinoC300XConfigEntry
-from .identity import station_device_identifier, unit_device_identifier, unit_unique_id
+from .identity import (
+    station_device_identifier,
+    station_id_known,
+    unit_device_identifier,
+    unit_unique_id,
+)
 
 if TYPE_CHECKING:
     from homeassistant.helpers.device_registry import DeviceInfo
@@ -65,8 +70,14 @@ def async_register_unit_device(
 
 @callback
 def event_device_id(hass: HomeAssistant, entry: BticinoC300XConfigEntry, unit_id: str | None) -> str | None:
-    """The device a station event belongs to: its unit's, else the station's."""
+    """The device a station event belongs to: its unit's, else the station's.
 
+    None while the entry waits for its station id (before the agent update
+    Repair): there is no device yet, and the event still reaches the bus.
+    """
+
+    if not station_id_known(entry):
+        return None
     devices = dr.async_get(hass)
     identifiers = [station_device_identifier(entry)]
     if unit_id is not None:

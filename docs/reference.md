@@ -310,8 +310,8 @@ was assumed.
 
 Home Assistant also fires `bticino_c300x_agent_event_received` for every
 station event, with `event_type` (a key from the table below), `entry_id`,
-`device_id` (the outdoor unit's device, else the station's), `unit`,
-`call_id`, `event_at` and `data`. The logbook shows each station event on its
+`device_id` (the outdoor unit's device, else the station's; `null` until the
+agent update Repair has run), `unit`, `call_id`, `event_at` and `data`. The logbook shows each station event on its
 device.
 
 | `event_type` | When |

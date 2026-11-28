@@ -451,7 +451,8 @@ bundled blueprints use the outdoor unit's event.
 The integration also fires `bticino_c300x_agent_event_received` for every
 station event. Data: `event_type` (the key from the
 [event table](../reference.md#events), never a label), `entry_id`,
-`device_id` (the outdoor unit's device, else the station's), `unit` and
+`device_id` (the outdoor unit's device, else the station's; `null` while the
+entry waits for its station id, before the agent update Repair), `unit` and
 `call_id` (`null` when the event has none), `event_at`, `data` (the agent's
 raw event data, with `raw` and `address` for door and stair light frames),
 `source_event_id` when the agent sends one, and the extra data of the event.

@@ -365,7 +365,9 @@ The bus event `bticino_c300x_agent_event_received` keeps every event,
 rings included: the card, the ring preview, captures and the event entities
 listen to it. Its `event_type` is the stable key; `unit` and `call_id` are
 `null` while not known (a door frame names its unit also outside a call),
-`device_id` is the unit's device, else the station's. Automations should
+`device_id` is the unit's device, else the station's, and `null` while the
+entry waits for its station id (an entry from before 3.1.0 until the agent
+update Repair): the event is fired all the same. Automations should
 trigger on the event entities. There is no event for an action Home
 Assistant ran (`run_action`, a display tile): automations react to the entity
 that was switched; a door and the stair light fire the Door and Stair light

@@ -918,6 +918,13 @@ def test_the_busy_station_message_is_plain_in_every_language() -> None:
         assert not re.search(r"agent|409|station_busy|HTTP", message, re.IGNORECASE), language
 
 
+# The name of the agent event entity that 3.1.0 removed, as 3.0.0 showed it.
+_DEVICE_EVENT_NAMES = {
+    "strings": "Device event", "en": "Device event", "de": "Geräteereignis",
+    "fr": "Événement appareil", "it": "Evento dispositivo", "es": "Evento del dispositivo",
+}
+
+
 def test_the_outdoor_units_repair_names_what_replaces_the_removed_parts() -> None:
     # The removed agent event entity: its bus event. The two blueprints that
     # take a device now: by the names Home Assistant shows for them.
@@ -935,8 +942,14 @@ def test_the_outdoor_units_repair_names_what_replaces_the_removed_parts() -> Non
             "lock_address",
             "lock_name",
             "video_available",
+            # Automations that filtered on the gone event_key stop firing.
+            "event_key: doorbell_pressed",
+            "event_type: doorbell_pressed",
+            "evaluate_ring_analysis",
         ):
             assert name in text, (path.name, name)
+        # The removed entity by the name users saw for it.
+        assert f'"{_DEVICE_EVENT_NAMES[path.stem]}"' in text, path.name
         # The risky one first: a Light activation that switched a light must
         # become a Stair light; by the names the activation form shows.
         texts = _load_json(path)

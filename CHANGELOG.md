@@ -155,6 +155,10 @@ Setup:
 - **Classe 300X2 recognised.** Setup, the agent reinstall and the SSH Repair
   tell a Classe 300X2 apart and install nothing on it: it is not supported
   yet. Before, it was taken for a Classe 300X.
+- **PCMU after a new installation:** on a Classe 300X with firmware 1.7.19
+  or 2.0.2, a new installation switches the sound to PCMU and restarts the
+  station once at its end, as soon as no call or stream is running.
+  Existing installations, reinstalls and agent updates keep their codec.
 
 Going back to 3.0.x needs the Home Assistant backup from before the update:
 3.0.x cannot load the updated entry.

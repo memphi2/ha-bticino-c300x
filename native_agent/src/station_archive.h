@@ -4,7 +4,9 @@
 #include <stddef.h>
 
 #define C300X_ARCHIVE_XML_PATH "/home/bticino/cfg/extra/0/archive.xml"
+#ifndef C300X_CONF_XML_PATH
 #define C300X_CONF_XML_PATH "/var/tmp/conf.xml"
+#endif
 #define C300X_UNIT_WHERE_LEN 24
 #define C300X_UNIT_NAME_LEN 64
 #define C300X_ARCHIVE_MAX_ENTRIES 16

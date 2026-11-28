@@ -692,7 +692,9 @@ Request fields: `address`, optional. Without it the light is at
 address from `conf.xml` (`vdes/communication` `dev` + `address`, outside
 `p_default`): `11` on a station with dev 1 and address 1, where its display
 sends `*8*21*11##`. That file has this block on 1.7.19, 2.0.2, 3.0.6 and the
-C100X 1.5.8.
+C100X 1.5.8. The installers before 3.1 always wrote the address `10`: at its
+first start the agent clears a `10` from a file written before 3.1 (one with
+`activations.discoveryRoots`) and saves the file once.
 
 ```json
 {"address": "11"}

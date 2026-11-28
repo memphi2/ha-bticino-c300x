@@ -910,6 +910,16 @@ int c300x_load_config(
             return 0;
         }
     }
+    /* Before 3.1 the installer always wrote the stair-light address "10",
+     * never the user's choice, and every saved file had
+     * activations.discoveryRoots, which 3.1 no longer writes. In such a file
+     * "10" gives way to the station's own address (conf.xml); a "10" set
+     * since then stays. */
+    if (nested_member(document, document_end, "activations", "discoveryRoots", &value)
+        && strcmp(config->stair_light_default_address, "10") == 0) {
+        config->stair_light_default_address[0] = '\0';
+        config->config_migrated = 1;
+    }
     if (nested_member(document, document_end, "locks", "releaseDelayMs", &value)) {
         if (!int_value(value, document_end, &config->lock_release_delay_ms)) {
             set_error(error, error_len, "locks.releaseDelayMs must be positive");

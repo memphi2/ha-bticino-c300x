@@ -47,6 +47,7 @@ def test_the_activations_form_says_that_further_locks_and_actuators_are_added_th
 # Each language has one word for the station ("station", "stazione"); the
 # outdoor unit keeps its own ("poste extérieur", "posto esterno").
 OTHER_WORDS_FOR_THE_STATION = {
+    "de": ("innenstation",),
     "fr": ("platine", "poste intérieur"),
     "it": ("postazione", "posto interno"),
 }
@@ -57,6 +58,27 @@ def test_each_language_has_one_word_for_the_station() -> None:
         text = (TRANSLATIONS / f"{language}.json").read_text(encoding="utf-8").lower()
         for word in words:
             assert not re.search(rf"\b{word}\b", text), (language, word)
+
+
+# The words for the stair light that its button does not use.
+OTHER_WORDS_FOR_THE_STAIR_LIGHT = {"fr": ("éclairage", "lumière escalier")}
+
+
+def test_each_language_has_one_word_for_the_stair_light() -> None:
+    # The button's word, also for the activation type, the event and the card.
+    for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
+        data = _load_json(path)
+        word = data["entity"]["button"]["stair_light"]["name"]
+        types = data["selector"]["device_activation_item_type"]["options"]
+        assert types["stair_light"] == data["entity"]["event"]["stair_light"]["name"] == word, path.name
+        # A station item without a name: its type, then its address.
+        for kind, label in types.items():
+            assert data["entity"]["button"][f"activation_{kind}"]["name"] == f"{label} {{address}}", (path.name, kind)
+    card = (INTEGRATION / "frontend" / "c300x-translations.js").read_text(encoding="utf-8").lower()
+    for language, words in OTHER_WORDS_FOR_THE_STAIR_LIGHT.items():
+        text = (TRANSLATIONS / f"{language}.json").read_text(encoding="utf-8").lower()
+        for other in words:
+            assert other not in text and other not in card, (language, other)
 
 
 def test_snapshot_size_help_distinguishes_native_framebuffer_from_high_stream() -> None:

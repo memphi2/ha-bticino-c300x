@@ -225,6 +225,28 @@ CHANGED_SINCE_2_10_0 = frozenset({
     "options/step/device_activations/data_description/device_activation_mode",
     # French names the outdoor unit "poste extérieur" and the station "station" (3.1.0).
     "services/camera_picture/description",
+    # French calls the stair light "lumière d'escalier" everywhere, as its button (3.1.0).
+    "config/error/invalid_device_activations",
+    "config/step/reconfigure_dashboard_alarm/data_description/alarm_page_entity_id",
+    "config/step/reconfigure_device_activations/data/device_activation_mode",
+    "config/step/reconfigure_device_activations/data/device_activation_stair_light_n",
+    "config/step/reconfigure_device_activations/data/device_activation_stair_light_p",
+    "config/step/reconfigure_device_activations/data_description/device_activation_stair_light_n",
+    "config/step/reconfigure_device_activations/data_description/device_activation_stair_light_p",
+    "config/step/user_dashboard_alarm/data_description/alarm_page_entity_id",
+    "config/step/user_device_activations/data/device_activation_mode",
+    "config/step/user_device_activations/data/device_activation_stair_light_n",
+    "config/step/user_device_activations/data/device_activation_stair_light_p",
+    "config/step/user_device_activations/data_description/device_activation_stair_light_n",
+    "config/step/user_device_activations/data_description/device_activation_stair_light_p",
+    "options/error/invalid_device_activations",
+    "options/step/dashboard_alarm/data_description/alarm_page_entity_id",
+    "options/step/device_activations/data/device_activation_mode",
+    "options/step/device_activations/data/device_activation_stair_light_n",
+    "options/step/device_activations/data/device_activation_stair_light_p",
+    "options/step/device_activations/data_description/device_activation_stair_light_n",
+    "options/step/device_activations/data_description/device_activation_stair_light_p",
+    "selector/device_activation_item_type/options/stair_light",
 })
 # Texts of 2.10.0 that are gone: 3.1.0 removed the agent event entity, the
 # doorbell state sensor, the station's door button (each unit has its own) and
@@ -283,11 +305,11 @@ REMOVED_SINCE_2_10_0 = frozenset({
 # ones, per file:
 #   json.dumps({"a/b/c": text}, sort_keys=True, ensure_ascii=False)
 DIGESTS_2_10_0 = {
-    "base": "cfa537be9b9241f6af8a7d8c78dca54b0a550467534bd25a1af1e8fd21289bf2",
-    "en": "cfa537be9b9241f6af8a7d8c78dca54b0a550467534bd25a1af1e8fd21289bf2",
-    "de": "079f0dbc5d62cd28fd7e4c01857c001f943c44608208222b517b2c54b464f7b1",
-    "it": "0745e4526e1bf6aba29941ecc6af094ad942684fa9f22f2ad65d3eca2b7eaba5",
-    "fr": "386e48ba46037028f4f484781f61cadaf204c959141ecace1325e0124a95607c",
+    "base": "667f6f4f824c522ece0596bf2235e40115b4d7ebf9151bb18ea07fa0b3df6797",
+    "en": "667f6f4f824c522ece0596bf2235e40115b4d7ebf9151bb18ea07fa0b3df6797",
+    "de": "f7563d892e3464b0d5a18ff56ae58d6189562a2217250cbfc02d1edb20302a22",
+    "it": "87931fbdfeb78484309424aa44f458b6850989745a06bd22ad5a142f19bc174e",
+    "fr": "cc61a5dff20ae63274c4b1f60fd9cae54914347c478462903a7e6d806e253060",
 }
 
 

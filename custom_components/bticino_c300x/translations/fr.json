@@ -99,16 +99,16 @@
         "title": "Activations appareil supplémentaires",
         "description": "Les serrures et actionneurs supplémentaires de l'installation s'ajoutent ici, une activation chacune, par exemple pour un ouvre-portail. Ajoutez ici une serrure qui n'appartient à aucun poste extérieur ; une serrure à l'adresse de la serrure d'un poste extérieur est le bouton Ouvrir la porte de ce poste extérieur et lui donne son nom.\n\nActivations supplémentaires configurées : {device_activation_count}\n\n{device_activation_items}\n\nAjouter, modifier ou supprimer ne change que la configuration Home Assistant en attente. L'agent appareil est synchronisé après l'enregistrement, et seulement si sa configuration d'activations diffère.",
         "data": {
-          "device_activation_mode": "Adresse de l'éclairage d'escalier",
-          "device_activation_stair_light_p": "Éclairage d'escalier P",
-          "device_activation_stair_light_n": "Éclairage d'escalier N",
+          "device_activation_mode": "Adresse de la lumière d'escalier",
+          "device_activation_stair_light_p": "Lumière d'escalier P",
+          "device_activation_stair_light_n": "Lumière d'escalier N",
           "device_activation_flow_action": "Action",
           "device_activation_flow_target": "Activation"
         },
         "data_description": {
-          "device_activation_mode": "Automatique : l'éclairage d'escalier est à l'adresse propre de la station, qu'elle connaît par sa configuration. Manuel définit seulement l'adresse de l'éclairage d'escalier, à partir des valeurs P et N ci-dessous.",
-          "device_activation_stair_light_p": "Mode manuel uniquement : partie P de l'adresse de l'éclairage d'escalier, de 0 à 99.",
-          "device_activation_stair_light_n": "Mode manuel uniquement : partie N de l'adresse de l'éclairage d'escalier, de 0 à 99.",
+          "device_activation_mode": "Automatique : la lumière d'escalier est à l'adresse propre de la station, qu'elle connaît par sa configuration. Manuel définit seulement l'adresse de la lumière d'escalier, à partir des valeurs P et N ci-dessous.",
+          "device_activation_stair_light_p": "Mode manuel uniquement : partie P de l'adresse de la lumière d'escalier, de 0 à 99.",
+          "device_activation_stair_light_n": "Mode manuel uniquement : partie N de l'adresse de la lumière d'escalier, de 0 à 99.",
           "device_activation_flow_action": "Ajouter, modifier ou supprimer une activation - ou terminer et enregistrer.",
           "device_activation_flow_target": "L'activation à modifier ou à supprimer."
         }
@@ -125,7 +125,7 @@
         "data_description": {
           "device_activation_item_id": "Lettres, chiffres, _ et -, 32 caractères au plus. Chaque ID ne sert qu'une fois.",
           "device_activation_item_name": "Nom du bouton dans Home Assistant, 63 caractères au plus.",
-          "device_activation_item_type": "Ce que l'adresse déclenche : une serrure de porte, un actionneur comme un ouvre-portail ou l'éclairage d'escalier.",
+          "device_activation_item_type": "Ce que l'adresse déclenche : une serrure de porte, un actionneur comme un ouvre-portail ou la lumière d'escalier.",
           "device_activation_item_address": "Adresse dans l'installation à laquelle l'activation est envoyée (OpenWebNet « where »), 31 caractères au plus."
         }
       },
@@ -226,18 +226,18 @@
       },
       "reconfigure_device_activations": {
         "title": "Activations appareil supplémentaires",
-        "description": "Les serrures et actionneurs supplémentaires de l'installation s'ajoutent ici, une activation chacune, par exemple pour un ouvre-portail. Ajoutez ici une serrure qui n'appartient à aucun poste extérieur ; une serrure à l'adresse de la serrure d'un poste extérieur est le bouton Ouvrir la porte de ce poste extérieur et lui donne son nom.\n\nManuelles : {device_activation_count}\n\n{device_activation_items}\n\nDe la station (ses propres serrures, actionneurs et éclairage d'escalier) : {station_activation_count}\n\n{station_activation_items}\n\nAjouter, modifier ou supprimer ne change que la configuration Home Assistant en attente. L'agent appareil est synchronisé après l'enregistrement, et seulement si sa configuration d'activations diffère.",
+        "description": "Les serrures et actionneurs supplémentaires de l'installation s'ajoutent ici, une activation chacune, par exemple pour un ouvre-portail. Ajoutez ici une serrure qui n'appartient à aucun poste extérieur ; une serrure à l'adresse de la serrure d'un poste extérieur est le bouton Ouvrir la porte de ce poste extérieur et lui donne son nom.\n\nManuelles : {device_activation_count}\n\n{device_activation_items}\n\nDe la station (ses propres serrures, actionneurs et lumière d'escalier) : {station_activation_count}\n\n{station_activation_items}\n\nAjouter, modifier ou supprimer ne change que la configuration Home Assistant en attente. L'agent appareil est synchronisé après l'enregistrement, et seulement si sa configuration d'activations diffère.",
         "data": {
-          "device_activation_mode": "Adresse de l'éclairage d'escalier",
-          "device_activation_stair_light_p": "Éclairage d'escalier P",
-          "device_activation_stair_light_n": "Éclairage d'escalier N",
+          "device_activation_mode": "Adresse de la lumière d'escalier",
+          "device_activation_stair_light_p": "Lumière d'escalier P",
+          "device_activation_stair_light_n": "Lumière d'escalier N",
           "device_activation_flow_action": "Action",
           "device_activation_flow_target": "Activation"
         },
         "data_description": {
-          "device_activation_mode": "Automatique : l'éclairage d'escalier est à l'adresse propre de la station, qu'elle connaît par sa configuration. Manuel définit seulement l'adresse de l'éclairage d'escalier, à partir des valeurs P et N ci-dessous.",
-          "device_activation_stair_light_p": "Mode manuel uniquement : partie P de l'adresse de l'éclairage d'escalier, de 0 à 99.",
-          "device_activation_stair_light_n": "Mode manuel uniquement : partie N de l'adresse de l'éclairage d'escalier, de 0 à 99.",
+          "device_activation_mode": "Automatique : la lumière d'escalier est à l'adresse propre de la station, qu'elle connaît par sa configuration. Manuel définit seulement l'adresse de la lumière d'escalier, à partir des valeurs P et N ci-dessous.",
+          "device_activation_stair_light_p": "Mode manuel uniquement : partie P de l'adresse de la lumière d'escalier, de 0 à 99.",
+          "device_activation_stair_light_n": "Mode manuel uniquement : partie N de l'adresse de la lumière d'escalier, de 0 à 99.",
           "device_activation_flow_action": "Ajouter, modifier ou supprimer une activation - ou terminer et enregistrer.",
           "device_activation_flow_target": "L'activation à modifier ou à supprimer."
         }
@@ -254,7 +254,7 @@
         "data_description": {
           "device_activation_item_id": "Lettres, chiffres, _ et -, 32 caractères au plus. Chaque ID ne sert qu'une fois.",
           "device_activation_item_name": "Nom du bouton dans Home Assistant, 63 caractères au plus.",
-          "device_activation_item_type": "Ce que l'adresse déclenche : une serrure de porte, un actionneur comme un ouvre-portail ou l'éclairage d'escalier.",
+          "device_activation_item_type": "Ce que l'adresse déclenche : une serrure de porte, un actionneur comme un ouvre-portail ou la lumière d'escalier.",
           "device_activation_item_address": "Adresse dans l'installation à laquelle l'activation est envoyée (OpenWebNet « where »), 31 caractères au plus."
         }
       },
@@ -305,7 +305,7 @@
         },
         "data_description": {
           "alarm_entity_id": "Centrale d'alarme que Home Assistant arme et désarme depuis le {model} et que la page Alarme affiche. Laissez vide si vous n'utilisez pas Alarmo : le bouton Alarme n'apparaît alors pas.",
-          "alarm_page_entity_id": "Entité optionnelle sur la page Alarme de l'écran (patch display), par exemple l'éclairage d'escalier. Les boutons, interrupteurs, scènes et scripts peuvent y être commandés, les autres entités sont seulement affichées. Laissez vide pour la masquer."
+          "alarm_page_entity_id": "Entité optionnelle sur la page Alarme de l'écran (patch display), par exemple la lumière d'escalier. Les boutons, interrupteurs, scènes et scripts peuvent y être commandés, les autres entités sont seulement affichées. Laissez vide pour la masquer."
         }
       },
       "user_dashboard_alarm_c100x": {
@@ -317,7 +317,7 @@
         },
         "data_description": {
           "alarm_entity_id": "Centrale d'alarme que Home Assistant arme et désarme depuis le {model} et que la page Alarmo affiche. Laissez vide si vous n'utilisez pas Alarmo : l'élément Alarmo n'apparaît alors pas dans le menu principal.",
-          "alarm_page_entity_id": "Entité optionnelle sur la page Alarmo de l'écran, par exemple l'éclairage d'escalier. Les boutons, interrupteurs, scènes et scripts peuvent y être commandés, les autres entités sont seulement affichées. Laissez vide pour la masquer."
+          "alarm_page_entity_id": "Entité optionnelle sur la page Alarmo de l'écran, par exemple la lumière d'escalier. Les boutons, interrupteurs, scènes et scripts peuvent y être commandés, les autres entités sont seulement affichées. Laissez vide pour la masquer."
         }
       },
       "reconfigure_dashboard_alarm": {
@@ -329,7 +329,7 @@
         },
         "data_description": {
           "alarm_entity_id": "Centrale d'alarme que Home Assistant arme et désarme depuis le {model} et que la page Alarme affiche. Laissez vide si vous n'utilisez pas Alarmo : le bouton Alarme n'apparaît alors pas.",
-          "alarm_page_entity_id": "Entité optionnelle sur la page Alarme de l'écran (patch display), par exemple l'éclairage d'escalier. Les boutons, interrupteurs, scènes et scripts peuvent y être commandés, les autres entités sont seulement affichées. Laissez vide pour la masquer."
+          "alarm_page_entity_id": "Entité optionnelle sur la page Alarme de l'écran (patch display), par exemple la lumière d'escalier. Les boutons, interrupteurs, scènes et scripts peuvent y être commandés, les autres entités sont seulement affichées. Laissez vide pour la masquer."
         }
       },
       "reconfigure_dashboard_alarm_c100x": {
@@ -341,7 +341,7 @@
         },
         "data_description": {
           "alarm_entity_id": "Centrale d'alarme que Home Assistant arme et désarme depuis le {model} et que la page Alarmo affiche. Laissez vide si vous n'utilisez pas Alarmo : l'élément Alarmo n'apparaît alors pas dans le menu principal.",
-          "alarm_page_entity_id": "Entité optionnelle sur la page Alarmo de l'écran, par exemple l'éclairage d'escalier. Les boutons, interrupteurs, scènes et scripts peuvent y être commandés, les autres entités sont seulement affichées. Laissez vide pour la masquer."
+          "alarm_page_entity_id": "Entité optionnelle sur la page Alarmo de l'écran, par exemple la lumière d'escalier. Les boutons, interrupteurs, scènes et scripts peuvent y être commandés, les autres entités sont seulement affichées. Laissez vide pour la masquer."
         }
       },
       "user_dashboard_pages": {
@@ -777,7 +777,7 @@
       "invalid_alarm_page_entity": "Sélectionnez une entité dashboard prise en charge pour la page alarme ou laissez vide.",
       "invalid_weather_entity": "Sélectionnez une entité météo ou laissez vide.",
       "invalid_audio_level": "Choisissez un niveau dans la liste et un réglage fin entre -10 dB et +10 dB.",
-      "invalid_device_activations": "Vérifiez l'ID, le nom, le type et l'adresse d'activation. Les ID doivent être uniques; le mode lumière escalier manuel réserve déjà stair_light.",
+      "invalid_device_activations": "Vérifiez l'ID, le nom, le type et l'adresse d'activation. Les ID doivent être uniques; le mode manuel de la lumière d'escalier réserve déjà stair_light.",
       "invalid_stair_light_part": "Saisissez une valeur P/N numérique de 0 à 99.",
       "required": "Ce champ est obligatoire.",
       "invalid_dashboard_entities": "Une entité ne peut pas être affichée sur l'écran.",
@@ -901,19 +901,19 @@
         }
       },
       "device_activations": {
-        "title": "Activations : serrures, actionneurs, éclairage d'escalier",
-        "description": "Les serrures et actionneurs supplémentaires de l'installation s'ajoutent ici, une activation chacune, par exemple pour un ouvre-portail. Ajoutez ici une serrure qui n'appartient à aucun poste extérieur ; une serrure à l'adresse de la serrure d'un poste extérieur est le bouton Ouvrir la porte de ce poste extérieur et lui donne son nom.\n\nManuelles : {device_activation_count}\n\n{device_activation_items}\n\nDe la station (ses propres serrures, actionneurs et éclairage d'escalier) : {station_activation_count}\n\n{station_activation_items}\n\nChoisissez quoi faire et validez. Les changements sont d'abord rassemblés ici ; avec **Terminer et enregistrer** ils sont enregistrés et l'appareil est mis à jour, et seulement si ses activations diffèrent.",
+        "title": "Activations : serrures, actionneurs, lumière d'escalier",
+        "description": "Les serrures et actionneurs supplémentaires de l'installation s'ajoutent ici, une activation chacune, par exemple pour un ouvre-portail. Ajoutez ici une serrure qui n'appartient à aucun poste extérieur ; une serrure à l'adresse de la serrure d'un poste extérieur est le bouton Ouvrir la porte de ce poste extérieur et lui donne son nom.\n\nManuelles : {device_activation_count}\n\n{device_activation_items}\n\nDe la station (ses propres serrures, actionneurs et lumière d'escalier) : {station_activation_count}\n\n{station_activation_items}\n\nChoisissez quoi faire et validez. Les changements sont d'abord rassemblés ici ; avec **Terminer et enregistrer** ils sont enregistrés et l'appareil est mis à jour, et seulement si ses activations diffèrent.",
         "data": {
-          "device_activation_mode": "Adresse de l'éclairage d'escalier",
-          "device_activation_stair_light_p": "Éclairage d'escalier P",
-          "device_activation_stair_light_n": "Éclairage d'escalier N",
+          "device_activation_mode": "Adresse de la lumière d'escalier",
+          "device_activation_stair_light_p": "Lumière d'escalier P",
+          "device_activation_stair_light_n": "Lumière d'escalier N",
           "device_activation_flow_action": "Action",
           "device_activation_flow_target": "Activation"
         },
         "data_description": {
-          "device_activation_mode": "Automatique : l'éclairage d'escalier est à l'adresse propre de la station, qu'elle connaît par sa configuration. Manuel définit seulement l'adresse de l'éclairage d'escalier, à partir des valeurs P et N ci-dessous.",
-          "device_activation_stair_light_p": "Mode manuel uniquement : partie P de l'adresse de l'éclairage d'escalier, de 0 à 99.",
-          "device_activation_stair_light_n": "Mode manuel uniquement : partie N de l'adresse de l'éclairage d'escalier, de 0 à 99.",
+          "device_activation_mode": "Automatique : la lumière d'escalier est à l'adresse propre de la station, qu'elle connaît par sa configuration. Manuel définit seulement l'adresse de la lumière d'escalier, à partir des valeurs P et N ci-dessous.",
+          "device_activation_stair_light_p": "Mode manuel uniquement : partie P de l'adresse de la lumière d'escalier, de 0 à 99.",
+          "device_activation_stair_light_n": "Mode manuel uniquement : partie N de l'adresse de la lumière d'escalier, de 0 à 99.",
           "device_activation_flow_action": "Ajouter, modifier ou supprimer une activation - ou terminer et enregistrer.",
           "device_activation_flow_target": "L'activation à modifier ou à supprimer."
         }
@@ -930,7 +930,7 @@
         "data_description": {
           "device_activation_item_id": "Lettres, chiffres, _ et -, 32 caractères au plus. Chaque ID ne sert qu'une fois.",
           "device_activation_item_name": "Nom du bouton dans Home Assistant, 63 caractères au plus.",
-          "device_activation_item_type": "Ce que l'adresse déclenche : une serrure de porte, un actionneur comme un ouvre-portail ou l'éclairage d'escalier.",
+          "device_activation_item_type": "Ce que l'adresse déclenche : une serrure de porte, un actionneur comme un ouvre-portail ou la lumière d'escalier.",
           "device_activation_item_address": "Adresse dans l'installation à laquelle l'activation est envoyée (OpenWebNet « where »), 31 caractères au plus."
         }
       },
@@ -980,7 +980,7 @@
           "features": "Vidéo et audio",
           "visitor_snapshot": "Instantané visiteur",
           "camera_quality": "Qualité de la caméra",
-          "device_activations": "Activations : serrures, actionneurs, éclairage d'escalier",
+          "device_activations": "Activations : serrures, actionneurs, lumière d'escalier",
           "speech": "Synthèse vocale",
           "display": "Écran",
           "done": "Terminé",
@@ -991,7 +991,7 @@
           "features": "Image en direct, parole, volumes et accès vidéo et audio sur le C300X.",
           "visitor_snapshot": "Taille de l'image du visiteur enregistrée, délai de capture, conservation et date inscrite dans l'image.",
           "camera_quality": "Taille, débit et fréquence d'images du flux caméra ; une modification redémarre l'appareil.",
-          "device_activations": "Serrures et actionneurs supplémentaires de l'installation que Home Assistant peut déclencher, et l'adresse de l'éclairage d'escalier.",
+          "device_activations": "Serrures et actionneurs supplémentaires de l'installation que Home Assistant peut déclencher, et l'adresse de la lumière d'escalier.",
           "speech": "Moteur de synthèse vocale et langue des notifications parlées.",
           "display": "Patch display, pages, tuiles et Alarmo.",
           "done": "Fermer les réglages. Tout ce qui a été validé est déjà enregistré.",
@@ -1006,7 +1006,7 @@
           "features": "Vidéo et audio",
           "visitor_snapshot": "Instantané visiteur",
           "camera_quality": "Qualité de la caméra",
-          "device_activations": "Activations : serrures, actionneurs, éclairage d'escalier",
+          "device_activations": "Activations : serrures, actionneurs, lumière d'escalier",
           "speech": "Synthèse vocale",
           "display": "Écran",
           "done": "Terminé",
@@ -1017,7 +1017,7 @@
           "features": "Image en direct, parole, volumes et accès vidéo et audio sur le C100X.",
           "visitor_snapshot": "Taille de l'image du visiteur enregistrée, délai de capture, conservation et date inscrite dans l'image.",
           "camera_quality": "Taille, débit et fréquence d'images du flux caméra ; une modification redémarre l'appareil.",
-          "device_activations": "Serrures et actionneurs supplémentaires de l'installation que Home Assistant peut déclencher, et l'adresse de l'éclairage d'escalier.",
+          "device_activations": "Serrures et actionneurs supplémentaires de l'installation que Home Assistant peut déclencher, et l'adresse de la lumière d'escalier.",
           "speech": "Moteur de synthèse vocale et langue des notifications parlées.",
           "display": "Pages, tuiles et Alarmo.",
           "done": "Fermer les réglages. Tout ce qui a été validé est déjà enregistré.",
@@ -1093,7 +1093,7 @@
         },
         "data_description": {
           "alarm_entity_id": "Centrale d'alarme que Home Assistant arme et désarme depuis le {model} et que la page Alarme affiche. Laissez vide si vous n'utilisez pas Alarmo : le bouton Alarme n'apparaît alors pas.",
-          "alarm_page_entity_id": "Entité optionnelle sur la page Alarme de l'écran (patch display), par exemple l'éclairage d'escalier. Les boutons, interrupteurs, scènes et scripts peuvent y être commandés, les autres entités sont seulement affichées. Laissez vide pour la masquer."
+          "alarm_page_entity_id": "Entité optionnelle sur la page Alarme de l'écran (patch display), par exemple la lumière d'escalier. Les boutons, interrupteurs, scènes et scripts peuvent y être commandés, les autres entités sont seulement affichées. Laissez vide pour la masquer."
         }
       },
       "dashboard_alarm_c100x": {
@@ -1105,7 +1105,7 @@
         },
         "data_description": {
           "alarm_entity_id": "Centrale d'alarme que Home Assistant arme et désarme depuis le {model} et que la page Alarmo affiche. Laissez vide si vous n'utilisez pas Alarmo : l'élément Alarmo n'apparaît alors pas dans le menu principal.",
-          "alarm_page_entity_id": "Entité optionnelle sur la page Alarmo de l'écran, par exemple l'éclairage d'escalier. Les boutons, interrupteurs, scènes et scripts peuvent y être commandés, les autres entités sont seulement affichées. Laissez vide pour la masquer."
+          "alarm_page_entity_id": "Entité optionnelle sur la page Alarmo de l'écran, par exemple la lumière d'escalier. Les boutons, interrupteurs, scènes et scripts peuvent y être commandés, les autres entités sont seulement affichées. Laissez vide pour la masquer."
         }
       },
       "dashboard_pages": {
@@ -1307,7 +1307,7 @@
       "invalid_alarm_page_entity": "Sélectionnez une entité dashboard prise en charge pour la page alarme ou laissez vide.",
       "invalid_weather_entity": "Sélectionnez une entité météo ou laissez vide.",
       "invalid_audio_level": "Choisissez un niveau dans la liste et un réglage fin entre -10 dB et +10 dB.",
-      "invalid_device_activations": "Vérifiez l'ID, le nom, le type et l'adresse d'activation. Les ID doivent être uniques; le mode lumière escalier manuel réserve déjà stair_light.",
+      "invalid_device_activations": "Vérifiez l'ID, le nom, le type et l'adresse d'activation. Les ID doivent être uniques; le mode manuel de la lumière d'escalier réserve déjà stair_light.",
       "invalid_stair_light_part": "Saisissez une valeur P/N numérique de 0 à 99.",
       "invalid_dashboard_entities": "Une entité ne peut pas être affichée sur l'écran.",
       "invalid_device_activation_mode": "Choisissez automatique ou manuel pour le mode d'adresse des activations.",
@@ -1990,7 +1990,7 @@
     },
     "outdoor_units_breaking_change": {
       "title": "Entités de sonnette déplacées vers les postes extérieurs",
-      "description": "{entry_title} affiche désormais chaque poste extérieur comme appareil propre sous la station. La caméra de sonnette, l'événement de sonnette et le bouton de porte sont passés à l'appareil du poste extérieur par défaut ; leurs identifiants d'entité et leur historique restent. Merci de refaire ces étapes :\n\n- Important : l'événement bticino_c300x_agent_event_received n'a plus event_key, les automatisations qui filtrent dessus (par exemple event_key: doorbell_pressed) ne se déclenchent donc plus. Remplacer event_key par event_type (event_type: doorbell_pressed).\n- bticino_c300x_agent_event_received : le champ address de premier niveau est désormais data.address ; event, event_type_key, event_name, event_value, event_label et event_label_* n'existent plus.\n- Automatisations de blueprint : sélectionner à nouveau le poste extérieur (son événement de sonnette). Les blueprints \"BTicino Calendar display reminder\" et \"BTicino strict phrase decision\" demandent désormais l'appareil de la station ou de la porte.\n- answer_doorbell_call et hangup_doorbell_call s'appellent désormais answer_call et hangup_call. Chaque service prend une cible (la station ou un poste extérieur) au lieu de entry_id. evaluate_ring_analysis ne prend plus lock_id : il ouvre la porte du poste extérieur qui a sonné.\n- Les services unlock_door, stair_light, stop_doorbell_video, reboot, reload_gui, run_device_activation et delete_latest_* n'existent plus : appuyer plutôt sur les boutons correspondants (button.press). Pour un éclairage d'escalier à une adresse propre, ajouter une activation de type Éclairage d'escalier et appuyer sur son bouton.\n- Notifications : le champ mode n'existe plus ; régler plutôt dans data les interrupteurs display, tts et led.\n- Le capteur d'état de sonnette n'existe plus : utiliser le capteur d'appel du poste extérieur. L'entité \"Événement appareil\" n'existe plus : utiliser l'événement Porte du poste extérieur, l'événement Lumière d'escalier de la station ou l'événement bticino_c300x_agent_event_received, dont event_type est désormais une clé fixe (par exemple ringer_muted). L'événement bticino_c300x_action_received n'existe plus : réagir à l'entité commandée ou aux événements Porte et Lumière d'escalier.\n- Boutons Ouvrir la porte : l'attribut lock_id est remplacé par lock_address (l'adresse bus de la serrure) et lock_name.\n- L'événement de sonnette d'un poste extérieur se déclenche dès que la station a nommé le poste extérieur qui appelle, jusqu'à 1 s après la sonnerie ; pour la réaction la plus rapide, utilisez l'événement Sonnerie de la station. Ses attributs event_key, event et video_available n'existent plus, pas plus que les champs de l'événement de la station qu'il reprenait (comme entry_id, event_at et event_label_*) ; il a call_id, unit et last_ring_at.\n- Les activations de type Lumière n'existent plus : la mise à jour les a supprimées. Les actionneurs et l'éclairage d'escalier de la station viennent désormais de la station elle-même.\n- Adresse de l'éclairage d'escalier Automatique : l'éclairage d'escalier est désormais commandé à l'adresse propre de la station au lieu de 10.\n- Les activations de type Serrure de porte à l'adresse de la serrure d'un poste extérieur, lues dans la station ou configurées par vous, sont désormais le bouton Ouvrir la porte de ce poste extérieur, qui prend le nom de l'activation. Leurs anciens boutons d'activation n'existent plus et peuvent être supprimés.\n- Adresse de l'éclairage d'escalier Manuel : l'activation Éclairage d'escalier qui en résulte n'a plus de bouton propre ; le bouton Lumière d'escalier fait la même chose. Son ancien bouton peut être supprimé.\n\nIgnorez ce message une fois terminé."
+      "description": "{entry_title} affiche désormais chaque poste extérieur comme appareil propre sous la station. La caméra de sonnette, l'événement de sonnette et le bouton de porte sont passés à l'appareil du poste extérieur par défaut ; leurs identifiants d'entité et leur historique restent. Merci de refaire ces étapes :\n\n- Important : l'événement bticino_c300x_agent_event_received n'a plus event_key, les automatisations qui filtrent dessus (par exemple event_key: doorbell_pressed) ne se déclenchent donc plus. Remplacer event_key par event_type (event_type: doorbell_pressed).\n- bticino_c300x_agent_event_received : le champ address de premier niveau est désormais data.address ; event, event_type_key, event_name, event_value, event_label et event_label_* n'existent plus.\n- Automatisations de blueprint : sélectionner à nouveau le poste extérieur (son événement de sonnette). Les blueprints \"BTicino Calendar display reminder\" et \"BTicino strict phrase decision\" demandent désormais l'appareil de la station ou de la porte.\n- answer_doorbell_call et hangup_doorbell_call s'appellent désormais answer_call et hangup_call. Chaque service prend une cible (la station ou un poste extérieur) au lieu de entry_id. evaluate_ring_analysis ne prend plus lock_id : il ouvre la porte du poste extérieur qui a sonné.\n- Les services unlock_door, stair_light, stop_doorbell_video, reboot, reload_gui, run_device_activation et delete_latest_* n'existent plus : appuyer plutôt sur les boutons correspondants (button.press). Pour une lumière d'escalier à une adresse propre, ajouter une activation de type Lumière d'escalier et appuyer sur son bouton.\n- Notifications : le champ mode n'existe plus ; régler plutôt dans data les interrupteurs display, tts et led.\n- Le capteur d'état de sonnette n'existe plus : utiliser le capteur d'appel du poste extérieur. L'entité \"Événement appareil\" n'existe plus : utiliser l'événement Porte du poste extérieur, l'événement Lumière d'escalier de la station ou l'événement bticino_c300x_agent_event_received, dont event_type est désormais une clé fixe (par exemple ringer_muted). L'événement bticino_c300x_action_received n'existe plus : réagir à l'entité commandée ou aux événements Porte et Lumière d'escalier.\n- Boutons Ouvrir la porte : l'attribut lock_id est remplacé par lock_address (l'adresse bus de la serrure) et lock_name.\n- L'événement de sonnette d'un poste extérieur se déclenche dès que la station a nommé le poste extérieur qui appelle, jusqu'à 1 s après la sonnerie ; pour la réaction la plus rapide, utilisez l'événement Sonnerie de la station. Ses attributs event_key, event et video_available n'existent plus, pas plus que les champs de l'événement de la station qu'il reprenait (comme entry_id, event_at et event_label_*) ; il a call_id, unit et last_ring_at.\n- Les activations de type Lumière n'existent plus : la mise à jour les a supprimées. Les actionneurs et la lumière d'escalier de la station viennent désormais de la station elle-même.\n- Adresse de la lumière d'escalier Automatique : la lumière d'escalier est désormais commandée à l'adresse propre de la station au lieu de 10.\n- Les activations de type Serrure de porte à l'adresse de la serrure d'un poste extérieur, lues dans la station ou configurées par vous, sont désormais le bouton Ouvrir la porte de ce poste extérieur, qui prend le nom de l'activation. Leurs anciens boutons d'activation n'existent plus et peuvent être supprimés.\n- Adresse de la lumière d'escalier Manuel : l'activation Lumière d'escalier qui en résulte n'a plus de bouton propre ; le bouton Lumière d'escalier fait la même chose. Son ancien bouton peut être supprimé.\n\nIgnorez ce message une fois terminé."
     }
   },
   "selector": {
@@ -2055,7 +2055,7 @@
       "options": {
         "lock": "Serrure de porte",
         "actuator": "Actionneur",
-        "stair_light": "Éclairage d'escalier"
+        "stair_light": "Lumière d'escalier"
       }
     },
     "device_activation_mode": {

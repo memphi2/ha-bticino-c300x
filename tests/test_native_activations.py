@@ -158,27 +158,32 @@ def test_a_stair_light_activation_releases_the_light_as_the_display_does(lab: La
 
 
 STORED_LIGHT = [
-    {"id": "gate", "name": "Gate opener", "type": "light", "addressMode": "manual", "address": "25"},
+    {"id": "lamp", "name": "Lamp", "type": "light", "addressMode": "manual", "address": "20"},
+    {"id": "front", "name": "Front", "type": "lock", "addressMode": "manual", "address": "21"},
+]
+ACTUATOR = [
+    {"id": "gate", "name": "Gate opener", "type": "actuator", "addressMode": "manual", "address": "25"},
 ]
 
 
 @pytest.mark.parametrize("lab", [STORED_LIGHT], indirect=True)
-def test_a_stored_light_item_becomes_an_actuator_once(lab: Lab) -> None:
+def test_a_stored_light_item_is_left_out_and_the_file_saved_without_it(lab: Lab) -> None:
+    # "light" sent the stair-light frame; the lock frames at its address
+    # (here outdoor unit 20) would open a door, so the item goes.
     text = lab.config_path.read_text()
     stored = json.loads(text)["activations"]["items"]
     status, body = lab.request("GET", "/api/v1/activations")
+    run_status, _ = lab.request("POST", "/api/v1/activations/lamp/actions/run", {})
 
-    assert [(item["id"], item["name"], item["type"], item["address"]) for item in stored] == [
-        ("gate", "Gate opener", "actuator", "25"),
-    ]
-    assert '"light"' not in text
+    assert [item["id"] for item in stored] == ["front"]
+    assert '"light"' not in text and '"lamp"' not in text
     assert status == 200
-    assert [(item["id"], item["name"], item["type"], item["address"]) for item in body["items"]] == [
-        ("gate", "Gate opener", "actuator", "25"),
-    ]
+    assert [(item["id"], item["type"]) for item in body["items"]] == [("front", "lock")]
+    assert run_status == 404
+    assert lab.bus.sent() == []
 
 
-@pytest.mark.parametrize("lab", [STORED_LIGHT], indirect=True)
+@pytest.mark.parametrize("lab", [ACTUATOR], indirect=True)
 def test_an_actuator_is_pressed_and_released_with_the_lock_frames(lab: Lab) -> None:
     status, body = lab.request("POST", "/api/v1/activations/gate/actions/run", {})
 

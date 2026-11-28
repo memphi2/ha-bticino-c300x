@@ -67,7 +67,7 @@ struct c300x_config {
     int activations_enabled;
     int activations_auto_discover;
     int activations_count;
-    int activations_migrated; /* the loaded file named an actuator "light": save it once */
+    int config_migrated; /* the loaded file was changed from an older agent's: save it once */
     struct c300x_activation activations[C300X_MAX_ACTIVATIONS];
     int maintenance_enabled;
     int maintenance_ssh_start_enabled;

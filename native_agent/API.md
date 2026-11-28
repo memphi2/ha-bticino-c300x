@@ -795,12 +795,11 @@ Activation types and their frames (an item's own `pressCommand` and
 `actuator` is the station's generic actuator (AutomationVDE, shown as
 "Generic" on the display, archive object 3008): the display presses and
 releases it with the lock frames at its address `2N`. The type `light` no
-longer exists: the agent's configuration file's `light` items (which sent the
-stair-light frame) become `actuator` at the first start of this agent and the
-file is saved once; id, name and address stay as configured (an address `25`
-stays `25`). Requests that set activation items with `type: "light"` are
-refused (`invalid_activation_items`, detail `activations item type is
-invalid`).
+longer exists: at its first start the agent leaves the `light` items of its
+configuration file out and saves the file once without them. The station's
+actuators and stair light are its own items (see above). Requests that set
+activation items with `type: "light"` are refused (`invalid_activation_items`,
+detail `activations item type is invalid`).
 
 ## Device Feature State
 

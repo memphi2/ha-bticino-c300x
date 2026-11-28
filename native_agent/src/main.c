@@ -247,8 +247,8 @@ int main(int argc, char **argv)
         return 0;
     }
 
-    /* Actuators the file still names "light" are written as "actuator", once. */
-    if (config.activations_migrated) {
+    /* What an older agent's file needed changed is saved, once. */
+    if (config.config_migrated) {
         int changed = 0;
         if (!c300x_save_config_if_changed(&config, error, sizeof(error), &changed)) {
             fprintf(stderr, "warning: config_migration_not_saved: %s\n", error);

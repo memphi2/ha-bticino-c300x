@@ -176,8 +176,8 @@ int main(int argc, char **argv)
         assert(c300x_config_set_activation_items_json(config,
             "[{\"id\":\"a\",\"name\":\"A\",\"type\":\"lock\",\"pressCommand\":\"*1*1*11##\"}]",
             set_error_text, sizeof(set_error_text)));
-        /* The API takes the actuator type only; "light" is migrated in the
-         * agent's own file, never accepted from a request. */
+        /* A request's "light" is an invalid type; the agent's own file
+         * leaves its "light" items out. */
         assert(!c300x_config_set_activation_items_json(config,
             "[{\"id\":\"gate\",\"name\":\"Gate\",\"type\":\"light\",\"address\":\"25\"}]",
             set_error_text, sizeof(set_error_text)));
@@ -185,7 +185,17 @@ int main(int argc, char **argv)
         assert(c300x_config_set_activation_items_json(config,
             "[{\"id\":\"gate\",\"name\":\"Gate\",\"type\":\"actuator\",\"address\":\"25\"}]",
             set_error_text, sizeof(set_error_text)));
-        assert(strcmp(config->activations[0].type, "actuator") == 0 && !config->activations_migrated);
+        assert(strcmp(config->activations[0].type, "actuator") == 0 && !config->config_migrated);
+        const char *stored =
+            "[{\"id\":\"lamp\",\"name\":\"Lamp\",\"type\":\"light\",\"address\":\"20\"},"
+            "{\"id\":\"front\",\"name\":\"Front\",\"type\":\"lock\",\"address\":\"21\"},"
+            "{\"id\":\"lamp2\",\"name\":\"Lamp 2\",\"type\":\"light\",\"address\":\"22\"}]";
+        assert(parse_activation_items_value(stored, stored + strlen(stored), config, 1,
+                                            set_error_text, sizeof(set_error_text)));
+        assert(config->activations_count == 1 && config->config_migrated);
+        assert(strcmp(config->activations[0].id, "front") == 0);
+        assert(strcmp(config->activations[0].type, "lock") == 0);
+        assert(config->activations[1].id[0] == '\0');
         assert(!c300x_config_set_activation_items_json(config,
             "[{\"id\":\"gate\",\"name\":\"Gate\",\"type\":\"actuator\"}]",
             set_error_text, sizeof(set_error_text)));

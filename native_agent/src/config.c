@@ -496,8 +496,11 @@ static const char *next_array_value(
     return after;
 }
 
-/* stored: the agent's own configuration file, whose "light" items (an
- * actuator that sent the stair-light frame) become "actuator" once. */
+enum { ACTIVATION_ITEM_INVALID = 0, ACTIVATION_ITEM_KEPT = 1, ACTIVATION_ITEM_LEFT_OUT = 2 };
+
+/* migrated is passed for the agent's own configuration file only: its items
+ * of the gone type "light" are left out and *migrated is set. A request's
+ * "light" is an invalid type. */
 static int parse_activation_item(
     const char *item,
     const char *document_end,
@@ -534,8 +537,9 @@ static int parse_activation_item(
     if (find_member(item, item_end, "type", &value)) {
         int read = string_value(value, document_end, activation->type, sizeof(activation->type));
         if (read && migrated != NULL && strcmp(activation->type, "light") == 0) {
-            safe_copy(activation->type, sizeof(activation->type), "actuator");
+            memset(activation, 0, sizeof(*activation));
             *migrated = 1;
+            return ACTIVATION_ITEM_LEFT_OUT;
         }
         if (!read || !activation_type_is_valid(activation->type)) {
             set_error(error, error_len, "activations item type is invalid");
@@ -575,7 +579,7 @@ static int parse_activation_item(
         set_error(error, error_len, "activations item holdMs is invalid");
         return 0;
     }
-    return 1;
+    return ACTIVATION_ITEM_KEPT;
 }
 
 static int parse_activation_items_value(
@@ -607,17 +611,20 @@ static int parse_activation_items_value(
             set_error(error, error_len, "too many activations configured");
             return 0;
         }
-        if (!parse_activation_item(
+        int parsed = parse_activation_item(
             item,
             document_end,
             &config->activations[config->activations_count],
-            stored ? &config->activations_migrated : NULL,
+            stored ? &config->config_migrated : NULL,
             error,
             error_len
-        )) {
+        );
+        if (parsed == ACTIVATION_ITEM_INVALID) {
             return 0;
         }
-        config->activations_count++;
+        if (parsed == ACTIVATION_ITEM_KEPT) {
+            config->activations_count++;
+        }
     }
     return 1;
 }

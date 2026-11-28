@@ -1457,7 +1457,7 @@ offers the same setting as the **Touch tone** switch under **Configuration**.
 It follows changes made on the station, is unavailable while the agent has no
 connection to the station's interface, and Home Assistant never sets it on
 start. A confirmed
-change fires a **Touch tone changed** device event; see
+change fires `display_touch_tone_changed` on `bticino_c300x_agent_event_received`; see
 [Events](../reference.md#events).
 
 Turning the Display patch off restores the original Settings menu. A Settings

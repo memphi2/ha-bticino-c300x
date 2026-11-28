@@ -1410,7 +1410,7 @@ Capabilities report `api_version: "2"`, `capabilities.outdoor_units` and
   unit, live or ended less than 60 s ago (else `409 call_not_current`).
   `404 unknown_unit` for an unknown unit. While the ring call's unit is not
   known yet (from the ring until its caller frame, at most 1 s, then the
-  default unit stands in), `current` is no unit: `409 call_unit_pending` with
+  default unit stands in, also for a ring answered before then), `current` is no unit: `409 call_unit_pending` with
   the ring's `call_id` and `retry_after_ms` (the time left until the default
   unit stands in, 1-1000); nothing reaches the station, and the request can
   be repeated then or after `call.caller_identified`.
@@ -1428,7 +1428,10 @@ Capabilities report `api_version: "2"`, `capabilities.outdoor_units` and
   (only the ring's own video shows whatever unit is asked). A running view of another unit ends first
   (BYE, its cached frames dropped, `doorbell.media.closed`, the view call
   ends); the RTSP clients stay connected and get the new unit's view. The unit
-  stays selected for later streams until the next activation.
+  stays selected for later streams until the next activation. An activation
+  that waits for its media operation keeps the unit it started with: a ring
+  or a display view that comes meanwhile changes neither its unit nor its
+  answer.
 
 Events: `doorbell.pressed` carries `call_id`, `unit` and `attribution`; new are
 `call.caller_identified`, `call.answered`, `call.view_started`, `call.ended`,
@@ -1437,6 +1440,11 @@ Events: `doorbell.pressed` carries `call_id`, `unit` and `attribution`; new are
 unit's door state, the first frame of a unit also sends
 `outdoor_units.changed`) and `outdoor_units.changed`; `door_unlock.*` and `doorbell.view_requested`
 carry `unit` and `call_id` when they belong to a unit.
+`call.caller_identified` (`call_id`, `unit`, `where`, `action_where`,
+`attribution`, `raw`) names the ring call's unit: its caller frame
+(`attribution: "caller_frame"`), else 1 s after the ring the default unit
+(`"default_fallback"`, `raw: null`), whether the call still rings or was
+answered before then.
 
 ### `POST /api/v1/calls/doorbell/actions/capture`
 

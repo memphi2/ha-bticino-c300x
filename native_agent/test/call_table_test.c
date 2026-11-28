@@ -317,6 +317,33 @@ static void caller_late(void)
     assert(calls.caller_frames_ignored == 1 && count("call.caller_identified") == 2);
 }
 
+/* HA answers at +277 ms as in c300x-ring-answer-20260703-185353, but no
+ * caller frame comes: the default unit stands in for the answered call once
+ * the caller wait is over, as it does for a ringing one. */
+static void answered_before_caller_wait(void)
+{
+    reset(ARCHIVE_THREE);
+    ring(0);
+    media.ring_leg = media.ha_answered = 1;
+    answer_seen(277);
+    expect(nth("call.answered", 1), "\"call_id\":\"8f3a1c2e-1\",\"unit\":null,\"answered_by\":\"ha\"");
+    assert(c300x_calls_timeout_ms(&calls, 277) == 723);
+    tick(999);
+    assert(count("call.caller_identified") == 0);
+    for (long long now = 1000; now <= 30000; now += 1000) tick(now);
+    assert(count("call.caller_identified") == 1 && count("call.ended") == 0);
+    expect(nth("call.caller_identified", 1), "\"call_id\":\"8f3a1c2e-1\",\"unit\":\"20\",\"where\":\"20#2\","
+           "\"action_where\":\"20\",\"attribution\":\"default_fallback\",\"raw\":null");
+    const struct c300x_call *call = c300x_calls_find(&calls, "8f3a1c2e-1");
+    assert(call != NULL && call->state == C300X_CALL_ANSWERED);
+    assert(strcmp(call->unit, "20") == 0 && strcmp(call->attribution, "default_fallback") == 0);
+    assert(c300x_calls_unlock_allowed(&calls, "8f3a1c2e-1", "20", 30000));
+    assert(c300x_calls_timeout_ms(&calls, 30000) == 277 + C300X_CALL_GUARD_MS - 30000);
+    char json[2048];
+    assert(c300x_calls_json(&calls, 30000, json, sizeof(json)));
+    expect(json, "\"state\":\"answered\",\"unit\":\"20\",\"attribution\":\"default_fallback\"");
+}
+
 static void stale_call_id(void)
 {
     reset(NULL);
@@ -812,6 +839,7 @@ int main(int argc, char **argv)
         {"two_units_within_one_second", two_units_within_one_second},
         {"caller_missing", caller_missing},
         {"caller_late", caller_late},
+        {"answered_before_caller_wait", answered_before_caller_wait},
         {"stale_call_id", stale_call_id},
         {"rings_of_one_session", rings_of_one_session},
         {"hangup_reason", hangup_reason},

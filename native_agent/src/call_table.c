@@ -345,23 +345,33 @@ static int station_idle(const struct c300x_calls *calls, const struct c300x_call
     return calls->idle_ms >= 0 && live(call) && call->started_ms <= calls->idle_ms;
 }
 
+/* A ring call, ringing or answered before its caller wait was over, that
+ * no caller frame named yet. */
+static int caller_pending(const struct c300x_call *call)
+{
+    return ring_live(call) && strcmp(call->attribution, "pending") == 0;
+}
+
 static long long call_deadline(const struct c300x_call *call)
 {
+    long long due;
+
     if (call->state == C300X_CALL_RINGING) {
-        long long due = call->updated_ms + C300X_CALL_RINGING_TIMEOUT_MS;
-        if (call->unit[0] == '\0' && strcmp(call->attribution, "pending") == 0
-            && call->started_ms + C300X_CALLER_WAIT_MS < due) {
-            due = call->started_ms + C300X_CALLER_WAIT_MS;
-        }
+        due = call->updated_ms + C300X_CALL_RINGING_TIMEOUT_MS;
         if (call->closing != NULL && call->closed_ms + C300X_CALL_SETTLE_MS < due) {
             due = call->closed_ms + C300X_CALL_SETTLE_MS;
         }
-        return due;
-    }
-    if (call->state == C300X_CALL_ENDED) {
+    } else if (call->state == C300X_CALL_ENDED) {
         return call->updated_ms + C300X_CALL_ENDED_KEEP_MS;
+    } else if (live(call)) {
+        due = call->probe_ms;
+    } else {
+        return -1;
     }
-    return live(call) ? call->probe_ms : -1;
+    if (caller_pending(call) && call->started_ms + C300X_CALLER_WAIT_MS < due) {
+        due = call->started_ms + C300X_CALLER_WAIT_MS;
+    }
+    return due;
 }
 
 static long long deadline(const struct c300x_calls *calls, const struct c300x_call *call)
@@ -397,17 +407,23 @@ void c300x_calls_tick(struct c300x_calls *calls, const struct c300x_call_sink *s
         }
         if (station_idle(calls, call) && now - calls->idle_ms >= C300X_CALL_SETTLE_MS) {
             c300x_calls_end(calls, sink, call->id, call->closing != NULL ? call->closing : "station_idle", now);
-        } else if (call->state == C300X_CALL_ENDED) {
+            continue;
+        }
+        if (call->state == C300X_CALL_ENDED) {
             memset(call, 0, sizeof(*call));
-        } else if (call->state == C300X_CALL_RINGING) {
-            if (strcmp(call->attribution, "pending") == 0 && now - call->started_ms >= C300X_CALLER_WAIT_MS) {
-                fall_back(call, sink);
-            }
+            continue;
+        }
+        if (caller_pending(call) && now - call->started_ms >= C300X_CALLER_WAIT_MS) {
+            fall_back(call, sink);
+        }
+        if (call->state == C300X_CALL_RINGING) {
             if (call->closing != NULL && now - call->closed_ms >= C300X_CALL_SETTLE_MS) {
                 c300x_calls_end(calls, sink, call->id, call->closing, now);
             } else if (now - call->updated_ms >= C300X_CALL_RINGING_TIMEOUT_MS) {
                 c300x_calls_end(calls, sink, call->id, "timeout", now);
             }
+        } else if (now < call->probe_ms) {
+            /* Only the caller wait was due. */
         } else if (!media_live(calls, call, media)) {
             c300x_calls_end(calls, sink, call->id, "media_closed", now);
         } else {

@@ -205,6 +205,36 @@ def test_an_activation_answers_with_its_own_result(lab: Lab) -> None:
     assert lab.log() == ["stop begin", "stop end", "activate"]
 
 
+@pytest.mark.parametrize(
+    "lab", [{"events": {"udp": {"enabled": True, "group": "239.255.76.67", "port": EVENT_PORT}}}],
+    indirect=True,
+)
+@pytest.mark.parametrize(
+    ("frame", "state"),
+    [("*8*1#1#4#21*11##", "ringing"), ("*8*1#5#4#21*11##", "viewing")],
+    ids=["ring", "view"],
+)
+def test_an_activation_keeps_the_unit_it_started_with(lab: Lab, frame: str, state: str) -> None:
+    # A ring whose unit is still pending, or a display view of another
+    # unit, that comes while the activation runs changes neither its answer
+    # nor its unit: it was started and is not started again.
+    (lab.root / "hold-activate").write_text("")
+    activate = lab.post(ACTIVATE, {"audio": False})
+    lab.wait_for("activate")
+    send_udp_event(EVENT_PORT, frame)
+    deadline = time.monotonic() + 5
+    while not (calls := api_get(lab.api_port, "/api/v1/calls"))["calls"]:
+        assert time.monotonic() < deadline
+        time.sleep(0.02)
+    assert calls["calls"][0]["state"] == state
+    assert calls["calls"][0]["unit"] == (None if state == "ringing" else "21")
+
+    lab.release()
+    assert finish(activate) == {"ok": True, "audio": False}
+    lab.health_ms()
+    assert lab.log() == ["activate"]
+
+
 def test_a_stop_whose_caller_left_ends_and_frees_the_worker(lab: Lab) -> None:
     stop = lab.held_stop()
     stop.close()

@@ -346,7 +346,7 @@ static void answered_before_caller_wait(void)
     assert(c300x_calls_unlock_allowed(&calls, "8f3a1c2e-1", "20", 30000));
     assert(c300x_calls_timeout_ms(&calls, 30000) == 277 + C300X_CALL_GUARD_MS - 30000);
     char json[2048];
-    assert(c300x_calls_json(&calls, 30000, json, sizeof(json)));
+    assert(c300x_calls_json(&calls, &media, 30000, json, sizeof(json)));
     expect(json, "\"state\":\"answered\",\"unit\":\"20\",\"attribution\":\"default_fallback\"");
 }
 
@@ -478,7 +478,7 @@ static void timeouts_and_json(void)
     char json[2048];
     reset(NULL);
     ring_with_caller(0, "*8*9#1#4*20##");
-    assert(c300x_calls_json(&calls, 1000, json, sizeof(json)));
+    assert(c300x_calls_json(&calls, &media, 1000, json, sizeof(json)));
     expect(json, "\"current_call_id\":\"8f3a1c2e-1\"");
     expect(json, "\"state\":\"ringing\",\"unit\":\"20\",\"attribution\":\"caller_frame\",\"answered_by\":null,\"end_reason\":null,\"age_ms\":1000");
     tick(C300X_CALL_RINGING_TIMEOUT_MS);
@@ -494,7 +494,72 @@ static void timeouts_and_json(void)
             if (calls.items[slot].state == C300X_CALL_RINGING) c300x_calls_end(&calls, &sink, calls.items[slot].id, "hangup", 200000 + index * 5000 + 1000);
         }
     }
-    assert(c300x_calls_json(&calls, 300000, json, sizeof(json)));
+    assert(c300x_calls_json(&calls, &media, 300000, json, sizeof(json)));
+}
+
+/* Home Assistant hangs up only a call the agent holds a leg of: its ring
+ * leg (ringing or answered by HA) or its own view. A call the station, its
+ * answering machine, the display or the app holds goes on. */
+static const char *refusal(const char *call_id)
+{
+    return c300x_calls_hangup_refusal(c300x_calls_find(&calls, call_id), &media);
+}
+
+static void hangup_refusals(void)
+{
+    char json[2048];
+    reset(NULL);
+    ring_with_caller(0, "*8*9#1#4*20##");
+    /* A bus-only ring: the agent has no ring leg (smartphone forwarding on). */
+    assert(strcmp(refusal("8f3a1c2e-1"), "ring_call_not_active") == 0);
+    media.agent = 1;
+    assert(strcmp(refusal("8f3a1c2e-1"), "ring_call_not_active") == 0);
+    assert(c300x_calls_json(&calls, &media, 500, json, sizeof(json)));
+    expect(json, "\"state\":\"ringing\",\"unit\":\"20\",\"attribution\":\"caller_frame\",\"answered_by\":null,"
+                 "\"end_reason\":null,\"age_ms\":500,\"can_hangup\":false}");
+    media.agent = 0;
+    media.ring_leg = 1;
+    assert(refusal("8f3a1c2e-1") == NULL);
+    assert(c300x_calls_json(&calls, &media, 500, json, sizeof(json)));
+    expect(json, "\"age_ms\":500,\"can_hangup\":true}");
+    media.ring_leg = 0;
+    /* The display answered: the station holds the call. */
+    station("*#8**35*6*0*0##", 5000);
+    assert(strcmp(refusal("8f3a1c2e-1"), "station_busy") == 0);
+    media.ring_leg = 1;
+    assert(strcmp(refusal("8f3a1c2e-1"), "station_busy") == 0);
+    media.ring_leg = 0;
+    c300x_calls_end(&calls, &sink, "8f3a1c2e-1", "media_closed", 6000);
+    assert(strcmp(refusal("8f3a1c2e-1"), "call_not_current") == 0);
+    assert(c300x_calls_json(&calls, &media, 6000, json, sizeof(json)));
+    expect(json, "\"end_reason\":\"media_closed\",\"age_ms\":6000,\"can_hangup\":false}");
+
+    /* The answering machine took it. */
+    ring_with_caller(20000, "*8*9#1#4*20##");
+    station("*#8**35*7*0*0##", 24000);
+    assert(strcmp(refusal("8f3a1c2e-2"), "station_busy") == 0);
+    c300x_calls_end(&calls, &sink, "8f3a1c2e-2", "media_closed", 30000);
+
+    /* HA answered its ring leg. */
+    ring_with_caller(40000, "*8*9#1#4*20##");
+    media.ring_leg = media.ha_answered = 1;
+    answer_seen(41000);
+    assert(refusal("8f3a1c2e-3") == NULL);
+    media.ring_leg = media.ha_answered = 0;
+    assert(refusal("8f3a1c2e-3") == NULL);
+    c300x_calls_end(&calls, &sink, "8f3a1c2e-3", "hangup", 42000);
+
+    /* A view: the agent's own, else the display's. */
+    frame("*8*1#5#4#20*11##", 50000);
+    media.agent = 1;
+    assert(refusal("8f3a1c2e-4") == NULL);
+    media.agent = 0;
+    media.external = 1;
+    assert(strcmp(refusal("8f3a1c2e-4"), "station_busy") == 0);
+    media.agent = 1;
+    assert(refusal("8f3a1c2e-4") == NULL);
+    media.agent = media.external = 0;
+    assert(refusal("8f3a1c2e-4") == NULL);
 }
 
 /* A frame that names the plain address of a unit behind an apartment
@@ -812,7 +877,7 @@ static void station_states(void)
      * machine takes the call (*8*67 at 4873), greets, records; the end frame
      * and idle at 25.5 s. */
     reset(NULL);
-    c300x_calls_json(&calls, 0, json, sizeof(json));
+    c300x_calls_json(&calls, &media, 0, json, sizeof(json));
     expect(json, "\"station_state\":null");
     ring(0);
     station("*#8**35*1*0*0##", 5);
@@ -833,7 +898,7 @@ static void station_states(void)
     expect(nth("station.call_state", 1), "{\"code\":1,\"state\":\"setup\"}");
     expect(nth("station.call_state", 3), "{\"code\":4,\"state\":\"waiting\"}");
     expect(nth("station.call_state", 7), "{\"code\":0,\"state\":\"idle\"}");
-    c300x_calls_json(&calls, 26000, json, sizeof(json));
+    c300x_calls_json(&calls, &media, 26000, json, sizeof(json));
     expect(json, "\"station_state\":{\"code\":0,\"state\":\"idle\",\"age_ms\":538},\"calls\":[");
 
     /* c300x-full-ring-20260704-145356: the display answers (6 at 14.4 s);
@@ -870,6 +935,25 @@ static void station_states(void)
     assert(count("call.answered") == 1);
     expect(nth("call.answered", 1), "\"answered_by\":\"ha\"");
     media.ring_leg = media.ha_answered = 0;
+
+    /* Only the bus rings and HA's on-demand view runs: every view reports
+     * 3, then 6 (c300x-app-ondemand-20260613-124656), which answers no ring.
+     * The display's answer frame does. */
+    reset(NULL);
+    ring_with_caller(0, "*8*9#1#4*21##");
+    media.agent = 1;
+    station("*#8**35*3*0*0##", 2000);
+    station("*#8**35*6*0*0##", 2600);
+    assert(count("call.answered") == 0 && count("station.call_state") == 2);
+    answer_seen(9000);
+    expect(nth("call.answered", 1), "\"unit\":\"21\",\"answered_by\":\"station\"");
+    /* With the ring leg up, 6 is the ring's conversation. */
+    reset(NULL);
+    ring_with_caller(0, "*8*9#1#4*21##");
+    media.agent = media.ring_leg = 1;
+    station("*#8**35*6*0*0##", 6000);
+    expect(nth("call.answered", 1), "\"answered_by\":\"station\"");
+    memset(&media, 0, sizeof(media));
 
     /* A ring after the station went idle, before its own setup state: the
      * old idle ends nothing; an unknown state is reported raw. */
@@ -962,6 +1046,7 @@ int main(int argc, char **argv)
         {"view_and_media_closed", view_and_media_closed},
         {"close_ends_its_own_call", close_ends_its_own_call},
         {"timeouts_and_json", timeouts_and_json},
+        {"hangup_refusals", hangup_refusals},
         {"plain_address_is_the_qualified_unit", plain_address_is_the_qualified_unit},
         {"seen_units_survive_restart", seen_units_survive_restart},
         {"default_qualifier_survives_restart", default_qualifier_survives_restart},

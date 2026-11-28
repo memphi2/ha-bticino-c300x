@@ -749,7 +749,7 @@ static void lifecycle_ha_answer_ha_hangup(void) {
 /* Capture 13:37:27-13:38:35: the display answers; the agent's ring leg is
  * cancelled while the display call goes on until its end frame. */
 static void lifecycle_station_answer_station_hangup(void) {
-    char data[4096], id[32];
+    char data[4096], id[32], path[96];
     int preview;
     ring_with_caller(id, &preview);
     bus("*8*84*11##");
@@ -762,6 +762,8 @@ static void lifecycle_station_answer_station_hangup(void) {
     assert(strstr(data, id) && strstr(data, "\"answered_by\":\"station\""));
     wait_event("doorbell.media.closed", 1, data, sizeof(data));
     assert(payload_external(data));
+    snprintf(path, sizeof(path), "{\"kind\":\"ring\",\"call_id\":\"%s\",", id);
+    assert(strncmp(data, path, strlen(path)) == 0);
     close(preview);
     bus("*8*100#1#4*20##");
     usleep(300000);
@@ -773,6 +775,10 @@ static void lifecycle_station_answer_station_hangup(void) {
     assert(strstr(data, id) && strstr(data, "\"reason\":\"media_closed\""));
     assert_current("");
     assert(atomic_load(&station_byes) == 0);
+    /* The display call's bus end frame is the ring's close. */
+    wait_event("doorbell.media.closed", 2, data, sizeof(data));
+    snprintf(path, sizeof(path), "{\"raw\":\"*8*3#1#4*411##\",\"kind\":\"ring\",\"call_id\":\"%s\",", id);
+    assert(strncmp(data, path, strlen(path)) == 0);
 }
 
 /* c300x-ha-device-20260616-000849: HA answers; 60 s later the station ends
@@ -1046,16 +1052,56 @@ static void view_during_bus_ring(void) {
     close(fd);
 }
 
+/* Only the bus rings, HA opens the live view of the ringing unit: the
+ * station reports that view as every on-demand view in the captures
+ * (c300x-app-ondemand-20260613-124656, c300x-ha-card-2click-ondemand-
+ * 20260621-181353): view frame, 3, *8*2#5#, then 6. That 6 answers no
+ * ring; the display's answer frame still does. */
+static void view_state6_during_bus_ring(void) {
+    char data[4096], id[32];
+    atomic_store(&station_busy, 0);
+    bus("*8*1#1#4#21*11##");
+    bus("*#8**35*1*0*0##");
+    bus("*8*9#1#4*21##");
+    wait_event("call.caller_identified", 1, data, sizeof(data));
+    call_id_of(data, id);
+    assert(calls_api("POST", "/api/v1/video/doorbell/actions/activate", "{}", data, sizeof(data)) == 200);
+    int fd = rtsp_open();
+    assert(rtsp_play(fd, "/doorbell") == 200);
+    wait_event("doorbell.view_requested", 1, NULL, 0);
+    bus("*8*1#5#4#21*11##");
+    bus("*#8**35*3*0*0##");
+    bus("*8*2#5#4*11##");
+    bus("*#8**35*6*0*0##");
+    wait_event("station.call_state", 3, data, sizeof(data));
+    assert(strstr(data, "\"code\":6"));
+    usleep(300000);
+    assert(count_events("call.answered") == 0);
+    assert(calls_api("GET", "/api/v1/calls", "", data, sizeof(data)) == 200);
+    assert(strstr(data, "\"kind\":\"ring\",\"state\":\"ringing\""));
+    assert_current(id);
+    /* After the view's start transition (3.5 s), in which an answer frame is
+     * taken for the view's own. */
+    atomic_store(&clock_offset, 4000);
+    bus("*8*2#1#4*11##");
+    wait_event("call.answered", 1, data, sizeof(data));
+    assert(strstr(data, id) && strstr(data, "\"answered_by\":\"station\""));
+    c300x_video_stop(runtime->video);
+    wait_byes(1);
+    close(fd);
+}
+
 /* HA views, a visitor rings (bus only), HA stops its view: the view call
  * ends, the ring call rings on until its own end (here the station's idle). */
 static void view_close_keeps_ring(void) {
-    char data[4096], id[32];
+    char data[4096], id[32], view[32], fields[96];
     atomic_store(&station_busy, 0);
     assert(c300x_video_activate(runtime->video, 1, NULL));
     int fd = rtsp_open();
     assert(rtsp_play(fd, "/doorbell") == 200);
     bus("*8*1#5#4#20*11##");
-    wait_event("call.view_started", 1, NULL, 0);
+    wait_event("call.view_started", 1, data, sizeof(data));
+    call_id_of(data, view);
     bus("*8*1#1#4#21*11##");
     bus("*8*9#1#4*21##");
     wait_event("call.caller_identified", 1, data, sizeof(data));
@@ -1064,8 +1110,10 @@ static void view_close_keeps_ring(void) {
     wait_byes(1);
     wait_event("call.ended", 1, data, sizeof(data));
     assert(strstr(data, "\"kind\":\"view\"") && strstr(data, id) == NULL);
+    /* The close names its media and its call: the view's, not the ring's. */
     wait_event("doorbell.media.closed", 1, data, sizeof(data));
-    assert(strstr(data, "\"media\"") == NULL);
+    snprintf(fields, sizeof(fields), "{\"kind\":\"view\",\"call_id\":\"%s\",", view);
+    assert(strstr(data, "\"media\"") == NULL && strncmp(data, fields, strlen(fields)) == 0);
     usleep(2000000);
     assert(count_events("call.ended") == 1 && count_events("call.answered") == 0);
     assert_current(id);
@@ -1093,6 +1141,31 @@ static void display_view_end_keeps_ring(void) {
     assert_current(id);
 }
 
+/* The display views unit 20, unit 21 rings (bus only), the view ends,
+ * then the ring ends unanswered with its bus end frame. The agent has no
+ * media of that ring, so the frame is no media close and ends nothing; the
+ * station's idle ends the ring call. */
+static void unanswered_bus_ring_end_frame(void) {
+    char data[4096], id[32];
+    bus("*8*1#5#4#20*11##");
+    wait_event("call.view_started", 1, NULL, 0);
+    bus("*8*1#1#4#21*11##");
+    bus("*8*9#1#4*21##");
+    wait_event("call.caller_identified", 1, data, sizeof(data));
+    call_id_of(data, id);
+    bus("*8*3#5#4*411##");
+    wait_event("call.ended", 1, data, sizeof(data));
+    assert(strstr(data, "\"kind\":\"view\""));
+    bus("*8*3#1#4*411##");
+    usleep(2000000);
+    assert(count_events("doorbell.media.closed") == 1 && count_events("call.ended") == 1);
+    assert_current(id);
+    bus("*#8**35*0*0*0##");
+    wait_event("call.ended", 2, data, sizeof(data));
+    assert(strstr(data, id) && strstr(data, "\"reason\":\"station_idle\""));
+    assert_current("");
+}
+
 /* The display views unit 20: the agent cannot end that view. HA's hang-up
  * is refused (409 station_busy), nothing reaches the station, the view
  * call goes on. HA's own view still ends with its hang-up (view_is_current). */
@@ -1113,6 +1186,82 @@ static void display_view_hangup(void) {
     assert(atomic_load(&station_byes) == 0);
 }
 
+/* The display answers the ring (the agent's leg is cancelled): the agent
+ * holds no leg of the call. HA's hang-up is refused (409 station_busy),
+ * nothing reaches the station, the call goes on until the display ends it. */
+static void display_answered_hangup(void) {
+    char data[4096], id[32], path[96];
+    int preview;
+    ring_starts(&preview);
+    bus("*8*9#1#4*21##");
+    wait_event("call.caller_identified", 1, data, sizeof(data));
+    call_id_of(data, id);
+    assert(calls_api("GET", "/api/v1/calls", "", data, sizeof(data)) == 200);
+    assert(strstr(data, "\"state\":\"ringing\"") && strstr(data, "\"can_hangup\":true}"));
+    bus("*8*84*11##");
+    bus("*8*85*11##");
+    station_send("CANCEL", 1, NULL);
+    wait_ring_code(200, 1);
+    usleep(300000);
+    bus("*8*2#1#4*11##");
+    wait_event("call.answered", 1, data, sizeof(data));
+    assert(strstr(data, id) && strstr(data, "\"answered_by\":\"station\""));
+    close(preview);
+    wait_clients(0);
+    assert(calls_api("GET", "/api/v1/calls", "", data, sizeof(data)) == 200);
+    assert(strstr(data, "\"state\":\"answered\"") && strstr(data, "\"can_hangup\":false}"));
+    snprintf(path, sizeof(path), "/api/v1/calls/%s/actions/hangup", id);
+    assert(calls_api("POST", path, "", data, sizeof(data)) == 409);
+    assert(strstr(data, "{\"ok\":false,\"error\":\"station_busy\"}"));
+    usleep(300000);
+    assert(count_events("call.ended") == 0 && atomic_load(&station_byes) == 0);
+    assert_current(id);
+    atomic_store(&clock_offset, 60000);
+    bus("*8*3#1#4*411##");
+    wait_event("call.ended", 1, data, sizeof(data));
+    assert(strstr(data, id) && strstr(data, "\"reason\":\"media_closed\""));
+}
+
+/* Only the bus rings (no ring leg of the agent) while HA's live view runs:
+ * HA's hang-up of the ring call is refused (409 ring_call_not_active) and
+ * stops nothing, the view neither; the ring call stays current, the
+ * display still answers it. */
+static void bus_ring_hangup_during_view(void) {
+    char data[4096], id[32], path[96];
+    struct c300x_video_status current;
+    atomic_store(&station_busy, 0);
+    bus("*8*1#1#4#21*11##");
+    bus("*8*9#1#4*21##");
+    wait_event("call.caller_identified", 1, data, sizeof(data));
+    call_id_of(data, id);
+    assert(calls_api("POST", "/api/v1/video/doorbell/actions/activate", "{}", data, sizeof(data)) == 200);
+    int fd = rtsp_open();
+    assert(rtsp_play(fd, "/doorbell") == 200);
+    wait_event("doorbell.view_requested", 1, NULL, 0);
+    assert(calls_api("GET", "/api/v1/calls", "", data, sizeof(data)) == 200);
+    assert(strstr(data, "\"kind\":\"ring\",\"state\":\"ringing\"") && strstr(data, "\"can_hangup\":false}"));
+    snprintf(path, sizeof(path), "/api/v1/calls/%s/actions/hangup", id);
+    assert(calls_api("POST", path, "", data, sizeof(data)) == 409);
+    assert(strstr(data, "{\"ok\":false,\"error\":\"ring_call_not_active\"}"));
+    /* The media layer's ring hang-up stops no view either. */
+    c300x_video_doorbell_call_hangup(runtime->video);
+    usleep(300000);
+    status(&current);
+    assert(current.call_active && current.clients == 1);
+    assert(atomic_load(&station_byes) == 0);
+    assert(count_events("call.ended") == 0 && count_events("doorbell.media.closed") == 0);
+    assert_current(id);
+    /* After the view's start transition (3.5 s), in which an answer frame is
+     * taken for the view's own. */
+    atomic_store(&clock_offset, 4000);
+    bus("*8*2#1#4*11##");
+    wait_event("call.answered", 1, data, sizeof(data));
+    assert(strstr(data, id) && strstr(data, "\"answered_by\":\"station\""));
+    c300x_video_stop(runtime->video);
+    wait_byes(1);
+    close(fd);
+}
+
 static void agent_answer_is_ha(void) {
     char data[4096], id[32];
     int preview;
@@ -1124,6 +1273,23 @@ static void agent_answer_is_ha(void) {
     wait_event("doorbell.view_requested", 1, data, sizeof(data));
     assert(strstr(data, "\"media\"") == NULL && strstr(data, id));
     close(preview);
+}
+
+/* The agent's own event of its ring leg's answer is Home Assistant's
+ * answer by itself, also when the leg's answer state is gone by the time
+ * the event is read: here no ring leg reports one. */
+static void own_ring_answer_is_ha(void) {
+    char data[4096], id[32];
+    struct c300x_video_status current;
+    bus("*8*1#1#4#21*11##");
+    bus("*8*9#1#4*21##");
+    wait_event("call.caller_identified", 1, data, sizeof(data));
+    call_id_of(data, id);
+    status(&current);
+    assert(!current.ring_answered && !current.ring_answer_requested);
+    dispatch_video_event(runtime, "doorbell.view_requested", C300X_VIDEO_EVENT_RING, 0);
+    wait_event("call.answered", 1, data, sizeof(data));
+    assert(strstr(data, id) && strstr(data, "\"answered_by\":\"ha\""));
 }
 
 /* A bus ring without the agent's ring leg: until the caller frame names
@@ -1225,6 +1391,7 @@ static void single_unit_as_3_0_0(void) {
         strip_key(data, "call_id");
         strip_key(data, "unit");
         strip_key(data, "attribution");
+        strip_key(data, "kind");
         printf("event %s %s\n", event_types[i], data);
     }
     pthread_mutex_unlock(&events_mutex);
@@ -1576,9 +1743,14 @@ int main(int argc, char **argv) {
     else if (strcmp(argv[1], "pending_unit_video") == 0) pending_unit_video();
     else if (strcmp(argv[1], "view_during_bus_ring") == 0) view_during_bus_ring();
     else if (strcmp(argv[1], "agent_answer_is_ha") == 0) agent_answer_is_ha();
+    else if (strcmp(argv[1], "own_ring_answer_is_ha") == 0) own_ring_answer_is_ha();
     else if (strcmp(argv[1], "display_view_hangup") == 0) display_view_hangup();
+    else if (strcmp(argv[1], "display_answered_hangup") == 0) display_answered_hangup();
+    else if (strcmp(argv[1], "bus_ring_hangup_during_view") == 0) bus_ring_hangup_during_view();
+    else if (strcmp(argv[1], "view_state6_during_bus_ring") == 0) view_state6_during_bus_ring();
     else if (strcmp(argv[1], "view_close_keeps_ring") == 0) view_close_keeps_ring();
     else if (strcmp(argv[1], "display_view_end_keeps_ring") == 0) display_view_end_keeps_ring();
+    else if (strcmp(argv[1], "unanswered_bus_ring_end_frame") == 0) unanswered_bus_ring_end_frame();
     else if (strcmp(argv[1], "boot_id_at_start") == 0) boot_id_at_start();
     else if (strcmp(argv[1], "station_busy_bus_end") == 0) station_busy_case(true);
     else if (strcmp(argv[1], "station_busy_timeout") == 0) station_busy_case(false);

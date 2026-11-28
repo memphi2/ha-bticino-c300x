@@ -283,6 +283,12 @@ void c300x_calls_station(struct c300x_calls *calls, const struct c300x_call_sink
     snprintf(data, sizeof(data), "{\"code\":%d,\"state\":%s%s%s}", code, name ? "\"" : "", name ? name : "null",
              name ? "\"" : "");
     emit(sink, "station.call_state", data);
+    /* Every on-demand view reports 3, then 6: during the agent's own view
+     * without its ring leg, 6 is that view's; the display's answer frame
+     * still answers the ring. */
+    if (code == 6 && media->agent && !media->ring_leg) {
+        return;
+    }
     if (call != NULL && call->state == C300X_CALL_RINGING && (code == 6 || code == 7)) {
         c300x_calls_answered(calls, sink, call->id,
                              code == 7 ? "answering_machine" : media->ha_answered ? "ha" : "station", now);
@@ -470,6 +476,12 @@ const struct c300x_call *c300x_calls_current(const struct c300x_calls *calls)
     return call != NULL ? call : live_view(mutable_calls, NULL);
 }
 
+const struct c300x_call *c300x_calls_media_call(const struct c300x_calls *calls, int view)
+{
+    struct c300x_calls *mutable_calls = (struct c300x_calls *)calls;
+    return view ? live_view(mutable_calls, NULL) : ring_call(mutable_calls);
+}
+
 const struct c300x_call *c300x_calls_live_for_unit(const struct c300x_calls *calls, const char *unit)
 {
     struct c300x_calls *mutable_calls = (struct c300x_calls *)calls;
@@ -489,6 +501,20 @@ int c300x_calls_unlock_allowed(const struct c300x_calls *calls, const char *call
     const struct c300x_call *call = c300x_calls_find(calls, call_id);
     return call != NULL && strcmp(call->unit, unit) == 0
         && (live(call) || now - call->updated_ms < C300X_CALL_ENDED_KEEP_MS);
+}
+
+const char *c300x_calls_hangup_refusal(const struct c300x_call *call, const struct c300x_call_media *media)
+{
+    if (!live(call)) {
+        return "call_not_current";
+    }
+    if (call->view) {
+        return media->external && !media->agent ? "station_busy" : NULL;
+    }
+    if (call->state == C300X_CALL_ANSWERED) {
+        return strcmp(call->answered_by, "ha") == 0 ? NULL : "station_busy";
+    }
+    return media->ring_leg ? NULL : "ring_call_not_active";
 }
 
 void c300x_calls_answered(struct c300x_calls *calls, const struct c300x_call_sink *sink,
@@ -537,7 +563,8 @@ static const char *state_name(enum c300x_call_state state)
     return names[state];
 }
 
-int c300x_calls_json(const struct c300x_calls *calls, long long now, char *out, size_t out_len)
+int c300x_calls_json(const struct c300x_calls *calls, const struct c300x_call_media *media, long long now,
+                     char *out, size_t out_len)
 {
     const struct c300x_call *current = c300x_calls_current(calls);
     const struct c300x_call *listed[C300X_MAX_CALLS];
@@ -581,13 +608,14 @@ int c300x_calls_json(const struct c300x_calls *calls, long long now, char *out, 
         const struct c300x_call *call = listed[index];
         if (!c300x_appendf(out, out_len, &used,
                 "%s{\"call_id\":\"%s\",\"kind\":\"%s\",\"state\":\"%s\",\"unit\":%s,\"attribution\":\"%s\","
-                "\"answered_by\":%s%s%s,\"end_reason\":%s%s%s,\"age_ms\":%lld}",
+                "\"answered_by\":%s%s%s,\"end_reason\":%s%s%s,\"age_ms\":%lld,\"can_hangup\":%s}",
                 index > 0 ? "," : "", call->id, call->view ? "view" : "ring", state_name(call->state),
                 unit_json(call, unit, sizeof(unit)), call->attribution,
                 call->answered_by ? "\"" : "null", call->answered_by ? call->answered_by : "",
                 call->answered_by ? "\"" : "",
                 call->end_reason ? "\"" : "null", call->end_reason ? call->end_reason : "",
-                call->end_reason ? "\"" : "", now - call->started_ms)) {
+                call->end_reason ? "\"" : "", now - call->started_ms,
+                c300x_calls_hangup_refusal(call, media) == NULL ? "true" : "false")) {
             return 0;
         }
     }

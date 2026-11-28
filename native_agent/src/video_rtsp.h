@@ -89,6 +89,7 @@ void c300x_video_set_ring_receiver_enabled(struct c300x_video *video, int enable
 int c300x_video_activate(struct c300x_video *video, int include_audio, const char *devaddr);
 void c300x_video_stop(struct c300x_video *video);
 int c300x_video_doorbell_call_answer(struct c300x_video *video);
+/* Ends the agent's ring leg; without one it stops nothing, an on-demand view neither. */
 void c300x_video_doorbell_call_hangup(struct c300x_video *video);
 int c300x_video_home_call_start(struct c300x_video *video, int duration_seconds);
 void c300x_video_home_call_stop(struct c300x_video *video);

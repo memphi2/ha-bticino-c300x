@@ -157,7 +157,7 @@ the captures and from the vendor functions that send each value:
 | `2` | `ringing` | with the caller frame, while the ringtone plays |
 | `3` | `viewing` | a view without a ring |
 | `4` | `waiting` | about 2.5 s after `2` with the ringtone's end (`*7*59#8…`), or when the ringer is muted; the call still waits |
-| `6` | `conversation` | the display, the app or Home Assistant answered (`*8*2#…`) |
+| `6` | `conversation` | the display, the app or Home Assistant answered (`*8*2#…`), also an on-demand view (`*8*2#5#…`) |
 | `7` | `answering_machine` | it took the unanswered call (`*8*67*<unit>##`) |
 | `8` | `greeting` | it plays the greeting (`*7*58#…` audio path) |
 | `9` | `recording` | it records the visitor; a saved message follows the end (`*8*96#1#0*##`) |
@@ -175,8 +175,14 @@ reported one read as unknown.
 
 Only the current call can be answered or hung up: the live ring call, else
 the live on-demand view (`state: "viewing"`). Hanging up a view stops it, as
-the stop button does; a view the display or the app holds, not the agent,
-only they can end (`409 station_busy`, the view call goes on).
+the stop button does. A hang-up ends only a call the agent holds a leg of
+(`can_hangup` in `GET /api/v1/calls`): its ring leg, ringing or answered by
+Home Assistant, or its own view. A ring call answered on the display, the
+app or by the answering machine and a view the display or the app holds get
+`409 station_busy`; a ringing call without the agent's ring leg (only the bus
+rang) gets `409 ring_call_not_active`. The call goes on and stays current,
+and a ring call's hang-up never stops Home Assistant's view. Home Assistant
+checks `can_hangup` before it closes its own media and sends nothing then.
 
 ### End of a call
 
@@ -191,14 +197,19 @@ not a call.
 | `doorbell.pressed` | Opens the ring call, or belongs to the live one (see Ring timing). |
 | `doorbell.view_requested` of the ring (`*8*2#1#…`, or the agent's answer of its ring leg) | The ring call is `answered`: `answered_by: "ha"` for the agent's answer, which it gives Home Assistant only, else `"station"` (display or app). In which order the display's frames and the ring leg's close come does not matter. The `doorbell.view_requested` of the agent's on-demand view answers nothing. |
 | `doorbell.media.closed` of the ring whose payload still reports the station's own media | The ringing call is `answered` by the station. |
-| Station state `6` (conversation) | The ringing call is `answered`: `"ha"` while Home Assistant answered the ring leg, else `"station"`. |
+| Station state `6` (conversation) | The ringing call is `answered`: `"ha"` while Home Assistant answered the ring leg, else `"station"`. Not while the agent's own on-demand view runs and it has no ring leg: every on-demand view reports `3`, then `6` after `*8*2#5#…` (captures `c300x-app-ondemand-20260613-124656`, `c300x-ha-card-2click-ondemand-20260621-181353`); the answer frame `*8*2#1#…` still answers. |
 | Station state `7` (answering machine) | The ringing call is `answered` (`"answering_machine"`). |
 | View frame `*8*1#5#4#<where>*…##` | Opens a `viewing` call of that unit; a view of another unit ends the one before (`reason: "superseded"`). |
 
 A media close belongs to the ring or to a view, never to both: the ring's
 is the close of the agent's ring leg or the bus end frame `*8*3#1#…`, a
 view's the close of the agent's on-demand view, the bus end frame
-`*8*3#5#…` or the video off `*7*0*##` that follows either end frame.
+`*8*3#5#…` or the video off `*7*0*##` that follows either end frame. A bus
+end frame is a media close only while the agent has media of that call: its
+ring leg or view, or the display's or the app's after their answer or view.
+The end frame of a ring that nobody answered and that the agent has no ring
+leg of (only the bus rang) ends nothing: that call ends on the station's
+idle (1.5 s after `*#8**35*0`) or after 90 s without a change.
 
 | Source | Ends |
 | --- | --- |
@@ -264,14 +275,15 @@ so it is unknown after a restart until the next frame. Same frame and sender
   "calls": [
     {"call_id": "8f3a1c2e-7", "kind": "ring", "state": "ringing",
      "unit": "21", "attribution": "caller_frame", "answered_by": null,
-     "end_reason": null, "age_ms": 1200}
+     "end_reason": null, "age_ms": 1200, "can_hangup": true}
   ]
 }
 ```
 
 Lists live calls and calls ended in the last 60 s, newest first, at most 8.
 `station_state`: see Station call state; `null` until the station sent or
-answered one.
+answered one. `can_hangup`: a hang-up of the call would be taken now (see
+Current call); `false` for an ended call.
 
 ### `POST /api/v1/calls/{call_id}/actions/answer`, `.../hangup`
 
@@ -305,9 +317,11 @@ shows the calling unit; the station switches the picture itself.
 On demand, the request's `unit` selects the INVITE's `a=DEVADDR`: the default
 unit keeps `video.sip.devaddr`; any other unit sends its full `where`
 verbatim (`21`, `20#2`), which bt_answering_machine turns into
-`*8*4#1<own>*<DEVADDR>##` when it starts with `2` and the unit address
-after that `2`, up to `#`, is below 96 (`210` is unit 10; else
-`409 unit_video_unsupported`). A running view of another
+`*8*4#1<own>*<DEVADDR>##` when it starts with `2` and the number after that
+`2`, up to `#`, is below 96 (`210` is unit 10; an empty number reads as 0
+there). The agent refuses a DEVADDR without a unit address after the `2`
+(`2`, `2#1`), which names no unit; any other DEVADDR the station does not
+view gets `409 unit_video_unsupported` as well. A running view of another
 unit is stopped first (BYE, on-demand GOP cache dropped), then the parked
 RTSP clients get the new unit's INVITE; the view frame
 `*8*1#5#4#<where>*<own>##` attributes the view call to that unit. The
@@ -319,9 +333,10 @@ selection stays for later streams until the next activation.
 | --- | --- | --- |
 | `409` | `call_not_current` | The `call_id` is unknown (also from an earlier boot), ended, or not the current call; for unlock: not that unit's call or ended more than 60 s ago. The body carries `current_call_id` (or `null`). Nothing is sent to the station. |
 | `404` | `unknown_unit` | No unit with that id. |
-| `409` | `station_busy` | Hang-up of a view that the display or the app holds, not the agent: the agent cannot end it. Nothing is sent to the station; the view call goes on. |
+| `409` | `station_busy` | Hang-up of a call the station holds: a ring call answered on the display, the app or by the answering machine, or a view that the display or the app holds. The agent cannot end it. Nothing is sent to the station; the call goes on. |
+| `409` | `ring_call_not_active` | Answer or hang-up of a ringing call without the agent's ring leg (only the bus rang). Nothing is sent to the station; the call rings on, a running view goes on. |
 | `409` | `call_unit_pending` | `current` (also a video request without `unit`) while the ring call's unit is not known yet: from the ring until its caller frame or the default fallback (1 s). The body carries the ring's `call_id` and `retry_after_ms` (1-1000), the time left until the fallback. Nothing is sent to the station. A video request that the ring's own video answers is not refused. |
-| `409` | `unit_video_unsupported` | On-demand video of a unit whose address the station does not view (not `2…`, no unit address after the `2`, or one of 96 and above), also while a view runs, which goes on; only the ring's own video is shown whatever unit is asked. |
+| `409` | `unit_video_unsupported` | On-demand video of a unit whose address the station does not view (not `2…`, or a unit address of 96 and above) or that the agent refuses (no unit address after the `2`), also while a view runs, which goes on; only the ring's own video is shown whatever unit is asked. |
 | `400` | `invalid_call_id` | Empty or longer than 32 characters. |
 
 ### Events
@@ -338,6 +353,7 @@ All carry the 3.0 envelope (`event_id`, `type`, `occurred_at`, `data`).
 | `station.call_state` | `code`, `state` (see Station call state; `null` for a code without a proven meaning), on every change |
 | `door.opened`, `door.closed` | `unit`, `where`, `raw`; on a change of the unit's door state. The first door frame of a unit also sends `outdoor_units.changed`. |
 | `doorbell.view_requested` | adds `call_id` and `unit` when the frame names the unit |
+| `doorbell.media.closed` | adds `kind` (`ring` or `view`: whose media closed, see End of a call) and `call_id` of the live call it belongs to (the ring call, or the newest view; `null` when none is live). The visitor journal ends a visit only on the close of its ring. |
 | `door_unlock.started`, `door_unlock.ended` | add `unit` when the address is a unit's lock, and `call_id` of its live call |
 | `outdoor_units.changed` | `count`; Home Assistant reads `GET /api/v1/outdoor-units` again |
 

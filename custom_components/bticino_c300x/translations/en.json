@@ -1755,6 +1755,9 @@
     "call_not_current": {
       "message": "That call is over or is not the current call. Nothing was sent to the station."
     },
+    "ring_call_not_active": {
+      "message": "Home Assistant is not connected to this ringing call, so it cannot answer or hang it up; the station keeps ringing. Nothing was sent to the station."
+    },
     "unknown_unit": {
       "message": "The station has no such outdoor unit."
     },

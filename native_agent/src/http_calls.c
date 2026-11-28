@@ -206,6 +206,26 @@ static int own_media(const char *data)
     return strcmp(data, C300X_VIDEO_EVENT_RING) == 0 ? 'r' : strcmp(data, C300X_VIDEO_EVENT_VIEW) == 0 ? 'v' : 0;
 }
 
+/* A media close of a view, not of the ring. The bus ends a ring call with
+ * *8*3#1#, a view with *8*3#5#; its video off (*7*0*##) follows either and
+ * ends no ring. */
+static int closed_view(const char *data, int own)
+{
+    return own != 0 ? own == 'v' : data == NULL || strstr(data, "\"raw\":\"*8*3#1#") == NULL;
+}
+
+/* doorbell.media.closed with the kind of media that closed and its call. */
+static int closed_fields(const struct c300x_call_hub *hub, const char *data, int own, char *out, size_t out_len)
+{
+    int view = closed_view(data, own);
+    const struct c300x_call *call = c300x_calls_media_call(&hub->calls, view);
+    char fields[80];
+
+    snprintf(fields, sizeof(fields), "\"kind\":\"%s\",\"call_id\":%s%s%s", view ? "view" : "ring",
+             call ? "\"" : "null", call ? call->id : "", call ? "\"" : "");
+    return append_fields(data, fields, out, out_len);
+}
+
 static int hub_event(struct c300x_call_hub *hub, const char *type, const char *data, int own,
                      char *out, size_t out_len)
 {
@@ -246,6 +266,9 @@ static int hub_event(struct c300x_call_hub *hub, const char *type, const char *d
         const struct c300x_call *call = c300x_calls_current(&hub->calls);
         return call != NULL && call->unit[0] != '\0' ? decorate(data, call->unit, call->id, out, out_len) : 1;
     }
+    if (strcmp(type, "doorbell.media.closed") == 0) {
+        return closed_fields(hub, data, own, out, out_len);
+    }
     return 1;
 }
 
@@ -268,9 +291,7 @@ void c300x_call_hub_media_closed(struct c300x_call_hub *hub, const char *data, i
     struct c300x_call_media media;
     int own = data != NULL ? own_media(data) : 0;
     int from_bus = data != NULL && strstr(data, "\"raw\"") != NULL;
-    /* The bus ends a ring call with *8*3#1#, a view with *8*3#5#; its video
-     * off (*7*0*##) follows either and ends no ring. */
-    int view = own != 0 ? own == 'v' : data == NULL || strstr(data, "\"raw\":\"*8*3#1#") == NULL;
+    int view = closed_view(data, own);
 
     if (hub != NULL) {
         media_state(hub, &media);
@@ -338,15 +359,6 @@ static int stop_view(int client_fd, const struct c300x_call_routes *routes)
     return 1;
 }
 
-/* The display or the app holds the view, not the agent: only they end it. */
-static int view_held_by_station(const struct c300x_call_hub *hub)
-{
-    struct c300x_call_media media;
-
-    media_state(hub, &media);
-    return media.external && !media.agent;
-}
-
 static void call_action(int client_fd, const struct c300x_call_routes *routes, const struct request *request,
                         const char *call_id, int answer)
 {
@@ -354,6 +366,9 @@ static void call_action(int client_fd, const struct c300x_call_routes *routes, c
     /* Checked before the operation starts, not when its result is answered. */
     int owns = routes->control != NULL && routes->control->worker.owner_fd == client_fd;
     const struct c300x_call *call = c300x_calls_find(&hub->calls, call_id);
+    struct c300x_call_media media;
+    const char *refused;
+    char body[64];
     int done;
 
     if (!owns && !c300x_calls_is_current(&hub->calls, call_id)) {
@@ -364,9 +379,15 @@ static void call_action(int client_fd, const struct c300x_call_routes *routes, c
         c300x_http_send_json(client_fd, 409, "Conflict", "{\"ok\":false,\"error\":\"call_not_ringing\"}\n");
         return;
     }
-    if (!owns && call != NULL && call->view && view_held_by_station(hub)) {
-        c300x_http_send_json(client_fd, 409, "Conflict", "{\"ok\":false,\"error\":\"station_busy\"}\n");
-        return;
+    if (!owns && !answer && call != NULL) {
+        /* A call the agent holds no leg of goes on: nothing reaches the station. */
+        media_state(hub, &media);
+        refused = c300x_calls_hangup_refusal(call, &media);
+        if (refused != NULL) {
+            snprintf(body, sizeof(body), "{\"ok\":false,\"error\":\"%s\"}\n", refused);
+            c300x_http_send_json(client_fd, 409, "Conflict", body);
+            return;
+        }
     }
     hub->stopping = !answer;
     if (call != NULL && call->view) {
@@ -603,6 +624,7 @@ int c300x_http_calls_route(int client_fd, const struct c300x_call_routes *routes
     struct c300x_call_hub *hub = routes->hub;
     char segment[REQUEST_CALL_ID_LEN];
     char body[4096];
+    struct c300x_call_media media;
     int get = strcmp(request->method, "GET") == 0;
     int post = strcmp(request->method, "POST") == 0;
 
@@ -623,7 +645,8 @@ int c300x_http_calls_route(int client_fd, const struct c300x_call_routes *routes
         if (!hub->units.loaded) load_units(hub);
         if (!ask_station_state(routes)) return 1;
         tick(hub);
-        if (!c300x_calls_json(&hub->calls, c300x_monotonic_ms(), body, sizeof(body))) {
+        media_state(hub, &media);
+        if (!c300x_calls_json(&hub->calls, &media, c300x_monotonic_ms(), body, sizeof(body))) {
             c300x_copy_string(body, sizeof(body), "{\"ok\":false,\"error\":\"response_too_large\"}\n");
         }
         c300x_http_send_json(client_fd, 200, "OK", body);

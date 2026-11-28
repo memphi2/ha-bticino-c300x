@@ -26,6 +26,7 @@ from .api_errors import (
     C300XCallUnitPendingError,
     C300XDeviceNotRegisteredError,
     C300XDisplayBridgeNotRegisteredError,
+    C300XRingCallNotActiveError,
     C300XStationBusyError,
     C300XUnitVideoUnsupportedError,
     C300XUnknownUnitError,
@@ -255,6 +256,8 @@ class _C300XApiCore:
             if status == 409 and _agent_error_field(text, "error") == "call_not_current":
                 raise C300XCallNotCurrentError(
                     _http_error_text(status, text), _agent_error_field(text, "current_call_id"))
+            if status == 409 and _agent_error_field(text, "error") == "ring_call_not_active":
+                raise C300XRingCallNotActiveError(_http_error_text(status, text))
             if status == 409 and _agent_error_field(text, "error") == "call_unit_pending":
                 wait = json.loads(text).get("retry_after_ms")
                 raise C300XCallUnitPendingError(

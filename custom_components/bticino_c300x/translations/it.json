@@ -1755,6 +1755,9 @@
     "call_not_current": {
       "message": "Questa chiamata è terminata o non è la chiamata attuale. Alla stazione non è stato inviato nulla."
     },
+    "ring_call_not_active": {
+      "message": "Home Assistant non è collegato a questa chiamata in arrivo, quindi non può rispondere né riagganciare; la stazione continua a squillare. Alla stazione non è stato inviato nulla."
+    },
     "unknown_unit": {
       "message": "La stazione non ha questo posto esterno."
     },

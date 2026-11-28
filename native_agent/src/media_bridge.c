@@ -5277,30 +5277,38 @@ static void stop_media_session_locked(bool close_client, bool explicit_stop) {
     pthread_mutex_unlock(&g_bridge.mutex);
 }
 
-void c300x_media_session_stop(struct c300x_video *video) {
-    bool dispatch_closed;
-    bool owned;
+/* Stops the ring leg when one is up; false when there was none. */
+static bool stop_ring_session(struct c300x_video *video) {
     bool ring_dispatch_closed;
 
     pthread_mutex_lock(&g_bridge.mutex);
-    owned = g_bridge.video == video;
     ring_dispatch_closed = (
-        owned
+        g_bridge.video == video
         && !home_call_active_locked(&g_bridge)
         && !g_bridge.ring_call_stop
         && (g_bridge.ring_call_active || g_bridge.ring_media_active)
     );
+    pthread_mutex_unlock(&g_bridge.mutex);
+    if (!stop_ring_call_if_active(true, true)) {
+        return false;
+    }
+    c300x_video_bridge_media_stopped(g_bridge.video);
+    if (ring_dispatch_closed && c300x_video_consume_media_closed_event(video)) {
+        c300x_video_dispatch_event(video, "doorbell.media.closed", C300X_VIDEO_EVENT_RING, 0);
+    }
+    return true;
+}
+
+void c300x_media_session_stop(struct c300x_video *video) {
+    bool dispatch_closed;
+    bool owned;
+
+    pthread_mutex_lock(&g_bridge.mutex);
+    owned = g_bridge.video == video;
     dispatch_closed = owned && doorbell_media_session_active_locked(&g_bridge);
     pthread_mutex_unlock(&g_bridge.mutex);
 
-    if (stop_ring_call_if_active(true, true)) {
-        c300x_video_bridge_media_stopped(g_bridge.video);
-        if (
-            ring_dispatch_closed
-            && c300x_video_consume_media_closed_event(video)
-        ) {
-            c300x_video_dispatch_event(video, "doorbell.media.closed", C300X_VIDEO_EVENT_RING, 0);
-        }
+    if (stop_ring_session(video)) {
         return;
     }
     stop_media_session(true, true);
@@ -5410,10 +5418,10 @@ void c300x_media_ring_call_hangup(struct c300x_video *video) {
     pthread_mutex_lock(&g_bridge.mutex);
     owned = g_bridge.video == video;
     pthread_mutex_unlock(&g_bridge.mutex);
-    if (!owned) {
-        return;
+    /* A ring call's hang-up ends its ring leg, never the on-demand view. */
+    if (owned) {
+        (void)stop_ring_session(video);
     }
-    c300x_media_session_stop(video);
 }
 
 bool c300x_media_talkback_running(const struct c300x_video *video) {

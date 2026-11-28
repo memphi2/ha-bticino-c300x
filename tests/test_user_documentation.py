@@ -706,6 +706,39 @@ def test_the_outdoor_units_and_calls_texts_say_what_the_agent_does():
     assert "(`a=DEVADDR:20#2`, see Video); whether the station shows that unit for it is not verified" in contract
 
 
+def test_the_end_frame_of_an_unanswered_bus_ring_is_no_media_close_in_the_texts():
+    # A bus end frame becomes doorbell.media.closed only while a media close is
+    # owed; an unanswered ring without the agent's ring leg owes none (ring
+    # replay case unanswered_bus_ring_end_frame) and ends on the station's idle
+    # or the ringing timeout.
+    http = (ROOT / "native_agent/src/http.c").read_text()
+    assert "&& !c300x_video_consume_media_closed_event(runtime->video)" in http
+    table = (ROOT / "native_agent/src/call_table.h").read_text()
+    assert "#define C300X_CALL_SETTLE_MS 1500" in table and "#define C300X_CALL_RINGING_TIMEOUT_MS 90000" in table
+    replay = (ROOT / "native_agent/test/ring_replay_test.c").read_text()
+    assert "static void unanswered_bus_ring_end_frame(void)" in replay
+    api = " ".join((ROOT / "native_agent/API.md").read_text().split())
+    contract = " ".join((ROOT / "docs/dev/multi-outdoor-units.md").read_text().split())
+    for text in (api, contract):
+        assert ("The end frame of a ring that nobody answered and that the agent has no ring leg of "
+                "(only the bus rang) ends nothing: that call ends on the station's idle (1.5 s after "
+                "`*#8**35*0`) or after 90 s without a change") in text
+
+
+def test_a_devaddr_without_a_unit_address_is_the_agents_refusal_in_the_texts():
+    # bt_answering_machine reads the number after the leading 2 with strtol: an
+    # empty one is 0 and passes its check below 96. The agent refuses it.
+    unit = (ROOT / "native_agent/src/media_unit.c").read_text()
+    assert "devaddr[1] < '0' || devaddr[1] > '9'" in unit
+    api = " ".join((ROOT / "native_agent/API.md").read_text().split())
+    contract = " ".join((ROOT / "docs/dev/multi-outdoor-units.md").read_text().split())
+    assert "not `2` or `296`" not in api
+    assert "the station does not view (not `2…`, no unit address after the `2`" not in contract
+    assert "it reads an empty number as 0. The agent refuses a DEVADDR without a unit address" in api
+    assert "The agent refuses a DEVADDR without a unit address after the `2` (`2`, `2#1`)" in contract
+    assert "or that the agent refuses (no unit address after the `2`)" in contract
+
+
 def _heading_anchors(path: Path) -> set[str]:
     """The GitHub anchors of the headings of the Markdown file ``path``."""
 

@@ -1755,6 +1755,9 @@
     "call_not_current": {
       "message": "Esa llamada ha terminado o no es la llamada actual. No se ha enviado nada a la estación."
     },
+    "ring_call_not_active": {
+      "message": "Home Assistant no está conectado a esta llamada entrante, así que no puede contestarla ni colgarla; la estación sigue sonando. No se ha enviado nada a la estación."
+    },
     "unknown_unit": {
       "message": "La estación no tiene esa placa exterior."
     },

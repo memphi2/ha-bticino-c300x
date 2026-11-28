@@ -499,3 +499,30 @@ def test_a_later_caller_frame_moves_the_visit_to_its_unit(tmp_path, monkeypatch)
     assert [item["unit"] for item in journal.items()] == ["21"]
     journal.event(call_event("call_caller_identified", 4, None))
     assert [item["unit"] for item in journal.items()] == ["21"]
+
+
+def test_only_the_rings_own_media_close_ends_its_visit(tmp_path, monkeypatch):
+    # The live view of a unit closes while the visitor's ring goes on: the
+    # agent keeps the ring call, so does the journal; another ring's close
+    # neither ends it. The ring's own close does.
+    _, journal = fixture(tmp_path, monkeypatch)
+
+    def call_event(event_type, sequence, call_id, media=None):
+        item = event(event_type, sequence)
+        item.data.update({"call_id": call_id, "data": {"kind": media} if media else {}})
+        return item
+
+    journal.event(call_event("doorbell_pressed", 1, "0badc0de-2"))
+    visit = journal.active
+    assert visit is not None
+    journal.event(call_event("doorbell_media_closed", 2, "0badc0de-3", "view"))
+    journal.event(call_event("doorbell_media_closed", 3, None, "view"))
+    journal.event(call_event("doorbell_media_closed", 4, "0badc0de-1", "ring"))
+    assert journal.active == visit
+    journal.event(call_event("doorbell_media_closed", 5, "0badc0de-2", "ring"))
+    assert journal.active is None
+    # A ring whose call the agent did not name ends with its close, as before.
+    journal.event(call_event("doorbell_pressed", 6, "0badc0de-4"))
+    assert journal.active is not None
+    journal.event(call_event("doorbell_media_closed", 7, None, "ring"))
+    assert journal.active is None

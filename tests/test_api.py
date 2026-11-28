@@ -2445,9 +2445,9 @@ def test_doorbell_call_status_requests_authenticated_endpoint() -> None:
 _CALLS = (
     '{"ok": true, "boot_id": "0badc0de", "current_call_id": "0badc0de-2", "calls": ['
     '{"call_id": "0badc0de-2", "kind": "ring", "state": "ringing", "unit": "21",'
-    ' "attribution": "caller_frame", "answered_by": null, "end_reason": null},'
+    ' "attribution": "caller_frame", "answered_by": null, "end_reason": null, "can_hangup": true},'
     '{"call_id": "0badc0de-1", "kind": "ring", "state": "answered", "unit": null,'
-    ' "attribution": "pending", "answered_by": "ha", "end_reason": null}]}'
+    ' "attribution": "pending", "answered_by": "ha", "end_reason": null, "can_hangup": true}]}'
 )
 
 
@@ -2465,7 +2465,7 @@ def test_answer_without_a_call_id_answers_the_agents_current_call() -> None:
 _VIEW = (
     '{"ok": true, "boot_id": "0badc0de", "current_call_id": "0badc0de-5", "calls": ['
     '{"call_id": "0badc0de-5", "kind": "view", "state": "viewing", "unit": "20",'
-    ' "attribution": "caller_frame", "answered_by": null, "end_reason": null}]}'
+    ' "attribution": "caller_frame", "answered_by": null, "end_reason": null, "can_hangup": true}]}'
 )
 
 
@@ -4330,7 +4330,7 @@ def test_a_call_id_of_another_unit_is_refused_for_a_unit_target() -> None:
 _PENDING_RING = (
     '{"ok": true, "boot_id": "0badc0de", "current_call_id": "0badc0de-2", "calls": ['
     '{"call_id": "0badc0de-2", "kind": "ring", "state": "ringing", "unit": null,'
-    ' "attribution": "pending", "answered_by": null, "end_reason": null}]}'
+    ' "attribution": "pending", "answered_by": null, "end_reason": null, "can_hangup": true}]}'
 )
 
 

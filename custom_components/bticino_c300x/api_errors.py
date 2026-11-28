@@ -74,6 +74,17 @@ class C300XCallNotCurrentError(C300XAgentApiConnectionError):
         self.current_call_id = current_call_id
 
 
+class C300XRingCallNotActiveError(C300XAgentApiConnectionError):
+    """The agent answered `409 ring_call_not_active`: it has no ring leg of that call.
+
+    Only the station rings (smartphone forwarding, for example), so Home
+    Assistant can neither answer nor hang up. Nothing reached the station.
+    """
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message, http_status=409, agent_state="ring_call_not_active")
+
+
 class C300XCallUnitPendingError(C300XAgentApiConnectionError):
     """The agent answered `409 call_unit_pending`: the ringing unit is not known yet.
 

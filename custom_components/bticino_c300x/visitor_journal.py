@@ -144,6 +144,11 @@ class VisitorJournal:
         ):
             # Another call ended (a superseded ring, a second unit): this visit goes on.
             return
+        elif kind == "doorbell_media_closed" and (
+            _closed_media(data) == "view" or _other_call(self.records.get(active or ""), data.get("call_id"))
+        ):
+            # A view's media closed, or another ring's: the ring's visit goes on.
+            return
         elif kind in {"doorbell_media_closed", "agent_restarted", "home_call_started", "call_ended"}:
             order = _source_order(data.get("source_event_id"), self.latest_source)
             if order is not None and order <= 0:
@@ -284,6 +289,20 @@ class VisitorJournal:
             await self.store.async_save(self._saved_payload())
         except OSError:
             _LOGGER.warning("Could not persist C300X visitor journal", exc_info=True)
+
+
+def _closed_media(data: Mapping[str, Any]) -> Any:
+    """``ring`` or ``view``: the media whose close doorbell.media.closed reports."""
+
+    payload = data.get("data")
+    return payload.get("kind") if isinstance(payload, Mapping) else None
+
+
+def _other_call(record: Mapping[str, Any] | None, call_id: Any) -> bool:
+    """The event names a call, and not the one of this visit."""
+
+    own = record.get("call_id") if record is not None else None
+    return call_id is not None and own is not None and call_id != own
 
 
 def _validated_record(raw: Any) -> dict[str, Any] | None:

@@ -54,6 +54,8 @@ NATIVE_AGENT_BUNDLE_INPUT_PATHS = (
     "custom_components/bticino_c300x/device_agent/init",
     "scripts/stage_device_agent_bundle.py",
     "scripts/device_file_strip.py",
+    "scripts/c100x_bundle_builder.py",
+    "scripts/c100x_qml_builder.py",
 )
 # Bundle inputs that never reach the agent binary. Their content is carried by
 # the bundle hash (stage_device_agent_bundle.py feeds qml_patch_hash into it),
@@ -128,7 +130,6 @@ REQUIRED_PATHS = [
     "project-versions.json",
     "custom_components/bticino_c300x/manifest.json",
     "custom_components/bticino_c300x/brand/icon.png",
-    "custom_components/bticino_c300x/brand/logo.png",
     "custom_components/bticino_c300x/quality_scale.yaml",
     "custom_components/bticino_c300x/config_flow.py",
     "custom_components/bticino_c300x/discovery.py",
@@ -142,7 +143,17 @@ REQUIRED_PATHS = [
     "docs/dev/quality-scale.md",
     "docs/dev/release-validation.md",
     "docs/legal.md",
-    "docs/user-guide.md",
+    "docs/reference.md",
+    "docs/classe-300x/1-setup.md",
+    "docs/classe-300x/2-use.md",
+    "docs/classe-300x/3-display.md",
+    "docs/classe-300x/4-troubleshooting.md",
+    "docs/classe-300x/5-update-and-removal.md",
+    "docs/classe-100x/1-setup.md",
+    "docs/classe-100x/2-use.md",
+    "docs/classe-100x/3-display.md",
+    "docs/classe-100x/4-troubleshooting.md",
+    "docs/classe-100x/5-update-and-removal.md",
     "scripts/check_quality_scale.py",
     "scripts/check_dependency_updates.py",
     "scripts/check_coverage.py",
@@ -515,7 +526,7 @@ def check_release_metadata() -> list[str]:
         "SUPPORT.md": active_release_line,
         "PRIVACY.md": "Local Data Flow",
         "LICENSE": "Apache License",
-        "NOTICE": "BTicino C300X Home Assistant Integration",
+        "NOTICE": "BTicino C300X/C100X Home Assistant Integration",
     }
     for relative_path, expected in required_mentions.items():
         path = ROOT / relative_path
@@ -814,7 +825,7 @@ def check_hacs_metadata() -> list[str]:
     hacs_path = ROOT / "hacs.json"
     hacs = json.loads(hacs_path.read_text(encoding="utf-8"))
     expected_hacs = {
-        "name": "BTicino C300X",
+        "name": "BTicino C300X/C100X",
         "homeassistant": MIN_HOME_ASSISTANT_VERSION,
         "zip_release": True,
         "filename": "ha-bticino-c300x.zip",

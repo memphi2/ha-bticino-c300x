@@ -187,6 +187,53 @@ export const C300X_TRANSLATIONS = {
     unavailable: "Non disponibile",
     unknown: "Sconosciuto",
   },
+  es: {
+    show_picture_controls: "Mostrar los controles de imagen para el vídeo en directo compatible",
+    show_media_history: "Explorar imágenes y vídeos guardados",
+    last_image: "Imagen archivada (no en directo)",
+    device_unresolved: "Asignación del dispositivo de la cámara no disponible",
+    door_unlock: "Abrir puerta",
+    stair_light: "Luz de escalera",
+    answer: "Responder",
+    auto_mode: "Videoportero + Home Call",
+    call_home: "Llamar a casa",
+    calling: "Llamando",
+    connected: "Conectado",
+    busy: "Ocupado",
+    door_station: "Videoportero C300X",
+    doorbell_call: "Timbre / A petición",
+    doorstation_card: "Tarjeta del videoportero",
+    entity: "Entidad de cámara",
+    external_call: "Llamada externa",
+    hang_up: "Colgar",
+    home_call: "Home Call",
+    home_call_name: "C300X Home Call",
+    idle: "Inactivo",
+    mode: "Modo",
+    name: "Nombre",
+    microphone_required: "El acceso al micrófono requiere HTTPS o Home Assistant Cloud",
+    microphone_stream_only: "Micrófono no disponible; solo escucha",
+    tap_for_sound: "Toca la tarjeta para oír el sonido",
+    media_blocked: "Multimedia bloqueada",
+    media_forwarding_required: "La llamada de timbre requiere el desvío a Home Assistant",
+    media_ready: "Multimedia lista",
+    media_unavailable: "Multimedia no disponible",
+    media_unknown: "Estado multimedia desconocido",
+    media_warning: "La multimedia requiere atención",
+    mute_microphone: "Silenciar micrófono",
+    no_active_door_call: "Ninguna llamada de puerta activa",
+    no_active_home_call: "Ningún audio de Home Call activo",
+    open_repairs: "Abrir Reparaciones",
+    ringback_tone: "Tono de llamada de Home Call",
+    ringback_volume: "Volumen del tono de llamada de Home Call",
+    show_media_readiness: "Mostrar la línea de disponibilidad multimedia",
+    show_door_unlock: "Mostrar el botón Abrir puerta",
+    show_stair_light: "Mostrar el botón de la luz de escalera",
+    stream: "Transmisión",
+    unmute_microphone: "Activar micrófono",
+    unavailable: "No disponible",
+    unknown: "Desconocido",
+  },
 };
 
 export function c300xLanguage(hass) {
@@ -196,6 +243,10 @@ export function c300xLanguage(hass) {
 
 export function c300xLocalize(hass, key) {
   return c300xLabel(c300xLanguage(hass), key);
+}
+
+export function c300xModelLabel(label, model) {
+  return model === "C100X" ? label.replace("C300X", "C100X") : label;
 }
 
 export function c300xLabel(language, key) {

@@ -205,7 +205,8 @@ def test_validate_setup_uses_native_agent_version() -> None:
         '{"api_version": "1", '
         '"agent": {"implementation": "native-c", "version": "0.2.0"}, '
         '"device": {"id": "c300x-aabbcc001122", '
-        '"model": "C300X", "firmware": "1.7.19"}, '
+        '"model": "C100X", "display_kind": "qt5_ondisk", "camera": "fixed", "model_check": "ok", '
+        '"board": "BTicino SHARK board (Dig-D/Car-C)", "article": "", "firmware": "1.5.8"}, '
         '"capabilities": {"doorbell_events": true}}'
     )
     api = C300XAgentApi(
@@ -221,7 +222,10 @@ def test_validate_setup_uses_native_agent_version() -> None:
     assert setup["implementation"] == "native-c"
     assert setup["api_version"] == "1"
     assert setup["device_id"] == "c300x-aabbcc001122"
-    assert setup["model"] == "C300X"
+    assert (setup["model"], setup["display_kind"]) == ("C100X", "qt5_ondisk")
+    assert (setup["camera"], setup["model_check"]) == ("fixed", "ok")
+    # An empty article number is none.
+    assert (setup["board"], setup["article"]) == ("BTicino SHARK board (Dig-D/Car-C)", None)
     assert setup["capabilities"] == {"doorbell_events": True}
     assert session.requests[0]["kwargs"]["timeout"] == 2.0
 
@@ -1047,7 +1051,8 @@ def test_legacy_mqtt_status_uses_separate_maintenance_endpoint() -> None:
         '"init_link": "/etc/rc5.d/S99TcpDump2Mqtt", '
         '"flexisip_backup_available": true, '
         '"flexisip_restart_marker": true, '
-        '"flexisip_reference_state": "legacy_mqtt_patch"}'
+        '"flexisip_reference_state": "legacy_mqtt_patch", '
+        '"bridge_blocked": true, "watchdog": true}'
     )
     api = C300XAgentApi(
         session,  # type: ignore[arg-type]
@@ -1066,6 +1071,7 @@ def test_legacy_mqtt_status_uses_separate_maintenance_endpoint() -> None:
     assert status["flexisip_backup_available"] is True
     assert status["flexisip_restart_marker"] is True
     assert status["flexisip_reference_state"] == "legacy_mqtt_patch"
+    assert (status["bridge_blocked"], status["watchdog"]) == (True, True)
     assert session.requests[0]["args"] == (
         "GET",
         "http://agent.local:8080/api/v1/maintenance/legacy-mqtt",
@@ -1105,6 +1111,8 @@ def test_normalize_legacy_mqtt_status_accepts_minimal_payload() -> None:
         "flexisip_backup_available": None,
         "flexisip_restart_marker": None,
         "flexisip_reference_state": None,
+        "bridge_blocked": None,
+        "watchdog": None,
         "raw": {"enabled": False},
     }
 
@@ -2209,7 +2217,7 @@ def test_activate_doorbell_video_requests_authenticated_endpoint() -> None:
     assert session.requests[0]["kwargs"]["json"] == {"audio": True}
 
 
-def test_set_doorstation_audio_gain_requests_runtime_endpoint() -> None:
+def test_set_doorstation_audio_level_requests_runtime_endpoint() -> None:
     session = _FakeSession('{"ok": true}')
     api = C300XAgentApi(
         session,  # type: ignore[arg-type]
@@ -2217,7 +2225,7 @@ def test_set_doorstation_audio_gain_requests_runtime_endpoint() -> None:
         "agent-token",
     )
 
-    assert asyncio.run(api.async_set_doorstation_audio_gain_db(6.0)) == {"ok": True}
+    assert asyncio.run(api.async_set_doorstation_audio_level(9, -2)) == {"ok": True}
     assert session.requests[0]["args"] == (
         "POST",
         "http://agent.local:8080/api/v1/video/doorbell/audio",
@@ -2225,7 +2233,7 @@ def test_set_doorstation_audio_gain_requests_runtime_endpoint() -> None:
     assert session.requests[0]["kwargs"]["headers"] == {
         "Authorization": "Bearer agent-token",
     }
-    assert session.requests[0]["kwargs"]["json"] == {"doorstation_audio_gain_tenths": 60}
+    assert session.requests[0]["kwargs"]["json"] == {"door_level_db": 9, "fine_gain_db": -2}
 
 
 def test_activate_doorbell_video_accepts_active_ring_conflict() -> None:
@@ -2542,16 +2550,32 @@ def test_normalize_ssh_status_accepts_running_flag() -> None:
     assert normalize_ssh_status({"running": "true"})["running"] is True
     assert normalize_ssh_status({"enabled": False})["running"] is False
     assert normalize_ssh_status({"running": "disabled"})["running"] is False
+    facts = {"state": None, "manager": None, "listening": None, "factory_running": None}
     assert normalize_ssh_status({"running": "maybe"}) == {
         "running": None,
         "enabled": None,
+        **facts,
         "raw": {"running": "maybe"},
     }
     assert normalize_ssh_status({"raw": "missing"}) == {
         "running": None,
         "enabled": None,
+        **facts,
         "raw": {"raw": "missing"},
     }
+
+
+def test_normalize_ssh_status_names_who_keeps_ssh_running() -> None:
+    data = {"ok": True, "enabled": True, "running": True, "state": "managed_externally",
+            "listening": True, "factory_running": False, "manager": "bt_service_watchdog"}
+    status = normalize_ssh_status(data)
+    assert {key: status[key] for key in ("running", "state", "manager", "listening",
+                                         "factory_running")} == {
+        "running": True, "state": "managed_externally", "manager": "bt_service_watchdog",
+        "listening": True, "factory_running": False}
+    # Only known states and short names reach entity attributes.
+    odd = normalize_ssh_status({**data, "state": "<b>", "manager": "../etc/passwd"})
+    assert odd["state"] is None and odd["manager"] is None
 
 
 def test_normalize_qml_patch_status_derives_state() -> None:
@@ -3410,6 +3434,7 @@ def test_normalize_agent_diagnostics_removes_unusable_values() -> None:
             "open_fd_count": "9",
             "agent_init_script_present": True,
             "agent_init_link_ok": False,
+            "agent_started_after_boot_seconds": "21",
             "subscription_count": "1",
             "recent_event_count": "4",
             "recent_event_capacity": "16",
@@ -3458,6 +3483,7 @@ def test_normalize_agent_diagnostics_removes_unusable_values() -> None:
     assert normalized["open_fd_count"] == 9
     assert normalized["agent_init_script_present"] is True
     assert normalized["agent_init_link_ok"] is False
+    assert normalized["agent_started_after_boot_seconds"] == 21
     assert normalized["subscription_count"] == 1
     assert normalized["recent_event_count"] == 4
     assert normalized["recent_event_capacity"] == 16

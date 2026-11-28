@@ -28,7 +28,7 @@ def test_released_updater_installs_beta_without_losing_display_state(
     stager.stage_bundle(stage, version="test", skip_build=True, agent_binary=binary)
     manifest_path = stage / "device_agent/bundle.json"
     manifest = json.loads(manifest_path.read_text())
-    assert manifest["update_file_set_version"] == 6
+    assert manifest["update_file_set_version"] == 7
 
     retained = {
         "config.json": b'{"existing": "configuration"}',
@@ -74,6 +74,10 @@ def test_released_updater_installs_beta_without_losing_display_state(
         relative = entry["path"]
         if relative == stager.LEGACY_BOOTSTRAP_QML:
             assert not (agent / "qml/C300XEnergyDistribution.qml").exists()
+            continue
+        if relative == "device_agent/qml/c100x_bundle.sh":
+            # The Classe 100X adapter is in the package and never on a Classe 300X.
+            assert not (agent / "qml/c100x_bundle.sh").exists()
             continue
         if relative == "device_agent/init/c300x-native-agent":
             target = agent / "init-script"

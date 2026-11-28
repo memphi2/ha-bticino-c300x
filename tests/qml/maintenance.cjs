@@ -128,7 +128,7 @@ assert.match(qml, /onVisibleChanged: if \(visible\) readStatus\(\); else hidden\
 const translations = vm.createContext({});
 vm.runInContext(fs.readFileSync(path.join(dir, "js/c300x_i18n.js"), "utf8")
     .replace(/^\.pragma library/, ""), translations);
-for (const locale of ["de", "en", "it", "fr"]) {
+for (const locale of ["de", "en", "it", "fr", "es"]) {
     for (const key of ["reboot", "remove", "confirm_reboot", "confirm_remove", "accepted", "timeout"]) {
         assert.ok(translations.catalog(locale)["maintenance_" + key], locale + ": " + key);
     }

@@ -1,7 +1,7 @@
 # Architecture
 
 Internal ownership, data flow, resource limits and open design work. For what
-users see, read the [Reference](../feature-reference.md); the HTTP contract is in
+users see, read the [Reference](../reference.md); the HTTP contract is in
 the [Native Agent API](../../native_agent/API.md); runtime packaging is in
 [Native Agent](native-agent.md).
 

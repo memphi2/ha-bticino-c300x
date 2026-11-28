@@ -6,6 +6,7 @@
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <linux/videodev2.h>
@@ -57,10 +58,11 @@ static int listed;
 DIR *__wrap_opendir(const char *name)
 {
     static const char root[] = "/sys/bus/i2c/drivers/";
-    assert(!strncmp(name, root, sizeof(root) - 1));
+    const size_t root_len = sizeof(root) - 1;
+    assert(!strncmp(name, root, root_len));
     ++dirs;
     listed = 0;
-    if (!decoder || strcmp(name + sizeof(root) - 1, decoder)) { errno = ENOENT; return NULL; }
+    if (!decoder || strcmp(&name[root_len], decoder)) { errno = ENOENT; return NULL; }
     return (DIR *)&dir_token;
 }
 struct dirent *__wrap_readdir(DIR *dir)
@@ -163,23 +165,112 @@ int __wrap_ioctl(int fd, unsigned long cmd, ...)
     return 0;
 }
 
+static int profile = PICTURE_PROFILE_C300X;
 static enum picture_source_result run(enum picture_field field, int value, int *out)
 {
     struct picture_command command = {field, value};
-    return picture_source_execute(&command, out, active, &owner);
+    return picture_source_execute(profile, &command, out, active, &owner);
+}
+
+/* C100X 1.5.8 stack_open.xml, algo 1: day and night raw values per ten-percent step. */
+static const int day[3][11] = {
+    {30, 49, 68, 87, 106, 125, 144, 163, 182, 201, 220},
+    {80, 97, 115, 132, 150, 167, 185, 202, 220, 237, 255},
+    {80, 97, 115, 132, 150, 167, 185, 202, 220, 237, 255},
+};
+static const int night[3][11] = {
+    {30, 45, 60, 75, 90, 105, 120, 135, 150, 165, 180},
+    {50, 57, 64, 71, 78, 85, 92, 99, 106, 113, 120},
+    {80, 91, 102, 113, 124, 135, 146, 157, 168, 179, 190},
+};
+
+static int nearest_day(int i, int value)
+{
+    int best = 0;
+    for (int k = 1; k <= 10; k++)
+        if (abs(value - day[i][k]) < abs(value - day[i][best])) best = k;
+    return best * 10;
+}
+
+/* The C100X: same mxc_v4l2 signature as a C300X HW rev 4, tvp5150 bound, the station at 50 %. */
+static void reset_c100x(void)
+{
+    reset_stock("tvp5150");
+    raw[0] = day[0][5]; raw[1] = day[1][5]; raw[2] = day[2][5];
+}
+
+static void c100x_cases(void)
+{
+    int out[3] = {0};
+    profile = PICTURE_PROFILE_C100X;
+    reset_c100x();
+    assert(run(PICTURE_READ, 0, out) == PICTURE_SOURCE_OK && out[0] == 50 && out[1] == 50 && out[2] == 50);
+    assert(!writes && queries == 3);
+    /* Writes use the day table, so HA's percent is the station's own day percent. */
+    for (int i = 0; i < 3; i++) {
+        for (int percent = 0; percent <= 100; percent += 10) {
+            reset_c100x();
+            assert(run(PICTURE_BRIGHTNESS + i, percent, out) == PICTURE_SOURCE_OK);
+            assert(raw[i] == day[i][percent / 10] && out[i] == percent);
+            assert(writes == (percent != 50) && closes == 1);
+            queries = reads = 0;
+            assert(run(PICTURE_READ, 0, out) == PICTURE_SOURCE_OK && out[i] == percent);
+        }
+    }
+    /* Night values (re-applied on dark luma) read as the nearest day step, clamped. */
+    for (int i = 0; i < 3; i++) {
+        for (int k = 0; k <= 10; k++) {
+            reset_c100x();
+            raw[i] = night[i][k];
+            assert(run(PICTURE_READ, 0, out) == PICTURE_SOURCE_OK && !writes);
+            assert(out[i] == nearest_day(i, night[i][k]));
+        }
+    }
+    reset_c100x();
+    raw[1] = night[1][0]; /* 50, below the day range: clamps to 0 %. */
+    assert(run(PICTURE_READ, 0, out) == PICTURE_SOURCE_OK && out[1] == 0);
+    /* Menu steps off the 10 % grid: nearest day step, a tie to the lower one. */
+    reset_c100x();
+    raw[0] = 100; raw[1] = 106; raw[2] = 254;
+    assert(run(PICTURE_READ, 0, out) == PICTURE_SOURCE_OK && out[0] == 40 && out[1] == 10 && out[2] == 100);
+    /* Outside every vendor range, and contrast 0 (unwritten driver cache after boot): unavailable. */
+    static const int outside[][2] = {{0, 29}, {0, 221}, {1, 0}, {1, 49}, {2, 79}};
+    for (unsigned n = 0; n < sizeof(outside) / sizeof(outside[0]); n++) {
+        reset_c100x();
+        raw[outside[n][0]] = outside[n][1];
+        assert(run(PICTURE_READ, 0, out) == PICTURE_SOURCE_UNAVAILABLE && !writes);
+    }
+    /* A night value is overwritten with the day value of the requested percent. */
+    reset_c100x();
+    raw[0] = night[0][4];
+    assert(run(PICTURE_BRIGHTNESS, 30, out) == PICTURE_SOURCE_OK && writes == 1 && raw[0] == day[0][3]);
+    /* Verification stays exact: a value that only snaps to the request is not applied. */
+    reset_c100x();
+    raw[0] = day[0][4] + 1;
+    fault = NOT_CHANGED;
+    assert(run(PICTURE_BRIGHTNESS, 40, out) == PICTURE_SOURCE_NOT_APPLIED);
+    assert(writes == 2 && written == day[0][4] + 1 && raw[0] == day[0][4] + 1);
+    /* No profile: nothing is opened. */
+    reset_c100x();
+    profile = PICTURE_PROFILE_NONE;
+    assert(run(PICTURE_READ, 0, out) == PICTURE_SOURCE_UNAVAILABLE && !opens);
+    profile = PICTURE_PROFILE_C300X;
 }
 
 int main(void)
 {
     reset(NONE);
-    assert(picture_source_supported("C300X", "1.7.19") && !dirs);
-    assert(!picture_source_supported("C100X", "1.7.19"));
+    assert(picture_source_supported("C300X", "1.7.19") == PICTURE_PROFILE_C300X && !dirs);
+    assert(!picture_source_supported("C100X", "1.7.19") && !dirs);
     static const char *const decoders[] = {NULL, "adv7180", "tvp5150", "other"};
     for (int d = 0; d < 4; d++) {
         decoder = decoders[d];
-        assert(picture_source_supported("C300X", "1.7.19"));
-        assert(picture_source_supported("C300X", "2.0.2") == (d == 1 || d == 2));
-        assert(picture_source_supported("C300X", "3.0.6") == (d == 1 || d == 2));
+        assert(picture_source_supported("C300X", "1.7.19") == PICTURE_PROFILE_C300X);
+        assert(picture_source_supported("C300X", "2.0.2") == (d == 1 || d == 2 ? PICTURE_PROFILE_C300X : 0));
+        assert(picture_source_supported("C300X", "3.0.6") == (d == 1 || d == 2 ? PICTURE_PROFILE_C300X : 0));
+        /* C100X: only 1.5.8 with its tvp5150 bound; the C300X firmwares never. */
+        assert(picture_source_supported("C100X", "1.5.8") == (d == 2 ? PICTURE_PROFILE_C100X : 0));
+        assert(!picture_source_supported("C300X", "1.5.8") && !picture_source_supported("C100X", "1.5.9"));
         assert(!picture_source_supported("C100X", "3.0.6") && !picture_source_supported("C300X", "3.0.5"));
         assert(!picture_source_supported("C300X", NULL) && !picture_source_supported(NULL, "2.0.2"));
     }
@@ -280,5 +371,6 @@ int main(void)
         assert(raw[0] == (90 ^ 0x80) && writes == (failed > 3) * 2);
         assert(out[0] == -1 && out[1] == -1 && out[2] == -1);
     }
+    c100x_cases();
     return 0;
 }

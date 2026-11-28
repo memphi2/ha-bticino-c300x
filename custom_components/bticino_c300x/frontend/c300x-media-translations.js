@@ -43,6 +43,17 @@ export const C300X_MEDIA_TRANSLATIONS = {
     loading: "Caricamento media", empty: "Nessun media salvato", unavailable: "Media non disponibili",
     controls: "Controlli multimediali", expand: "Apri la vista ingrandita", close: "Chiudi",
   },
+  es: {
+    picture: "Ajustar la imagen de la cámara", brightness: "Brillo", contrast: "Contraste", saturation: "Saturación",
+    picture_unavailable: "Los ajustes de imagen no están disponibles en este momento.",
+    picture_not_applied: "El videoportero no ha aplicado este ajuste.", picture_busy: "El videoportero está ocupado. Inténtalo de nuevo.",
+    previous: "Multimedia anterior", next: "Multimedia posterior", history: "Historial multimedia",
+    play: "Reproducir", pause: "Pausa", mute: "Silenciar", unmute: "Activar sonido", volume: "Volumen",
+    fullscreen: "Pantalla completa", exit_fullscreen: "Salir de pantalla completa", seek: "Posición de reproducción",
+    image: "Instantánea", video: "Grabación", live: "En directo",
+    loading: "Cargando multimedia", empty: "No hay multimedia guardada", unavailable: "Multimedia no disponible",
+    controls: "Controles multimedia", expand: "Abrir la vista ampliada", close: "Cerrar",
+  },
 };
 
 export function mediaLanguage(hass) {

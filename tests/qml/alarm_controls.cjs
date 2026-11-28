@@ -119,7 +119,7 @@ assert.equal(q.status.color, "#ff6b6b");
 Api.status(q.status, q, q.alarmState, q.activeSince);
 pending.shift().error("API error: 503");
 assert.equal(q.status.text, I18n.text("en", "status_error") + " (503)");
-for (const lang of ["de", "fr", "it"]) {
+for (const lang of ["de", "fr", "it", "es"]) {
     assert.notEqual(I18n.text(lang, "status_error"), "status_error", lang);
     assert.notEqual(I18n.text(lang, "status_error"), I18n.text("en", "status_error"), lang);
 }

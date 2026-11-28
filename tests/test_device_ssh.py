@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import signal
+import socket
 import threading
 import time
 from pathlib import Path
@@ -15,8 +16,23 @@ import pytest
 from custom_components.bticino_c300x import device_installer as installer
 
 
+@pytest.fixture
+def host_key_type() -> str:
+    """The host key of the factory station's Dropbear."""
+    return "ssh-rsa"
+
+
+@pytest.fixture
+def station_login() -> dict:
+    """What the station's SSH server accepts: the factory Dropbear takes passwords only.
+
+    "keys": public keys of test-user; "password": False is a key-only build (dropbear -s).
+    """
+    return {"password": True, "keys": []}
+
+
 @pytest.fixture(params=["diffie-hellman-group14-sha1", "diffie-hellman-group1-sha1"])
-def ssh_server(monkeypatch, request):
+def ssh_server(monkeypatch, request, host_key_type, station_login):
     ready = concurrent.futures.Future()
     failures = []
     state = {}
@@ -26,13 +42,27 @@ def ssh_server(monkeypatch, request):
             return True
 
         def password_auth_supported(self):
-            return True
+            return station_login["password"]
 
         def validate_password(self, username, password):
             return username == "test-user" and password == "test-password"
 
+        def public_key_auth_supported(self):
+            return bool(station_login["keys"])
+
+        def validate_public_key(self, username, key):
+            return username == "test-user" and any(
+                key.public_data == known.public_data for known in station_login["keys"]
+            )
+
     async def process_handler(process):
         assert process.term_type is None
+        state.setdefault("commands", []).append(process.command)
+        if process.command == "id -u":
+            # The user id of the login: the station's root unless a test says otherwise.
+            process.stdout.write(f"{station_login.get('uid', 0)}\n".encode())
+            process.exit(0)
+            return
         if process.command == "hang":
             await process.stdin.read()
             await state["stop"].wait()
@@ -57,12 +87,20 @@ def ssh_server(monkeypatch, request):
     async def serve():
         state["loop"] = asyncio.get_running_loop()
         state["stop"] = asyncio.Event()
+        host_algs = station_login.get("host_sig_algs", [host_key_type])
+        host_key = asyncssh.generate_private_key(
+            host_key_type, **({"key_size": 2048} if host_key_type == "ssh-rsa" else {}),
+        )
+        # The algorithms offered for the host key: an RSA key otherwise offers
+        # every hash, a Dropbear only the ones it knows.
+        host_key.sig_algorithms = tuple(alg.encode() for alg in host_algs)
         async with asyncssh.listen(
-            "127.0.0.1", 0, server_factory=Server,
-            server_host_keys=[asyncssh.generate_private_key("ssh-rsa", key_size=2048)],
-            signature_algs=["ssh-rsa"], kex_algs=[request.param],
-            encryption_algs=["aes128-cbc"], process_factory=process_handler,
-            encoding=None,
+            "127.0.0.1", 0, server_factory=Server, server_host_keys=[host_key],
+            # Only this host key is offered, as by a Dropbear given one key (dropbear -r);
+            # user keys sign with the algorithms the station takes besides.
+            signature_algs=[*host_algs, *station_login.get("sig_algs", [])],
+            kex_algs=[request.param], encryption_algs=["aes128-cbc"],
+            process_factory=process_handler, encoding=None,
         ) as server:
             ready.set_result(server.get_port())
             await state["stop"].wait()
@@ -84,6 +122,7 @@ def ssh_server(monkeypatch, request):
         return {**original(value), "port": port}
 
     monkeypatch.setattr(installer, "_asyncssh_connect_kwargs", connection_options)
+    station_login["commands"] = state.setdefault("commands", [])
     try:
         yield installer.C300XDeviceInstallRequest(
             host="127.0.0.1", ssh_username="test-user", ssh_password="test-password",
@@ -110,6 +149,174 @@ def test_legacy_login_commands_binary_input_and_close(ssh_server):
         client.run("true")
 
 
+@pytest.mark.parametrize("host_key_type", [
+    "ssh-rsa", "ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521", "ssh-ed25519",
+])
+def test_a_station_with_only_one_host_key_type_is_reached(ssh_server, host_key_type):
+    """Root tools can set up Dropbear with an ECDSA or Ed25519 key only."""
+    client = installer._connect_device_client(ssh_server)
+    try:
+        assert client.run("printf 'ready'") == "ready"
+    finally:
+        client.close()
+
+
+def _user_key(key_type: str):
+    return asyncssh.generate_private_key(key_type, **({"key_size": 2048} if key_type == "ssh-rsa" else {}))
+
+
+@pytest.mark.parametrize("host_key_type", ["ssh-rsa"])
+@pytest.mark.parametrize(("key_type", "key_format", "passphrase", "sig_algs"), [
+    # Dropbear 2017.75 (1.7.19, 2.0.2, C100X 1.5.8): RSA signed with SHA-1, ECDSA.
+    ("ssh-rsa", "openssh", "", []),
+    ("ssh-rsa", "pkcs1-pem", "", []),
+    ("ecdsa-sha2-nistp256", "openssh", "secret phrase", ["ecdsa-sha2-nistp256"]),
+    ("ecdsa-sha2-nistp256", "pkcs8-pem", "secret phrase", ["ecdsa-sha2-nistp256"]),
+    # Dropbear 2020.81 (3.0.6): also Ed25519 and RSA with SHA-256.
+    ("ssh-ed25519", "openssh", "", ["ssh-ed25519"]),
+    ("ssh-ed25519", "openssh", "secret phrase", ["ssh-ed25519"]),
+    ("ssh-rsa", "openssh", "secret phrase", ["rsa-sha2-256"]),
+])
+@pytest.mark.parametrize("password", ["", "test-password"])
+def test_a_key_only_station_is_reached_with_a_pasted_private_key(
+    ssh_server, station_login, host_key_type, key_type, key_format, passphrase, sig_algs, password,
+):
+    """A root tool can turn password logins off (dropbear -s): the key logs in."""
+    from dataclasses import replace
+
+    key = _user_key(key_type)
+    station_login.update(password=False, keys=[key], sig_algs=sig_algs)
+    pasted = key.export_private_key(key_format, passphrase or None).decode()
+    # Pasted into a form: Windows line ends and surrounding blanks.
+    pasted = "  " + pasted.replace("\n", "\r\n") + "\n "
+    client = installer._connect_device_client(replace(
+        ssh_server, ssh_password=password, ssh_private_key=pasted, ssh_key_passphrase=passphrase,
+    ))
+    try:
+        assert client.run("printf 'ready'") == "ready"
+    finally:
+        client.close()
+
+
+@pytest.mark.parametrize("host_key_type", ["ssh-rsa"])
+def test_a_refused_key_falls_back_to_the_typed_password(ssh_server, station_login):
+    from dataclasses import replace
+
+    station_login.update(keys=[_user_key("ecdsa-sha2-nistp256")], sig_algs=["ecdsa-sha2-nistp256"])
+    other = _user_key("ecdsa-sha2-nistp256").export_private_key("openssh").decode()
+    client = installer._connect_device_client(replace(ssh_server, ssh_private_key=other))
+    try:
+        assert client.run("printf 'ready'") == "ready"
+    finally:
+        client.close()
+    with pytest.raises(installer.C300XDeviceInstallError, match="ssh_login_refused"):
+        installer._connect_device_client(replace(ssh_server, ssh_password="", ssh_private_key=other))
+
+
+@pytest.mark.parametrize("pasted", [
+    "not a key", "PUBLIC",
+    "ENCRYPTED",
+])
+def test_an_unreadable_key_is_named_and_never_quoted(ssh_server, caplog, pasted):
+    from dataclasses import replace
+
+    key = _user_key("ssh-ed25519")
+    text = {
+        "PUBLIC": key.export_public_key("openssh").decode(),
+        "ENCRYPTED": key.export_private_key("openssh", "right").decode(),
+    }.get(pasted, pasted)
+    with pytest.raises(installer.C300XDeviceInstallError) as caught:
+        # A wrong passphrase reads like no key at all.
+        installer._connect_device_client(replace(ssh_server, ssh_private_key=text, ssh_key_passphrase="wrong"))
+    assert caught.value.reason == "invalid_ssh_key"
+    # No library message rides along: it could quote the key.
+    assert caught.value.__cause__ is None and caught.value.__suppress_context__
+    assert text.strip() not in caplog.text and "wrong" not in caplog.text
+    assert text.strip() not in repr(replace(ssh_server, ssh_private_key=text))
+
+
+@pytest.mark.parametrize(("uid", "reason"), [(1000, "ssh_user_not_root"), (0, None)])
+def test_the_login_is_checked_for_root_rights_before_any_step(ssh_server, station_login, uid, reason):
+    """A tool's second user (bticino2, uid 1000) logs in but cannot install anything."""
+    station_login["uid"] = uid
+    if reason is not None:
+        with pytest.raises(installer.C300XDeviceInstallError) as caught:
+            installer._connect_device_client(ssh_server)
+        assert caught.value.reason == reason
+        # Nothing else ran on the station.
+        assert station_login["commands"] == ["id -u"]
+        return
+    client = installer._connect_device_client(ssh_server)
+    try:
+        assert station_login["commands"] == ["id -u"]
+    finally:
+        client.close()
+
+
+@pytest.mark.parametrize("factory_login", [False, True])
+def test_a_key_only_station_tells_that_it_takes_no_password(ssh_server, station_login, factory_login):
+    """dropbear -s: only a key logs in. Without one the user is told so, not "refused"."""
+    from dataclasses import replace
+
+    station_login.update(password=False, keys=[_user_key("ecdsa-sha2-nistp256")], sig_algs=["ecdsa-sha2-nistp256"])
+    with pytest.raises(installer.C300XDeviceInstallError) as caught:
+        installer._connect_device_client(replace(ssh_server, factory_login=factory_login))
+    assert caught.value.reason == "ssh_password_login_disabled"
+    # A station that takes passwords still asks for another login after a wrong one.
+    station_login["password"] = True
+    with pytest.raises(installer.C300XDeviceInstallError, match="ssh_login_refused"):
+        installer._connect_device_client(replace(ssh_server, ssh_password="wrong"))
+
+
+def _station_without_ssh(monkeypatch, behaviour: str) -> socket.socket:
+    listener = socket.socket()
+    listener.bind(("127.0.0.1", 0))
+    port = listener.getsockname()[1]
+    if behaviour == "refused":
+        listener.close()
+    else:
+        # Packets dropped: the connection never gets an SSH answer.
+        listener.listen(1)
+        monkeypatch.setattr(installer, "_SSH_CONNECT_TIMEOUT", 0.5)
+    original = installer._asyncssh_connect_kwargs
+    monkeypatch.setattr(installer, "_asyncssh_connect_kwargs", lambda value: {**original(value), "port": port})
+    return listener
+
+
+@pytest.mark.parametrize("behaviour", ["refused", "silent"])
+def test_a_station_without_ssh_is_named_unreachable(monkeypatch, behaviour):
+    listener = _station_without_ssh(monkeypatch, behaviour)
+    try:
+        with pytest.raises(installer.C300XDeviceInstallError) as caught:
+            installer._connect_device_client(installer.C300XDeviceInstallRequest(
+                host="127.0.0.1", ssh_username="root", ssh_password="secret",
+            ))
+    finally:
+        listener.close()
+    assert caught.value.reason == "ssh_unreachable"
+
+
+@pytest.fixture
+def rsa_host_signature(station_login, request):
+    station_login["host_sig_algs"] = [request.param]
+    return request.param
+
+
+@pytest.mark.parametrize("host_key_type", ["ssh-rsa"])
+@pytest.mark.parametrize("rsa_host_signature", [
+    # Dropbear 2020.81 (3.0.6) signs its RSA host key with SHA-256.
+    "rsa-sha2-256", "rsa-sha2-512",
+    # Dropbear 2017.75 (1.7.19, 2.0.2, C100X 1.5.8) knows SHA-1 only.
+    "ssh-rsa",
+], indirect=True)
+def test_an_rsa_host_key_is_accepted_with_each_signature_hash(rsa_host_signature, ssh_server, host_key_type):
+    client = installer._connect_device_client(ssh_server)
+    try:
+        assert client.run("printf 'ready'") == "ready"
+    finally:
+        client.close()
+
+
 def test_command_failure_does_not_expose_remote_output(ssh_server):
     client = installer._connect_device_client(ssh_server)
     try:
@@ -126,6 +333,31 @@ def test_wrong_password_fails_cleanly(ssh_server):
 
     with pytest.raises(installer.C300XDeviceInstallError, match="ssh_login_refused"):
         installer._connect_device_client(replace(ssh_server, ssh_password="wrong"))
+
+
+def test_no_ssh_config_of_the_ha_user_is_read_by_any_login_step(ssh_server, monkeypatch, tmp_path: Path):
+    """A refused password asks the station for its login methods: that probe,
+    like the login, never reads the user's ~/.ssh/config (SECURITY.md)."""
+    from dataclasses import replace
+
+    marker = tmp_path / "proxy-command-ran"
+    ssh_dir = tmp_path / "home" / ".ssh"
+    ssh_dir.mkdir(parents=True)
+    (ssh_dir / "config").write_text(f"Host *\n    ProxyCommand /usr/bin/touch {marker}\n", encoding="utf-8")
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    probed = []
+    original_probe = installer.password_login_offered
+
+    async def recorded_probe(asyncssh_module, options):
+        probed.append(await original_probe(asyncssh_module, options))
+        return probed[-1]
+
+    monkeypatch.setattr(installer, "password_login_offered", recorded_probe)
+    with pytest.raises(installer.C300XDeviceInstallError, match="ssh_login_refused"):
+        installer._connect_device_client(replace(ssh_server, ssh_password="wrong"))
+    assert not marker.exists()
+    # The probe reached the station itself and was told it takes passwords.
+    assert probed == [True]
 
 
 def test_command_timeout_closes_channel(ssh_server, monkeypatch):
@@ -167,7 +399,7 @@ def test_a_display_write_past_its_deadline_is_ended_by_sigterm_and_reported(
     script = tmp_path / "qml_patch.sh"
     script.write_text(DISPLAY_STAND_IN.format(trap=trap))
     script.chmod(0o700)
-    monkeypatch.setattr(installer, "_device_display_is_qt5", lambda client: False)
+    monkeypatch.setattr(installer, "_device_display_kind", lambda client: "qt4_ondisk")
     monkeypatch.setattr(installer, "_SSH_DISPLAY_WRITE_TIMEOUT", 0.5, raising=False)
     monkeypatch.setattr(installer, "_SSH_DISPLAY_WRITE_TERM_GRACE", grace, raising=False)
     client = installer._connect_device_client(ssh_server)
@@ -238,7 +470,7 @@ def test_a_display_write_whose_channel_closed_at_the_deadline_is_a_timeout(
     script.write_text(DISPLAY_STAND_IN.format(trap=""))
     script.chmod(0o700)
     grace = 30.0
-    monkeypatch.setattr(installer, "_device_display_is_qt5", lambda client: False)
+    monkeypatch.setattr(installer, "_device_display_kind", lambda client: "qt4_ondisk")
     monkeypatch.setattr(installer, "_SSH_DISPLAY_WRITE_TIMEOUT", 0.5)
     monkeypatch.setattr(installer, "_SSH_DISPLAY_WRITE_TERM_GRACE", grace)
     client = installer._connect_device_client(ssh_server)

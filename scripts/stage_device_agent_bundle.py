@@ -16,6 +16,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from c100x_bundle_builder import MEMBER as C100X_MEMBER
+from c100x_bundle_builder import build as build_c100x_bundle
 from device_file_strip import (
     DEVICE_SOURCE_FILES,
     EMBEDDED_SETTINGS,
@@ -30,8 +32,12 @@ COMPONENT_SRC = ROOT / "custom_components" / DOMAIN
 AGENT_BINARY = ROOT / "native_agent" / "build" / "armhf" / "c300x-agent-native"
 AGENT_VERSION_FILE = ROOT / "native_agent" / "VERSION"
 AGENT_API_VERSION = "1"
-AGENT_UPDATE_FILE_SET_VERSION = 6
+AGENT_UPDATE_FILE_SET_VERSION = 7
 QT5_RECOVERY_VERSION = 1
+LEGACY_MANIFEST_BUFFER_BYTES = 8192
+# One package serves the Classe 300X and the Classe 100X. A C100X agent takes
+# an update only from a package that says so.
+C100X_COMPATIBLE = True
 ARMHF_STRIP = "arm-linux-gnueabihf-strip"
 FIREWALL_PATCH_MATERIAL = "c300x-native-agent-ipv4-firewall-v2-api-rtsp-talkback"
 IPV6_FIREWALL_PATCH_MATERIAL = "c300x-native-agent-ipv6-firewall-v2-api-rtsp-talkback"
@@ -157,13 +163,19 @@ def stage_bundle(
     runtime_files.append(
         _copy_agent_binary(binary, component_dir / "device_agent/armhf/c300x-agent-native")
     )
+    try:
+        c100x_payload = build_c100x_bundle(component_dir / C100X_MEMBER, root=ROOT)
+    except (OSError, ValueError) as err:
+        raise BundleStageError(f"Cannot stage C100X payload: {err}") from err
+    # The adapter of the Classe 100X is in no group: a change of it alone is
+    # neither a Display patch change nor a script change on a Classe 300X.
     _set_file_modes(qml_files, 0o644)
-    _set_file_modes(script_files, 0o700)
+    _set_file_modes(script_files + [c100x_payload], 0o700)
     _set_file_modes(runtime_files, 0o700)
     legacy_bootstrap = component_dir / LEGACY_BOOTSTRAP_QML
     legacy_bootstrap.write_bytes(LEGACY_BOOTSTRAP_CONTENT)
     legacy_bootstrap.chmod(0o644)
-    staged_files.extend(_unique_paths(runtime_files + script_files + qml_files + [legacy_bootstrap]))
+    staged_files.extend(_unique_paths(runtime_files + script_files + qml_files + [c100x_payload, legacy_bootstrap]))
     file_entries = _file_entries(component_dir, staged_files)
     group_hashes = {
         "runtime_hash": _content_hash(component_dir, runtime_files),
@@ -192,28 +204,30 @@ def stage_bundle(
         group_hashes=group_hashes,
     )
     manifest_path = component_dir / "device_agent/bundle.json"
-    manifest_path.write_text(
-        json.dumps(
-            {
-                "version": native_version,
-                "agent_version": native_version,
-                "integration_version": version,
-                "api_version": AGENT_API_VERSION,
-                "update_file_set_version": AGENT_UPDATE_FILE_SET_VERSION,
-                "qt5_recovery_version": QT5_RECOVERY_VERSION,
-                "architecture": "armhf",
-                "bundle_hash": bundle_hash,
-                "agent": "device_agent/armhf/c300x-agent-native",
-                "qml": "device_agent/qml",
-                "files": file_entries,
-                **group_hashes,
-            },
-            indent=2,
-            sort_keys=True,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
+    manifest_text = json.dumps(
+        {
+            "version": native_version,
+            "agent_version": native_version,
+            "integration_version": version,
+            "api_version": AGENT_API_VERSION,
+            "update_file_set_version": AGENT_UPDATE_FILE_SET_VERSION,
+            "qt5_recovery_version": QT5_RECOVERY_VERSION,
+            "architecture": "armhf",
+            "c100x_compatible": C100X_COMPATIBLE,
+            "bundle_hash": bundle_hash,
+            "agent": "device_agent/armhf/c300x-agent-native",
+            "qml": "device_agent/qml",
+            "files": file_entries,
+            **group_hashes,
+        },
+        indent=2,
+        sort_keys=True,
+    ) + "\n"
+    # Old agents must read the entire new manifest before installing the updater.
+    # Keep room for their terminating NUL; a file-set bump cannot fix truncation.
+    if len(manifest_text.encode("utf-8")) >= LEGACY_MANIFEST_BUFFER_BYTES:
+        raise BundleStageError("Bundle manifest exceeds legacy updater buffer")
+    manifest_path.write_text(manifest_text, encoding="utf-8")
     manifest_path.chmod(0o600)
 
 
@@ -336,6 +350,7 @@ def _bundle_hash(
             "qt5_recovery_version": QT5_RECOVERY_VERSION,
             "files": files,
             "groups": group_hashes,
+            "c100x_compatible": C100X_COMPATIBLE,
         },
         sort_keys=True,
         separators=(",", ":"),

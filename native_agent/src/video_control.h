@@ -51,7 +51,7 @@ enum c300x_video_control_state {
 struct c300x_video_control {
     struct c300x_request_worker worker;
     struct c300x_video_control_job job;
-    int picture_baseline; /* cached only for this session and owner */
+    int picture_baseline; /* the verified profile, cached only for this session and owner */
     int baseline_owner;
     const volatile sig_atomic_t *shutdown;
     unsigned long baseline_session;

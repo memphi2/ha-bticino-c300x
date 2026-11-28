@@ -46,11 +46,11 @@ Public CI runners do not have that proprietary sysroot: they compile ARMHF and
 run `armhf-stack-check`, and local release builds must run the ABI check against
 the real sysroot. One binary serves every supported firmware: it is built
 against the oldest (`1.7.19`), and the check also runs against each newer root
-file system named in `C300X_ABI_SYSROOTS` (by default the extracted `3.0.6` one,
-when present). For each it requires the libraries the agent links against, every
-versioned C library symbol it imports, and every function it loads at run time
-from `libcurl`, `libsrtp` and `libspeex`. `armhf-stack-check` rejects oversized
-or dynamic stack usage records.
+file system named in `C300X_ABI_SYSROOTS` (by default the extracted `3.0.6` and
+C100X `1.5.8` ones, when present). For each it requires the libraries the agent
+links against, every versioned C library symbol it imports, and every function
+it loads at run time from `libcurl`, `libsrtp` and `libspeex`.
+`armhf-stack-check` rejects oversized or dynamic stack usage records.
 
 ### Developer Checks
 
@@ -135,7 +135,7 @@ Key sections:
 ## Callbacks
 
 User-side setup (HTTP or HTTPS, which addresses to avoid, the override field) is
-in [Callback URL](../advanced-maintenance.md#callback-url). The integration
+in [Callback URL](behaviour-details.md#callback-url). The integration
 overrides only the callback base URL; the webhook path and shared secret stay.
 HA derives the agent's internal `callbacks.httpsEnabled` from the override.
 
@@ -160,7 +160,7 @@ The agent serves a versioned API under `/api/v1` plus a loopback-only UI
 listener for the station's QML pages. Paths, auth rules, payloads, side effects
 and compatibility rules live only in [API.md](../../native_agent/API.md); keep
 new endpoint details there. The user-facing mapping is in the
-[Reference](../feature-reference.md).
+[Reference](../reference.md).
 
 Activation items use `addressMode: "manual"` when `address` holds the
 OpenWebNet `where` value. `addressMode: "auto"` is reserved for read-only device
@@ -175,8 +175,12 @@ Token-based maintenance keeps working when noAuth maintenance is off.
 ## Discovery and Address Changes
 
 The optional mDNS responder (`mdns.enabled`, HA mDNS maintenance switch)
-advertises `_bticino-c300x-agent._tcp.local` with a per-device TXT `id` and host
-name derived from the MAC address, falling back to the host name.
+advertises `_bticino-c300x-agent._tcp.local` (C300X) or
+`_bticino-c100x-agent._tcp.local` (C100X) with a per-device TXT `id` and host
+name derived from the MAC address, falling back to the host name. It answers
+queries only for its own type. HA lists both types in `manifest.json`; an
+announcement of one model never matches, renews or moves an entry whose agent
+reported the other model (`model_mismatch`).
 
 - It stays quiet while Home Assistant is present: HA has reached the agent in
   this run (a successful callback) and an authenticated API request arrived
@@ -224,7 +228,7 @@ the Home Assistant settings tab while keeping the stock General touch-tone
 control, installs the project-owned Alarmo, Home Assistant and energy pages, and
 installs the local QML JavaScript bridge. File list and safety rules:
 [device_qml/README.md](../../device_qml/README.md); user view:
-[Station Display Pages](../display.md).
+[Station Display Pages](../classe-300x/3-display.md).
 
 On Qt 4 devices (firmware 1.7.x and 2.0.2) the patch also raises the swipe
 threshold of the display library from 4 to 16 pixels, so a tap with a slightly
@@ -253,7 +257,7 @@ a reboot. SSH is started before and after the cleanup and
 is not removed. A failed restore step stops the script before the backups are
 deleted, with one exception: a display library without a valid stock backup
 keeps the wider tap tolerance and removal continues. User steps:
-[Remove Agent](../advanced-maintenance.md#remove-agent).
+[Remove Agent](../classe-300x/5-update-and-removal.md#remove-the-device-agent).
 
 The media step checks the routing executable first. A verified stock file is
 left as it is, and so is a file the agent never patched (no backup and no
@@ -299,7 +303,7 @@ refreshes are one-shot and shared.
 the exact verified media executables of firmware **1.7.19** and **2.0.2**. The
 **688x480** and **704x576** choices keep their stock behaviour. Firmware 3.0.x
 and its low-stream path are unchanged. User view:
-[Camera Quality and Picture Size](../user-guide.md#camera-quality-and-picture-size).
+[Camera Quality and Picture Size](../classe-300x/2-use.md#camera-quality).
 
 Geometry:
 
@@ -385,6 +389,8 @@ for the current source. The lock covers these native and bundle inputs:
 - `custom_components/bticino_c300x/device_agent/init`
 - `scripts/stage_device_agent_bundle.py`
 - `scripts/device_file_strip.py`
+- `scripts/c100x_bundle_builder.py`
+- `scripts/c100x_qml_builder.py`
 - `scripts/build_hacs_release.py`
 - `scripts/check_agent_abi.py`
 - `scripts/native_build_lock.py`
@@ -403,6 +409,13 @@ independent compiler/sysroot provenance. Procedure:
 [Release Validation](release-validation.md#reviewed-local-native-build).
 
 ## Supported Firmware Versions
+
+The `c100x_1.5.8` branch adds the C100X 1.5.8 (in test, issue #51):
+detection, routing, package compatibility gates and the display activation by
+reboot. The [model matrix](../reference.md#models-and-features) and
+the [C100X notes](../classe-100x/1-setup.md) separate what is offered from what
+is confirmed on a device; the C300X statements below do not imply the same
+display, audio or credential support on C100X.
 
 The agent is built and ABI-checked against the firmware `1.7.19` root file
 system. Firmware `2.0.2` uses the same binary and display files because
@@ -427,8 +440,10 @@ Firmware `3.0.6` fails this check and is supported with its own display path:
   same binary runs there; `armhf-abi-check` checks it against the `3.0.6` root
   file system too.
 - Its display is Qt 5 with the QML built into the vendor program `BtClass` as
-  Qt resources. `qml_patch.sh` recognises it by `/usr/lib/libQt5Core.so.5` and
-  then works on a copy in `display-qt5/` under the agent folder: the agent
+  Qt resources. `qml_patch.sh` recognises it in its device-profile block
+  (display kind `qt5_rcc`: `/usr/lib/libQt5Core.so.5` is there and the C100X
+  display program is not; the same block stands in `remove_agent.sh` and
+  matches `device_detect.c`) and then works on a copy in `display-qt5/` under the agent folder: the agent
   reads the seven display files the patch changes out of `BtClass`
   (`--display-qt5 extract`: at the known table offsets of the 3.0.6 build, for
   another build where exactly one resource tree with those files is found), the
@@ -449,7 +464,7 @@ Firmware `3.0.6` fails this check and is supported with its own display path:
   `qt5_unsupported: display_wrapper_unknown`. A
   partial restore keeps the overlay for the remaining core hooks or user label.
   User view:
-  [Display Patch on Firmware 3.0.6](../display.md#display-patch-on-firmware-306).
+  [Display Patch on Firmware 3.0.6](../classe-300x/3-display.md#firmware-306).
 - Activation changes preserve the resource file, preload library, wrapper,
   original wrapper backup and quarantine marker as one rollback unit. A failed
   rollback retains its recovery copies and leaves the overlay blocked. Updates

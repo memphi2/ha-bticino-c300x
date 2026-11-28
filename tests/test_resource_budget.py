@@ -60,6 +60,14 @@ def test_extracted_http_modules_have_separate_budgets() -> None:
         "http_media_actions.c": (7_500, 210),
         "http_ring_status.c": (4_000, 110),
         "http_identity.c": (4_500, 130),
+        "proc_probe.c": (2_000, 80),
+        "http_ui_preferences.c": (2_000, 45),
+        "c100x_activation.c": (18_000, 440),
+        "c100x_payload.c": (1_000, 30),
+        "c100x_boot_check.c": (1_200, 40),
+        "c100x_reboot_gate.c": (2_000, 60),
+        "http_c100x_display.c": (3_500, 90),
+        "http_c100x_display_api.c": (4_500, 100),
     }
     for name, (size, lines) in limits.items():
         path = ROOT / "native_agent" / "src" / name

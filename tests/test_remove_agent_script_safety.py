@@ -47,7 +47,8 @@ def local_device(tmp_path):
            "C300X_QML_GUI_DIR": str(gui), "C300X_QML_SOURCE_DIR": str(SOURCE_DIR),
            "C300X_QML_BACKUP_DIR": str(backup / "original/gui/skins/default"),
            "C300X_QML_NO_REMOUNT": "1", "C300X_QML_RELOAD_GUI": "0",
-           "C300X_SSH_INIT": str(commands / "ssh-init"), "C300X_REBOOT": str(commands / "reboot")}
+           "C300X_SSH_INIT": str(commands / "ssh-init"), "C300X_REBOOT": str(commands / "reboot"),
+           "C300X_LEGACY_MQTT_BRIDGE": str(tmp_path / "etc/tcpdump2mqtt/TcpDump2Mqtt")}
     for key in ("C300X_INIT_SCRIPT", "C300X_INIT_LINK", "C300X_IPTABLES", "C300X_IPTABLES6"):
         path = tmp_path / key
         path.write_text("original\n")
@@ -899,7 +900,7 @@ def _use_original_file_tools(tmp_path, firmware):
         wrapper.chmod(0o700)
 
 
-@pytest.mark.parametrize("firmware", ["1.7.19", "3.0.6"])
+@pytest.mark.parametrize("firmware", ["1.7.19", "3.0.6", "c100x-1.5.8"])
 def test_original_firmware_busybox_preserves_startup_metadata(local_device, tmp_path, firmware):
     env = local_device
     before = _startup_entries(env, tmp_path, "relative")
@@ -919,7 +920,7 @@ def test_original_firmware_busybox_preserves_startup_metadata(local_device, tmp_
     assert not list(Path(env["TMPDIR"]).iterdir())
 
 
-@pytest.mark.parametrize("firmware", ["1.7.19", "3.0.6"])
+@pytest.mark.parametrize("firmware", ["1.7.19", "3.0.6", "c100x-1.5.8"])
 @pytest.mark.parametrize("partial", [False, True])
 def test_original_firmware_tools_validate_post_delete_identity(local_device, tmp_path, firmware, partial):
     env = local_device
@@ -949,7 +950,7 @@ fi''')
     assert "reboot" not in Path(env["CALL_LOG"]).read_text().splitlines()
 
 
-@pytest.mark.parametrize("firmware", ["1.7.19", "3.0.6"])
+@pytest.mark.parametrize("firmware", ["1.7.19", "3.0.6", "c100x-1.5.8"])
 def test_original_busybox_pidof_matches_long_agent_name(tmp_path, firmware):
     busybox = _original_busybox(firmware)
     syntax = subprocess.run([*busybox, "sh", "-n", str(REMOVE)], capture_output=True, timeout=10)

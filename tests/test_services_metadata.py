@@ -110,3 +110,11 @@ def _services_yaml_sections() -> dict[str, str]:
             sections[current].append(line)
 
     return {key: "".join(lines) for key, lines in sections.items()}
+
+
+def test_service_texts_fit_both_station_models() -> None:
+    """Actions are global: their names and descriptions name no station model."""
+
+    text = (ROOT / "custom_components" / "bticino_c300x" / "services.yaml").read_text(encoding="utf-8")
+    shown = [line for line in text.splitlines() if line.strip().startswith(("name:", "description:"))]
+    assert [line for line in shown if "C300X" in line or "C100X" in line] == []

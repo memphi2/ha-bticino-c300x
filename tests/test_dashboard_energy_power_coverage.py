@@ -118,7 +118,7 @@ def test_sanitized_multi_meter_shape_uses_available_sensors_and_unconfigured_zer
 
 
 @pytest.mark.parametrize("kind", ["grid", "battery", "solar"])
-@pytest.mark.parametrize("language", ["en", "de", "fr", "it", "unsupported"])
+@pytest.mark.parametrize("language", ["en", "de", "fr", "it", "es", "unsupported"])
 def test_groups_keep_normal_labels_and_preserve_signed_sum_zero_and_holes(kind, language):
     sources = sources_with_unconfigured_power(kind)
     result = payload(sources, {

@@ -3,8 +3,8 @@ export const C300X_CARD_TYPE = `custom:${C300X_CARD_TAG}`;
 export const C300X_PLATFORM = "bticino_c300x";
 export const C300X_CAMERA_OBJECT_ID = "bticino_c300x_doorbell_camera";
 export const C300X_MEDIA_READINESS_OBJECT_ID = "bticino_c300x_media_readiness";
-export const C300X_AUDIO_CODEC_OBJECT_ID = "bticino_c300x_audio_codec";
-export const C300X_DOCUMENTATION_URL = "https://github.com/memphi2/ha-bticino-c300x#doorbell-video-ring-calls-and-talkback";
+export const C300X_DOCUMENTATION_URL = "https://github.com/memphi2/ha-bticino-c300x/blob/main/docs/classe-300x/2-use.md#doorbell-card";
+export const C100X_DOCUMENTATION_URL = "https://github.com/memphi2/ha-bticino-c300x/blob/main/docs/classe-100x/2-use.md#what-works";
 export const C300X_DEFAULT_CONFIG = {
   mode: "auto",
   ringback_tone: true,
@@ -127,6 +127,27 @@ export function c300xRelatedEntity(hass, config, domain, baseObjectId, configKey
     && c300xSameDevice(hass, camera, hass.entities[entityId])
     && c300xRegistryEntityMatches(entityId, hass.entities[entityId], domain, baseObjectId)
   ));
+}
+
+// The device page names a C100X "Classe 100X"; every other device keeps the C300X texts.
+export function c300xDeviceModel(hass, entityId) {
+  const deviceId = hass?.entities?.[entityId]?.device_id;
+  return hass?.devices?.[deviceId]?.model === "Classe 100X" ? "C100X" : "C300X";
+}
+
+// One card serves both models. Home Assistant reads its documentation link in
+// the card picker and editor, without a card at hand: the link follows the
+// stations set up, the Classe 300X page when there are both or none.
+export function c300xDocumentationUrl(hass) {
+  const models = new Set(Object.values(hass?.entities || {})
+    .filter((entry) => entry?.platform === C300X_PLATFORM && entry.device_id)
+    .map((entry) => hass?.devices?.[entry.device_id]?.model));
+  return models.size === 1 && models.has("Classe 100X") ? C100X_DOCUMENTATION_URL : C300X_DOCUMENTATION_URL;
+}
+
+// The Home Assistant frontend's own state, which the card registration can read.
+export function c300xDocumentationUrlOfPage() {
+  return c300xDocumentationUrl(globalThis.document?.querySelector?.("home-assistant")?.hass);
 }
 
 export function c300xEntryId(hass, config, entityId) {

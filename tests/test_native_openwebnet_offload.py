@@ -17,6 +17,7 @@ from http.client import HTTPConnection
 from pathlib import Path
 
 import pytest
+from native_build import default_host_agent
 
 from native_agent.test.smoke import (
     TOKEN,
@@ -106,10 +107,7 @@ def finish(conn: HTTPConnection, status: int = 200) -> dict:
 
 @pytest.fixture(scope="module")
 def binary(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    directory = tmp_path_factory.mktemp("openwebnet-offload-build")
-    subprocess.run(["make", "-C", str(ROOT / "native_agent"), f"BUILD_DIR={directory}",
-                    "-j2", "all"], check=True, capture_output=True, text=True)
-    return directory / "host/c300x-agent-native"
+    return default_host_agent(tmp_path_factory)
 
 
 @pytest.fixture

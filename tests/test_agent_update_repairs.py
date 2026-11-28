@@ -204,6 +204,7 @@ class FakeEntry:
     entry_id: str = "entry-1"
     data: dict[str, Any] = field(default_factory=dict)
     options: dict[str, Any] = field(default_factory=dict)
+    unique_id: str | None = None
 
 
 class FakeConfigEntries:
@@ -2648,6 +2649,40 @@ def test_wait_for_agent_after_update_retries_until_setup_succeeds(
     assert sleeps == [0.5, 1, 1]
 
 
+def test_wait_for_agent_after_update_outwaits_the_init_scripts_stop(
+    monkeypatch,
+) -> None:
+    import custom_components.bticino_c300x.repairs as repairs
+
+    init = (
+        Path(__file__).resolve().parents[1]
+        / "custom_components/bticino_c300x/device_agent/init/c300x-native-agent"
+    ).read_text(encoding="utf-8")
+    polls = int(re.search(r'wait_gone "\$pid" (\d+)', init).group(1))
+    # A hung agent is killed only after the stop's polls of 100 ms; the new
+    # agent then needs a few seconds to start.
+    answer_after = polls // 10 + 5
+
+    class SlowRestartApi:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def async_validate_setup(self) -> dict[str, Any]:
+            self.calls += 1
+            if self.calls < answer_after:
+                raise C300XAgentApiError("restarting")
+            return {"version": "3.0.0"}
+
+    async def fake_sleep(_delay: float) -> None:
+        return None
+
+    monkeypatch.setattr(repairs.asyncio, "sleep", fake_sleep)
+    api = SlowRestartApi()
+
+    assert asyncio.run(_async_wait_for_agent_after_update(api)) == {"version": "3.0.0"}
+    assert api.calls == answer_after
+
+
 def test_wait_for_agent_after_update_raises_last_error(
     monkeypatch,
 ) -> None:
@@ -3279,7 +3314,8 @@ def test_display_restore_follows_the_new_agent_capabilities(monkeypatch, mainten
     assert "apply_firewall" in api.calls
 
 
-def test_ssh_install_uses_the_factory_login_and_asks_only_after_a_refusal(monkeypatch) -> None:
+@pytest.mark.parametrize("model", ["", "C100X", "C300X"])
+def test_ssh_install_uses_the_factory_login_and_asks_only_after_a_refusal(monkeypatch, model) -> None:
     import custom_components.bticino_c300x.repairs as repairs
     from custom_components.bticino_c300x.device_installer import C300XDeviceInstallError
     from custom_components.bticino_c300x.factory_login import factory_ssh_login
@@ -3289,6 +3325,7 @@ def test_ssh_install_uses_the_factory_login_and_asks_only_after_a_refusal(monkey
         data={"agent_host": "192.0.2.60", "agent_token": "t", "maintenance_token": "m"},
     )
     entry.runtime_data.agent_update_state = FakeAgentUpdateState()
+    entry.runtime_data.agent_info = {"device": {"model": model}}
     flow = DeviceAgentUpdateRepairFlow(FakeHass(entry), "entry-1")  # type: ignore[arg-type]
     logins: list[tuple[str, str]] = []
 
@@ -3307,10 +3344,12 @@ def test_ssh_install_uses_the_factory_login_and_asks_only_after_a_refusal(monkey
     first = asyncio.run(flow.async_step_ssh_install(None))
     assert first["data_schema"].schema == {}
     refused = asyncio.run(flow.async_step_ssh_install({}))
-    assert logins == [factory_ssh_login()]
+    assert logins == [factory_ssh_login(model)]
     assert refused["errors"] == {"base": "ssh_login_refused"}
     asked = refused["data_schema"]({})
-    assert set(asked) == {"bootstrap_ssh_username", "bootstrap_ssh_password"}
+    assert set(asked) == {
+        "bootstrap_ssh_username", "bootstrap_ssh_password", "bootstrap_ssh_key", "bootstrap_ssh_key_passphrase",
+    }
 
     asyncio.run(flow.async_step_ssh_install({
         "bootstrap_ssh_username": "admin", "bootstrap_ssh_password": "typed",
@@ -3318,6 +3357,31 @@ def test_ssh_install_uses_the_factory_login_and_asks_only_after_a_refusal(monkey
     assert logins[-1] == ("admin", "typed")
     # The fields stay once asked for, also after another kind of failure.
     assert set(asyncio.run(flow.async_step_ssh_install(None))["data_schema"]({})) == set(asked)
+
+
+def test_ssh_install_asks_for_another_login_when_the_login_has_no_root_rights(monkeypatch) -> None:
+    import custom_components.bticino_c300x.repairs as repairs
+    from custom_components.bticino_c300x.device_installer import C300XDeviceInstallError
+
+    entry = FakeEntry(
+        runtime_data=FakeRuntimeData(FakePatchApi()),
+        data={"agent_host": "192.0.2.60", "agent_token": "t", "maintenance_token": "m"},
+    )
+    entry.runtime_data.agent_update_state = FakeAgentUpdateState()
+    flow = DeviceAgentUpdateRepairFlow(FakeHass(entry), "entry-1")  # type: ignore[arg-type]
+
+    async def install_agent(_request: Any, **_kwargs: Any) -> Any:
+        raise C300XDeviceInstallError("ssh_user_not_root")
+
+    async def ensure_installer_dependencies(_hass: Any) -> None:
+        return None
+
+    monkeypatch.setattr(repairs, "async_install_device_agent", install_agent)
+    monkeypatch.setattr(repairs, "async_ensure_installer_dependencies", ensure_installer_dependencies)
+    flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}  # type: ignore[method-assign]
+    result = asyncio.run(flow.async_step_ssh_install({}))
+    assert result["errors"] == {"base": "ssh_user_not_root"}
+    assert "bootstrap_ssh_username" in result["data_schema"]({})
 
 
 def test_the_core_repair_runs_the_whole_owed_display_followup_and_clears_it() -> None:

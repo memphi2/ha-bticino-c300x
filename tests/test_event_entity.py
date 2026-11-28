@@ -158,6 +158,45 @@ def test_device_info_uses_typed_setup_firmware_as_software_version() -> None:
     assert entity.device_info["sw_version"] == "1.7.19"
 
 
+def test_device_info_names_the_model_the_agent_detected() -> None:
+    c100x = _FakeEntry(runtime_data=_FakeRuntimeData(agent_info={"model": "C100X"}))
+    c300x = _FakeEntry(runtime_data=_FakeRuntimeData(agent_info={"model": "C300X"}))
+    offline = _FakeEntry(runtime_data=_FakeRuntimeData(agent_info={"model": None}))
+
+    assert C300XEntity(c100x, "test").device_info["model"] == "Classe 100X"  # type: ignore[arg-type]
+    assert C300XEntity(c300x, "test").device_info["model"] == "Classe 300X"  # type: ignore[arg-type]
+    assert C300XEntity(offline, "test").device_info["model"] == "Classe 300X"  # type: ignore[arg-type]
+
+
+def test_device_info_shows_the_board_and_the_article_number_the_station_reports() -> None:
+    owner = _FakeEntry(runtime_data=_FakeRuntimeData(agent_info={
+        "model": "C300X", "firmware": "1.7.19",
+        "board": "BTicino ZIA board HW Rev 3", "article": "344642",
+    }))
+    info = C300XEntity(owner, "test").device_info  # type: ignore[arg-type]
+    assert (info["model"], info["sw_version"]) == ("Classe 300X", "1.7.19")
+    # The full board name, and the article number as the model id.
+    assert (info["hw_version"], info["model_id"]) == ("BTicino ZIA board HW Rev 3", "344642")
+
+    c100x = _FakeEntry(runtime_data=_FakeRuntimeData(agent_info={
+        "model": "C100X", "board": "BTicino SHARK board (Dig-D/Car-C)", "article": "",
+    }))
+    info = C300XEntity(c100x, "test").device_info  # type: ignore[arg-type]
+    assert info["hw_version"] == "BTicino SHARK board (Dig-D/Car-C)"
+    assert "model_id" not in info and "sw_version" not in info
+
+    # An agent that reports neither leaves the device as release 2.10.0 showed it.
+    plain = _FakeEntry(runtime_data=_FakeRuntimeData(agent_info={"model": "C300X", "firmware": "2.0.2"}))
+    assert dict(C300XEntity(plain, "test").device_info) == {  # type: ignore[arg-type]
+        "identifiers": {("bticino_c300x", plain.entry_id)}, "manufacturer": "BTicino",
+        "model": "Classe 300X", "name": plain.title, "sw_version": "2.0.2",
+    }
+    for empty in (None, "", "  "):
+        blank = _FakeEntry(runtime_data=_FakeRuntimeData(agent_info={"board": empty, "article": empty}))
+        info = C300XEntity(blank, "test").device_info  # type: ignore[arg-type]
+        assert "hw_version" not in info and "model_id" not in info
+
+
 def test_device_info_omits_empty_firmware_version() -> None:
     entry = _FakeEntry(
         runtime_data=_FakeRuntimeData(agent_info={"firmware": ""}),
@@ -241,7 +280,7 @@ def test_doorbell_event_entity_triggers_standard_ring_event() -> None:
     assert entity.extra_state_attributes["video_available"] is True
 
 
-@pytest.mark.parametrize("language", ["en", "de", "fr", "it"])
+@pytest.mark.parametrize("language", ["en", "de", "fr", "it", "es"])
 @pytest.mark.parametrize("cls,key,expected", [
     (C300XDoorbellEventEntity, "doorbell_pressed", "ring"),
     (C300XDeviceAgentEventEntity, "door_unlock_started", "door_unlock_started"),
@@ -263,12 +302,17 @@ def test_real_ha_event_processing_preserves_type_in_every_language(
         "event_key": key,
         "event_type": "Display label must not replace the technical type",
         "event_at": "2026-11-15T00:00:00Z",
+        "event_label_es": "Etiqueta en español",
     }))
 
     assert entity.state_attributes["event_type"] == expected
     assert expected in entity.event_types
     assert entity.state_attributes["event_key"] == key
     assert entity.state_attributes["event"] != expected
+    if cls is C300XDeviceAgentEventEntity:
+        assert entity.extra_state_attributes["last_event_label_es"] == "Etiqueta en español"
+    if language == "es":
+        assert entity.state_attributes["event"] == "Etiqueta en español"
 
 
 @pytest.mark.parametrize("supported", [False, True])

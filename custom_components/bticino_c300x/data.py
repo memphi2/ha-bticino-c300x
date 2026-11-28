@@ -232,6 +232,7 @@ class C300XRuntimeResources:
     answering_machine_messages_refresh_task: Task[None] | None = None
     startup_sync_task: Task[None] | None = None
     memos_refresh_task: Task[None] | None = None
+    c100x_display_task: Task[None] | None = None
     pending_message_refreshes: set[str] = field(default_factory=set)
 
     def close(self) -> None:
@@ -252,6 +253,7 @@ class C300XRuntimeResources:
             self.answering_machine_messages_refresh_task,
             self.startup_sync_task,
             self.agent_cpu_watchdog_task,
+            self.c100x_display_task,
         )
         self.unregister_event_registration = None
         self.close_display_notifications = None
@@ -273,6 +275,7 @@ class C300XRuntimeResources:
         self.answering_machine_messages_refresh_task = None
         self.startup_sync_task = None
         self.agent_cpu_watchdog_task = None
+        self.c100x_display_task = None
         errors: list[Exception] = []
         for cancel in callbacks:
             if cancel is not None:
@@ -333,6 +336,8 @@ class BticinoC300XRuntimeData:
     qml_status_watch: QmlStatusWatch = field(default_factory=QmlStatusWatch)
     device_user_status: dict[str, Any] = field(default_factory=dict)
     device_user_status_updated_at: datetime | None = None
+    # Last SSH state the SSH switch read: who keeps SSH running, if not the station.
+    ssh_status: dict[str, Any] = field(default_factory=dict)
     self_test_status: Mapping[str, Any] = field(default_factory=dict)
     self_test_status_updated_at: datetime | None = None
     display_image_base_url: str = ""
@@ -343,6 +348,8 @@ class BticinoC300XRuntimeData:
     display_notifications: DisplayNotifications | None = None
     media_timeline: C300XMediaTimeline = field(default_factory=C300XMediaTimeline)
     agent_update_state: AgentUpdateState | None = None
+    # A failed door-level write was logged as a warning; repeats log at debug.
+    doorstation_audio_level_failed: bool = False
     resources: C300XRuntimeResources = field(default_factory=C300XRuntimeResources)
     diagnostics: C300XRuntimeDiagnostics = field(
         default_factory=C300XRuntimeDiagnostics

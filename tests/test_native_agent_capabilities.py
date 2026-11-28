@@ -14,6 +14,7 @@ def test_native_capabilities_contract(tmp_path: Path) -> None:
             "-D_DEFAULT_SOURCE", "-D_POSIX_C_SOURCE=200809L",
             str(root / "test" / "capabilities_test.c"),
             str(root / "src" / "capabilities.c"),
+            str(root / "src" / "answering_capabilities.c"),
             str(root / "src" / "json_util.c"),
             str(root / "src" / "json_parse.c"),
             "-o", str(binary),
@@ -22,21 +23,38 @@ def test_native_capabilities_contract(tmp_path: Path) -> None:
     )
     result = subprocess.run([str(binary)], check=True, capture_output=True, text=True)
     documents = [json.loads(line) for line in result.stdout.splitlines()]
-    assert len(documents) == 5
+    c300 = subprocess.run([str(binary), "C300X"], check=True, capture_output=True, text=True)
+    c300_documents = [json.loads(line) for line in c300.stdout.splitlines()]
+    for index, document in enumerate(c300_documents[:4]):
+        assert set(document["capabilities"]["maintenance"].values()) == {bool(index // 2)}
+    assert len(documents) == 7
+    # Only the C100X activation adds its member; the documents before it are unchanged.
+    assert documents[6]["capabilities"].pop("c100x_display") == {"supported": True}
+    assert documents[6] == documents[5]
+    assert all("c100x_display" not in document["capabilities"] for document in documents[:6] + c300_documents[:6])
     for index, document in enumerate(documents[:4]):
         caps = document["capabilities"]
         pcmu = bool(index % 2)
         maintenance = bool(index // 2)
         assert document["api_version"] == "1"
         assert document["device"] == {
-            "id": "synthetic-id", "model": "C300X", "firmware": '1.7.19"test',
+            # The model is the detected one, not the configured C300X.
+            "id": "synthetic-id", "model": "C100X", "display_kind": "qt5_ondisk", "camera": "high_res",
+            # The board as the kernel names it; no article number on this station.
+            "model_check": "ok", "board": 'BTicino SHARK board (Dig-D/Car-C) "x"', "article": "",
+            "firmware": '1.7.19"test',
         }
         assert document["agent"]["self_update_supported"] is maintenance
         assert caps["memo_led"] is (not maintenance)
         assert caps["ipv6_firewall_hook"] is maintenance
-        assert document["agent"]["self_update_file_set_version"] == 6
+        assert document["agent"]["self_update_file_set_version"] == 7
         assert caps["https_callbacks"] is maintenance
-        assert set(caps["maintenance"].values()) == {maintenance}
+        assert caps["maintenance"]["audio_codec_apply"] is False
+        assert all(
+            value is maintenance
+            for key, value in caps["maintenance"].items()
+            if key != "audio_codec_apply"
+        )
         assert caps["doorbell_video"] == {
             "supported": True, "stream_path": '/doorbell"video',
             "audio_stream_path": "/audio", "recorder_stream_path": "/recorder",
@@ -48,13 +66,36 @@ def test_native_capabilities_contract(tmp_path: Path) -> None:
         assert caps["activations"] == {"supported": True, "count": 3}
         assert caps["announcements"] == {"supported": False}
         assert caps["ringer"] == {
-            "supported": True, "mute": True, "volume": True,
+            "supported": True, "mute": False, "volume": True,
             "min_volume": 0, "max_volume": 10, "step": 1,
         }
         assert caps["system_metrics"] == {
             "supported": True, "cpu": True, "load": True, "memory": True,
             "temperature": True, "watch": True, "sample_interval_seconds": 30,
             "heartbeat_seconds": 600, "change_percent": 5,
+        }
+        # A display without patchable files has no key beep, alerts or bridge.
+        assert caps["touch_tone"] == {"supported": False, "requires_display_patch": True}
+        assert caps["display_alerts"] is False
+        assert caps["display_bridge"] == {"supported": False, "configurable": False, "configured": True}
+        # The C100X records nothing and has no voice memos: text memos only, no delete.
+        assert caps["answering_machine"] == {
+            "supported": False, "status": False, "greeting_message": False,
+            "messages": {"supported": False, "source": "local_files", "watch": False, "media": False, "delete": False},
+        }
+        assert caps["memos"] == {
+            "supported": True, "text": True, "voice": False, "media": False, "source": "local_files",
+            "watch": True, "delete": False, "write_text": True,
+        }
+    for document in c300_documents[:4]:
+        caps = document["capabilities"]
+        assert caps["answering_machine"] == {
+            "supported": True, "status": True, "greeting_message": True,
+            "messages": {"supported": True, "source": "local_files", "watch": True, "media": True, "delete": True},
+        }
+        assert caps["memos"] == {
+            "supported": True, "text": True, "voice": True, "media": True, "source": "local_files",
+            "watch": True, "delete": True, "write_text": True,
         }
     for offset in (0, 2):
         speex = documents[offset]
@@ -71,6 +112,14 @@ def test_native_capabilities_contract(tmp_path: Path) -> None:
     assert disabled["system_metrics"]["watch"] is False
     assert disabled["answering_machine"]["messages"]["supported"] is False
     assert disabled["answering_machine"]["messages"]["watch"] is False
+    patchable = documents[5]["capabilities"]
+    assert patchable["touch_tone"] == {"supported": True, "requires_display_patch": True}
+    assert patchable["display_alerts"] is True
+    assert patchable["display_bridge"] == {"supported": True, "configurable": True, "configured": True}
+    assert patchable["ringer"]["mute"] is True
+    for feature in ("touch_tone", "display_alerts", "display_bridge", "ringer"):
+        disabled[feature] = patchable[feature]
+    assert disabled == patchable  # Nothing else follows the display.
 
 
 def test_capabilities_reads_running_video_codec_without_firmware_probe() -> None:

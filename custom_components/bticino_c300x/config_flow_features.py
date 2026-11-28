@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from .capabilities import entry_gui_function_patch_active
-from .config_audio import audio_gain_db_or_default
+from .config_audio import audio_fine_gain_db_or_default, door_audio_level_db_or_default
 from .config_flow_camera_quality import camera_quality_offered
 from .config_flow_dashboard import (
     DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT as _DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT,
@@ -34,6 +34,7 @@ from .const import (
     CONF_AGENT_TOKEN,
     CONF_ALARM_ENTITY_ID,
     CONF_ALARM_PAGE_ENTITY_ID,
+    CONF_AUDIO_FINE_GAIN_DB,
     CONF_CALLBACK_BASE_URL,
     CONF_CREATE_HOMEASSISTANT_USER,
     CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
@@ -48,19 +49,18 @@ from .const import (
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
     CONF_DEVICE_ACTIVATIONS,
     CONF_DEVICE_UI_ENABLED,
-    CONF_DOORSTATION_AUDIO_GAIN_DB,
+    CONF_DOOR_AUDIO_LEVEL_DB,
     CONF_ENERGY_PAGE,
     CONF_MAINTENANCE_TOKEN,
     CONF_NATIVE_TWO_WAY_AUDIO,
-    CONF_RING_CAPTURE_AUDIO_GAIN_DB,
     CONF_VIDEO_ENABLED,
     CONF_VIDEO_PORT,
     CONF_VIDEO_STREAM_PATH,
     CONF_WEATHER_ENTITY_ID,
     CONF_WEBRTC_ICE_POLICY,
     DEFAULT_AGENT_PORT,
-    DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
-    DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
+    DEFAULT_AUDIO_FINE_GAIN_DB,
+    DEFAULT_DOOR_AUDIO_LEVEL_DB,
     DEFAULT_STAIR_LIGHT_N,
     DEFAULT_STAIR_LIGHT_P,
     DEFAULT_VIDEO_PORT,
@@ -74,11 +74,67 @@ from .dashboard_energy import normalize_energy_page
 from .dashboard_entities import normalize_dashboard_pages
 from .dashboard_optional_config import OPTIONAL_PAGE_KEYS, optional_page_values
 from .dashboard_page_order import dashboard_navigation
+from .display_support import entry_display_supported
 from .entry_config import entry_config_value
 from .entry_types import BticinoC300XConfigEntry
 from .schema_compat import vol
 
 CREATE_HOMEASSISTANT_USER_DEFAULT = True
+RECONFIGURED_OPTION_KEYS = frozenset(
+    {
+        *SNAPSHOT_DEFAULTS,
+        *OPTIONAL_PAGE_KEYS,
+        CONF_ACTIONS,
+        CONF_AGENT_HOST,
+        CONF_AGENT_PORT,
+        CONF_AGENT_TOKEN,
+        CONF_CALLBACK_BASE_URL,
+        CONF_CREATE_HOMEASSISTANT_USER,
+        CONF_ALARM_ENTITY_ID,
+        CONF_ALARM_PAGE_ENTITY_ID,
+        CONF_DASHBOARD_ENTITIES,
+        CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
+        CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
+        CONF_DASHBOARD_NAVIGATION,
+        CONF_DASHBOARD_PAGES,
+        CONF_ENERGY_PAGE,
+        CONF_DASHBOARD_STATUS_PAGE_ENABLED,
+        CONF_DASHBOARD_PREVENT_RETURN,
+        CONF_DEVICE_ACTIVATION_MODE,
+        CONF_DEVICE_ACTIVATIONS,
+        CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
+        CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
+        CONF_DEVICE_UI_ENABLED,
+        CONF_DOOR_AUDIO_LEVEL_DB,
+        CONF_MAINTENANCE_TOKEN,
+        CONF_NATIVE_TWO_WAY_AUDIO,
+        CONF_AUDIO_FINE_GAIN_DB,
+        CONF_VIDEO_ENABLED,
+        CONF_VIDEO_PORT,
+        CONF_VIDEO_STREAM_PATH,
+        CONF_WEATHER_ENTITY_ID,
+        CONF_WEBRTC_ICE_POLICY,
+    }
+)
+
+
+def clear_reconfigured_option_overrides(
+    hass: Any,
+    config_entry: BticinoC300XConfigEntry,
+    data_updates: dict[str, Any],
+) -> None:
+    """Clear stale option values for settings written through reconfigure."""
+
+    options = dict(config_entry.options)
+    keys_to_clear = RECONFIGURED_OPTION_KEYS & data_updates.keys()
+    if not options or not keys_to_clear:
+        return
+    updated_options = {
+        key: value for key, value in options.items() if key not in keys_to_clear
+    }
+    if updated_options == options:
+        return
+    hass.config_entries.async_update_entry(config_entry, options=updated_options)
 
 
 def webrtc_ice_policy_or_default(value: Any) -> str:
@@ -141,21 +197,21 @@ def options_features_schema(
         if create_homeassistant_user is None
         else create_homeassistant_user
     )
-    default_ring_capture_audio_gain_db = audio_gain_db_or_default(
+    default_audio_fine_gain_db = audio_fine_gain_db_or_default(
         _config_default(
             config_entry,
-            CONF_RING_CAPTURE_AUDIO_GAIN_DB,
-            DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
+            CONF_AUDIO_FINE_GAIN_DB,
+            DEFAULT_AUDIO_FINE_GAIN_DB,
         ),
-        DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
+        DEFAULT_AUDIO_FINE_GAIN_DB,
     )
-    default_doorstation_audio_gain_db = audio_gain_db_or_default(
+    default_door_audio_level_db = door_audio_level_db_or_default(
         _config_default(
             config_entry,
-            CONF_DOORSTATION_AUDIO_GAIN_DB,
-            DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
+            CONF_DOOR_AUDIO_LEVEL_DB,
+            DEFAULT_DOOR_AUDIO_LEVEL_DB,
         ),
-        DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
+        DEFAULT_DOOR_AUDIO_LEVEL_DB,
     )
     default_webrtc_ice_policy = webrtc_ice_policy_or_default(
         _config_default(config_entry, CONF_WEBRTC_ICE_POLICY, DEFAULT_WEBRTC_ICE_POLICY)
@@ -165,8 +221,8 @@ def options_features_schema(
     return _reconfigure_features_schema(
         default_video_enabled,
         default_create_homeassistant_user=bool(default_create_homeassistant_user),
-        default_doorstation_audio_gain_db=default_doorstation_audio_gain_db,
-        default_ring_capture_audio_gain_db=default_ring_capture_audio_gain_db,
+        default_door_audio_level_db=default_door_audio_level_db,
+        default_audio_fine_gain_db=default_audio_fine_gain_db,
         default_webrtc_ice_policy=default_webrtc_ice_policy,
         default_native_two_way_audio=(
             _config_default(config_entry, CONF_NATIVE_TWO_WAY_AUDIO, False) is True
@@ -258,21 +314,21 @@ def current_feature_options(
             CONF_VIDEO_STREAM_PATH,
             DEFAULT_VIDEO_STREAM_PATH,
         ),
-        CONF_DOORSTATION_AUDIO_GAIN_DB: audio_gain_db_or_default(
+        CONF_DOOR_AUDIO_LEVEL_DB: door_audio_level_db_or_default(
             _config_default(
                 config_entry,
-                CONF_DOORSTATION_AUDIO_GAIN_DB,
-                DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
+                CONF_DOOR_AUDIO_LEVEL_DB,
+                DEFAULT_DOOR_AUDIO_LEVEL_DB,
             ),
-            DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
+            DEFAULT_DOOR_AUDIO_LEVEL_DB,
         ),
-        CONF_RING_CAPTURE_AUDIO_GAIN_DB: audio_gain_db_or_default(
+        CONF_AUDIO_FINE_GAIN_DB: audio_fine_gain_db_or_default(
             _config_default(
                 config_entry,
-                CONF_RING_CAPTURE_AUDIO_GAIN_DB,
-                DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
+                CONF_AUDIO_FINE_GAIN_DB,
+                DEFAULT_AUDIO_FINE_GAIN_DB,
             ),
-            DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
+            DEFAULT_AUDIO_FINE_GAIN_DB,
         ),
         CONF_WEBRTC_ICE_POLICY: webrtc_ice_policy_or_default(
             _config_default(
@@ -342,12 +398,8 @@ def reconfigure_features_schema_from_current(
     return _reconfigure_features_schema(
         bool(current[CONF_VIDEO_ENABLED]),
         default_create_homeassistant_user=bool(current[CONF_CREATE_HOMEASSISTANT_USER]),
-        default_doorstation_audio_gain_db=float(
-            current[CONF_DOORSTATION_AUDIO_GAIN_DB]
-        ),
-        default_ring_capture_audio_gain_db=float(
-            current[CONF_RING_CAPTURE_AUDIO_GAIN_DB]
-        ),
+        default_door_audio_level_db=int(current[CONF_DOOR_AUDIO_LEVEL_DB]),
+        default_audio_fine_gain_db=int(current[CONF_AUDIO_FINE_GAIN_DB]),
         default_webrtc_ice_policy=webrtc_ice_policy_or_default(
             current[CONF_WEBRTC_ICE_POLICY]
         ),
@@ -400,14 +452,14 @@ def feature_input_defaults(
         defaults.get(CONF_VIDEO_STREAM_PATH, DEFAULT_VIDEO_STREAM_PATH),
     )
     data.setdefault(
-        CONF_DOORSTATION_AUDIO_GAIN_DB,
-        defaults.get(CONF_DOORSTATION_AUDIO_GAIN_DB, DEFAULT_DOORSTATION_AUDIO_GAIN_DB),
+        CONF_DOOR_AUDIO_LEVEL_DB,
+        defaults.get(CONF_DOOR_AUDIO_LEVEL_DB, DEFAULT_DOOR_AUDIO_LEVEL_DB),
     )
     data.setdefault(
-        CONF_RING_CAPTURE_AUDIO_GAIN_DB,
+        CONF_AUDIO_FINE_GAIN_DB,
         defaults.get(
-            CONF_RING_CAPTURE_AUDIO_GAIN_DB,
-            DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
+            CONF_AUDIO_FINE_GAIN_DB,
+            DEFAULT_AUDIO_FINE_GAIN_DB,
         ),
     )
     data.setdefault(
@@ -475,5 +527,5 @@ def options_menu(config_entry: BticinoC300XConfigEntry) -> list[str]:
     menu.append("device_activations")
     if speech_offered(config_entry):
         menu.append("speech")
-    menu.append("display")
+    menu.append("display" if entry_display_supported(config_entry) else "dashboard_alarm")
     return menu

@@ -53,12 +53,12 @@ async def _probe(case: str, config_dir: str) -> None:
         from custom_components.bticino_c300x.activation_address import (
             normalize_stair_light_part,
         )
-        from custom_components.bticino_c300x.config_audio import audio_gain_db
+        from custom_components.bticino_c300x.config_audio import door_audio_level_db
         from custom_components.bticino_c300x.service_schema import wyoming_port
 
         for validator in (
             cv.entity_id,
-            audio_gain_db,
+            door_audio_level_db,
             wyoming_port,
             lambda value: normalize_stair_light_part(value, default="00"),
         ):
@@ -73,7 +73,7 @@ async def _probe(case: str, config_dir: str) -> None:
             _setup_connection_schema,
         )
         from custom_components.bticino_c300x.config_schemas import setup_features_schema
-        from custom_components.bticino_c300x.const import CONF_DOORSTATION_AUDIO_GAIN_DB
+        from custom_components.bticino_c300x.const import CONF_DOOR_AUDIO_LEVEL_DB
         from custom_components.bticino_c300x.repair_flows_frontend import (
             _frontend_card_setup_schema,
         )
@@ -107,13 +107,13 @@ async def _probe(case: str, config_dir: str) -> None:
             json.dumps(serialized)
         with pytest.raises(data_entry_flow.InvalidData):
             await manager.async_configure(
-                form["flow_id"], {CONF_DOORSTATION_AUDIO_GAIN_DB: "invalid!"},
+                form["flow_id"], {CONF_DOOR_AUDIO_LEVEL_DB: "invalid!"},
             )
         result = await manager.async_configure(
-            form["flow_id"], {CONF_DOORSTATION_AUDIO_GAIN_DB: 0},
+            form["flow_id"], {CONF_DOOR_AUDIO_LEVEL_DB: "0"},
         )
         assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
-        assert result["data"][CONF_DOORSTATION_AUDIO_GAIN_DB] == 0
+        assert result["data"][CONF_DOOR_AUDIO_LEVEL_DB] == "0"
         return
 
     if case == "services":

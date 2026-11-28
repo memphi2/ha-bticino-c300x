@@ -13,6 +13,8 @@ BEGIN="# c300x-native-agent firewall begin"
 END="# c300x-native-agent firewall end"
 IPV6_BEGIN="# c300x-native-agent ipv6 firewall begin"
 IPV6_END="# c300x-native-agent ipv6 firewall end"
+# Exit status for a hook whose own rules changed after we patched it.
+HOOK_CHANGED=3
 
 validate_port() {
     label="$1"
@@ -32,6 +34,21 @@ validate_port() {
 validate_port api "$PORT"
 validate_port rtsp "$RTSP_PORT"
 validate_port talkback "$TALKBACK_RTP_PORT"
+
+apply_live_rules() {
+    command -v iptables >/dev/null 2>&1 || return 0
+    if ! iptables -C INPUT -p tcp --dport "$PORT" -j ACCEPT 2>/dev/null; then
+        iptables -A INPUT -p tcp --dport "$PORT" -j ACCEPT
+    fi
+    if [ "$VIDEO_ENABLED" = "1" ]; then
+        if ! iptables -C INPUT -p tcp --dport "$RTSP_PORT" -j ACCEPT 2>/dev/null; then
+            iptables -A INPUT -p tcp --dport "$RTSP_PORT" -j ACCEPT
+        fi
+        if ! iptables -C INPUT -p udp --dport "$TALKBACK_RTP_PORT" -j ACCEPT 2>/dev/null; then
+            iptables -A INPUT -p udp --dport "$TALKBACK_RTP_PORT" -j ACCEPT
+        fi
+    fi
+}
 
 TMP="/tmp/c300x-firewall.$$"
 BASE="/tmp/c300x-firewall-base.$$"
@@ -54,6 +71,13 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Without a boot hook there is nothing to keep the rules across a reboot:
+# open the ports for this run and write no file.
+if [ ! -e "$IPTABLES" ] && [ ! -L "$IPTABLES" ]; then
+    apply_live_rules
+    printf 'changed_files=0\n'
+    exit 0
+fi
 [ -f "$IPTABLES" ] || exit 1
 
 awk -v begin="$BEGIN" -v end="$END" '
@@ -102,9 +126,27 @@ changed_files=0
 if [ -e "$BACKUP" ] || [ -L "$BACKUP" ]; then
     # Older interrupted installs could leave a partial backup. Never trust it
     # without matching the unmanaged rules still present in the live script.
-    if [ -L "$BACKUP" ] || [ ! -f "$BACKUP" ] || ! cmp -s "$ORIGINAL" "$BACKUP"; then
+    if [ -L "$BACKUP" ] || [ ! -f "$BACKUP" ]; then
         printf 'existing firewall backup cannot be verified\n' >&2
         exit 1
+    fi
+    if ! cmp -s "$ORIGINAL" "$BACKUP"; then
+        if grep -qxF -e "$BEGIN" -e "$END" -e "$IPV6_BEGIN" -e "$IPV6_END" "$IPTABLES"; then
+            # Our rules are in the hook, and its other rules changed since:
+            # the backup no longer restores what the station had.
+            printf 'firewall hook changed after the agent patched it\n' >&2
+            exit "$HOOK_CHANGED"
+        fi
+        # No rules of ours: the station was set up again (a root tool
+        # reflashed it) and the backup describes an earlier hook. Keep it
+        # beside the new one and back up the hook as it is now.
+        STALE="${BACKUP}.stale-$(date +%Y%m%d%H%M%S)"
+        if [ -e "$STALE" ] || [ -L "$STALE" ]; then
+            STALE="$STALE.$$"
+        fi
+        mv -f "$BACKUP" "$STALE"
+        printf 'archived stale firewall backup\n' >&2
+        changed_files=$((changed_files + 1))
     fi
 fi
 if ! cmp -s "$IPTABLES" "$TMP"; then
@@ -137,18 +179,5 @@ if ! cmp -s "$IPTABLES" "$TMP"; then
     changed_files=$((changed_files + 1))
 fi
 
-if command -v iptables >/dev/null 2>&1; then
-    if ! iptables -C INPUT -p tcp --dport "$PORT" -j ACCEPT 2>/dev/null; then
-        iptables -A INPUT -p tcp --dport "$PORT" -j ACCEPT
-    fi
-    if [ "$VIDEO_ENABLED" = "1" ]; then
-        if ! iptables -C INPUT -p tcp --dport "$RTSP_PORT" -j ACCEPT 2>/dev/null; then
-            iptables -A INPUT -p tcp --dport "$RTSP_PORT" -j ACCEPT
-        fi
-        if ! iptables -C INPUT -p udp --dport "$TALKBACK_RTP_PORT" -j ACCEPT 2>/dev/null; then
-            iptables -A INPUT -p udp --dport "$TALKBACK_RTP_PORT" -j ACCEPT
-        fi
-    fi
-fi
-
+apply_live_rules
 printf 'changed_files=%s\n' "$changed_files"

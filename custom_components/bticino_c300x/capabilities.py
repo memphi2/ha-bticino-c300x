@@ -7,6 +7,7 @@ from typing import Any
 
 from .const import CONF_DEVICE_UI_ENABLED
 from .display_activation import display_activation_confirmed
+from .display_support import entry_display_supported
 from .event_types import (
     ACTIVATION_EVENTS,
     ALWAYS_REGISTERED_EVENTS,
@@ -131,6 +132,31 @@ EVENT_LABELS: dict[str, dict[str, str]] = {
         "agent_diagnostics_changed": "Diagnostics ecritures agent mis a jour",
         "agent_restarted": "Device-Agent redemarre",
     },
+    "es": {
+        "doorbell_pressed": "Timbre pulsado",
+        "doorbell_view_requested": "Vista del timbre solicitada",
+        "doorbell_media_closed": "Transmisión de la cámara del timbre finalizada",
+        "door_unlock_started": "Apertura de puerta iniciada",
+        "door_unlock_ended": "Apertura de puerta finalizada",
+        "stair_light_activated": "Luz de escalera activada",
+        "stair_light_released": "Luz de escalera liberada",
+        "activation_executed": "Activación del dispositivo ejecutada",
+        "call_started": "Llamada iniciada",
+        "call_ended": "Llamada finalizada",
+        "home_call_started": "Home Call iniciada",
+        "home_call_answered": "Home Call respondida",
+        "home_call_ended": "Home Call finalizada",
+        "ringer_muted": "Timbre silenciado",
+        "display_touch_tone_changed": "Tono de teclas cambiado",
+        "ringer_unmuted": "Sonido del timbre activado",
+        "ringer_volume_changed": "Volumen del timbre cambiado",
+        "smartphone_forwarding_changed": "Desvío al smartphone cambiado",
+        "answering_machine_messages_changed": "Mensajes de vídeo cambiados",
+        "memos_changed": "Notas cambiadas",
+        "system_metrics_changed": "Métricas del sistema actualizadas",
+        "agent_diagnostics_changed": "Diagnóstico de escrituras del agente actualizado",
+        "agent_restarted": "Agente reiniciado",
+    },
 }
 _CAPABILITY_EVENT_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("doorbell_events", DOORBELL_EVENTS),
@@ -165,6 +191,8 @@ def _event_label_language(language: str | None) -> str:
         return "it"
     if language_code.startswith("fr"):
         return "fr"
+    if language_code.startswith("es"):
+        return "es"
     return "en"
 
 
@@ -181,10 +209,16 @@ def gate_capabilities(
     capabilities: dict[str, Any],
     *,
     doorbell_video_enabled: bool,
+    c100x: bool = False,
 ) -> dict[str, Any]:
     """Apply HA config gates to device-agent capabilities."""
 
     result = dict(capabilities) if isinstance(capabilities, dict) else {}
+    if c100x:
+        # The station has no page for text memos and records no voice memos:
+        # no memo sensor, no memo event and no memo service on a C100X.
+        memos = result.get("memos")
+        result["memos"] = {**memos, "supported": False} if isinstance(memos, dict) else False
     if not doorbell_video_enabled:
         for capability in ("doorbell_video", "home_call"):
             video = result.get(capability)
@@ -195,12 +229,21 @@ def gate_capabilities(
     return result
 
 
+def ringer_mute_supported(capabilities: Mapping[str, Any]) -> bool:
+    """Keep legacy read/mute support, but honor an explicit mute exclusion."""
+
+    ringer = capabilities.get("ringer")
+    return capability_is_supported(capabilities, "ringer") and (
+        not isinstance(ringer, Mapping) or ringer.get("mute", True) is True
+    )
+
+
 def entry_gui_function_patch_active(entry: Any) -> bool:
     """Return true when the loaded entry reports the full C300X Display patch."""
 
     runtime_data = getattr(entry, "runtime_data", None)
     status = getattr(runtime_data, "qml_patch_status", {})
-    return qml_patch_status_is_active(status)
+    return entry_display_supported(entry) and qml_patch_status_is_active(status)
 
 
 def entry_device_ui_configured(entry: Any) -> bool | None:
@@ -221,12 +264,14 @@ def entry_device_ui_configured(entry: Any) -> bool | None:
 def entry_device_ui_enabled(entry: Any) -> bool:
     """Return the effective HA setting for C300X device UI integration."""
 
-    return bool(entry_device_ui_configured(entry))
+    return entry_display_supported(entry) and bool(entry_device_ui_configured(entry))
 
 
 def entry_device_ui_effective(entry: Any) -> bool | None:
     """Prefer an explicit choice; only a confirmed patch state resolves a legacy entry."""
 
+    if not entry_display_supported(entry):
+        return False
     configured = entry_device_ui_configured(entry)
     if configured is not None:
         return configured
@@ -389,6 +434,33 @@ def memos_supported(capabilities: dict[str, Any]) -> bool:
     """Return true when local manual memo metadata is supported."""
 
     return capability_is_supported(capabilities, "memos")
+
+
+def voice_memos_supported(capabilities: dict[str, Any]) -> bool:
+    """Return true when the agent offers voice memos.
+
+    A C100X agent reports ``voice: false``; agents before the field always
+    offered them, so only an explicit false hides them.
+    """
+
+    if not memos_supported(capabilities):
+        return False
+    memos = capabilities.get("memos")
+    return not (isinstance(memos, dict) and memos.get("voice") is False)
+
+
+def stored_media_offered(capabilities: Any, kind: str) -> bool:
+    """Return false when the agent reports no video messages or voice memos.
+
+    Only a reported capability counts: capabilities that name neither keep
+    the earlier behaviour of asking the agent.
+    """
+
+    if not isinstance(capabilities, dict):
+        return True
+    if kind == "video":
+        return "answering_machine" not in capabilities or answering_machine_messages_supported(capabilities)
+    return "memos" not in capabilities or voice_memos_supported(capabilities)
 
 
 def diagnostics_supported(capabilities: dict[str, Any]) -> bool:

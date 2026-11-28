@@ -61,7 +61,8 @@ def test_mdns_restart_changes_only_service_txt(tmp_path: Path) -> None:
     binary = tmp_path / "mdns-packet"
     subprocess.run(
         ["cc", "-std=c11", "-D_DEFAULT_SOURCE", "-I", str(src), "-x", "c", "-",
-         str(src / "string_util.c"), str(src / "time_util.c"), "-o", str(binary)],
+         str(src / "string_util.c"), str(src / "device_detect.c"), str(src / "time_util.c"),
+         "-o", str(binary)],
         input="""
 #include "mdns.c"
 int main(int argc, char **argv)
@@ -117,7 +118,7 @@ def test_mdns_advertises_home_assistant_zeroconf_shape() -> None:
     assert "c300x_mdns_device_id(device_id, sizeof(device_id))" in capabilities_body
     capabilities_json = (ROOT / "native_agent" / "src" / "capabilities.c").read_text(encoding="utf-8")
     assert (
-        '\\"device\\":{\\"id\\":\\"%s\\",\\"model\\":\\"%s\\",\\"firmware\\":\\"%s\\"}'
+        '\\"device\\":{\\"id\\":\\"%s\\",\\"model\\":\\"%s\\",\\"display_kind\\":\\"%s\\",\\"camera\\":\\"%s\\",\\"model_check\\":\\"%s\\",\\"board\\":%s,\\"article\\":%s,\\"firmware\\":\\"%s\\"}'
         in capabilities_json
     )
     assert '"id=%s"' in build_body

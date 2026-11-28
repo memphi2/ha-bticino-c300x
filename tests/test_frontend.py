@@ -465,7 +465,7 @@ def test_bundled_card_supports_editor_languages_and_multi_device_config() -> Non
     assert "return this._isHomeCallMode() ? 2 : 7;" in source
     assert 'name: "card_height"' not in source
     assert 'getEntitySuggestion: (hass, entityId)' in source
-    assert 'documentationURL: C300X_DOCUMENTATION_URL' in source
+    assert 'get documentationURL() {\n    return c300xDocumentationUrlOfPage();' in source
     assert 'preview: false' in source
     assert "ll-rebuild" not in source
     assert 'formatEntityName' in source
@@ -495,7 +495,7 @@ def test_bundled_card_supports_editor_languages_and_multi_device_config() -> Non
     assert 'C300X_CARD_EDITOR_TAG = "c300x-doorbell-call-card-editor"' in editor_source
     assert "customElements.define(C300X_CARD_EDITOR_TAG" in editor_source
     assert 'customElements.get(C300X_CARD_TAG)' in source
-    for language in ("en", "de", "fr", "it"):
+    for language in ("en", "de", "fr", "it", "es"):
         assert f"  {language}: {{" in translations_source
     assert '"state_entity"' not in source
     assert "state_label" not in source

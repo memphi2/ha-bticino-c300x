@@ -22,6 +22,7 @@ from http.client import HTTPConnection
 from pathlib import Path
 
 import pytest
+from native_build import default_host_agent
 
 from native_agent.test.smoke import (
     TOKEN,
@@ -135,10 +136,7 @@ class Lab:
 
 @pytest.fixture(scope="module")
 def binary(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    directory = tmp_path_factory.mktemp("memo-vendor-build")
-    subprocess.run(["make", "-C", str(ROOT / "native_agent"), f"BUILD_DIR={directory}",
-                    "-j2", "all"], check=True, capture_output=True, text=True)
-    return directory / "host/c300x-agent-native"
+    return default_host_agent(tmp_path_factory)
 
 
 def write_entry(store: Path, directory: int, number: int, text: str | None = None) -> Path:

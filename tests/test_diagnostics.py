@@ -61,6 +61,7 @@ from custom_components.bticino_c300x.diagnostics import (
     _same_lan_prefix_guess,
     _self_test_diagnostics,
     _sequence_count,
+    _ssh_diagnostics,
     async_get_config_entry_diagnostics,
 )
 from custom_components.bticino_c300x.media_timeline import C300XMediaTimeline
@@ -686,6 +687,11 @@ def test_diagnostics_helpers_keep_runtime_data_safe_and_useful() -> None:
             "implementation": "native",
             "api_version": "1.1",
             "model": "C300X",
+            "display_kind": "qt4_ondisk",
+            "camera": "high_res",
+            "model_check": "ok",
+            "board": "BTicino ZIA board HW Rev 3",
+            "article": "344642",
             "firmware": "1.7.19",
             "device_id": "private-device-id",
         },
@@ -719,6 +725,11 @@ def test_diagnostics_helpers_keep_runtime_data_safe_and_useful() -> None:
         "implementation": "native",
         "api_version": "1.1",
         "model": "C300X",
+        "display_kind": "qt4_ondisk",
+        "camera": "high_res",
+        "model_check": "ok",
+        "board": "BTicino ZIA board HW Rev 3",
+        "article": "344642",
         "firmware": "1.7.19",
         "device_id_configured": True,
         "device_id_fingerprint": agent_info["device_id_fingerprint"],
@@ -813,6 +824,20 @@ def test_diagnostics_report_media_user_and_self_test_failure_reasons() -> None:
     assert self_test["checks"]["firewall"] == {"ok": True, "reason": "media_ports_open"}
     # Per-check details carry device paths and stay out of the report.
     assert "private-users" not in json.dumps(self_test)
+
+
+def test_diagnostics_name_the_tool_that_keeps_ssh_running() -> None:
+    runtime = SimpleNamespace(ssh_status={
+        "running": True, "enabled": True, "state": "managed_externally",
+        "manager": "c300x-ssh", "listening": True, "factory_running": False,
+    })
+    assert _ssh_diagnostics(runtime) == {
+        "running": True, "state": "managed_externally", "manager": "c300x-ssh",
+        "listening": True, "factory_running": False,
+    }
+    assert _ssh_diagnostics(None) is None
+    assert _ssh_diagnostics(SimpleNamespace(ssh_status={})) is None
+    assert _ssh_diagnostics(SimpleNamespace(ssh_status=[])) is None
 
 
 def test_diagnostics_helpers_handle_missing_or_invalid_runtime_data() -> None:
@@ -995,6 +1020,45 @@ def test_diagnostics_carry_the_bridge_counters_issue_44_needs() -> None:
     # The error text stays out; only that there is one.
     assert section["last_error_present"] is True
     assert "/dev/video0" not in json.dumps(section)
+
+
+def test_bridge_diagnostics_show_where_the_door_level_went() -> None:
+    class _Api:
+        async def async_doorbell_video_status(self) -> dict[str, Any]:
+            return {
+                "bridge": {
+                    "audio_level": {
+                        "door_level_db": 9,
+                        "fine_gain_db": -2,
+                        "door_level_path": "chip",
+                        "chip_lever": "ready",
+                        "chip_gain_db": 9,
+                        "software_gain_db": -2,
+                        "unexpected": "/home/root/demo/Audio_State.sh",
+                    }
+                }
+            }
+
+    entry = _FakeEntry(
+        data={CONF_VIDEO_ENABLED: True, "door_audio_level_db": 9, "audio_fine_gain_db": -2},
+        runtime_data=SimpleNamespace(api=_Api()),
+    )
+
+    section = asyncio.run(
+        _async_video_bridge_diagnostics(entry, entry.runtime_data)  # type: ignore[arg-type]
+    )
+
+    assert section is not None
+    assert section["audio_level"] == {
+        "door_level_db": 9,
+        "fine_gain_db": -2,
+        "door_level_path": "chip",
+        "chip_lever": "ready",
+        "chip_gain_db": 9,
+        "software_gain_db": -2,
+    }
+    assert section["audio_level_configured"] == {"door_level_db": 9, "fine_gain_db": -2}
+    assert "Audio_State" not in json.dumps(section)
 
 
 def test_diagnostics_survive_an_agent_that_cannot_be_reached() -> None:

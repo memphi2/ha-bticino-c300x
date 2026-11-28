@@ -12,7 +12,7 @@ proxy if a site needs TLS.
 ## Versioning
 
 - HTTP base path: `/api/v1`
-- Current agent version: `2.10.0`
+- Current agent version: `3.0.0`
 - Self-test contract version: `api_version: "1.1"`
 - Normal payloads are JSON unless an endpoint explicitly returns binary media.
 
@@ -22,6 +22,10 @@ declares the minimum required set. Set `2` includes `C300XRingerControl.qml`,
 set `3` adds `C300XEnergy.qml`, and set `4` is the retired 2.4.1 energy-view set.
 Set `5` adds the 2.5 display navigation, optional-page, Consumers and alert
 components. Set `6` adds the shared checks/optional-page views and Situations.
+Set `7` adds the display adapter of the Classe 100X (`qml/c100x_bundle.sh`). It
+is mandatory on a C100X only: a C300X checks it with the rest of a package,
+never installs it, and also takes a package without it. A change of the adapter
+alone is neither a display-patch nor a script change.
 The matching native agent and complete display bundle are required;
 updating the HA integration alone does not install these GUI components.
 When the installed self-updater cannot install the target file set, Home
@@ -46,7 +50,10 @@ The agent has two HTTP listeners:
   the Display patch writes the port into the patched `MainApp.qml` and
   `EventManager.qml`, and all other pages take it from there. After a port
   change, restart the agent and reapply the Display patch; until then the patch
-  is reported as partially patched.
+  is reported as partially patched. The C100X display adapter is the
+  exception: it uses the default UI port only, so its activation is refused
+  while `listen.uiPort` is changed (see
+  [C100X display activation](#c100x-display-activation)).
 
 Public UI listener endpoints are documented separately under
 [Loopback UI API](#loopback-ui-api).
@@ -242,6 +249,9 @@ for example `config_error`, `api_token_missing`, `api_bind_failed`,
 | `POST` | `/api/v1/maintenance/ssh/actions/start` | maintenance | Starts SSH after confirmation. |
 | `POST` | `/api/v1/maintenance/ssh/actions/stop` | maintenance | Stops SSH after confirmation. |
 | `POST` | `/api/v1/maintenance/reboot` | maintenance | Schedules reboot after confirmation. |
+| `GET` | `/api/v1/maintenance/c100x-display` | maintenance | C100X only: reads the display activation state. |
+| `POST` | `/api/v1/maintenance/c100x-display/actions/activate` | maintenance | C100X only: prepares the display pages and reboots once idle. |
+| `POST` | `/api/v1/maintenance/c100x-display/actions/restore` | maintenance | C100X only: restores the original display and reboots once idle. |
 | `POST` | `/api/v1/maintenance/agent/actions/remove` | maintenance | Schedules agent removal after confirmation. |
 | `POST` | `/api/v1/maintenance/agent/actions/restart` | maintenance | Restarts the native agent after confirmation. |
 | `GET` | `/api/v1/maintenance/update/status` | maintenance | Reads staged update state. |
@@ -329,9 +339,35 @@ Important top-level fields:
 - `agent.version`
 - `agent.implementation`
 - `device.id`
-- `device.model`
+- `device.model`: `C300X` or `C100X`, read on the device, not taken from the
+  agent config. The station names it in `<webserver_type>` of
+  `/home/bticino/sp/dbfiles_ws.xml`; the display program (`BtClass100` on the
+  C100X) is the cross-check and decides where that name is missing or
+  disagrees.
+- `device.model_check`: `ok` (both sources agree), `unread` (the station names
+  no model; the display program decided) or `mismatch` (they disagree; the
+  display program decided, and neither the Display patch nor the C100X display
+  activation is written). On a mismatch the `maintenance` Display patch
+  members (`qml_patch`, `qml_core_patch` and the others) are false and the
+  Home Assistant media user is set up without its label on the display; a
+  patch that is already there is removed over SSH with
+  `qml_patch.sh restore-all`.
+- `device.display_kind`: `qt4_ondisk` (C300X 1.7.x/2.0.x), `qt5_rcc` (C300X
+  3.0.x, display files built into the program) or `qt5_ondisk` (C100X)
+- `device.camera`: `high_res` when the camera resolution can be switched,
+  `fixed` otherwise
+- `device.board`: the board as the kernel names it (the `Hardware` line of
+  `/proc/cpuinfo`, else the device-tree model), for example
+  `BTicino ZIA board HW Rev 3`; empty when it cannot be read
+- `device.article`: the article number from `/var/tmp/flags/codename` without
+  its padding, for example `344642`; empty where the station has none (C100X)
 - `device.firmware`
-- `capabilities`
+- `capabilities`. `touch_tone`, `display_alerts`, `display_bridge` and
+  `ringer.mute` are reported on every C300X as before; on the C100X only once
+  the display adapter was confirmed in its trial boot (see
+  [C100X display activation](#c100x-display-activation)).
+  `maintenance.gui_reload` is not offered on the C100X, whose display program
+  the agent does not restart.
 
 ### `GET /api/v1/state`
 
@@ -357,6 +393,11 @@ write counters such as:
 - `last_write_class`
 - `last_write_reason`
 - `qml_patch_last_action`
+
+`agent_init_script_present` and `agent_init_link_ok` tell whether the start
+script and its boot link are in place. `agent_started_after_boot_seconds` is
+the station's uptime at the moment the agent started: a small value means the
+boot link started it, a value near the station's uptime a later start by hand.
 
 Media diagnostic fields describe ownership and bridge state without exposing
 tokens, callback URLs, or raw packet data.
@@ -566,7 +607,8 @@ Request fields:
 For `display_bridge.state` and `notifications`, an optional boolean `unread`
 also synchronizes HA's memo LED claim, even without a display listener. The
 agent advertises `memo_led` only when it finds the LED and a usable, trusted
-volatile claim store at startup. An empty private directory on tmpfs records
+volatile claim store at startup. On a C100X it never advertises or drives
+`memo_led`: no memo LED is proven on that hardware. An empty private directory on tmpfs records
 ownership across agent crashes, not device reboots. Releasing the claim
 respects the firmware LED trigger and any unread native memos. An accepted
 event is not a hardware delivery receipt.
@@ -851,6 +893,14 @@ Authentication: normal API token.
 
 Side effects: reads answering-machine state.
 
+A C100X has no answering machine: its HAL reports none for the SHARK board and
+the vendor recorder forces it off. There, capabilities report
+`answering_machine.supported: false` and `memos` with `voice`, `media` and
+`delete` false (text memos keep reading and `write_text`). Every
+`/api/v1/answering-machine` route, `GET /api/v1/memos/voice/{id}/audio` and
+`POST /api/v1/memos/actions/delete` answer `409` with
+`answering_machine_unsupported_model` before any device I/O.
+
 ### `POST /api/v1/answering-machine`
 
 Authentication: normal API token.
@@ -970,6 +1020,21 @@ Request fields:
 
 ## Media and Calls
 
+RTSP video (`/doorbell`, `/doorbell-video`, `/doorbell-recorder`) starts at
+a keyframe for every client: a client that starts playing first gets the
+newest keyframe group (SPS, PPS, IDR and the frames since, at most 1.5 s and
+512 KiB), sent at once with timestamps 1 ms apart, then the live frames. Without
+a complete group it gets no video until the next keyframe; audio starts at
+once. A client whose connection cannot take the group within 200 ms (all
+clients starting at the same moment share that time) starts at the next
+keyframe instead, so a slow client never holds up the others' video and
+audio for longer. When a ring's call and an on-demand view deliver video at the
+same time, the clients stay on the stream that came first until its session
+ends or it pauses for a second, then start at the other's next keyframe; the
+end of one session never drops the other's keyframe group. Each client has its own continuous RTP sequence numbers and timestamps,
+also when the station's stream restarts. The agent reads the station's stream
+from the first media command of an on-demand start.
+
 ### `GET /api/v1/video/doorbell`
 
 Authentication: normal API token.
@@ -986,8 +1051,8 @@ Side effects: none.
 
 Returns doorbell video availability, stream paths, media ownership, and bridge
 state. The endpoint must reflect agent/device state, not Home Assistant UI
-state. `bridge.doorstation_audio_gain_db` reports the runtime-only downstream
-gain that is applied to doorstation audio before RTSP output.
+state. `bridge.audio_level` reports the door level and fine adjustment (see
+`POST /api/v1/video/doorbell/audio`) and where the door level is applied.
 `bridge.ring_hangup_requested` is true while the native ring-call hangup path is
 being driven.
 
@@ -995,16 +1060,80 @@ being driven.
 
 Authentication: normal API token.
 
-Side effects: updates only the native agent's in-memory doorstation downstream
-audio gain. It does not write C300X device files or change Home Call audio.
-
-Request fields:
+Sets the level of the door station's sound toward Home Assistant (live view,
+answered calls and the ring recordings taken from `/doorbell`). Calls with the
+home (Home Call) keep their level. Both fields are required whole numbers:
 
 ```json
-{"doorstation_audio_gain_tenths": 60}
+{"door_level_db": 6, "fine_gain_db": 0}
 ```
 
-Accepted gain range is `-200` to `200` tenths of a dB, in 0.5 dB steps.
+- `door_level_db`: `0` (stock), `3`, `6`, `9` or `12`.
+- `fine_gain_db`: `-10` to `10`.
+
+Anything else is answered `400` with `invalid_audio_level`. Success returns
+`{"ok": true, "audio_level": {...}}` with the object described below.
+
+The software stage applies `fine_gain_db + door_level_db - chip_gain_db` once
+per packet before the RTSP fan-out, on every codec (Speex is decoded first,
+PCMU and PCMA go through the same curve). Above 0 dB a soft limiter keeps the
+sound linear up to -6 dBFS and bends louder peaks toward full scale without
+clipping; a peak never comes out quieter than it came in, so the curve joins
+0 dB without a step. At 0 dB PCMU passes unchanged.
+
+Side effects on a Classe 300X with the audio chip lever (`chip_lever` is not
+`unsupported`): a door level above stock writes the agent's version of the
+vendor's empty `/home/root/demo/Audio_State.sh`, which the vendor audio driver
+runs at every audio state change. In the state for the app and Home Assistant
+(`EN_AUDIO_IP_EU`) it marks the raise in `/run/c300x-sout-raised` (written
+whole, then renamed into place) and then raises `ZL0 Sout Gain Volume` from
+the profile's 11 by one step (about 3 dB) per 3 dB of door level; without the
+mark it raises nothing. While the mark is there the agent reads the control's
+live value, so a mark whose raise has not happened yet counts 0 dB, and a mark
+that cannot be parsed still counts the live value. The other states the vendor stub lists load a profile
+with its own gain and only drop the mark; `EN_AUDIO_OFF`, `EN_AUDIO_IP_IU` and
+any other state (`FAKE`, an empty or unknown argument), which load no profile
+of their own, set 11 again while the mark is there. The vendor file is backed up once
+under `/home/bticino/cfg/extra/c300x-device-file-backups/original` and only
+replaced while it is the known vendor stub (or already the agent's own); the
+root filesystem is writable only for the write. The agent's own hook is a
+`#!` script with a `# c300x-agent audio hook v<n>` line and its level in a
+`V=` line; a hook with that line from any agent version counts as the agent's
+own. One whose bytes differ from what the running agent writes for its level
+is rewritten to the current version when the agent starts (on a station with
+the lever, and not while the raised mark is there: the hook that raised the
+gain lowers it) or on the next level change. A level change rewrites the
+file; `door_level_db: 0` puts the vendor stub back and lowers a gain a running
+call still has. A hook that is neither is never touched. Removing the agent
+puts the vendor stub back. When the backup is missing or is not a stub, the
+agent writes a neutral stub instead (`#!/bin/sh` and `exit 1`, the vendor
+stub's behaviour without its text) with the file's mode kept; the neutral
+stub counts as the vendor stub from then on, so a lost backup never blocks a
+level change or the removal.
+
+`audio_level` fields:
+
+- `door_level_db`, `fine_gain_db`: the current settings. After an agent
+  restart the door level is read back from the hook; without the hook it is 0
+  until Home Assistant sets it.
+- `chip_lever`: `ready` (the hook carries the door level), `off` (stock door
+  level, vendor stub in place), `not_installed`, `unsupported` (no ZL38005
+  lever: another model, an unknown `IP_PE.cr`, no `amixer` or no readable
+  control; the door level is applied in software), `hook_foreign`,
+  `hook_missing` or `write_failed`.
+- `door_level_path`, `chip_gain_db`, `software_gain_db` describe the running
+  door call (sound toward Home Assistant within the last second, until the
+  session ends). Without one nothing is applied and they read `none`, `0` and
+  `0`.
+- `door_level_path`: where the door level goes in the running call: `chip`,
+  `software`, `chip_and_software` (a level changed during a call), or `none`
+  for a stock door level or no running call.
+- `chip_gain_db`: what the chip adds right now, read from the control while
+  sound flows: at every packet (at most every 10 ms) for the first 2 s after
+  a call starts (a session start or end, or the first packet after 100 ms
+  without one), every 500 ms after that. Before the hook has raised the gain
+  in a call it is 0 and the software stage carries the door level.
+- `software_gain_db`: what the software stage applies in the running call.
 
 ### `POST /api/v1/video/doorbell/actions/activate`
 
@@ -1045,9 +1174,11 @@ Side effects: POST changes one picture control of the active video source.
 A connected GUI advertising `picture=1` provides the legacy ring-only path.
 An eligible C300X (firmware 1.7.19; 2.0.2 with a bound ADV7180 video decoder,
 HW rev 2/3, or TVP5150, HW rev 1/4; 3.0.6 with its bound TVP5150, as the 3.0.6
-package requires HW rev 4) can also report
+package requires HW rev 4), or a C100X on firmware 1.5.8 with its bound
+TVP5150 (the HW rev 4 capture path), can also report
 `bridge.picture_controls_scope: "ring_and_on_demand"` with
-`bridge.picture_controls_supported: true`. Model and firmware alone do not
+`bridge.picture_controls_supported: true`. The model is the station's own
+(the agent detects it at runtime), not the configured one. Model and firmware alone do not
 enable it: an authenticated status or capability request during owned media
 checks the capture source on the bounded media worker. The read result is
 cached for that media session; no source is opened while idle.
@@ -1063,16 +1194,27 @@ The source must be character device 81:0 bound to `mxc_v4l2_capture` with
 driver is refused. The stock capture driver has no V4L2 control descriptors
 (`VIDIOC_QUERYCTRL` fails with `EINVAL`). The agent accepts that only by its
 exact signature (version `0x10b`, capabilities `0x05000005`, `device_caps` 0,
-empty card and bus) and uses the stock firmware's fixed raw ranges
-(brightness 30-180, contrast 59-209, saturation 64-244, eleven steps). Any
-other `mxc_v4l2` device must expose integer descriptors that cover these
-ranges; raw control reads alone do not make it supported.
+empty card and bus) and uses the stock firmware's fixed raw steps (eleven per
+control, one per 10 %). C300X: brightness 30-180, contrast 59-209, saturation
+64-244, in equal steps. C100X 1.5.8: the station's day ranges, brightness
+30-220, contrast 80-255, saturation 80-255, each step
+`trunc(min + percent * (max - min) / 100)` as in its `stack_open.xml`, so a
+percent in HA is the station's own day percent. Any other `mxc_v4l2` device
+must expose integer descriptors that cover these steps; raw control reads
+alone do not make it supported.
 The decoder is told by its bound I2C driver
 (`/sys/bus/i2c/drivers/adv7180/<bus>-<address>` or `.../tvp5150/...`). The
 stock ADV7180 driver writes brightness XOR `0x80` but reads the register back
 raw, so the agent undoes that XOR on read. The TVP5150 reads back plain; its
 contrast is a driver cache that stays 0 until the first write after boot.
-Such a 0, like any read off the eleven steps, fails the whole read: all three
+On the C100X, `bt_av_media` re-applies its night ranges (brightness 30-180,
+contrast 50-120, saturation 80-190) once per session when it detects a dark
+picture, and the station's own menu uses steps off the 10 % grid. A C100X read
+inside the day and night ranges together therefore reads as the nearest day
+step (a tie goes to the lower one), clamped to 0-100 %; a write still writes
+the day step and is verified against that exact raw value.
+On a C300X, a read off the eleven steps, and on both models a read outside
+those ranges (such as that contrast 0), fails the whole read: all three
 controls are unavailable, and the agent refuses direct control for the rest
 of that media session (a Ring Call falls back to the GUI path). Once a
 TVP5150 contrast write ioctl succeeds, its read-back always matches, because
@@ -1086,8 +1228,8 @@ The TVP5150 driver queues its I2C write and returns at once, so when the
 read-back differs the agent reads again up to five times, 10 ms apart,
 before it reports the setting as not applied.
 Changes last for the current media session; the station applies its own
-values again when the next session starts. 3.0.6 and the 2.0.2 path are
-checked offline only; 1.7.19 is tested on a device.
+values again when the next session starts. 3.0.6, the 2.0.2 path and the
+C100X are checked offline only; 1.7.19 is tested on a device.
 Direct operations check media ownership and session identity during execution.
 A failed direct write returns an error; it is not retried through the GUI.
 When the write or its read-back fails, the agent writes the previous value
@@ -1408,8 +1550,8 @@ write finishes it (see QML Patch).
 Graceful agent shutdown during a QML write sends that `SIGTERM` once, as the
 first step of its clean-up, and waits up to the same 15 seconds before
 `SIGKILL` at the end of it; that request is closed without an answer. The init
-script's own stop sends `SIGKILL` to the agent after 5 seconds (50 waits of
-100 ms); the script, in
+script's own stop sends `SIGKILL` to the agent after 20 seconds (200 waits
+of 100 ms), so that grace ends first; the script, in
 a process group of its own, has its signal by then and still finishes its
 rollback. A write cut off even so is finished at the next agent start.
 
@@ -1433,7 +1575,7 @@ deadline and a 4096-byte bounded-prefix capture; script failure retains HTTP 200
 with unavailable/unknown label status. SSH start and stop have a 60-second
 deadline and SSH status a 15-second one; at the deadline the process group is
 killed with `SIGKILL`; an action then fails like a failed command and a
-status reads as not running, so a hanging script no longer holds maintenance. They discard output.
+status reads the factory dropbear as unknown (`factory_running: null`), so a hanging script no longer holds maintenance. They discard output.
 
 Device-user native routing/user mutations are **synchronous**: they run inside
 the request. Label apply/restore is not: it is a QML write job with an
@@ -1465,7 +1607,29 @@ do not perform device writes.
 
 `GET /api/v1/maintenance/ssh`
 
-Returns SSH service status.
+Returns SSH service status:
+
+```json
+{"ok": true, "enabled": true, "running": true, "state": "running",
+ "listening": true, "factory_running": true, "manager": null}
+```
+
+- `factory_running`: the factory dropbear runs (pidfile `/var/run/dropbear.pid`,
+  executable `/usr/sbin/dropbear`, as the stock init script starts it on
+  1.7.19, 2.0.2, 3.0.6 and the C100X 1.5.8); `null` when the probe failed or
+  timed out.
+- `listening`: a TCP or TCP6 socket listens on port 22 (`/proc/net/tcp`,
+  `/proc/net/tcp6`).
+- `manager`: a third-party service that keeps SSH running on its own, found by
+  its init script: `c300x-ssh` (own dropbear and pidfile), `c100x-ssh` (own
+  dropbear; the factory init script is disabled with `NO_START=1`) or
+  `bt_service_watchdog` (restarts the factory dropbear every 60 s). `unknown`
+  when port 22 listens without the factory dropbear and without a known tool;
+  `null` otherwise.
+- `state`: `managed_externally` when port 22 listens and either a manager is
+  installed or the factory dropbear is not the listener; `running` when port 22
+  listens or the factory dropbear runs; `stopped` otherwise. `running` and
+  `enabled` are true unless the state is `stopped`.
 
 `POST /api/v1/maintenance/ssh`
 
@@ -1486,6 +1650,12 @@ Starts or stops SSH through a boolean request:
 ```json
 {"confirm": "stop_ssh"}
 ```
+
+While port 22 listens and a known manager is installed, the three SSH writes
+start and stop nothing and answer `409`
+`{"ok":false,"error":"ssh_managed_externally","manager":"c300x-ssh"}`. The
+factory init script only ever stops the dropbear of the factory pidfile, so a
+foreign dropbear is never stopped.
 
 ### Reboot, Agent, GUI
 
@@ -1527,7 +1697,48 @@ can fall between the stop and the start of the GUI, so the script repeats the
 restart once and exits 131. The request stays open until the script has ended
 and is then answered with the same `502 reload_failed`, up to 25 seconds after
 it was sent; `gui_running` of `GET /api/v1/maintenance/qml-patch` says whether
-the display is up.
+the display is up. Not offered on the C100X: its display
+program cannot be restarted.
+
+### C100X Display Activation
+
+C100X only; the routes exist when the agent runs on a C100X and need the
+maintenance token and the reboot permission (`404 maintenance_disabled`
+otherwise).
+
+`GET /api/v1/maintenance/c100x-display` returns `{"ok":true,"c100x_display":{...}}`
+with `status_known`, `busy`, `phase` (`unknown`, `stock`, `installed`,
+`prepared`, `trial`, `stale`), `trial_switched`, `confirmed`, `generation`,
+`available`, `last_result`, `last_error`, `reboot_pending`, `reboot_blocked`,
+`activate`, `restore`, `alert_sound` (always false) and `boot_check`. The same
+object is the `c100x_display` capability. `available` is the adapter next to
+the agent, `generation` the installed one; `activate` is true for a stock
+display and for confirmed pages of another adapter. After an agent update the
+adapter is read again, and `busy` is true until that has ended.
+
+`POST /api/v1/maintenance/c100x-display/actions/activate`
+
+```json
+{"confirm": "activate_c100x_display"}
+```
+
+`POST /api/v1/maintenance/c100x-display/actions/restore`
+
+```json
+{"confirm": "restore_c100x_display"}
+```
+
+Both answer `202` with `{"ok":true,"action":"...","scheduled":true}`. The agent
+switches the files, then reboots the station once it has been idle;
+`reboot_blocked` names what it waits for (`waiting_for_idle`, `call_active`,
+`call_recent`, `station_busy`, `display_busy`, `starting`, `reboot_disabled`,
+`call_state_unknown`). The trial boot confirms the pages; otherwise the next
+start rolls back. Restore of an already stock station answers `200` with
+`"changed":false`. Errors: `409` `c100x_display_busy`,
+`c100x_display_trial_pending` (activate), `c100x_display_boot_check_failed`
+(activate), `c100x_display_ui_port_unsupported` (activate with a UI port other
+than 8090); `503` `c100x_display_status_unknown`. The whole sequence is in
+[C100X display parity](../docs/dev/c100x-display-parity.md#activation-by-reboot).
 
 ### Agent Self-Update
 
@@ -1592,6 +1803,7 @@ Errors:
 | `400` | `invalid_update_metadata` | `bundle_hash` is missing or does not start with `sha256:`. |
 | `400` | `update_manifest_missing` | The staged `device_agent/bundle.json` is missing, empty or only line breaks, unreadable or 8 KiB or larger. |
 | `400` | `update_bundle_hash_mismatch` | `bundle_hash` differs from the hash in the staged manifest. |
+| `400` | `update_model_incompatible` | The staged manifest does not fit this station: a C100X-only package on another model, or a package on a C100X that does not declare itself C100X-compatible. |
 | `403` | `maintenance_unauthorized` | Maintenance is disabled, or the maintenance token is missing or wrong. |
 | `409` | `update_root_already_writable` | `/` was already writable before the update (by someone else, or left so by the agent and still busy); the agent refuses to install and leaves the mount as it is. |
 | `409` | `qt5_recovery_required` | Firmware 3.0.x: the staged agent has no Qt 5 display recovery while overlay files, a quarantine or an unverified display start script remain. The installed agent and its recovery stay untouched. |
@@ -1651,7 +1863,27 @@ Reads legacy MQTT script state.
 {"enabled": false}
 ```
 
-Enables or disables the legacy script path on the device.
+Enables or disables the legacy script path on the device. Off removes the
+`S99TcpDump2Mqtt` start link, stops the bridge and clears the execute bits of
+`/etc/tcpdump2mqtt/TcpDump2Mqtt`, so a watchdog that starts it again (such as
+`/etc/init.d/bt_service_watchdog` of fquinto's MQTT extras, which also keeps
+dropbear running and is left untouched) cannot run it, also after a reboot.
+The previous mode is kept in
+`/home/bticino/cfg/extra/c300x-device-file-backups/legacy-mqtt/bridge-mode`;
+on puts exactly that mode back unless the bridge was made executable again in
+the meantime, which then wins. Without that record (an agent installed again
+after a removal) on makes the read bits of a bridge without execute bits its
+execute bits. Removing the agent gives the bridge its recorded mode back the
+same way before the record is deleted with the backups. A bridge that is a
+symbolic link is not changed. Off changes the bridge before it removes the
+start link and on changes it before it creates the link; when the link step
+fails the bridge gets its previous mode back, and the request is answered
+`500` with `legacy_mqtt_disable_failed` or `legacy_mqtt_enable_failed`. The
+migration to the native bridge (`migrate-legacy`) disables it the same way.
+
+Status fields added for this: `bridge_blocked` (the bridge is there and not
+executable since that block) and `watchdog` (an installed
+`/etc/init.d/bt_service_watchdog` runs the bridge).
 
 ### Firewall
 
@@ -2007,11 +2239,12 @@ requests to Home Assistant require an active display bridge.
 | `GET`, `POST` | `/ui/preferences` | Local display feedback preference, independent of HA registration. |
 | `GET` | `/ui/status` | Local facts for the station's Integration tab: agent and firmware version, whether Home Assistant is registered or has switched the display bridge off, its address as scheme, host and port, and the age of the last contact. |
 | `GET` | `/ui/maintenance` | Availability of SSH, reboot and removal on this station. |
-| `GET`, `POST` | `/ui/maintenance/ssh` | Read SSH status or request `{"enabled":true}` or `{"enabled":false}`. A write checks the resulting process state. |
+| `GET`, `POST` | `/ui/maintenance/ssh` | Read SSH status or request `{"enabled":true}` or `{"enabled":false}`. A write checks the resulting state and fails with `502` when SSH does not end up as requested; SSH kept by another tool answers `409` `ssh_managed_externally`. |
 | `POST` | `/ui/maintenance/reboot` | Schedule a reboot with `{"confirm":"reboot"}`; leaves SSH unchanged. |
 | `POST` | `/ui/maintenance/remove` | Schedule the existing agent removal and restoration script with `{"confirm":"remove_agent"}`. |
 | `GET` | `/ui/touch-tone/next` | One sleeping GUI command connection; initial `enabled=0/1`, then matching `completed` ID and actual state acknowledge a command. |
 | `POST` | `/ui/touch-tone/state` | Reports changes to the original GUI setting as `{"enabled":true}`. |
+| `GET` | `/ui/c100x/presence/next`, `/status`, `/probe` | C100X display adapter only, loopback: the adapter's sleeping presence lease, its status and the readiness challenge the trial boot checks. |
 | `GET` | `/ui/state` | Display bridge state. |
 | `GET` | `/ui/alarm/status` | Alarm status alias. |
 | `GET` | `/homeassistant` | Render Home Assistant dashboard payload for QML. |
@@ -2127,8 +2360,8 @@ request has a monotonic five-second deadline. Diagnostics expose
 
 ## Compatibility
 
-Agent `2.10.0` retains self-test contract `api_version: "1.1"` for firmware families
-`1.7.x`, `2.0.x` and `3.0.x`. `firmware_family` is derived from `device.firmware` of
+Agent `3.0.0` retains self-test contract `api_version: "1.1"` for firmware families
+`1.7.x`, `2.0.x` and `3.0.x`; a C100X firmware reads `1.5.x`. `firmware_family` is derived from `device.firmware` of
 the agent config, or from the station's firmware info when that is empty, which
 is what the installer writes; it is `unknown` only when neither is readable. Of
 the `2.0.x` family only `2.0.2` is supported, of `3.0.x` only `3.0.6`.

@@ -130,10 +130,9 @@ def test_native_agent_ring_receiver_matches_captured_sip_media_flow() -> None:
     assert "c300x_media_sip_parse_sdp_sdes_key(invite, \"\\r\\nm=video \"" in ring_invite_body
     assert "media_srtp_init_inbound(&srtp" in ring_invite_body
     assert "srtp_unprotect" in media_bridge
-    assert "current_doorstation_audio_gain_q12(bridge)" in media_bridge
     assert "speex_decode_audio_frame(" in media_bridge
-    assert "c300x_audio_gain_apply(samples[index], gain_q12)" in media_bridge
-    assert "int16_t c300x_audio_gain_apply(" in media_audio
+    assert "c300x_audio_level_to_pcmu(samples, pcmu_payload, RTSP_AUDIO_FRAME_SAMPLES, door_level)" in media_bridge
+    assert "unsigned char c300x_pcmu_encode(" in media_audio
     assert "payload_type == RING_AUDIO_PAYLOAD_TYPE" in media_bridge
     assert "payload_type == MEDIA_AUDIO_PAYLOAD_TYPE" in media_bridge
     assert "payload_type == C300X_TALKBACK_RTP_PAYLOAD_TYPE" not in media_bridge[
@@ -482,7 +481,8 @@ def test_native_agent_home_call_tracks_flexisip_rtp_proxy_without_video_mode() -
     assert "bridge->home_call_srtp_state = &srtp;" in home_call_thread
     assert "start_talkback_proxy(bridge)" in home_call_thread
     assert "home_call_talkback_recent_locked(bridge, now)" in home_call_thread
-    assert "DOORSTATION_AUDIO_GAIN_Q12_NEUTRAL" in drain_home_call_body
+    # Calls with the home keep their level: no door level or fine adjustment.
+    assert "packet_len,\n                    false\n" in drain_home_call_body
     assert "MEDIA_AUDIO_PAYLOAD_TYPE" in home_call_talkback_body
     assert "bridge->home_call_target_audio_port" in home_call_talkback_body
     assert "bridge->home_call_last_talkback_ms = c300x_monotonic_ms();" in home_call_talkback_body
@@ -552,12 +552,13 @@ def test_native_agent_rtsp_audio_pcma_downstream_chunks_without_truncation() -> 
     assert "static uint32_t load_be32" in media_bridge
     assert "payload_type == RTSP_BACKCHANNEL_PCMA_PAYLOAD_TYPE" in audio_body
     assert "payload_type == RTSP_BACKCHANNEL_PCMU_PAYLOAD_TYPE" in audio_body
-    assert "&& gain_q12 == DOORSTATION_AUDIO_GAIN_Q12_NEUTRAL" in audio_body
+    assert "payload_type == RTSP_BACKCHANNEL_PCMU_PAYLOAD_TYPE && !door_level" in audio_body
     assert "while (offset < payload_len)" in audio_body
     assert "payload_len = RTSP_AUDIO_FRAME_SAMPLES" not in audio_body
     assert "c300x_pcma_decode(packet[payload_offset + offset + index])" in audio_body
-    assert "c300x_pcmu_decode(packet[payload_offset + offset + index])" in audio_body
-    assert "c300x_audio_gain_apply(" in audio_body
+    assert "memcpy(pcmu_payload, packet + payload_offset + offset, take);" in audio_body
+    assert "c300x_audio_level_pcmu(pcmu_payload, take, door_level);" in audio_body
+    assert "c300x_audio_level_to_pcmu(samples, pcmu_payload, take, door_level);" in audio_body
     assert "unsigned char c300x_pcmu_encode(" in media_audio
     assert "offset + take >= payload_len && marker" in audio_body
     assert "forward_rtsp_audio_pcmu_payload(" in audio_body
@@ -988,7 +989,7 @@ def test_native_agent_explicit_ondemand_stop_parks_persistent_rtsp_source() -> N
     ]
     status_body = media_bridge[
         media_bridge.index("void c300x_media_bridge_status") :
-        media_bridge.index("void c300x_media_bridge_set_doorstation_audio_gain_tenths")
+        media_bridge.index("static void mark_rtsp_connection_authenticated")
     ]
     rtsp_body = media_bridge[
         media_bridge.index("static void handle_rtsp_client") :
@@ -1265,3 +1266,16 @@ def test_native_agent_rtsp_answers_instead_of_closing_on_missing_client_slot() -
     )
     assert 'rtsp_note_reject_reason(&g_bridge, "setup_client_slot_lost");' in client_body
     assert 'rtsp_note_play_failure(&g_bridge, "play_client_slot_lost");' in client_body
+
+
+def test_native_agent_ring_bye_falls_back_to_the_device_sip_user_of_the_model() -> None:
+    media_bridge = _read_media_bridge()
+    dialog = (ROOT / "native_agent/src/media_sip_dialog.c").read_text()
+    invite = media_bridge[
+        media_bridge.index("static void handle_ring_invite") :
+    ]
+    contact = invite[: invite.index("pthread_mutex_lock(&bridge->mutex);")]
+
+    assert '"sip:%s@127.0.0.1:5060", c300x_device_sip_user()' in contact
+    assert "c300x@" not in media_bridge
+    assert "c300x@" not in dialog

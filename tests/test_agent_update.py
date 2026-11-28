@@ -287,6 +287,9 @@ class FakeUpdateApi:
     def __init__(self) -> None:
         self.calls: list[tuple[str, dict[str, Any]]] = []
 
+    async def async_validate_setup(self) -> dict[str, Any]:
+        return {"model": "C300X"}
+
     async def async_prepare_agent_update(
         self,
         *,

@@ -1,10 +1,10 @@
 """Bootstrap recovery retains generated keys without persisting SSH secrets."""
 
 import asyncio
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+import station_flow_harness
 
 from custom_components.bticino_c300x import config_flow, config_flow_auth
 from custom_components.bticino_c300x.config_flow import BticinoC300XConfigFlow
@@ -23,7 +23,7 @@ from custom_components.bticino_c300x.const import (
 @pytest.mark.parametrize("replace_access", [False, True])
 def test_bootstrap_final_validation_retry_retains_generated_keys(monkeypatch, failure, replace_access):
     flow = BticinoC300XConfigFlow()
-    flow.hass = SimpleNamespace()
+    flow.hass = station_flow_harness.hass()
     flow.context = {"source": "user"}
     flow._setup_connection = {"name": "Door", CONF_AGENT_HOST: "a.local", CONF_AGENT_PORT: 8091}
     flow._async_abort_if_manual_setup_duplicate = AsyncMock()
@@ -75,7 +75,7 @@ def test_bootstrap_final_validation_retry_retains_generated_keys(monkeypatch, fa
 
 def test_manual_setup_blank_keys_do_not_inherit_prior_input(monkeypatch):
     flow = BticinoC300XConfigFlow()
-    flow.hass = SimpleNamespace()
+    flow.hass = station_flow_harness.hass()
     flow.context = {"source": "user"}
     flow._setup_connection = {CONF_AGENT_HOST: "a.local", CONF_AGENT_PORT: 8091, CONF_AGENT_TOKEN: "prior", CONF_MAINTENANCE_TOKEN: "prior-admin"}
     validator = AsyncMock(return_value=({}, {}))
@@ -88,7 +88,7 @@ def test_manual_setup_blank_keys_do_not_inherit_prior_input(monkeypatch):
 
 def test_manual_final_validation_retry_keeps_the_typed_maintenance_key(monkeypatch):
     flow = BticinoC300XConfigFlow()
-    flow.hass = SimpleNamespace()
+    flow.hass = station_flow_harness.hass()
     flow.context = {"source": "user"}
     flow._setup_connection = {
         "name": "Door", CONF_AGENT_HOST: "a.local", CONF_AGENT_PORT: 8091,
@@ -126,7 +126,7 @@ def test_manual_final_validation_retry_keeps_the_typed_maintenance_key(monkeypat
 
 def test_manual_retry_after_a_rejected_maintenance_key_can_clear_it(monkeypatch):
     flow = BticinoC300XConfigFlow()
-    flow.hass = SimpleNamespace()
+    flow.hass = station_flow_harness.hass()
     flow.context = {"source": "user"}
     flow._setup_connection = {
         "name": "Door", CONF_AGENT_HOST: "a.local", CONF_AGENT_PORT: 8091,
@@ -162,7 +162,7 @@ def test_manual_retry_after_a_rejected_maintenance_key_can_clear_it(monkeypatch)
 
 def test_a_key_rejected_on_the_retry_itself_can_be_cleared(monkeypatch):
     flow = BticinoC300XConfigFlow()
-    flow.hass = SimpleNamespace()
+    flow.hass = station_flow_harness.hass()
     flow.context = {"source": "user"}
     flow._setup_connection = {
         "name": "Door", CONF_AGENT_HOST: "a.local", CONF_AGENT_PORT: 8091,
@@ -206,7 +206,7 @@ def test_a_key_rejected_on_the_retry_itself_can_be_cleared(monkeypatch):
 
 def test_a_key_typed_on_a_failed_retry_is_kept_when_another_key_is_rejected(monkeypatch):
     flow = BticinoC300XConfigFlow()
-    flow.hass = SimpleNamespace()
+    flow.hass = station_flow_harness.hass()
     flow.context = {"source": "user"}
     flow._setup_connection = {
         "name": "Door", CONF_AGENT_HOST: "a.local", CONF_AGENT_PORT: 8091,
@@ -252,7 +252,7 @@ def test_a_key_typed_on_a_failed_retry_is_kept_when_another_key_is_rejected(monk
 
 def test_a_rejected_key_the_device_later_accepts_is_kept(monkeypatch):
     flow = BticinoC300XConfigFlow()
-    flow.hass = SimpleNamespace()
+    flow.hass = station_flow_harness.hass()
     flow.context = {"source": "user"}
     flow._setup_connection = {
         "name": "Door", CONF_AGENT_HOST: "a.local", CONF_AGENT_PORT: 8091,
@@ -293,7 +293,7 @@ def test_a_rejected_key_the_device_later_accepts_is_kept(monkeypatch):
 
 def test_keys_accepted_before_a_wrong_device_answer_are_kept(monkeypatch):
     flow = BticinoC300XConfigFlow()
-    flow.hass = SimpleNamespace()
+    flow.hass = station_flow_harness.hass()
     flow.context = {"source": "user"}
     flow._setup_connection = {
         "name": "Door", CONF_AGENT_HOST: "a.local", CONF_AGENT_PORT: 8091,
@@ -336,7 +336,7 @@ def test_keys_accepted_before_a_wrong_device_answer_are_kept(monkeypatch):
 
 def _bootstrap_flow(monkeypatch, installer):
     flow = BticinoC300XConfigFlow()
-    flow.hass = SimpleNamespace()
+    flow.hass = station_flow_harness.hass()
     flow.context = {"source": "user"}
     flow._setup_connection = {"name": "Door", CONF_AGENT_HOST: "a.local", CONF_AGENT_PORT: 8091}
     flow._async_abort_if_manual_setup_duplicate = AsyncMock()
@@ -348,15 +348,19 @@ def _bootstrap_flow(monkeypatch, installer):
     return flow
 
 
-def test_bootstrap_installs_with_the_factory_login_without_asking(monkeypatch):
+@pytest.mark.parametrize("model", ["", "C100X", "C300X"])
+def test_bootstrap_installs_with_the_factory_login_without_asking(monkeypatch, model):
     from custom_components.bticino_c300x.factory_login import factory_ssh_login
 
     installer = AsyncMock()
     flow = _bootstrap_flow(monkeypatch, installer)
+    flow._setup_agent_info = {"device": {"model": model}}
     result = asyncio.run(flow.async_step_agent_missing({"bootstrap_install_agent": True}))
     assert result["step_id"] == "user_features"
     request = installer.call_args.args[0]
-    assert (request.ssh_username, request.ssh_password) == factory_ssh_login()
+    assert (request.ssh_username, request.ssh_password) == factory_ssh_login(model)
+    assert request.factory_login is True
+    assert request.device_model == model
 
 
 def test_bootstrap_asks_for_a_login_only_after_the_factory_login_was_refused(monkeypatch):
@@ -379,6 +383,7 @@ def test_bootstrap_asks_for_a_login_only_after_the_factory_login_was_refused(mon
         assert result["step_id"] == "user_features"
         request = installer.call_args.args[0]
         assert (request.ssh_username, request.ssh_password) == ("admin", "typed")
+        assert request.factory_login is False
         assert installer.await_count == 2
 
     asyncio.run(exercise())

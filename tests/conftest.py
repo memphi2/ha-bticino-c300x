@@ -8,6 +8,7 @@ from types import SimpleNamespace
 
 import homeassistant.components.camera  # noqa: F401
 import homeassistant.const  # noqa: F401
+import homeassistant.core as _ha_core
 import homeassistant.exceptions  # noqa: F401
 import homeassistant.helpers.aiohttp_client  # noqa: F401
 import homeassistant.helpers.selector  # noqa: F401
@@ -119,6 +120,21 @@ def entity_ha_boundary(monkeypatch):
         ):
             if hasattr(module, attr):
                 monkeypatch.setattr(module, attr, replacement)
+
+
+@pytest.fixture(autouse=True)
+def no_home_assistant_of_an_earlier_test():
+    """Each test starts without a current Home Assistant.
+
+    homeassistant.core keeps the last HomeAssistant object made in a thread as
+    that thread's current one, also after the test that made it has ended and
+    closed its event loop. Code that looks it up, such as the translations of a
+    flow's form, would then wait on that loop's unfinished work forever; which
+    test ran before depends on how pytest-xdist shares out the tests.
+    """
+    _ha_core._hass.hass = None
+    yield
+    _ha_core._hass.hass = None
 
 
 @pytest.fixture(autouse=True)

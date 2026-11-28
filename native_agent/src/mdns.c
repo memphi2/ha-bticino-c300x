@@ -1,4 +1,5 @@
 #include "mdns.h"
+#include "device_detect.h"
 #include "string_util.h"
 #include "time_util.h"
 
@@ -23,10 +24,29 @@
 #define C300X_MDNS_PORT 5353
 #define C300X_MDNS_ENUMERATION "_services._dns-sd._udp.local"
 #define C300X_MDNS_SERVICE "_bticino-c300x-agent._tcp.local"
+#define C100X_MDNS_SERVICE "_bticino-c100x-agent._tcp.local"
 #define C300X_MDNS_ANNOUNCE_SECONDS 60
 #define C300X_MDNS_CLASS_IN 0x0001
 #define C300X_MDNS_CLASS_FLUSH_IN 0x8001
 #define C300X_MDNS_FALLBACK_ID "c300x-agent"
+
+static const char *mdns_default_name(void)
+{
+    return c300x_device_model() == C300X_DEVICE_MODEL_C100X ? "BTicino C100X" : "BTicino C300X";
+}
+
+/* Each model has its own service type, so HA tells them apart before setup. */
+static const char *mdns_service(void)
+{
+    return c300x_device_model() == C300X_DEVICE_MODEL_C100X ? C100X_MDNS_SERVICE : C300X_MDNS_SERVICE;
+}
+
+static const char *mdns_display_name(const struct c300x_config *config)
+{
+    /* Older bootstrap configs saved the C300X default even on a C100X. */
+    return config->mdns_name[0] != '\0' && strcmp(config->mdns_name, "BTicino C300X") != 0
+        ? config->mdns_name : mdns_default_name();
+}
 
 static int mdns_open_socket(uint32_t *ipv4);
 static void mdns_send_response(
@@ -222,7 +242,7 @@ static int mdns_relevant_query(const unsigned char *packet, size_t size,
     if (questions == 0 || questions > 32) return 0;
     char label[64], instance[160], host[80];
     mdns_instance_name(config, device_id, label, sizeof(label));
-    snprintf(instance, sizeof(instance), "%s.%s", label, C300X_MDNS_SERVICE);
+    snprintf(instance, sizeof(instance), "%s.%s", label, mdns_service());
     snprintf(host, sizeof(host), "%s.local", device_id);
     size_t offset = 12;
     int relevant = 0;
@@ -234,7 +254,7 @@ static int mdns_relevant_query(const unsigned char *packet, size_t size,
         offset += 4;
         if (cls != 1 && cls != 255) continue;
         if (((type == 12 || type == 255) &&
-             (strcasecmp(name, C300X_MDNS_ENUMERATION) == 0 || strcasecmp(name, C300X_MDNS_SERVICE) == 0)) ||
+             (strcasecmp(name, C300X_MDNS_ENUMERATION) == 0 || strcasecmp(name, mdns_service()) == 0)) ||
             ((type == 16 || type == 33 || type == 255) && strcasecmp(name, instance) == 0) ||
             ((type == 1 || type == 28 || type == 255) && strcasecmp(name, host) == 0)) relevant = 1;
     }
@@ -408,7 +428,7 @@ static int mdns_build_response(
             sizeof(instance_name),
             "%s.%s",
             instance_label,
-            C300X_MDNS_SERVICE
+            mdns_service()
         ) >= (int)sizeof(instance_name)
     ) {
         return 0;
@@ -438,7 +458,7 @@ static int mdns_build_response(
             txt_name,
             sizeof(txt_name),
             "name=%s",
-            config->mdns_name[0] != '\0' ? config->mdns_name : "BTicino C300X"
+            mdns_display_name(config)
         ) >= (int)sizeof(txt_name)
     ) {
         return 0;
@@ -466,7 +486,7 @@ static int mdns_build_response(
     }
 
     rdata_len = 0;
-    if (!mdns_put_name(rdata, sizeof(rdata), &rdata_len, C300X_MDNS_SERVICE)) {
+    if (!mdns_put_name(rdata, sizeof(rdata), &rdata_len, mdns_service())) {
         return 0;
     }
     if (
@@ -496,7 +516,7 @@ static int mdns_build_response(
             buffer,
             buffer_len,
             &offset,
-            C300X_MDNS_SERVICE,
+            mdns_service(),
             12,
             C300X_MDNS_CLASS_IN,
             ttl,
@@ -544,7 +564,8 @@ static int mdns_build_response(
         || !mdns_put_txt_item(rdata, sizeof(rdata), &rdata_len, txt_name)
         || !mdns_put_txt_item(rdata, sizeof(rdata), &rdata_len, txt_version)
         || !mdns_put_txt_item(rdata, sizeof(rdata), &rdata_len, txt_instance)
-        || !mdns_put_txt_item(rdata, sizeof(rdata), &rdata_len, "model=C300X")
+        || !mdns_put_txt_item(rdata, sizeof(rdata), &rdata_len,
+            c300x_device_model() == C300X_DEVICE_MODEL_C100X ? "model=C100X" : "model=C300X")
     ) {
         return 0;
     }
@@ -731,14 +752,14 @@ static void mdns_instance_name(
 {
     char base[48];
     const char *suffix = device_id;
-    const char *source = config->mdns_name[0] != '\0' ? config->mdns_name : "BTicino C300X";
+    const char *source = mdns_display_name(config);
 
     if (out_len == 0) {
         return;
     }
     mdns_sanitize_label(source, base, sizeof(base));
     if (base[0] == '\0') {
-        snprintf(base, sizeof(base), "%s", "BTicino C300X");
+        snprintf(base, sizeof(base), "%s", mdns_default_name());
     }
     if (strncmp(device_id, "c300x-", 6) == 0 && strlen(device_id) > 6) {
         suffix = device_id + strlen(device_id) - 6;

@@ -5,6 +5,15 @@
 #include <string.h>
 #include <sys/types.h>
 
+/* optional: 0 every package has the file; 1 a patch script, which a package
+ * may leave out; 2 the display adapter of the Classe 100X, which only a C100X
+ * needs: a C300X checks it with the rest of a package but never installs it,
+ * and also takes a package without it, such as every release before the
+ * joint package. It belongs to neither the Display patch nor the scripts. */
+#define C300X_UPDATE_FILE_PATCH 1
+#define C300X_UPDATE_FILE_C100X 2
+#define C300X_AGENT_UPDATE_C100X_ADAPTER "device_agent/qml/c100x_bundle.sh"
+
 struct c300x_agent_update_file {
     const char *path;
     mode_t mode;
@@ -18,6 +27,7 @@ static const struct c300x_agent_update_file C300X_AGENT_UPDATE_FILES[] = {
     {"device_agent/scripts/bootstrap_firewall.sh", 0700, 0},
     {"device_agent/init/c300x-native-agent", 0700, 0},
     {"device_agent/qml/Alarm.qml", 0644, 0},
+    {C300X_AGENT_UPDATE_C100X_ADAPTER, 0700, C300X_UPDATE_FILE_C100X},
     {"device_agent/qml/C300XRingerControl.qml", 0644, 0},
     {"device_agent/qml/js/c300x_ringer.js", 0644, 0},
     {"device_agent/qml/HomeAssistant.qml", 0644, 0},
@@ -64,7 +74,7 @@ static int c300x_agent_update_file_path(const char *path)
 static int c300x_agent_update_patch_path(const char *path)
 {
     for (size_t index = 0; index < C300X_AGENT_UPDATE_FILE_COUNT; index++) {
-        if (C300X_AGENT_UPDATE_FILES[index].optional && strcmp(path, C300X_AGENT_UPDATE_FILES[index].path) == 0) {
+        if (C300X_AGENT_UPDATE_FILES[index].optional == C300X_UPDATE_FILE_PATCH && strcmp(path, C300X_AGENT_UPDATE_FILES[index].path) == 0) {
             return 1;
         }
     }

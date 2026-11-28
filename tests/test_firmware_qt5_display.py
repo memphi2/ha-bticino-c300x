@@ -1,9 +1,10 @@
-"""Firmware 3.0.x: a Qt 5 display, recognised by its library, not by a missing folder."""
+"""Device detection: model and display kind, and the Qt 5 firmwares that follow from them."""
 
 from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -19,6 +20,8 @@ NATIVE = ROOT / "native_agent"
 def config_probe(tmp_path_factory):
     folder = tmp_path_factory.mktemp("qt5")
     marker = folder / "libQt5Core.so.5"
+    c100x = folder / "BtClass100"
+    named = folder / "dbfiles_ws.xml"
     binary = folder / "probe"
     curl = os.environ.get("CURL_INCLUDE_DIR", "")
     sources = [str(path) for path in sorted((NATIVE / "src").glob("*.c")) if path.name != "main.c"]
@@ -28,6 +31,8 @@ def config_probe(tmp_path_factory):
             "-ffunction-sections", "-fdata-sections", "-Wl,--gc-sections",
             *([f"-idirafter{curl}"] if curl else []),
             f"-DC300X_QT5_DISPLAY_MARKER={json.dumps(str(marker))}",
+            f"-DC300X_C100X_DISPLAY_MARKER={json.dumps(str(c100x))}",
+            f"-DC300X_DEVICE_INFO_XML={json.dumps(str(named))}",
             str(NATIVE / "test/qt5_display_test.c"), *sources,
             "-o", str(binary), "-pthread", "-ldl",
         ],
@@ -35,12 +40,18 @@ def config_probe(tmp_path_factory):
     )
 
     def run(
-        *, qt5: bool, high_resolution: bool | None, display_patch: bool = False,
-        save: bool | None = None,
+        *, qt5: bool, high_resolution: bool | None = None, display_patch: bool = False,
+        save: bool | None = None, c100x_display: bool = False, names_itself: str | None = None,
     ) -> dict:
         marker.unlink(missing_ok=True)
+        c100x.unlink(missing_ok=True)
+        named.unlink(missing_ok=True)
+        if names_itself is not None:
+            named.write_text(f"<root><webserver_type>{names_itself}</webserver_type></root>\n", encoding="utf-8")
         if qt5:
             marker.write_bytes(b"")
+        if c100x_display:
+            c100x.write_bytes(b"")
         config = json.loads((NATIVE / "config.example.json").read_text(encoding="utf-8"))
         config["video"]["av"].pop("highResolution", None)
         if high_resolution is not None:
@@ -48,6 +59,7 @@ def config_probe(tmp_path_factory):
         if display_patch:
             config["maintenance"]["adminToken"] = "admin"
             config["maintenance"]["qmlPatch"] = {"enabled": True, "script": "/data/qml_patch.sh"}
+            config["maintenance"]["guiReload"] = {"enabled": True, "script": "/data/qml_patch.sh"}
         path = folder / "config.json"
         path.write_text(json.dumps(config), encoding="utf-8")
         command = [str(binary), str(path)] + ([] if save is None else [str(int(save))])
@@ -80,10 +92,111 @@ def test_the_camera_resolution_is_saved_and_refused_high_on_a_qt5_display(config
     assert config_probe(qt5=True, high_resolution=None, save=False)["saved"] == 1
 
 
+@pytest.mark.parametrize(("qt5", "c100x_display", "model", "kind"), [
+    (False, False, "C300X", "qt4_ondisk"),
+    (True, False, "C300X", "qt5_rcc"),
+    (True, True, "C100X", "qt5_ondisk"),
+    (False, True, "C100X", "qt5_ondisk"),
+], ids=["c300x-1.7-2.0", "c300x-3.0", "c100x-1.5", "c100x-no-library-marker"])
+def test_the_agent_names_the_model_and_display_of_each_firmware(config_probe, qt5, c100x_display, model, kind):
+    answer = config_probe(qt5=qt5, c100x_display=c100x_display, display_patch=True)
+    assert (answer["model"], answer["display_kind"]) == (model, kind)
+    # Every C300X gets the Display patch, the C100X its own activation; the
+    # Qt 5 firmwares send only the low stream.
+    qt4 = kind == "qt4_ondisk"
+    assert answer["files_patchable"] == answer["display_patch"] == int(model == "C300X")
+    # The display program is restarted on every C300X, never on the C100X.
+    assert answer["restartable"] == answer["gui_reload"] == int(model == "C300X")
+    assert answer["resolution_fixed"] == int(not qt4)
+    assert answer["high_resolution"] == int(qt4)
+    # The profile holds the same three facts; every helper above asks it.
+    assert answer["profile"] == [
+        int(model == "C100X"), ["qt4_ondisk", "qt5_rcc", "qt5_ondisk"].index(kind), int(not qt4)]
+
+
+def test_only_the_profile_reads_the_markers_of_the_station():
+    sources = {path.name: path.read_text(encoding="utf-8") for path in (NATIVE / "src").glob("*.[ch]")}
+    readers = sorted(name for name, text in sources.items() if "libQt5Core" in text or "BtClass100\"" in text)
+    assert readers == ["device_detect.c"]
+    detect = sources["device_detect.c"]
+    profile = detect[detect.index("struct c300x_device_profile c300x_device_profile(void)"):]
+    profile = profile[:profile.index("\n}\n")]
+    assert detect.count("access(") == profile.count("access(") == 2
+
+
+def test_a_c100x_keeps_the_low_stream_whatever_its_libraries(config_probe):
+    # Its bt_av_media builds no high-resolution branch on the C100X board.
+    answer = config_probe(qt5=False, c100x_display=True, high_resolution=True)
+    assert (answer["model"], answer["resolution_fixed"], answer["high_resolution"]) == ("C100X", 1, 0)
+
+
+def _script_profile_block(name: str = "qml_patch.sh") -> tuple[str, str]:
+    text = (NATIVE / "scripts" / name).read_text(encoding="utf-8")
+    head, rest = text.split("# device-profile-begin\n")
+    block, tail = rest.split("# device-profile-end\n")
+    return block, head + tail
+
+
+def test_the_scripts_ask_one_profile_block_for_the_station():
+    block, patch_rest = _script_profile_block()
+    remove_block, remove_rest = _script_profile_block("remove_agent.sh")
+    assert block == remove_block
+    # The same files as device_detect.c.
+    detect = (NATIVE / "src/device_detect.c").read_text(encoding="utf-8")
+    for path in ("/usr/lib/libQt5Core.so.5", "/home/bticino/bin/gui/BtClass100",
+                 "/home/bticino/sp/dbfiles_ws.xml"):
+        assert path in block and path in detect
+    for rest in (patch_rest, remove_rest):
+        assert "QT5_MARKER" not in rest and "libQt5Core" not in rest
+        assert '-e "$C100X_MARKER"' not in rest and "DEVICE_INFO_XML" not in rest
+        # A station that anything names a C100X is decided by its display kind.
+        assert '"$DEVICE_MODEL" =' not in rest
+    for script in (NATIVE / "scripts").glob("*.sh"):
+        if script.name not in ("qml_patch.sh", "remove_agent.sh") and not script.name.startswith("c100x_"):
+            assert "libQt5Core" not in script.read_text(encoding="utf-8"), script.name
+
+
+@pytest.mark.parametrize(("named", "qt5", "c100x", "expected"), [
+    ("C300X", False, False, "C300X ok qt4_ondisk"),
+    ("C300X", True, False, "C300X ok qt5_rcc"),
+    ("C100X", True, True, "C100X ok qt5_ondisk"),
+    (None, False, False, "C300X unread qt4_ondisk"),
+    (None, True, False, "C300X unread qt5_rcc"),
+    (None, True, True, "C100X unread qt5_ondisk"),
+    ("C500X", True, False, "C300X unread qt5_rcc"),
+    # They disagree: the display program decides, as in 2.10.0.
+    ("C300X", True, True, "C100X mismatch qt5_ondisk"),
+    ("C100X", True, False, "C300X mismatch qt5_rcc"),
+    ("C100X", False, False, "C300X mismatch qt4_ondisk"),
+])
+def test_the_script_profile_block_reads_the_station_like_the_agent(tmp_path, named, qt5, c100x, expected):
+    """The same table as tests/test_native_device_identity.py for the agent."""
+
+    if named is not None:
+        (tmp_path / "dbfiles_ws.xml").write_text(
+            f"<Root_Element>\n      <webserver_type>{named}</webserver_type>\n"
+            "      <ver_webserver>1.7.19</ver_webserver>\n</Root_Element>\n", encoding="utf-8")
+    if qt5:
+        (tmp_path / "qt5").write_bytes(b"")
+    if c100x:
+        (tmp_path / "c100x").write_bytes(b"")
+    script = "set -eu\n" + _script_profile_block()[0] + 'echo "$DEVICE_MODEL $DEVICE_MODEL_CHECK $DEVICE_DISPLAY"\n'
+    for shell in (["sh"], ["busybox", "sh"]):
+        if shutil.which(shell[0]) is None:
+            continue
+        result = subprocess.run(
+            [*shell, "-c", script], capture_output=True, text=True, check=True,
+            env={"PATH": os.environ["PATH"], "C300X_QML_DEVICE_INFO_XML": str(tmp_path / "dbfiles_ws.xml"),
+                 "C300X_QML_QT5_MARKER": str(tmp_path / "qt5"), "C300X_QML_C100X_MARKER": str(tmp_path / "c100x")},
+        )
+        assert result.stdout.strip() == expected, shell
+
+
 def test_the_agent_offers_the_camera_resolution_except_on_a_qt5_display():
     http = (NATIVE / "src/http.c").read_text(encoding="utf-8")
     capabilities = (NATIVE / "src/capabilities.c").read_text(encoding="utf-8")
-    assert ".camera_resolution_fixed = c300x_device_display_is_qt5()," in http
+    assert ".camera_resolution_fixed = c300x_device_camera_resolution_fixed()," in http
+    assert ".display_kind = c300x_display_kind_name(profile.display)," in http
     assert '\\"camera_resolution\\":%s,\\"camera_quality\\":%s}' in capabilities
     assert "config->video_enabled && !context->camera_resolution_fixed" in capabilities
 
@@ -94,28 +207,81 @@ def test_the_agent_offers_the_display_patch_on_both_displays(config_probe):
     assert config_probe(qt5=True, high_resolution=None, display_patch=True)["display_patch"] == 1
 
 
+@pytest.mark.parametrize("qt5", [False, True], ids=["qt4", "qt5"])
+def test_a_station_whose_name_contradicts_its_display_is_offered_no_display_patch(config_probe, qt5):
+    """The patch script refuses to write there: an offered patch or a label write could only fail."""
+
+    for names_itself in (None, "C300X"):
+        agreed = config_probe(qt5=qt5, display_patch=True, names_itself=names_itself)
+        assert agreed["files_patchable"] == agreed["display_patch"] == 1
+    mismatch = config_probe(qt5=qt5, display_patch=True, names_itself="C100X")
+    assert (mismatch["model"], mismatch["display_kind"]) == ("C300X", "qt5_rcc" if qt5 else "qt4_ondisk")
+    assert mismatch["files_patchable"] == mismatch["display_patch"] == 0
+    # The display program can still be restarted, and nothing else of the configuration changes.
+    assert mismatch["restartable"] == mismatch["gui_reload"] == 1
+    assert {**mismatch, "files_patchable": 1, "display_patch": 1} == agreed
+
+
 def test_the_agent_asks_the_patch_script_for_the_label_on_both_displays():
     routes = (NATIVE / "src/http_device_user.c").read_text(encoding="utf-8")
     assert "c300x_device_display_is_qt5()" not in routes
+    # Creation, deletion and routing restoration skip the label on a C100X only.
+    assert routes.count("c300x_device_display_files_patchable()") == 1
+    assert routes.count("c300x_label_script_usable(") == 2
+    label = (NATIVE / "src/device_user_label.c").read_text(encoding="utf-8")
+    assert "return c300x_device_display_files_patchable() && access(script, X_OK) == 0;" in label
 
 
 class _Device:
-    def __init__(self, *, qt5: bool) -> None:
+    def __init__(self, *, qt5: bool, c100x: bool = False) -> None:
         self.qt5 = qt5
+        self.c100x = c100x
         self.commands: list[str] = []
 
     def run(self, command: str) -> str:
         self.commands.append(command)
         if "libQt5Core" in command:
-            return "yes\n" if self.qt5 else "no\n"
+            return ("qt5" if self.qt5 else "qt4") + "\n" + ("c100x" if self.c100x else "c300x") + "\n"
         return json.dumps({"ok": True, "core_patched": True, "gui_running": True, "patched": True})
 
 
-def test_the_installer_recognises_the_qt5_display_by_its_library():
+def test_the_installer_names_the_display_like_the_agent():
     device = _Device(qt5=True)
-    assert installer._device_display_is_qt5(device) is True
-    assert device.commands == ["test -e /usr/lib/libQt5Core.so.5 && echo yes || echo no"]
-    assert installer._device_display_is_qt5(_Device(qt5=False)) is False
+    assert installer._device_display_kind(device) == "qt5_rcc"
+    assert device.commands == [
+        "test -e /usr/lib/libQt5Core.so.5 && echo qt5 || echo qt4; "
+        "test -e /home/bticino/bin/gui/BtClass100 && echo c100x || echo c300x; "
+        "sed -n 's:.*<webserver_type>[[:space:]]*\\(C[13]00X\\)[[:space:]]*</webserver_type>.*:named-\\1:p' "
+        "/home/bticino/sp/dbfiles_ws.xml 2>/dev/null | sed -n 1p"
+    ]
+    assert installer._device_display_kind(_Device(qt5=False)) == "qt4_ondisk"
+    assert installer._device_display_kind(_Device(qt5=True, c100x=True)) == "qt5_ondisk"
+
+
+class _Mute(_Device):
+    def run(self, command: str) -> str:
+        self.commands.append(command)
+        return ""
+
+
+def test_an_unreadable_display_answer_counts_as_the_qt4_display():
+    assert installer._device_display_kind(_Mute(qt5=True)) == "qt4_ondisk"
+
+
+@pytest.mark.parametrize("qt5", [False, True])
+def test_a_c100x_gets_no_display_patch_and_the_low_stream_for_now(qt5):
+    c100x = _Device(qt5=qt5, c100x=True)
+    kind = installer._device_display_kind(c100x)
+    assert installer._display_actions(kind, True) == installer._display_actions(kind, False) == ()
+    # Every C300X keeps the steps of 2.10.0.
+    for c300x in ("qt4_ondisk", "qt5_rcc"):
+        assert installer._display_actions(c300x, False) == ("core-apply",)
+        assert installer._display_actions(c300x, True) == ("core-apply", "apply")
+    source = Path(installer.__file__).read_text(encoding="utf-8")
+    assert "for action in _display_actions(kind, request.apply_gui_patch):" in source
+    unset = json.dumps({"video": {"av": {}}}).encode()
+    low = json.loads(installer._apply_qt5_low_res_video_default(installer._device_display_kind(c100x), unset))
+    assert low["video"]["av"]["highResolution"] is False
 
 
 def test_the_display_patch_runs_on_both_displays():
@@ -127,10 +293,10 @@ def test_the_display_patch_runs_on_both_displays():
 
 def test_the_installer_fixes_the_low_resolution_only_on_a_qt5_display():
     unset = json.dumps({"video": {"av": {}}}).encode()
-    low = json.loads(installer._apply_qt5_low_res_video_default(_Device(qt5=True), unset))
+    low = json.loads(installer._apply_qt5_low_res_video_default("qt5_rcc", unset))
     assert low["video"]["av"]["highResolution"] is False
-    assert installer._apply_qt5_low_res_video_default(_Device(qt5=False), unset) == unset
+    assert installer._apply_qt5_low_res_video_default("qt4_ondisk", unset) == unset
     pinned = json.dumps({"video": {"av": {"highResolution": True}}}).encode()
-    fixed = json.loads(installer._apply_qt5_low_res_video_default(_Device(qt5=True), pinned))
+    fixed = json.loads(installer._apply_qt5_low_res_video_default("qt5_rcc", pinned))
     assert fixed["video"]["av"]["highResolution"] is False
-    assert installer._apply_qt5_low_res_video_default(_Device(qt5=False), pinned) == pinned
+    assert installer._apply_qt5_low_res_video_default("qt4_ondisk", pinned) == pinned

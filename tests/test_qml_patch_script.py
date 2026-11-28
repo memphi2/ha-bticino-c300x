@@ -326,11 +326,11 @@ Page {
 """
 PATCH_OUTPUT_SHA256 = {
     "MainApp.qml": "3860c9addd37ba6be61fb6eea7fa1a08d93a782ffc94c1e989341cf8ef4d53ce",
-    "Settings.qml": "403b650e32e2353ba542b4960ea7d0d211d62897dbca9e953c7253e491156447",
+    "Settings.qml": "e77e9c1bc1c9f06cf3b506ca1cea1e999b7967e927f8740770d1a1640e175687",
     "Components/Settings/GeneralsChoice.qml": "fe4241e1c5d99abb9175f36ec6a9e35ef48033af0c07ab0c46b25309f615e240",
     "C300XSettings.qml": "e1bb26e8aea64ba95debd42ff2a5933fef19f09082c6606c8a9e45da997399bb",
     "js/c300x_maintenance.js": "f06a7b3ba394203ae833fadc7b13b660ee652b85b6f3b27fd96d0e353f6dc1d2",
-    "HomePage.qml": "998dbd1074ab0689303d213cff46663e8b72403eb944c28a9391e35512333193",
+    "HomePage.qml": "f19edfd72ae580b38a436baa00ede2dcc13c4fcff69cbb8a7d7be131774cc69e",
     "MemoPage.qml": "f7fe6279108429389bc607e6c92df065d75dbbce2d9cdfc6ec1280f30f893e0f",
     "EventManager.qml": "cf68c96d9b702ce9501e70f8a511658483e1bcd5f2c9fcdff2ae214af79e3a6a",
     "Alarm.qml": "65977bf521bcdca872d3c107148ddabf7b623c4af7e6707462f62ff565ab53d0",
@@ -353,11 +353,11 @@ PATCH_OUTPUT_SHA256 = {
     "js/c300x_energy_consumers.js": "f4128432b1990bebb79eae88daafe54481e953ad621fcf758e685ad57f0b4377",
     "js/c300x_ringer.js": "268fed06c44704de8fbf04ec458cac7425b9fbc78f9a68514112ca751603cb71",
     "js/c300x_ha.js": "40c83a7d5baffae75819a134657ca89ffe1e81194f5bb26a7533e13a401df0f5",
-    "js/c300x_i18n.js": "2f1149d6ed2917d9819a742294b3e373894b1f7f97181641fbaac31aad685d14",
+    "js/c300x_i18n.js": "27d38a2602f131b451de62dea48ece41245cbf61b6ce133146662f620affeee3",
     "js/c300x_memos.js": "2e922d5617dfafda1c231581ef1eff46f83f4897a11a7350926641135c46040d",
 }
 
-SIDE_BY_SIDE_HOME_PAGE_SHA256 = "5dc87a9ad493adcc11e4515f139a4545f1f103cbdd9f0526ceecb3c3b4a9cdb3"
+SIDE_BY_SIDE_HOME_PAGE_SHA256 = "d71e63b30ca4333989545ee1ee6fc4c7079782b97efd7c4128e411b7a80d7d58"
 
 
 def test_qml_patch_keeps_original_backup_across_reapply(tmp_path: Path) -> None:
@@ -1850,6 +1850,67 @@ def test_qml_patch_restore_refuses_to_delete_stock_files_without_backups(
     assert (gui_dir / "MemoPage.qml").read_text() == ORIGINAL_MEMO_PAGE
 
 
+
+def test_a_station_whose_model_sources_disagree_gets_no_new_display_patch(tmp_path: Path) -> None:
+    """Its display program says C300X, its own name says C100X: restore yes, write no."""
+
+    gui_dir = tmp_path / "gui"
+    backup_dir = tmp_path / "backups"
+    gui_dir.mkdir()
+    _write_original_gui(gui_dir)
+    named = tmp_path / "dbfiles_ws.xml"
+    named.write_text("<webserver_type>C300X</webserver_type>\n")
+    env = {"C300X_QML_DEVICE_INFO_XML": str(named)}
+    # Both sources agree: the patch is written as always.
+    assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "apply", env_overrides=env)["state"] == "patched"
+    patched = {path: path.read_bytes() for path in gui_dir.rglob("*") if path.is_file()}
+    named.write_text("<webserver_type>C100X</webserver_type>\n")
+    for action in ("apply", "core-apply", "media-user-label-apply"):
+        result = _run_qml_patch_raw(tmp_path, gui_dir, backup_dir, action, env_overrides=env)
+        assert result.returncode == 3, (action, result.stdout, result.stderr)
+        assert json.loads(result.stdout) == {"ok": False, "available": False, "state": "unsupported_display"}
+        assert {path: path.read_bytes() for path in gui_dir.rglob("*") if path.is_file()} == patched
+    assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "status", env_overrides=env)["state"] == "patched"
+    assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "restore-all", env_overrides=env)["state"] == "original"
+
+
+@pytest.mark.parametrize(
+    ("marker", "action"),
+    [
+        ("C300X_QML_C100X_MARKER", action)
+        for action in ("apply", "core-apply", "media-user-label-apply", "restore", "core-restore",
+                       "media-user-label-restore", "restore-all", "reload")
+    ],
+)
+def test_qml_patch_leaves_a_c100x_display_alone(
+    tmp_path: Path, marker: str, action: str
+) -> None:
+    gui_dir = tmp_path / "gui"
+    backup_dir = tmp_path / "backups"
+    gui_dir.mkdir()
+    _write_original_gui(gui_dir)
+    before = {path: path.read_bytes() for path in gui_dir.rglob("*") if path.is_file()}
+    present = tmp_path / "marker"
+    present.write_bytes(b"")
+    started = tmp_path / "started"
+    wrapper = tmp_path / "BtClass_qws"
+    wrapper.write_text(f"touch {started}\n")
+    env = {marker: str(present), "C300X_QML_RELOAD_GUI": "1",
+           "C300X_QML_GUI_WRAPPER": str(wrapper), "C300X_QML_GUI_RELOAD_DELAY_SECONDS": "0"}
+
+    result = _run_qml_patch_raw(tmp_path, gui_dir, backup_dir, action, env_overrides=env)
+
+    assert result.returncode == 3
+    assert json.loads(result.stdout) == {
+        "ok": False, "available": False, "state": "unsupported_display",
+    }
+    assert {path: path.read_bytes() for path in gui_dir.rglob("*") if path.is_file()} == before
+    assert not backup_dir.exists()
+    assert not started.exists()
+    status = _run_qml_patch(tmp_path, gui_dir, backup_dir, "status", env_overrides=env)
+    assert status["state"] == "original"
+
+
 def _run_qml_patch(
     tmp_path: Path,
     gui_dir: Path,
@@ -1999,6 +2060,7 @@ def _assert_complete_gui_patch(
     assert 'trsl.language === "de" ? "Alarmanlage"' in home_page
     assert 'trsl.language === "it" ? "Allarme"' in home_page
     assert 'trsl.language === "fr" ? "Alarme"' in home_page
+    assert 'trsl.language === "es" ? "Alarma"' in home_page
     assert "buttonHolder.buttonCount() === 5" in home_page
     assert "console.log(" not in home_page
 
@@ -2054,10 +2116,12 @@ def _assert_media_user_label_gui_patch(gui_dir: Path) -> None:
     assert "Anrufe an Home Assistant weitergeleitet" in call_block_popup
     assert "Chiamate inoltrate a Home Assistant" in call_block_popup
     assert "Appels renvoyés vers Home Assistant" in call_block_popup
+    assert "Llamadas enviadas a Home Assistant" in call_block_popup
     assert "Calls forwarded to Home Assistant" in call_block_popup
     assert "Anrufe an Home Assistant" in call_block_popup
     assert "Inoltra chiamate a Home Assistant" in call_block_popup
     assert "Renvoyer les appels vers Home Assistant" in call_block_popup
+    assert "Envía llamadas a Home Assistant" in call_block_popup
     assert "Forward calls to Home Assistant" in call_block_popup
     assert "action: AnsweringMachine.InHouseOnly" in call_block_popup
     assert 'qsTr("Forward calls to the smartphones in the home")' not in call_block_popup
@@ -2273,8 +2337,11 @@ def _blocking_commands(tmp_path: Path, name: str, failing_mv: bool = False) -> d
             f'exec "{shutil.which("mv")}" "$@"\n'
         )
         (commands / "mv").chmod(0o700)
+    (tmp_path / "temp").mkdir(exist_ok=True)
     return {
         "PATH": _without_host_display_tools(tmp_path, str(commands) + os.pathsep + os.environ["PATH"]),
+        # A script killed here cannot remove its staged files: they stay in the test's folder.
+        "TMPDIR": str(tmp_path / "temp"),
         "C300X_QML_RELOAD_GUI": "1",
         "C300X_QML_GUI_RELOAD_DELAY_SECONDS": "0",
         "C300X_QML_GUI_WRAPPER": str(tmp_path / "missing-wrapper"),
@@ -2401,6 +2468,27 @@ def test_a_write_rolls_a_leftover_transaction_back_before_it_writes(tmp_path: Pa
     restored = _run_qml_patch_raw(tmp_path, gui, backup, "restore-all")
     assert restored.returncode == 0, restored.stderr
     assert _gui_files(gui) == _before
+
+
+def test_a_write_removes_the_staged_files_a_killed_write_left(tmp_path: Path) -> None:
+    """A killed script cannot remove its staged copy; /tmp is in RAM on the station."""
+
+    gui, backup, _before = _killed_apply(tmp_path)
+    temp = tmp_path / "temp"
+    assert list(temp.glob("c300x-qml-patch.*"))
+    # A PID another program got since the killed write ended: its files go.
+    (temp / f"c300x-qml-patch.{os.getpid()}").mkdir()
+    owner = subprocess.Popen(["sh", "-c", "sleep 30; :", "qml_patch.sh"])
+    try:
+        # The staged files of a script that still runs are its own.
+        running = temp / f"c300x-qml-patch.{owner.pid}"
+        running.mkdir()
+        result = _run_qml_patch_raw(tmp_path, gui, backup, "apply", env_overrides={"TMPDIR": str(temp)})
+        assert result.returncode == 0, result.stderr
+        assert [path.name for path in temp.glob("c300x-qml-patch.*")] == [running.name]
+    finally:
+        owner.kill()
+        owner.wait()
 
 
 def test_a_leftover_cut_off_before_its_file_list_leaves_the_gui_alone(tmp_path: Path) -> None:

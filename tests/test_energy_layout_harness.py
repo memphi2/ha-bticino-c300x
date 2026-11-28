@@ -50,7 +50,9 @@ def test_power_fixtures_use_backend_aggregation_and_one_isolated_dot(monkeypatch
 
     monkeypatch.setattr(backend, "power_history_from_statistics", record)
     fixtures = HARNESS.make_fixtures()
-    assert len(calls) == len(fixtures) == 8
+    # Five display languages, a normal and a stress scenario each.
+    assert HARNESS.LANGUAGES == ("de", "en", "es", "fr", "it")
+    assert len(calls) == len(fixtures) == 10
     for fixture in fixtures:
         power = fixture["energy"]["power"]
         assert power["revision"]

@@ -1,6 +1,6 @@
 blueprint:
-  name: C300X strict phrase decision
-  description: Evaluate the latest local C300X ring transcription with strict capture freshness and exact phrase matching. Unlock is optional.
+  name: BTicino strict phrase decision
+  description: Evaluate the latest local ring transcription with strict capture freshness and exact phrase matching. Unlock is optional.
   domain: automation
   source_url: https://github.com/memphi2/ha-bticino-c300x/blob/main/blueprints/automation/bticino_c300x/strict_phrase_decision.yaml
   input:
@@ -12,7 +12,7 @@ blueprint:
           domain: input_button
     entry_id:
       name: Entry ID
-      description: Optional C300X config entry ID. Required for unlock only when more than one C300X entry exists.
+      description: Optional BTicino C300X/C100X config entry ID. Required for unlock only when more than one entry exists.
       default: ""
       selector:
         text:
@@ -44,7 +44,7 @@ blueprint:
         boolean:
     lock_id:
       name: Lock ID
-      description: Optional C300X lock ID. Defaults to default.
+      description: Optional lock ID of the station. Defaults to default.
       default: default
       selector:
         text:

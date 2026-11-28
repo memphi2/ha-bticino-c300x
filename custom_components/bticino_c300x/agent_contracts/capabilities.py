@@ -20,3 +20,8 @@ class CapabilityPayload(AgentContract):
     model: str | None
     firmware: str | None
     capabilities: dict[str, Any]
+    display_kind: str | None = None
+    camera: str | None = None
+    model_check: str | None = None
+    board: str | None = None
+    article: str | None = None

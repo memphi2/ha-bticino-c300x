@@ -9,6 +9,10 @@
 #include <unistd.h>
 #include "../src/agent_update.h"
 #include "../src/file_io.h"
+#include "../src/device_detect.h"
+
+static enum c300x_device_model test_model;
+enum c300x_device_model c300x_device_model(void) { return test_model; }
 
 /* The agent's Qt 5 display check; the updates here run on a Qt 4 station. */
 int c300x_device_display_is_qt5(void) { return 0; }
@@ -148,6 +152,10 @@ static void rollback_test(const struct c300x_config *config, const char *manifes
     }
     assert(symlink("old-agent", test_init_link) == 0);
     for (size_t i = 0; i < C300X_AGENT_UPDATE_FILE_COUNT; i++) {
+        if (C300X_AGENT_UPDATE_FILES[i].optional == C300X_UPDATE_FILE_C100X) {
+            /* The C100X adapter is not written on a C300X: nothing fails there. */
+            continue;
+        }
         assert(agent_update_target_path(config, C300X_AGENT_UPDATE_FILES[i].path, fail_target, sizeof(fail_target)));
         assert(!apply_agent_update_files(config, manifest, "{}", &summary, NULL));
         assert(summary.changed_files == 0);
@@ -239,6 +247,7 @@ static void regular_boot_entry_test(const struct c300x_config *config, const cha
 static void obsolete_source_safety_test(const struct c300x_config *config, const char *manifest)
 {
     char backup[sizeof(obsolete_source) + 24], other[C300X_MAX_PATH_LEN], content[64];
+    char folder[sizeof(obsolete_source)], moved[sizeof(obsolete_source) + 24];
     struct agent_update_change_summary summary;
     struct stat info;
     int fd;
@@ -251,14 +260,22 @@ static void obsolete_source_safety_test(const struct c300x_config *config, const
     fail_obsolete_unlink = 0;
     assert(read_bounded_text_file(obsolete_source, content, sizeof(content), NULL));
     assert(strcmp(content, "old-distribution") == 0);
-    fd = open(obsolete_source, O_RDONLY | O_NOFOLLOW);
-    assert(fd >= 0 && fstat(fd, &info) == 0 && (info.st_mode & 0777) == 0640);
-    close(fd);
     assert(access(backup, F_OK) != 0 && errno == ENOENT);
     assert(summary.changed_files == 0);
     /* The committed update that retired it could not clean up: the
-     * installed bundle verifies, so its leftover is dropped. */
-    assert(rename(obsolete_source, backup) == 0);
+     * installed bundle verifies, so its leftover is dropped. The file is
+     * moved inside its directory, held open, and its kept mode is read from
+     * the moved entry: no path is looked at first and acted on afterwards. */
+    snprintf(folder, sizeof(folder), "%s", obsolete_source);
+    char *name = strrchr(folder, '/');
+    assert(name != NULL);
+    *name++ = '\0';
+    assert(snprintf(moved, sizeof(moved), "%s.update-backup", name) < (int)sizeof(moved));
+    fd = open(folder, O_RDONLY | O_DIRECTORY);
+    assert(fd >= 0 && renameat(fd, name, fd, moved) == 0);
+    assert(fstatat(fd, moved, &info, AT_SYMLINK_NOFOLLOW) == 0);
+    assert(S_ISREG(info.st_mode) && (info.st_mode & 0777) == 0640);
+    close(fd);
     assert(apply_agent_update_files(config, manifest, manifest, &summary, NULL));
     assert(summary.changed_files == 0);
     assert(access(obsolete_source, F_OK) != 0 && errno == ENOENT);
@@ -306,6 +323,14 @@ static void whole_bundle_preflight_test(struct c300x_config *config)
     assert(agent_update_stage_path(config, "device_agent/bundle.json", path, sizeof(path)));
     assert(write_binary_chunk(path, (const unsigned char *)manifest, strlen(manifest), 0, 0600));
     assert(validate_agent_update_files(config, manifest));
+    test_model = C300X_DEVICE_MODEL_C100X;
+    assert(!apply_agent_update_files(config, manifest, "{}", &summary, NULL));
+    assert(summary.changed_files == 0);
+    assert(read_bounded_text_file(binary, installed, sizeof(installed), NULL));
+    assert(strcmp(installed, "original") == 0);
+    assert(access(test_init_script, F_OK) != 0);
+    assert(access(test_init_link, F_OK) != 0);
+    test_model = C300X_DEVICE_MODEL_C300X;
     assert(write_binary_chunk(obsolete_source, (const unsigned char *)"old-distribution", 16, 0, 0640));
     for (size_t i = 0; i < C300X_AGENT_UPDATE_FILE_COUNT; i++) {
         const char *name = C300X_AGENT_UPDATE_FILES[i].path;
@@ -336,6 +361,16 @@ static void whole_bundle_preflight_test(struct c300x_config *config)
 int main(int argc, char **argv)
 {
     assert(argc == 2);
+    test_model = C300X_DEVICE_MODEL_C100X;
+    const char *unsupported[] = {NULL, "{}", "{\"c100x_compatible\":false}",
+        "{\"c100x_compatible\":1}", "{\"c100x_compatible\":\"true\"}",
+        "{\"nested\":{\"c100x_compatible\":true}}", "{\"c100x_compatible\":true}garbage"};
+    for (size_t i = 0; i < sizeof(unsupported) / sizeof(unsupported[0]); i++) {
+        assert(!agent_update_model_compatible(unsupported[i]));
+    }
+    assert(agent_update_model_compatible("{\"c100x_compatible\":true}"));
+    test_model = C300X_DEVICE_MODEL_C300X;
+    assert(agent_update_model_compatible("{}"));
     struct c300x_config config = {0};
     struct agent_update_change_summary summary = {0};
     const char *bundle_path = "device_agent/qml/test.qml";

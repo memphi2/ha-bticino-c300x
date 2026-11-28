@@ -54,10 +54,11 @@ static void mixed_frames(void)
 {
     unsigned char wire[256];
     size_t request_len = sizeof(request) - 1;
-    size_t size = sizeof(frame) + request_len + sizeof(frame);
-    memcpy(wire, frame, sizeof(frame));
-    memcpy(wire + sizeof(frame), request, request_len);
-    memcpy(wire + sizeof(frame) + request_len, frame, sizeof(frame));
+    size_t frame_len = sizeof(frame);
+    size_t size = frame_len + request_len + frame_len;
+    memcpy(wire, frame, frame_len);
+    memcpy(&wire[frame_len], request, request_len);
+    memcpy(&wire[frame_len + request_len], frame, frame_len);
     /* Every prefix split, including compacting a partially consumed buffer. */
     for (size_t split = 0; split <= size; split++) {
         reader_t reader;

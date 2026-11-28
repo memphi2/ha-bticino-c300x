@@ -16,6 +16,7 @@ CONF_DISPLAY_SETTING_PENDING = "display_setting_pending"
 # Display steps the agent update or install owes on the Qt 5 display: True
 # with the full Display patch, False with the core hook only.
 CONF_DISPLAY_FOLLOWUP_PENDING = "display_followup_pending"
+CONF_REINSTALL_AGENT = "reinstall_agent"
 CONF_ALARM_ENTITY_ID = "alarm_entity_id"
 CONF_ALARM_PAGE_ENTITY_ID = "alarm_page_entity_id"
 CONF_AGENT_HOST = "agent_host"
@@ -23,6 +24,9 @@ CONF_AGENT_PORT = "agent_port"
 CONF_BOOTSTRAP_INSTALL_AGENT = "bootstrap_install_agent"
 CONF_BOOTSTRAP_SSH_PASSWORD = "bootstrap_ssh_password"
 CONF_BOOTSTRAP_SSH_USERNAME = "bootstrap_ssh_username"
+# A private key for this one install; like the password, never stored.
+CONF_BOOTSTRAP_SSH_KEY = "bootstrap_ssh_key"
+CONF_BOOTSTRAP_SSH_KEY_PASSPHRASE = "bootstrap_ssh_key_passphrase"
 CONF_CALLBACK_BASE_URL = "callback_base_url"
 CONF_CREATE_HOMEASSISTANT_USER = "create_homeassistant_user"
 CONF_HOMEASSISTANT_MEDIA_USER_BOOTSTRAPPED = "homeassistant_media_user_bootstrapped"
@@ -63,8 +67,15 @@ CONF_TTS_ENGINE = "tts_engine"
 CONF_TTS_LANGUAGE = "tts_language"
 SPEECH_OPTION_KEYS = (CONF_TTS_ENGINE, CONF_TTS_LANGUAGE)
 CONF_NATIVE_TWO_WAY_AUDIO = "native_two_way_audio"
-CONF_DOORSTATION_AUDIO_GAIN_DB = "doorstation_audio_gain_db"
-CONF_RING_CAPTURE_AUDIO_GAIN_DB = "ring_capture_audio_gain_db"
+# Level of the door station's sound toward Home Assistant (live, calls and
+# ring recordings): the door level in the station's audio chip where it has
+# the lever, else the same dB in the agent; the fine adjustment always in the
+# agent. Whole dB.
+CONF_DOOR_AUDIO_LEVEL_DB = "door_audio_level_db"
+CONF_AUDIO_FINE_GAIN_DB = "audio_fine_gain_db"
+# The level options before 3.0.0; read by nothing. Saving the options drops them
+# from the options; a copy in the setup data stays, unread.
+RETIRED_AUDIO_OPTION_KEYS = ("doorstation_audio_gain_db", "ring_capture_audio_gain_db")
 CONF_VIDEO_PORT = "video_port"
 CONF_VIDEO_STREAM_PATH = "video_stream_path"
 CONF_WEBHOOK_ID = "webhook_id"
@@ -88,8 +99,11 @@ DEFAULT_STAIR_LIGHT_P = "01"
 DEFAULT_STAIR_LIGHT_N = "00"
 DEFAULT_VIDEO_PORT = 6554
 DEFAULT_VIDEO_STREAM_PATH = "/doorbell-video"
-DEFAULT_DOORSTATION_AUDIO_GAIN_DB = 0.0
-DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB = 6.0
+DOOR_AUDIO_LEVELS_DB = (0, 3, 6, 9, 12)
+DEFAULT_DOOR_AUDIO_LEVEL_DB = 0
+AUDIO_FINE_GAIN_DB_MIN = -10
+AUDIO_FINE_GAIN_DB_MAX = 10
+DEFAULT_AUDIO_FINE_GAIN_DB = 0
 WEBRTC_ICE_POLICY_ALL = "all"
 WEBRTC_ICE_POLICY_DROP_LINK_LOCAL = "drop_link_local"
 WEBRTC_ICE_POLICY_PREFER_IPV4_ULA = "prefer_ipv4_ula"

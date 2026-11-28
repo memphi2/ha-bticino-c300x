@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { resolve, dirname, sep } from "node:path";
 import puppeteer from "puppeteer-core";
 import { checkSnapshotLayout } from "./snapshot_layout.mjs";
+import { checkC100xControls } from "./c100x_controls.mjs";
 import { checkMatchingPictureLayout } from "./matching_picture_layout.mjs";
 import { checkMediaAvailability } from "./media_availability.mjs";
 import { checkPendingMicrophone } from "./pending_microphone.mjs";
@@ -59,6 +60,7 @@ try {
   await page.goto(origin);
   await page.waitForFunction(() => !!window.lab);
   await checkMediaAvailability(page, artifacts);
+  await checkC100xControls(page, artifacts);
   await checkPendingMicrophone(page);
   await checkRingEndStart(page);
   await checkAnsweredRing(page);
@@ -118,7 +120,7 @@ try {
   };
   for (const width of [240, 320, 390, 1024]) {
     await page.setViewport({ width, height: 800 });
-    for (const language of ["de", "en", "fr", "it"]) {
+    for (const language of ["de", "en", "es", "fr", "it"]) {
       await page.evaluate((language) => {
         lab.hass.language = language;
         lab.hass.states[lab.camera].attributes.friendly_name = "Synthetic very long door station name for layout testing";
@@ -147,7 +149,7 @@ try {
   });
   for (const width of [240, 320, 390, 1024]) {
     await page.setViewport({ width, height: 800 });
-    for (const language of ["de", "en", "fr", "it"]) {
+    for (const language of ["de", "en", "es", "fr", "it"]) {
       const result = await page.evaluate(async (language) => {
         lab.hass.language = language;
         lab.card.hass = { ...lab.hass };
@@ -295,7 +297,7 @@ try {
   assert.deepEqual(errors, []);
   console.log(`Steady stream start (snapshot -> starting -> playing, microphone notice): ${steadyStarts.join(", ")}`);
   console.log(`Picture frame at 468 px, first stream in the browser and the next:\n  ${pictureShapes.join("\n  ")}`);
-  console.log("Browser smoke passed: matching 5:3 snapshot/live at 4 widths inline/expanded with rendered edge pixels, 16 wrapped-text layouts, 8 button layouts, actions, RTC cycles, microphone, reconfigure and detach cleanup");
+  console.log("Browser smoke passed: matching 5:3 snapshot/live at 4 widths inline/expanded with rendered edge pixels, 20 wrapped-text layouts, 8 button layouts, actions, RTC cycles, microphone, reconfigure and detach cleanup");
 } finally {
   await browser?.close();
   await new Promise((done) => server.close(done));

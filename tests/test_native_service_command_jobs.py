@@ -18,6 +18,10 @@ from test_native_agent_maintenance_jobs import lab as lab
 from native_agent.test.smoke import TOKEN, api_get
 
 SSH = "/api/v1/maintenance/ssh"
+ON = {"ok": True, "enabled": True, "running": True, "state": "running", "listening": False,
+      "factory_running": True, "manager": None}
+OFF = {**ON, "enabled": False, "running": False, "state": "stopped", "factory_running": False}
+UNKNOWN = {**OFF, "factory_running": None}
 REBOOT = "/api/v1/maintenance/reboot"
 REMOVE = "/api/v1/maintenance/agent/actions/remove"
 
@@ -40,7 +44,9 @@ def binary(request, tmp_path_factory):
              '-DC300X_SSH_INIT_SCRIPT=\\\"./service-test.sh\\\" '
              '-DC300X_SSH_STATUS_COMMAND=\\\"./status-test.sh\\\" '
              '-DC300X_REBOOT_PROGRAM=\\\"./reboot-test.sh\\\" '
-             '-DC300X_SSH_COMMAND_TIMEOUT_MS=2000 -DC300X_SSH_STATUS_TIMEOUT_MS=2000')
+             '-DC300X_SSH_COMMAND_TIMEOUT_MS=2000 -DC300X_SSH_STATUS_TIMEOUT_MS=2000 '
+             # Listening sockets and third-party init scripts come from the lab.
+             '-DC300X_PROC_NET_DIR=\\\"./proc-net\\\" -DC300X_FOREIGN_ROOT=\\\"./foreign\\\"')
     # The lab is a Qt 4 station unless a test creates "qt5-mark" in its root.
     flags += ' -DC300X_QT5_DISPLAY_MARKER=\\"./qt5-mark\\"'
     flags += (f' -DC300X_GUI_HOME=\\"{build}\\" -DC300X_GUI_SHELL=\\"{shell}\\" -DC300X_GUI_INIT_PID={os.getpid()}'
@@ -53,7 +59,7 @@ def binary(request, tmp_path_factory):
         link += " -Wl,--wrap=c300x_audio_codec_" + function
     result = subprocess.run(
         ["make", "-C", str(ROOT / "native_agent"), f"BUILD_DIR={build}",
-         f"CFLAGS={flags}", f"LDFLAGS={link}", "-j2", "all"], capture_output=True, text=True, timeout=120,
+         f"CFLAGS={flags}", f"LDFLAGS={link}", "-j2", "all"], capture_output=True, text=True, timeout=600,
     )
     assert result.returncode == 0, result.stdout + result.stderr
     return build / "host/c300x-agent-native"
@@ -290,9 +296,101 @@ def test_display_ssh_only_confirms_observed_state(lab):
     display(lab, "/ssh", status=502, **ui)
 
 
+TCP_HEAD = ("  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt"
+            "   uid  timeout inode" + " " * 60 + "\n")
+TCP6_HEAD = ("  sl  local_address                         remote_address"
+             "                        st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n")
+
+
+def sockets(lab, tcp=(), tcp6=()):
+    """/proc/net/tcp and tcp6 of the lab: (port, state) per socket."""
+    (lab.root / "proc-net").mkdir(exist_ok=True)
+    rows = [f"{i:4}: 0100007F:{port:04X} 00000000:0000 {state:02X} 00000000:00000000 00:00000000"
+            f" 00000000     0        0 {9000 + i} 1 0000000000000000 100 0 0 10 0" + " " * 20
+            for i, (port, state) in enumerate(tcp)]
+    (lab.root / "proc-net/tcp").write_text(TCP_HEAD + "".join(r + "\n" for r in rows))
+    rows = [f"{i:4}: {'0' * 32}:{port:04X} {'0' * 32}:0000 {state:02X} 00000000:00000000 00:00000000"
+            f" 00000000     0        0 {9100 + i} 1 0000000000000000 100 0 0 10 0"
+            for i, (port, state) in enumerate(tcp6)]
+    (lab.root / "proc-net/tcp6").write_text(TCP6_HEAD + "".join(r + "\n" for r in rows))
+
+
+def foreign(lab, *names):
+    init = lab.root / "foreign/etc/init.d"
+    init.mkdir(parents=True, exist_ok=True)
+    for name in names:
+        (init / name).write_text("#!/bin/sh\n")
+
+
+LISTEN, ESTABLISHED = 0x0A, 0x01
+
+
+@pytest.mark.parametrize("factory,tables,names,expected", [
+    # Stock station: the factory dropbear is the listener.
+    ("exit 0\n", {"tcp": [(22, LISTEN)]}, (), {**ON, "listening": True}),
+    ("exit 0\n", {"tcp6": [(22, LISTEN)]}, (), {**ON, "listening": True}),
+    # A session or another port is no SSH listener.
+    ("exit 1\n", {"tcp": [(22, ESTABLISHED), (2222, LISTEN), (5022, LISTEN)]}, (), OFF),
+    # c300x-root: its own dropbear and pidfile, the factory one is stopped.
+    ("exit 1\n", {"tcp": [(22, LISTEN)]}, ("c300x-ssh",),
+     {**OFF, "enabled": True, "running": True, "state": "managed_externally", "listening": True,
+      "manager": "c300x-ssh"}),
+    ("exit 1\n", {"tcp6": [(22, LISTEN)]}, ("c100x-ssh",),
+     {**OFF, "enabled": True, "running": True, "state": "managed_externally", "listening": True,
+      "manager": "c100x-ssh"}),
+    # MQTT extras: a watchdog restarts the factory dropbear after a stop.
+    ("exit 0\n", {"tcp": [(22, LISTEN)]}, ("bt_service_watchdog",),
+     {**ON, "state": "managed_externally", "listening": True, "manager": "bt_service_watchdog"}),
+    # Someone else's dropbear on port 22, no known tool.
+    ("exit 1\n", {"tcp": [(80, LISTEN), (22, LISTEN)]}, (),
+     {**OFF, "enabled": True, "running": True, "state": "managed_externally", "listening": True,
+      "manager": "unknown"}),
+    # An installed but stopped tool is named, SSH stays off.
+    ("exit 1\n", {}, ("c300x-ssh",), {**OFF, "manager": "c300x-ssh"}),
+])
+def test_ssh_status_reports_who_keeps_ssh_listening(lab, factory, tables, names, expected):
+    scripts(lab, status=factory)
+    sockets(lab, **tables)
+    foreign(lab, *names)
+    assert response(lab.request(SSH)) == expected
+
+
+@pytest.mark.parametrize("name", ["c300x-ssh", "c100x-ssh", "bt_service_watchdog"])
+@pytest.mark.parametrize("path,payload", [
+    (SSH, {"enabled": False}), (SSH, {"enabled": True}),
+    (SSH + "/actions/start", {"confirm": "start_ssh"}),
+    (SSH + "/actions/stop", {"confirm": "stop_ssh"}),
+])
+def test_ssh_kept_by_a_foreign_service_is_never_started_or_stopped(lab, name, path, payload):
+    scripts(lab)
+    sockets(lab, tcp=[(22, LISTEN)])
+    foreign(lab, name)
+    assert response(lab.request(path, payload), 409) == {
+        "ok": False, "error": "ssh_managed_externally", "manager": name}
+    ui = {"X-C300X-UI": "settings-v1"}
+    assert display(lab, "/ssh", {"enabled": False}, status=409, **ui)["manager"] == name
+    assert display(lab, "/ssh", **ui)["running"] is True
+    assert not (lab.root / "service-pid").exists()
+    # Not listening: the factory dropbear is driven as before.
+    sockets(lab)
+    assert response(lab.request(path, payload))["ok"] is True
+    assert (lab.root / "service-pid").exists()
+
+
+def test_a_long_socket_line_is_read_from_its_start_only(lab):
+    scripts(lab, status="exit 1\n")
+    (lab.root / "proc-net").mkdir()
+    # The tail of an overlong line looks like a LISTEN row on port 22.
+    tail = "   7: 0100007F:0016 00000000:0000 0A 00000000:00000000 00:00000000 00000000"
+    head = "   0: 0100007F:0050 00000000:0000 01 "
+    # The agent reads 255 bytes at a time: the tail starts the second read.
+    (lab.root / "proc-net/tcp").write_text(TCP_HEAD + head + "x" * (255 - len(head)) + tail + "\n")
+    assert response(lab.request(SSH)) == OFF
+
+
 @pytest.mark.parametrize("path,payload,expected", [
-    (SSH, None, {"ok": True, "enabled": True, "running": True}),
-    (SSH, {"enabled": True}, {"ok": True, "enabled": True, "running": True}),
+    (SSH, None, ON),
+    (SSH, {"enabled": True}, ON),
     (SSH + "/actions/start", {"confirm": "start_ssh"},
      {"ok": True, "action": "ssh_start", "enabled": True, "running": True}),
     (SSH + "/actions/stop", {"confirm": "stop_ssh"},
@@ -317,7 +415,7 @@ def test_slow_commands_leave_health_and_ui_responsive(lab, path, payload, expect
 
 
 @pytest.mark.parametrize("path,payload,expected", [
-    (SSH, None, (200, {"ok": True, "enabled": False, "running": False})),
+    (SSH, None, (200, UNKNOWN)),
     (SSH + "/actions/start", {"confirm": "start_ssh"},
      (502, {"ok": False, "error": "maintenance_command_failed"})),
 ])
@@ -344,7 +442,7 @@ def test_ssh_get_waits_in_input_pool_without_new_busy_status_or_deadline(lab):
     lab.release()
     response(pending)
     for connection in waiting:
-        assert response(connection) == {"ok": True, "enabled": True, "running": True}
+        assert response(connection) == ON
 
 
 def test_deferred_status_keeps_input_capacity_and_ui_reservation(lab):
@@ -378,7 +476,7 @@ def test_failed_service_keeps_502_and_does_not_probe(lab, path, payload):
 
 
 def test_missing_commands_and_failed_probe_keep_existing_statuses(lab):
-    assert response(lab.request(SSH)) == {"ok": True, "enabled": False, "running": False}
+    assert response(lab.request(SSH)) == UNKNOWN
     assert response(lab.request(SSH, {"enabled": True}), 502)["error"] == "maintenance_command_failed"
     scripts(lab, status="exit 1\n")
     assert response(lab.request(SSH, {"enabled": True}))["running"] is False

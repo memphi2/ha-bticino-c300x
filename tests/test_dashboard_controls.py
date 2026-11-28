@@ -1213,6 +1213,43 @@ def test_a_lock_is_a_tile_with_a_detail_page_and_only_runs_selected_entities():
     hass.services.async_call.assert_not_awaited()
 
 
+@pytest.mark.parametrize(("language", "label", "comma"), [
+    ("es", "Bloqueado", True), ("es-ES", "Bloqueado", True), ("pt", "Locked", False),
+])
+def test_the_tiles_speak_spanish_when_home_assistant_does(language, label, comma):
+    """Spanish Home Assistant got English tiles; a language without texts still does."""
+
+    hass = hass_for(state("locked", supported_features=1))
+    hass.config = SimpleNamespace(language=language)
+    entry = SimpleNamespace(
+        data={}, options={"device_ui_enabled": True, "dashboard_entities": ["lock.front"]}, entry_id="entry",
+    )
+
+    payload = asyncio.run(async_dashboard_payload(hass, entry))
+    item = next(item for page in payload["data"]["pages"] for item in page.get("items", [])
+                if item.get("entity_id") == "lock.front")
+
+    assert item["state_label"] == label
+    assert payload["decimalComma"] is comma
+
+
+def test_every_display_label_table_has_spanish_for_every_english_key():
+    from custom_components.bticino_c300x import dashboard_labels as labels
+    from custom_components.bticino_c300x.dashboard_optional_labels import (
+        optional_labels,
+    )
+    from custom_components.bticino_c300x.dashboard_situations import (
+        _LABELS as situations,
+    )
+
+    for table in (labels._DASHBOARD_STATE_LABELS_BY_LANGUAGE, labels._BINARY_SENSOR_DEVICE_CLASS_LABELS_BY_LANGUAGE,
+                  labels._WEATHER_STATE_LABELS_BY_LANGUAGE, labels.ENERGY_LABELS_BY_LANGUAGE):
+        assert set(table["es"]) == set(table["en"])
+    assert set(optional_labels("es")) == set(optional_labels("en"))
+    assert optional_labels("es")["leave_home"] == "Salir de casa"
+    assert len(situations["es"]) == len(situations["en"])
+
+
 _VACUUM_ALL = 4 | 8 | 16 | 32 | 512 | 8192
 
 

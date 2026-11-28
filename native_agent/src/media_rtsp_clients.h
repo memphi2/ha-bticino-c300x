@@ -28,6 +28,7 @@ typedef struct {
     int backchannel_interleaved_channel;
     struct sockaddr_in udp_client;
     char session_id[32];
+    unsigned long video_id; /* Unique per registration: the video cache's client. */
 } rtsp_client_slot_t;
 
 typedef struct {
@@ -36,6 +37,8 @@ typedef struct {
     bool transport_tcp;
     int channel;
     struct sockaddr_in udp_client;
+    int slot;
+    unsigned long video_id;
 } rtsp_send_target_t;
 
 /* Consume the retained descriptors and writer references, including on failure.
@@ -162,6 +165,8 @@ static inline size_t c300x_rtsp_client_slots_send_targets(
         targets[count].transport_tcp = slot->transport_tcp;
         targets[count].channel = audio ? slot->audio_interleaved_channel : slot->video_interleaved_channel;
         targets[count].udp_client = slot->udp_client;
+        targets[count].slot = (int)index;
+        targets[count].video_id = slot->video_id;
         count++;
     }
     return count;

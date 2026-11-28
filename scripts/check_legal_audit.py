@@ -206,10 +206,7 @@ def _check_runtime_requirements() -> list[str]:
 
 def _check_brand_assets() -> list[str]:
     failures: list[str] = []
-    for rel in (
-        "custom_components/bticino_c300x/brand/icon.png",
-        "custom_components/bticino_c300x/brand/logo.png",
-    ):
+    for rel in ("custom_components/bticino_c300x/brand/icon.png",):
         digest = _sha256(ROOT / rel)
         if digest != PROJECT_OWNED_BRAND_HASH:
             failures.append(f"brand asset hash changed and docs/legal.md needs review: {rel}")

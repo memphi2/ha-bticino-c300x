@@ -260,49 +260,54 @@ def dashboard_schema(
     default_dashboard_dynamic_homepage: bool = DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT,
     default_device_ui_enabled: bool = False,
     default_dashboard_navigation: Any = None,
+    home_buttons: bool = True,
 ) -> vol.Schema:
     """Return the display and Display patch schema.
 
     Alarmo, the weather and the entities are chosen per page in the pages
-    step; the saved ones are kept when this form is saved.
+    step; the saved ones are kept when this form is saved. The home-button
+    layout is a C300X Display patch option: ``home_buttons=False`` (C100X)
+    leaves it out, and the saved value stays.
     """
 
-    return vol.Schema(
-        {
-            vol.Optional(
-                CONF_DEVICE_UI_ENABLED,
-                default=default_device_ui_enabled,
-            ): bool,
-            vol.Optional(
-                CONF_DASHBOARD_PREVENT_RETURN,
-                default=default_dashboard_prevent_return,
-            ): bool,
-            vol.Optional(
-                CONF_DASHBOARD_NAVIGATION,
-                default=dashboard_navigation(default_dashboard_navigation),
-            ): selector.SelectSelector(selector.SelectSelectorConfig(
-                options=list(DASHBOARD_NAVIGATIONS),
-                translation_key=CONF_DASHBOARD_NAVIGATION,
-                mode=selector.SelectSelectorMode.DROPDOWN,
-            )),
-            vol.Optional(
-                CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
-                default=(
-                    DASHBOARD_HOME_BUTTONS_STOCK
-                    if dashboard_dynamic_homepage(default_dashboard_dynamic_homepage)
-                    else DASHBOARD_HOME_BUTTONS_SIDE_BY_SIDE
-                ),
-            ): selector.SelectSelector(selector.SelectSelectorConfig(
-                options=list(DASHBOARD_HOME_BUTTONS),
-                translation_key=CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
-                mode=selector.SelectSelectorMode.DROPDOWN,
-            )),
-            _optional_suggested(
-                CONF_ACTIONS_JSON,
-                default_actions_json,
-            ): _actions_json_field(),
-        }
-    )
+    fields: dict[Any, Any] = {
+        vol.Optional(
+            CONF_DEVICE_UI_ENABLED,
+            default=default_device_ui_enabled,
+        ): bool,
+        vol.Optional(
+            CONF_DASHBOARD_PREVENT_RETURN,
+            default=default_dashboard_prevent_return,
+        ): bool,
+        vol.Optional(
+            CONF_DASHBOARD_NAVIGATION,
+            default=dashboard_navigation(default_dashboard_navigation),
+        ): selector.SelectSelector(selector.SelectSelectorConfig(
+            options=list(DASHBOARD_NAVIGATIONS),
+            translation_key=CONF_DASHBOARD_NAVIGATION,
+            mode=selector.SelectSelectorMode.DROPDOWN,
+        )),
+        vol.Optional(
+            CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
+            default=(
+                DASHBOARD_HOME_BUTTONS_STOCK
+                if dashboard_dynamic_homepage(default_dashboard_dynamic_homepage)
+                else DASHBOARD_HOME_BUTTONS_SIDE_BY_SIDE
+            ),
+        ): selector.SelectSelector(selector.SelectSelectorConfig(
+            options=list(DASHBOARD_HOME_BUTTONS),
+            translation_key=CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
+            mode=selector.SelectSelectorMode.DROPDOWN,
+        )),
+        _optional_suggested(
+            CONF_ACTIONS_JSON,
+            default_actions_json,
+        ): _actions_json_field(),
+    }
+    if not home_buttons:
+        fields = {key: value for key, value in fields.items()
+                  if str(key) != CONF_DASHBOARD_DYNAMIC_HOMEPAGE}
+    return vol.Schema(fields)
 
 
 def dashboard_entity_display_schema(

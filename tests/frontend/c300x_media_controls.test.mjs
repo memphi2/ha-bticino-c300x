@@ -415,7 +415,7 @@ test("mode labels are text-only; volume normalization and language updates are s
 
 test("four standalone translations cover controls and follow HA language fallback conventions", () => {
   const keys = Object.keys(C300X_MEDIA_TRANSLATIONS.en).sort();
-  for (const language of ["en", "de", "fr", "it"]) {
+  for (const language of ["en", "de", "fr", "it", "es"]) {
     assert.deepEqual(Object.keys(C300X_MEDIA_TRANSLATIONS[language]).sort(), keys);
     assert.ok(Object.values(C300X_MEDIA_TRANSLATIONS[language]).every((value) => typeof value === "string" && value));
   }
@@ -479,14 +479,13 @@ test("the volume slider is hidden where the platform fixes the media volume", as
   assert.equal(s.volumes[0].detail.muted, true);
 });
 
-test("with a fixed media volume the slider stays for a live stream scaled by the card", async (t) => {
+test("with a fixed media volume a live stream offers mute but no slider", async (t) => {
   const previous = globalThis.document;
   globalThis.document = { createElement: () => ({ get volume() { return 1; }, set volume(_value) {} }) };
   t.after(() => { globalThis.document = previous; });
-  const s = harness(t, [], { enabled: false, live: true, hasAudio: true, scaledVolume: true }), c = s.controls;
+  const s = harness(t, [], { enabled: false, live: true, hasAudio: true }), c = s.controls;
   await tick();
-  assert.equal(c.nodes.volume.hidden, false);
-  s.configure({ live: true, hasAudio: true, scaledVolume: false });
+  assert.equal(c.nodes.mute.hidden, false);
   assert.equal(c.nodes.volume.hidden, true);
 });
 

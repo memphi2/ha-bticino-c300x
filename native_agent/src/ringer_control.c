@@ -53,6 +53,47 @@ void c300x_ringer_control_init(struct c300x_ringer_control *control)
     memset(control, 0, sizeof(*control));
     control->gui_fd = -1;
     control->client_fd = -1;
+    control->gui_muted = -1;
+}
+
+static int send_command(struct c300x_ringer_control *control, const char *body)
+{
+    char response[512];
+    int length = snprintf(response, sizeof(response),
+                          "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
+                          "Cache-Control: no-store\r\nConnection: close\r\nContent-Length: %zu\r\n\r\n%s",
+                          strlen(body), body);
+    int sent = c300x_http_write(control->gui_fd, response, (size_t)length);
+    close_agent_socket(control->gui_fd);
+    control->gui_fd = -1;
+    return sent;
+}
+
+/* Only into a sleeping GUI request, never past a command or another sync. */
+static void push_sync(struct c300x_ringer_control *control)
+{
+    char body[128];
+    long long now = c300x_monotonic_ms();
+    if (!control->sync_wanted || control->gui_fd < 0 || control->client_fd >= 0
+        || (control->sync_id[0] && now < control->sync_deadline_ms) || !new_id(control->sync_id)) {
+        return;
+    }
+    snprintf(body, sizeof(body), "{\"ok\":true,\"id\":\"%s\",\"muted\":false,\"expires\":%lld}\n",
+             control->sync_id, ((long long)time(NULL) + C300X_RINGER_CONTROL_TIMEOUT_MS / 1000) * 1000);
+    control->sync_wanted = 0;
+    control->sync_deadline_ms = now + C300X_RINGER_CONTROL_TIMEOUT_MS;
+    (void)send_command(control, body);
+}
+
+void c300x_ringer_control_observe(struct c300x_ringer_control *control, int muted, int sync)
+{
+    if (muted) {
+        control->gui_muted = 1;
+        control->sync_wanted = 0;
+    } else if (sync && control->client_fd < 0 && control->gui_muted != 0) {
+        control->sync_wanted = 1;
+        push_sync(control);
+    }
 }
 
 int c300x_gui_supports_picture(const struct c300x_ringer_control *control)
@@ -127,7 +168,12 @@ int c300x_ringer_control_next(
         picture_reply(control->client_fd, &control->picture, query);
         finish(control);
     }
-    if (completed[0] != '\0') {
+    if (completed[0] != '\0' && control->sync_id[0] && strcmp(completed, control->sync_id) == 0) {
+        /* The sync's ack: nobody waits for it, and it is not repeated. */
+        control->sync_id[0] = '\0';
+        control->sync_wanted = 0;
+        control->gui_muted = muted;
+    } else if (completed[0] != '\0') {
         if (control->client_fd < 0 || control->gui_confirmed || control->picture.field
             || strcmp(completed, control->id) != 0) {
             fail(fd, 409, "ringer_gui_stale_ack");
@@ -137,6 +183,7 @@ int c300x_ringer_control_next(
             fail(control->client_fd, 502, "ringer_gui_not_applied");
             finish(control);
         } else {
+            control->gui_muted = muted;
             control->gui_confirmed = 1;
             control->apply = apply;
             control->apply_ctx = ctx;
@@ -152,6 +199,7 @@ int c300x_ringer_control_next(
     control->gui_fd = fd;
     query_param_value(query, "picture", version, sizeof(version));
     control->picture_supported = !strcmp(version, "1");
+    push_sync(control);
     return 0;
 }
 
@@ -177,8 +225,6 @@ static void gui_request(
 )
 {
     char body[192];
-    char response[512];
-    int length;
     c300x_ringer_control_expire(control);
     if (control->client_fd >= 0) {
         fail(fd, 409, picture.field ? "picture_gui_busy" : "ringer_gui_busy");
@@ -200,18 +246,10 @@ static void gui_request(
              "{\"ok\":true,\"id\":\"%s\",\"muted\":%s,\"expires\":%lld}\n",
              control->id, command->muted ? "true" : "false",
              ((long long)time(NULL) + C300X_RINGER_CONTROL_TIMEOUT_MS / 1000) * 1000);
-    length = snprintf(response, sizeof(response),
-                      "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
-                      "Cache-Control: no-store\r\nConnection: close\r\nContent-Length: %zu\r\n\r\n%s",
-                      strlen(body), body);
-    if (!c300x_http_write(control->gui_fd, response, (size_t)length)) {
-        close_agent_socket(control->gui_fd);
-        control->gui_fd = -1;
+    if (!send_command(control, body)) {
         fail(fd, 503, "ringer_gui_unavailable");
         return;
     }
-    close_agent_socket(control->gui_fd);
-    control->gui_fd = -1;
     control->client_fd = fd;
     if (command) control->command = *command;
     control->picture = picture;

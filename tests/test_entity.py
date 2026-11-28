@@ -242,3 +242,16 @@ def test_reconnect_reads_are_coalesced_and_cancelled_on_entity_removal(monkeypat
             await asyncio.gather(*tasks, return_exceptions=True)
 
     asyncio.run(go())
+
+
+@pytest.mark.parametrize(("stored", "model"), [("C100X", "Classe 100X"), ("C300X", "Classe 300X"), (None, "Classe 300X")])
+def test_an_offline_entry_names_the_model_its_agent_named_last(stored, model) -> None:
+    from custom_components.bticino_c300x.device_profile import STATION_MODEL
+    from custom_components.bticino_c300x.entity import _device_info
+
+    entry = _entry(available=False)
+    entry.data = {STATION_MODEL: stored} if stored else {}
+    entry.runtime_data.agent_info = {"model": None, "display_kind": None, "offline_error": "down"}
+    assert _device_info(entry)["model"] == model
+    del entry.runtime_data
+    assert _device_info(entry)["model"] == model

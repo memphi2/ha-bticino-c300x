@@ -72,7 +72,7 @@ async def _async_check_events() -> None:
     )
 
     integration = ROOT / "custom_components" / DOMAIN
-    metadata = SimpleNamespace(file_path=integration, has_translations=True, name="BTicino C300X")
+    metadata = SimpleNamespace(file_path=integration, has_translations=True, name="BTicino C300X/C100X")
     entry = SimpleNamespace(entry_id="container-test", title="C300X", data={}, options={},
                             runtime_data=SimpleNamespace(agent_info={}, capabilities={
                                 "doorbell_events": True, "locks": True, "touch_tone": True,

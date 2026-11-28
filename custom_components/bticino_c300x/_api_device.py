@@ -66,6 +66,11 @@ class _ApiDeviceMixin(_C300XApiCore):
             model=_optional_string(device.get("model")),
             firmware=_optional_string(device.get("firmware")),
             capabilities=capabilities,
+            display_kind=_optional_string(device.get("display_kind")),
+            camera=_optional_string(device.get("camera")),
+            model_check=_optional_string(device.get("model_check")),
+            board=_optional_string(device.get("board")),
+            article=_optional_string(device.get("article")),
         )
 
     async def async_smartphone_forwarding_status(self) -> ForwardingStatus:

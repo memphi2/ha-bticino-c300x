@@ -2,12 +2,15 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  C300X_AUDIO_CODEC_OBJECT_ID,
+  C100X_DOCUMENTATION_URL,
   C300X_CAMERA_OBJECT_ID,
   C300X_DEFAULT_CONFIG,
+  C300X_DOCUMENTATION_URL,
   C300X_MEDIA_READINESS_OBJECT_ID,
   C300X_PLATFORM,
   c300xDeviceActionEntity,
+  c300xDocumentationUrl,
+  c300xDocumentationUrlOfPage,
   c300xEntityId,
   c300xEntryId,
   c300xFirstEntity,
@@ -15,6 +18,9 @@ import {
   c300xRelatedEntity,
   c300xResolveEntity,
 } from "../../custom_components/bticino_c300x/frontend/c300x-entity-resolver.js";
+
+// A select of the same device, to cover a domain other than sensor and button.
+const AUDIO_CODEC_OBJECT_ID = "bticino_c300x_audio_codec";
 
 function hass({
   states = {},
@@ -282,7 +288,7 @@ for (const [name, device] of [
     assert.equal(c300xFirstEntity(state, "camera", C300X_CAMERA_OBJECT_ID, "front-entry"), config.entity);
     assert.equal(c300xEntryId(state, config, config.entity), "front-entry");
     assert.equal(c300xRelatedEntity(state, config, "sensor", C300X_MEDIA_READINESS_OBJECT_ID), "sensor.front_media_readiness");
-    assert.equal(c300xRelatedEntity(state, config, "select", C300X_AUDIO_CODEC_OBJECT_ID), "select.front_audio_codec");
+    assert.equal(c300xRelatedEntity(state, config, "select", AUDIO_CODEC_OBJECT_ID), "select.front_audio_codec");
     assert.equal(c300xDeviceActionEntity(state, config, "door_unlock"), "button.front_door_unlock");
     assert.equal(c300xDeviceActionEntity(state, config, "stair_light"), "button.front_stair_light");
 
@@ -298,7 +304,7 @@ test("same-device lookups do not need an owner but service routing requires an u
     const state = displayHass(device);
     const config = { entity: "camera.front_doorbell_camera" };
     assert.equal(c300xEntryId(state, config, config.entity), "");
-    assert.equal(c300xRelatedEntity(state, config, "select", C300X_AUDIO_CODEC_OBJECT_ID), "select.front_audio_codec");
+    assert.equal(c300xRelatedEntity(state, config, "select", AUDIO_CODEC_OBJECT_ID), "select.front_audio_codec");
     assert.equal(c300xDeviceActionEntity(state, config, "door_unlock"), "button.front_door_unlock");
     assert.equal(c300xDeviceActionEntity(state, { ...config, entry_id: "front-entry" }, "door_unlock"), "");
   }
@@ -312,7 +318,7 @@ test("missing related entities never resolve to another device, even with the sa
   delete state.states["select.front_audio_codec"];
   delete state.states["button.front_door_unlock"];
   assert.equal(c300xRelatedEntity(state, config, "sensor", C300X_MEDIA_READINESS_OBJECT_ID), undefined);
-  assert.equal(c300xRelatedEntity(state, config, "select", C300X_AUDIO_CODEC_OBJECT_ID), undefined);
+  assert.equal(c300xRelatedEntity(state, config, "select", AUDIO_CODEC_OBJECT_ID), undefined);
   assert.equal(c300xDeviceActionEntity(state, config, "door_unlock"), "");
   assert.equal(c300xResolveEntity(state, { entry_id: "missing" }, "camera", C300X_CAMERA_OBJECT_ID), "");
   delete state.entities[config.entity];
@@ -330,4 +336,39 @@ test("a missing manual related entity and conflicting registry roles never trigg
   delete state.states["sensor.front_media_readiness"];
   delete state.states["sensor.other_media_readiness"];
   assert.equal(c300xFirstEntity(state, "sensor", C300X_MEDIA_READINESS_OBJECT_ID), undefined);
+});
+
+function stations(...models) {
+  const entities = {}, devices = {};
+  models.forEach((model, index) => {
+    devices[`device-${index}`] = { model };
+    entities[`camera.door_${index}`] = { platform: C300X_PLATFORM, device_id: `device-${index}` };
+  });
+  // A device of another integration never decides the page.
+  devices.other = { model: "Classe 100X" };
+  entities["camera.other"] = { platform: "other", device_id: "other" };
+  return hass({ entities, devices });
+}
+
+test("the documentation link opens the page of the model set up", () => {
+  assert.match(C100X_DOCUMENTATION_URL, /\/docs\/classe-100x\/2-use\.md#what-works$/);
+  assert.match(C300X_DOCUMENTATION_URL, /\/docs\/classe-300x\/2-use\.md#doorbell-card$/);
+  assert.equal(c300xDocumentationUrl(stations("Classe 100X")), C100X_DOCUMENTATION_URL);
+  assert.equal(c300xDocumentationUrl(stations("Classe 100X", "Classe 100X")), C100X_DOCUMENTATION_URL);
+  assert.equal(c300xDocumentationUrl(stations("Classe 300X")), C300X_DOCUMENTATION_URL);
+  // Both models, or none: the Classe 300X page, which describes the card in full.
+  assert.equal(c300xDocumentationUrl(stations("Classe 300X", "Classe 100X")), C300X_DOCUMENTATION_URL);
+  assert.equal(c300xDocumentationUrl(stations()), C300X_DOCUMENTATION_URL);
+  assert.equal(c300xDocumentationUrl(undefined), C300X_DOCUMENTATION_URL);
+});
+
+test("the card registration reads the stations of the Home Assistant page", (t) => {
+  const previous = globalThis.document;
+  t.after(() => {
+    globalThis.document = previous;
+  });
+  globalThis.document = { querySelector: (selector) => (selector === "home-assistant" ? { hass: stations("Classe 100X") } : null) };
+  assert.equal(c300xDocumentationUrlOfPage(), C100X_DOCUMENTATION_URL);
+  globalThis.document = undefined;
+  assert.equal(c300xDocumentationUrlOfPage(), C300X_DOCUMENTATION_URL);
 });

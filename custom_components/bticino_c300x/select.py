@@ -27,12 +27,14 @@ from .const import (
     SIGNAL_SETTING_STATE,
     SMARTPHONE_FORWARDING_MODES,
 )
+from .device_profile import entry_profile
 from .entity import C300XEntity, supports_capability
 from .entity import (
     async_refresh_initial_states as _async_refresh_initial_states,
 )
 from .entry_types import BticinoC300XConfigEntry
 from .event_payload import agent_event_key
+from .exceptions import home_assistant_error
 from .forwarding import coerce_forwarding_mode_state, forwarding_state_from_value
 from .select_camera_resolution import C300XCameraResolutionSelect
 
@@ -40,6 +42,15 @@ if TYPE_CHECKING:
     from homeassistant.core import Event
 
 PARALLEL_UPDATES = 1
+
+
+def _audio_codec_select_allowed(entry: BticinoC300XConfigEntry) -> bool:
+    """The firmware codec can be switched on a C300X only; a C100X stays on Speex."""
+
+    return not entry_profile(entry).is_c100x and (
+        entry_maintenance_action_is_advertised(entry, "audio_codec_apply")
+    )
+
 
 # The options are the agent's mode keys; their texts come from the state
 # translations. "unprovisioned" -- a device with no smartphone pairing at
@@ -60,7 +71,7 @@ async def async_setup_entry(
     entities: list[SelectEntity] = []
     if supports_capability(entry, "smartphone_forwarding"):
         entities.append(C300XSmartphoneForwardingModeSelect(entry))
-    if entry_maintenance_action_is_advertised(entry, "audio_codec_apply"):
+    if _audio_codec_select_allowed(entry):
         entities.append(C300XAudioCodecSelect(entry))
     if entry_maintenance_action_is_advertised(entry, "camera_resolution"):
         entities.append(C300XCameraResolutionSelect(entry))
@@ -234,6 +245,10 @@ class C300XAudioCodecSelect(C300XEntity, SelectEntity):
         self._attr_available = True
 
     @property
+    def available(self) -> bool:
+        return super().available and _audio_codec_select_allowed(self._entry)
+
+    @property
     def current_option(self) -> str | None:
         """Return the codec the device is currently running (None while partial)."""
 
@@ -248,6 +263,8 @@ class C300XAudioCodecSelect(C300XEntity, SelectEntity):
     async def async_select_option(self, option: str) -> None:
         """Switch the device codec (apply=PCMU, restore=speex); reboots."""
 
+        if not _audio_codec_select_allowed(self._entry):
+            raise home_assistant_error("maintenance_action_not_supported", entry=self._entry)
         api = self._entry.runtime_data.api
         try:
             if option == "pcmu":
@@ -338,6 +355,8 @@ class C300XAudioCodecSelect(C300XEntity, SelectEntity):
     async def async_added_to_hass(self) -> None:
         """Resolve pending codec changes when the agent reconnects post-reboot."""
 
+        # Home Assistant adds the same entity again after its id was renamed.
+        self._removed = False
         await super().async_added_to_hass()
         self.async_on_remove(self._cancel_pending_refresh)
         self.async_on_remove(

@@ -9,6 +9,9 @@
 #include <unistd.h>
 #include "../src/agent_update.h"
 #include "../src/file_io.h"
+#include "../src/device_detect.h"
+
+enum c300x_device_model c300x_device_model(void) { return C300X_DEVICE_MODEL_C300X; }
 
 /* The agent's Qt 5 display check; the updates here run on a Qt 4 station. */
 int c300x_device_display_is_qt5(void) { return 0; }
@@ -113,8 +116,10 @@ static void assert_committed(const struct c300x_config *config, const char *mani
         const char *name = C300X_AGENT_UPDATE_FILES[i].path;
         assert(agent_update_target_path(config, name, target, sizeof(target)));
         assert(read_bounded_text_file(target, content, sizeof(content), NULL));
+        /* This driver is a C300X: the C100X adapter is validated but never written there. */
         const char *wanted = !strcmp(name, "device_agent/init/c300x-native-agent") ? expected
-            : !strcmp(name, "device_agent/bundle.json") ? manifest : "new-payload";
+            : !strcmp(name, "device_agent/bundle.json") ? manifest
+            : C300X_AGENT_UPDATE_FILES[i].optional == C300X_UPDATE_FILE_C100X ? "old-payload" : "new-payload";
         assert(!strcmp(content, wanted));
     }
     assert(agent_init_link_matches());

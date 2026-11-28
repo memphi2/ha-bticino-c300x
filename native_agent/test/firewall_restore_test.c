@@ -84,13 +84,26 @@ int main(int argc, char **argv)
     static char inserted6[C300X_FIREWALL_BUFFER_SIZE];
     const char *vendor = "#!/bin/sh\niptables -P INPUT DROP\n\n";
 
-    assert(argc == 2);
+    assert(argc == 2 || argc == 3);
     snprintf(g_dir, sizeof(g_dir), "%s", argv[1]);
     path_in(config.maintenance_firewall_path, sizeof(config.maintenance_firewall_path), "iptables");
     path_in(config.maintenance_firewall_backup_path, sizeof(config.maintenance_firewall_backup_path), "iptables.orig");
     path_in(config.maintenance_ipv6_firewall_path, sizeof(config.maintenance_ipv6_firewall_path), "iptables6");
     path_in(config.maintenance_ipv6_firewall_backup_path, sizeof(config.maintenance_ipv6_firewall_backup_path), "iptables6.orig");
     config.api_port = 8080;
+    if (argc == 3) {
+        config.video_enabled = strcmp(argv[2], "enabled") == 0;
+        config.video_rtsp_port = 7654;
+        /* Only the fixture's command stubs are on the runtime rule PATH. */
+        assert(setenv("C300X_FIREWALL_RUNTIME_PATH", g_dir, 1) == 0);
+        assert(firewall_build_managed_content(&config, "", block, sizeof(block)));
+        assert(firewall_build_ipv6_managed_content(&config, "", inserted6, sizeof(inserted6)));
+        fputs(block, stdout);
+        fputs(inserted6, stdout);
+        assert(firewall_apply_runtime_rules(&config));
+        assert(ipv6_firewall_apply_runtime_rules(&config));
+        return 0;
+    }
 
     /* The installer's shell puts the block right after the file. */
     assert(firewall_build_managed_content(&config, "", block, sizeof(block)));

@@ -20,6 +20,7 @@ from .api import (
     display_bridge_callback_fingerprint,
 )
 from .api_errors import C300XDisplayBridgeNotRegisteredError
+from .c100x_display_activation import async_follow_c100x_display_if_open
 from .capabilities import (
     capability_is_supported,
     entry_device_ui_configured,
@@ -72,6 +73,7 @@ from .device_activations import (
     activation_items_match,
     desired_activation_items,
 )
+from .device_profile import STATION_MODEL, remember_station_model
 from .device_user import (
     device_user_bootstrap_needed,
     device_user_bootstrap_satisfied,
@@ -79,6 +81,12 @@ from .device_user import (
 )
 from .display_patch_sync import async_settle_display_setting, display_setting_pending
 from .display_settings import DISPLAY_SETTING_KEYS, display_settings
+from .display_support import (
+    entry_display_supported,
+    entry_is_c100x,
+    remember_display_support,
+    setup_is_c100x,
+)
 from .display_unread import async_release_unread_claim, async_send_unread_event
 from .entry_config import entry_config_value as _entry_config_value
 from .entry_locks import clear_entry_locks
@@ -249,7 +257,10 @@ class C300XRuntimeManager:
             self.capabilities = gate_capabilities(
                 capabilities,
                 doorbell_video_enabled=_entry_video_enabled(self.entry),
+                c100x=setup_is_c100x(self.setup_data),
             )
+            remember_display_support(self.hass, self.entry, self.setup_data)
+            remember_station_model(self.hass, self.entry, self.setup_data)
 
         if self.connection_state.available:
             self.agent_update_state = compare_agent_bundle(
@@ -299,14 +310,20 @@ class C300XRuntimeManager:
     async def async_sync_device_state(self) -> None:
         """Synchronize startup-only runtime state with the device agent."""
 
+        from .doorstation_audio import async_sync_doorstation_audio_level
+
         api = self._api()
         await self._async_refresh_display_registration(api, startup=True)
         if not self.connection_state.available:
             return
+        # Before the slower steps, and it never raises: a failed later step
+        # must not keep a lowered door level from the station.
+        await async_sync_doorstation_audio_level(self.entry)
         await _async_sync_device_user(self.hass, self.entry)
         await _async_refresh_self_test(self.entry)
         if display_setting_pending(self.entry):
             await async_settle_display_setting(self.hass, self.entry)
+        async_follow_c100x_display_if_open(self.hass, self.entry)
 
     async def _async_refresh_display_registration(
         self, api: C300XAgentApi, *, startup: bool = False,
@@ -532,6 +549,8 @@ def _entry_update_listener(
         data.pop(CONF_AGENT_UPDATE_QML_PENDING, None)
         data.pop(CONF_DISPLAY_FOLLOWUP_PENDING, None)
         data.pop(CONF_DISPLAY_SETTING_PENDING, None)
+        # A loaded entry reads the model from its agent; the kept one changes nothing.
+        data.pop(STATION_MODEL, None)
         data.pop(CONF_HOMEASSISTANT_MEDIA_USER_BOOTSTRAPPED, None)
         data.pop(CONF_FRONTEND_CARD_SETUP_DISMISSED, None)
         data.pop(CONF_FRONTEND_CARD_SETUP_REPAIR_VERSION, None)
@@ -659,6 +678,9 @@ def _async_remove_stale_gui_dependent_entities(
 ) -> None:
     """Remove stale HA entities for C300X GUI functions that are currently gated."""
 
+    if entry_is_c100x(entry):
+        # Created while the agent of a C100X entry had not named its model yet.
+        _async_remove_registered_entities(hass, entry, (("button", "reload_gui"),))
     # The same predicate the button platform creates them with. With the strict
     # one, an entry that predates the device-UI option but has an active patch
     # had its buttons removed here and re-added a moment later on every setup,
@@ -673,16 +695,24 @@ def _async_remove_stale_gui_dependent_entities(
         if not isinstance(status, dict) or status.get("patched") is not False:
             return
 
+    _async_remove_registered_entities(hass, entry, _GUI_DEPENDENT_ENTITY_KEYS)
+
+
+def _async_remove_registered_entities(
+    hass: HomeAssistant,
+    entry: BticinoC300XConfigEntry,
+    keys: tuple[tuple[str, str], ...],
+) -> None:
     import homeassistant.helpers.entity_registry as er
 
-    # Local like the registry import above: pulling the entity layer in at
+    # Local like the registry import: pulling the entity layer in at
     # module scope changes when Home Assistant's entity module is first
     # imported, which is load-order sensitive.
     from .entity import entry_entity_unique_id
 
     registry = er.async_get(hass)
     states = getattr(hass, "states", None)
-    for platform, key in _GUI_DEPENDENT_ENTITY_KEYS:
+    for platform, key in keys:
         entity_id = registry.async_get_entity_id(
             platform,
             DOMAIN,
@@ -721,6 +751,11 @@ def _offline_setup_data(err: Exception) -> dict[str, Any]:
         "implementation": None,
         "api_version": None,
         "model": None,
+        "display_kind": None,
+        "camera": None,
+        "model_check": None,
+        "board": None,
+        "article": None,
         "firmware": None,
         "capabilities": {},
         "offline_error": compact_error_text(err),
@@ -1043,6 +1078,11 @@ async def _async_configure_display_bridge(
 
     runtime_data = entry.runtime_data
     resources = getattr(runtime_data, "resources", None)
+
+    if not entry_display_supported(entry):
+        if resources is not None:
+            resources.display_bridge_registration_pending = False
+        return
 
     def check_active() -> None:
         if (

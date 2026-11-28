@@ -1,22 +1,19 @@
-import { C300XMediaAttachment } from "./c300x-media-attach.js?v=ebfcfca6e627d88b";
+import { C300XMediaAttachment } from "./c300x-media-attach.js?v=edf8e259c990f730";
 
 const C300X_WEBRTC_DISCONNECTED_GRACE_MS = 10000;
 const C300X_WEBRTC_DEBUG_STATUS_COMMAND = "bticino_c300x/debug/status";
-const C300X_WEBRTC_DEBUG_MODULE = "./c300x-webrtc-debug.js?v=ebfcfca6e627d88b";
+const C300X_WEBRTC_DEBUG_MODULE = "./c300x-webrtc-debug.js?v=edf8e259c990f730";
 
 export class C300XWebrtcClient {
   constructor({
-    getHass, getEntityId, isHomeCallMode, onClosed, onTrack, getCardGainDb, getPlayback, onGainChanged,
-    onPlaybackBlocked,
+    getHass, getEntityId, isHomeCallMode, onClosed, onTrack, getPlayback, onPlaybackBlocked,
   }) {
     this._getHass = getHass;
     this._getEntityId = getEntityId;
     this._isHomeCallMode = isHomeCallMode;
     this._onClosed = onClosed;
     this._onTrack = onTrack;
-    this._getCardGainDb = getCardGainDb || null;
     this._getPlayback = getPlayback || null;
-    this._onGainChanged = onGainChanged || null;
     this._onPlaybackBlocked = onPlaybackBlocked || null;
     this._mediaAttachment = null;
     this._pc = null;
@@ -45,24 +42,12 @@ export class C300XWebrtcClient {
     return this._pc;
   }
 
-  // Re-apply the client-side gain (call when the codec mode or configured
-  // gain changes while a stream is playing).
-  refreshGain() {
-    return this._mediaAttachment?.refreshGain();
-  }
-
   refreshPlayback() {
     return this._mediaAttachment?.refreshPlayback();
   }
 
-  // True while the received audio plays through the card's own gain stage,
-  // whose volume works even where the platform fixes the media volume.
-  get gainEngaged() {
-    return this._mediaAttachment?.gainEngaged === true;
-  }
-
-  // Move the client-side gain/muting to the element that now renders the
-  // stream (used when a preview stream is promoted to the main element).
+  // Move the volume and muting to the element that now renders the stream
+  // (used when a preview stream is promoted to the main element).
   retargetMedia(mediaElement) {
     return this._mediaAttachment?.retarget(mediaElement);
   }
@@ -102,9 +87,7 @@ export class C300XWebrtcClient {
     const rtcConfig = c300xNormalizeRtcConfig(clientConfig);
     this._remoteStream = new MediaStream();
     const mediaAttachment = new C300XMediaAttachment(mediaElement, this._remoteStream, {
-      getGainDb: this._getCardGainDb,
       getPlayback: this._getPlayback,
-      onGainChanged: this._onGainChanged,
       onPlaybackBlocked: this._onPlaybackBlocked,
     });
     this._mediaAttachment = mediaAttachment;

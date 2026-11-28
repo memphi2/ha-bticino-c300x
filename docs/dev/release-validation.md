@@ -17,6 +17,11 @@ changelog and release notes. The tagged commit must be the validated `main` HEAD
 with release checks, browser checks and verified provenance/SBOM attestations.
 Development branches are not a shortcut around the release gate.
 
+The local `c100x_1.5.8` development branch inherits these checks but cannot
+release through this workflow: it is not the validated canonical `main` commit.
+Local C100X ARM packages and focused tests are development artifacts, not
+release approval or device-activation evidence.
+
 ### Canonical CI Evidence
 
 Release tags do not repeat the full HA matrix, HACS, Hassfest or browser suite.
@@ -210,7 +215,7 @@ Run `npm ci --prefix tests/browser --ignore-scripts` and
 `node tests/browser/smoke.mjs`. Chrome must be installed; `CHROME_BIN` overrides
 its executable path. CI runs this separately from Python tests.
 
-The actual card is rendered at 240, 320, 390 and 1024 pixels in four languages.
+The actual card is rendered at 240, 320, 390 and 1024 pixels in five languages.
 Tests check action bounds/labels, unavailable and pending buttons, door/light
 routing, repeated WebRTC start/stop, microphone muting and detach cleanup.
 A synthetic canvas feeds a real browser-to-browser WebRTC connection; pixel
@@ -229,7 +234,7 @@ offscreen in an existing PySide6 environment:
   --fixture-python /path/to/ha-python --check --output .artifacts/energy
 ```
 
-It checks four languages, all subpages, normal and reduced heights, tab switching
+It checks five languages, all subpages, normal and reduced heights, tab switching
 and long labels/large values. Screenshots, text bounds and diagnostics stay in
 the ignored artifacts directory. `--revision COMMIT` renders an older QML file
 without changing the checkout. `--stock-skin DIRECTORY` can read local skin
@@ -287,7 +292,8 @@ the optional firmware-specific tests.
 
 The staged manifest (`update_file_set_version`) and the agent capability
 (`self_update_file_set_version`) must advertise the same update file set, today
-6. An installed updater with a lower file set cannot install the new paths; the
+7 (set 7 added the C100X display adapter `qml/c100x_bundle.sh`, which only a
+C100X installs). An installed updater with a lower file set cannot install the new paths; the
 HA Repair then runs its second pass before the active display is patched or
 reloaded.
 
@@ -417,6 +423,34 @@ Firmware `2.0.2`: steps 1 to 3 pass. The device tests are open; the
 contributor of the `2.0.2` routing table runs the agent on such a device, and
 Ring Call was not tested there because the device is not paired.
 
+### C100X Offline Checks
+
+The C100X 1.5.8 device tests run in issue #51 with the
+[tester notes](c100x-device-test.md#test-plan). The offline
+checks below need no device; run them with the main repository's
+`.venv/bin/python`:
+
+```sh
+export CURL_INCLUDE_DIR="$HOME/.cache/c300x-https/headers/usr/include/x86_64-linux-gnu"
+PY=../ha-bticino-c300x/.venv/bin/python
+"$PY" -m pytest -q tests/test_native_ringer_response.py tests/test_native_agent_capabilities.py tests/test_switch.py tests/test_number.py
+"$PY" -m pytest -q tests/test_c100x_display_support.py tests/test_options_display_menu.py tests/test_init_runtime.py
+"$PY" -m pytest -q tests/test_c100x_update_compatibility.py tests/test_native_agent_update_runtime.py tests/test_device_installer_bundle_transactions.py
+"$PY" -m pytest -q tests/test_native_mdns_runtime.py tests/test_discovery.py tests/test_entity.py
+"$PY" -m pytest -q tests/test_c100x_display_transaction.py tests/test_c100x_gui_presence.py tests/test_c100x_activation.py
+"$PY" -m pytest -q tests/test_c100x_firmware_compile.py
+PYTHONPATH=/tmp/c100x-qt5-runtime "$PY" -m pytest -q tests/test_c100x_qml_adapter.py tests/test_c100x_alerts.py tests/test_c100x_memos.py
+```
+
+The fixtures use temporary directories; native tests redirect install and init
+paths there and intercept system service calls. The host Qt 5 path is an
+optional local test environment, not a device dependency; its visual probe
+covers 80 component states and key propagation. The firmware probe compiles
+all 29 generated QML files against the original ARM Qt 5.10.1 under QEMU,
+with negative syntax, import and property controls. It creates no QML
+instances or GUI and proves neither binding evaluation nor hardware
+operation; rerun it whenever generated QML changes.
+
 ## Readiness and Repairs
 
 Verify each repair path when possible:
@@ -519,6 +553,8 @@ The reviewed build lock covers these native and bundle input paths:
 - `custom_components/bticino_c300x/device_agent/init`
 - `scripts/stage_device_agent_bundle.py`
 - `scripts/device_file_strip.py`
+- `scripts/c100x_bundle_builder.py`
+- `scripts/c100x_qml_builder.py`
 - `scripts/build_hacs_release.py`
 - `scripts/check_agent_abi.py`
 - `scripts/native_build_lock.py`

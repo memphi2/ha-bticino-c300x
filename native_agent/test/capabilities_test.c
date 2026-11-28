@@ -4,11 +4,15 @@
 #include <stdio.h>
 #include <string.h>
 
-int main(void)
+int main(int argc, char **argv)
 {
     struct c300x_config config = {0};
     struct c300x_capabilities_context context = {
         .device_id = "synthetic-id",
+        .device_model = "C100X",
+        .display_kind = "qt5_ondisk",
+        .model_check = "ok",
+        .board = "BTicino SHARK board (Dig-D/Car-C) \"x\"",
         .device_firmware = "1.7.19\"test",
         .bundle_hash = "",
         .activations_count = 3,
@@ -18,6 +22,7 @@ int main(void)
     };
     char body[32768];
     char short_body[16];
+    if (argc == 2) context.device_model = argv[1];
     strcpy(config.device_model, "C300X");
     strcpy(config.video_rtsp_video_path, "/doorbell\"video");
     strcpy(config.video_rtsp_path, "/audio");
@@ -65,6 +70,12 @@ int main(void)
     config.memos_enabled = 0;
     config.system_metrics_enabled = 0;
     context.announcements_supported = 1;
+    assert(c300x_capabilities_json(&config, &context, body, sizeof(body)));
+    fputs(body, stdout);
+    context.display_features = 1;
+    assert(c300x_capabilities_json(&config, &context, body, sizeof(body)));
+    fputs(body, stdout);
+    context.c100x = ",\"c100x_display\":{\"supported\":true}";
     assert(c300x_capabilities_json(&config, &context, body, sizeof(body)));
     fputs(body, stdout);
     return 0;

@@ -1,0 +1,9 @@
+module BtObjects
+ObjectModel 2.0 ObjectModel.qml
+ObjectInterface 2.0 ObjectInterface.qml
+AudioState 2.0 AudioState.qml
+ScreenState 2.0 ScreenState.qml
+Commissioning 2.0 Commissioning.qml
+RingtoneManager 2.0 RingtoneManager.qml
+VDEBase 2.0 VDEBase.qml
+GlobalProperties 2.0 GlobalProperties.qml

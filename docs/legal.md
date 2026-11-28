@@ -1,7 +1,8 @@
 # Legal and Asset Hygiene
 
 This repository is an independent community project for local Home Assistant
-use with compatible BTicino Classe 300X / C300X devices.
+use with compatible BTicino Classe 300X / C300X and Classe 100X / C100X
+devices.
 
 ## License
 
@@ -32,8 +33,8 @@ concept. They are not BTicino, Legrand, Home Assistant, HACS, Nabu Casa, or
 third-party logos, and they are not copied from firmware, APKs, product images,
 or controller repositories.
 
-`icon.png` and `logo.png` currently contain the same 256x256 PNG artwork. Their
-SHA-256 hash is:
+`icon.png` is a 256x256 PNG and also serves as the logo; there is no separate
+`logo.png`. Its SHA-256 hash is:
 
 ```text
 cd64c8c333ae2cfde2f32a8681054c1a5755a2edafadec1183501cd774088834
@@ -57,6 +58,14 @@ garden, supplied by the maintainer.
   similar shapes drawn for the render; the text is set in the free fonts
   Ubuntu Light (Ubuntu Font Licence 1.0) and DejaVu Sans. The Integration tab
   picture shows the tab's content without the surrounding Settings page.
+- The `c100x-display-*-en` images are renders of the integration's own pages
+  for the Classe 100X, not captures from a station and not station pages. The
+  pages run in Qt 5 on a PC, in English, 800 x 480 pixels, with free fonts of
+  that PC. The background is a plain blue gradient drawn for these pictures;
+  the station's wallpaper and its other artwork are not in them, and the two
+  pictures the pages take from the station (a key symbol and the EXIT symbol)
+  were replaced by drawings of our own for the render. No firmware file was
+  read for them.
 - The `ha-*-en` images are browser captures of the Home Assistant test
   instance from 2026-11-23, in English and dark mode. The picture in the
   doorbell card is an earlier visitor image from the maintainer's own station,

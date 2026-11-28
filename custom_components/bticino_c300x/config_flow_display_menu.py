@@ -38,6 +38,7 @@ from .config_flow_features import current_feature_options
 from .const import CONF_DEVICE_UI_ENABLED, CONF_ENERGY_PAGE
 from .dashboard_entities import DASHBOARD_PAGE_MAX_COUNT
 from .dashboard_page_order import SPECIAL_PAGE_ORDER, page_position
+from .display_support import entry_display_supported
 from .schema_compat import vol
 
 PAGE_LIST_STEP = "dashboard_page_list"
@@ -54,6 +55,8 @@ def display_menu(config_entry: Any) -> list[str]:
     """
 
     saved = current_feature_options(config_entry)
+    if not entry_display_supported(config_entry):
+        return ["dashboard_alarm"]
     menu = ["dashboard"]
     if saved[CONF_DEVICE_UI_ENABLED]:
         menu.append(PAGE_LIST_STEP)
@@ -193,6 +196,8 @@ def single_page_errors(
 
 def _open_page(key: str) -> Any:
     async def step(self: Any, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        if not entry_display_supported(self._config_entry):
+            return cast(ConfigFlowResult, self.async_abort(reason="unsupported_display"))
         self._load_saved()
         self._page_key = key
         return cast(ConfigFlowResult, self._async_show_options_dashboard_pages_form(None, {}))
@@ -224,6 +229,8 @@ class DisplayMenuSteps:
     ) -> ConfigFlowResult:
         """List the pages of the display; a page saved from here returns here."""
 
+        if not entry_display_supported(self._config_entry):
+            return cast(ConfigFlowResult, self.async_abort(reason="unsupported_display"))
         self._dashboard_options.clear()
         self._load_saved()
         self._page_key = None
@@ -239,6 +246,8 @@ class DisplayMenuSteps:
     ) -> ConfigFlowResult:
         """Open the first free page section."""
 
+        if not entry_display_supported(self._config_entry):
+            return cast(ConfigFlowResult, self.async_abort(reason="unsupported_display"))
         self._load_saved()
         used = len(dashboard_page_layout(self._dashboard_options))
         if used >= DASHBOARD_PAGE_MAX_COUNT:

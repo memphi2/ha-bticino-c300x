@@ -248,6 +248,9 @@ def test_android_ring_call_blueprint_opens_dashboard_from_notification() -> None
     assert "media_readiness_entity" not in inputs
     assert "camera_entity" not in inputs
     assert inputs["notification_channel"]["default"] == "alarm_stream"
+    # The channel name is the channel's identity on the phone: a new default would give
+    # existing users a second channel without their sound and priority settings.
+    assert inputs["active_call_channel"]["default"] == "C300X Call"
     assert inputs["notification_media_stream"]["default"] == "alarm_stream"
     assert inputs["c300x_device"]["selector"] == {
         "device": {"integration": "bticino_c300x"}
@@ -703,3 +706,22 @@ def test_phone_action_ids_use_real_script_run_contexts(tmp_path):
             unsubscribe()
 
     asyncio.run(run())
+
+
+def test_blueprint_texts_fit_both_station_models() -> None:
+    """A blueprint serves a C300X and a C100X: its shown texts name no model.
+
+    Only the integration name "BTicino C300X/C100X" stays, and the released default of the Android
+    active-call channel: that value identifies the channel on the phone and is no label.
+    """
+
+    for directory in (BLUEPRINT_DIR, PACKAGED_BLUEPRINT_DIR):
+        for path in directory.glob("*.yaml"):
+            blueprint = yaml.load(path.read_text(encoding="utf-8"), Loader=BlueprintLoader)["blueprint"]
+            texts = [blueprint["name"], blueprint.get("description", "")]
+            for key, field in blueprint.get("input", {}).items():
+                texts += [str(field.get("name", "")), str(field.get("description", ""))]
+                if key != "active_call_channel":
+                    texts.append(str(field.get("default", "")))
+            shown = " ".join(texts).replace("BTicino C300X/C100X", "")
+            assert "C300X" not in shown and "C100X" not in shown, path.name

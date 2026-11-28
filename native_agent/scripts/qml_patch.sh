@@ -12,12 +12,41 @@ GUI_WRAPPER="${C300X_QML_GUI_WRAPPER:-/home/bticino/bin/BtClass_qws}"
 GUI_RELOAD_DELAY_SECONDS="${C300X_QML_GUI_RELOAD_DELAY_SECONDS:-2}"
 GUI_STOP_SECONDS="${C300X_QML_GUI_STOP_SECONDS:-10}"
 PROC_DIR="${C300X_QML_PROC_DIR:-/proc}"
+# device-profile-begin
+# The station this script runs on: model and display mechanism. The same
+# block stands in qml_patch.sh and remove_agent.sh and matches the agent's
+# device_detect.c; nothing else in the scripts reads these files. The station
+# names its model itself; where that name is missing or disagrees with the
+# display program, the program decides model and display, and the Display
+# patch is not written on a station whose two sources disagree.
+DEVICE_INFO_XML="${C300X_QML_DEVICE_INFO_XML:-/home/bticino/sp/dbfiles_ws.xml}"
+QT5_MARKER="${C300X_QML_QT5_MARKER:-/usr/lib/libQt5Core.so.5}"
+C100X_MARKER="${C300X_QML_C100X_MARKER:-/home/bticino/bin/gui/BtClass100}"
+DEVICE_MODEL="$(sed -n 's:.*<webserver_type>[[:space:]]*\(C[13]00X\)[[:space:]]*</webserver_type>.*:\1:p' \
+    "$DEVICE_INFO_XML" 2>/dev/null | sed -n 1p)" || DEVICE_MODEL=""
+DEVICE_PROGRAM_MODEL=C300X
+[ ! -e "$C100X_MARKER" ] || DEVICE_PROGRAM_MODEL=C100X
+DEVICE_MODEL_CHECK=ok
+if [ -z "$DEVICE_MODEL" ]; then
+    DEVICE_MODEL_CHECK=unread
+elif [ "$DEVICE_MODEL" != "$DEVICE_PROGRAM_MODEL" ]; then
+    DEVICE_MODEL_CHECK=mismatch
+fi
+DEVICE_MODEL="$DEVICE_PROGRAM_MODEL"
+DEVICE_DISPLAY=qt4_ondisk
+if [ "$DEVICE_MODEL" = "C100X" ]; then
+    DEVICE_DISPLAY=qt5_ondisk
+elif [ -e "$QT5_MARKER" ]; then
+    DEVICE_DISPLAY=qt5_rcc
+fi
+# device-profile-end
 AGENT_BIN="${C300X_QML_AGENT_BIN:-${C300X_AGENT_DIR:-/home/bticino/cfg/extra/c300x-native-agent}/c300x-agent-native}"
 # 1: stock layout, 0: side by side, unset: keep the layout on the device.
 HOME_BUTTONS_REQUEST="${C300X_QML_DYNAMIC_HOME_PAGE:-}"
 STAGING_DIR="${C300X_QML_STAGING_DIR:-${TMPDIR:-/tmp}/c300x-qml-patch.$$}"
 CORE_PATCH_FILES="C300XRingerControl.qml js/c300x_ringer.js EventManager.qml"
 MEDIA_USER_LABEL_FILES="Components/Settings/CallBlockPopup.qml"
+RENEWED_LABEL_FILES=
 # The display files this integration adds; every list of them derives from here.
 GENERATED_FEATURE_FILES="C300XSettings.qml js/c300x_maintenance.js Alarm.qml HomeAssistant.qml C300XEnergy.qml C300XEnergyConsumers.qml js/c300x_energy_consumers.js C300XPageNavigation.qml C300XAgenda.qml C300XLeaveHome.qml C300XChecks.qml C300XSituations.qml C300XOptionalPages.qml C300XDetailControl.qml C300XEnergyReadout.qml C300XEnergySums.qml C300XAlerts.qml js/c300x_alerts.js js/c300x_energy.js js/c300x_ha.js js/c300x_i18n.js js/c300x_memos.js"
 FEATURE_PATCH_FILES="Settings.qml MainApp.qml HomePage.qml MemoPage.qml Components/Settings/GeneralsChoice.qml $GENERATED_FEATURE_FILES"
@@ -26,9 +55,10 @@ QT5_VENDOR_FILES="EventManager.qml HomePage.qml MainApp.qml MemoPage.qml Setting
 # Firmware 3.0.x has a Qt 5 display whose files are resources inside BtClass.
 # The patch then works on a copy here; the changed files reach the display as
 # a resource file that c300x-qrc-overlay.so, preloaded by the start script,
-# registers ahead of the program's own.
+# registers ahead of the program's own. A C100X has the Qt 5 library too, but
+# another display program and no such overlay.
 QT5_DISPLAY=0
-if [ -e "${C300X_QML_QT5_MARKER:-/usr/lib/libQt5Core.so.5}" ]; then
+if [ "$DEVICE_DISPLAY" = "qt5_rcc" ]; then
     QT5_DISPLAY=1
     QT5_AGENT_DIR="${C300X_AGENT_DIR:-/home/bticino/cfg/extra/c300x-native-agent}"
     QT5_BACKUP_ROOT="${C300X_BACKUP_ROOT:-/home/bticino/cfg/extra/c300x-device-file-backups}"
@@ -308,7 +338,21 @@ core_partial_patch_present() {
 
 media_user_label_present() {
     file_contains "$GUI_DIR/Components/Settings/CallBlockPopup.qml" 'Forward calls to Home Assistant' \
-        && file_contains "$GUI_DIR/Components/Settings/CallBlockPopup.qml" 'Calls forwarded to Home Assistant'
+        && file_contains "$GUI_DIR/Components/Settings/CallBlockPopup.qml" 'Calls forwarded to Home Assistant' \
+        && media_user_label_current
+}
+
+media_user_label_current() {
+    label_backup="$BACKUP_DIR/Components/Settings/CallBlockPopup.qml"
+    [ -f "$label_backup" ] || return 0
+    render_call_block_popup "$label_backup" 2>/dev/null \
+        | cmp -s - "$GUI_DIR/Components/Settings/CallBlockPopup.qml"
+}
+
+media_user_label_renewable() {
+    media_user_label_partial_present && ! media_user_label_present \
+        && stock_backup_valid Components/Settings/CallBlockPopup.qml 2>/dev/null \
+        && render_call_block_popup "$BACKUP_DIR/Components/Settings/CallBlockPopup.qml" >/dev/null 2>&1
 }
 
 media_user_label_partial_present() {
@@ -1136,9 +1180,7 @@ finish_write_action() {
     trap finish_signal HUP INT TERM
     # A publish cut short leaves its note; the rollback below takes a new one.
     gui_writing_end
-    if [ "$write_rc" != "0" ]; then
-        cleanup_staging
-    fi
+    cleanup_staging
     recovery_ok=1
     restart_previous=0
     if [ "${WRITE_TRANSACTION_READY:-0}" = "1" ] && [ "${WRITE_TRANSACTION_COMMITTED:-0}" != "1" ]; then
@@ -1493,7 +1535,7 @@ render_settings() {
             print "        style: CheckableButtonStyle {"
             print "            defaultImage: \"images/settings/settings-menu_btn.svg\""
             print "            checkedImage: \"images/settings/settings-menu_btn_p.svg\""
-            print "            description: (trsl.language === \"it\" ? \"Integrazione\" : \"Integration\") + trsl.empty"
+            print "            description: (trsl.language === \"it\" ? \"Integrazione\" : (trsl.language === \"es\" ? \"Integración\" : \"Integration\")) + trsl.empty"
             print "        }"
             print "    }"
             print "    PageLoader {"
@@ -1715,7 +1757,7 @@ patch_home_page() {
                 print "                width: buttonPrototype.width * 2 + foobar.spacing"
                 print "                height: buttonPrototype.height"
             }
-            print_home_assistant_button("alarmButton", "alarmButtonVisible", "keylock_icon-small", "sourceSize.width: 46", "trsl.language === \"de\" ? \"Alarmanlage\" : (trsl.language === \"it\" ? \"Allarme\" : (trsl.language === \"fr\" ? \"Alarme\" : \"Alarm\"))", "alarmPage")
+            print_home_assistant_button("alarmButton", "alarmButtonVisible", "keylock_icon-small", "sourceSize.width: 46", "trsl.language === \"de\" ? \"Alarmanlage\" : (trsl.language === \"it\" ? \"Allarme\" : (trsl.language === \"fr\" ? \"Alarme\" : (trsl.language === \"es\" ? \"Alarma\" : \"Alarm\")))", "alarmPage")
             print ""
             print_home_assistant_button("haButton", "haButtonVisible", "call/icon_call-home", "sourceSize.height: 41", "\"Home Assistant\"", "haPage")
             if (layout != "stock") {
@@ -1953,6 +1995,28 @@ patch_memo_page() {
     mv "$temp_file" "$memo_page"
 }
 
+render_call_block_popup() {
+    awk '
+        /message: qsTr\("Calls forwarded to the smartphones in the home"\)/ {
+            sub(/message: qsTr\("Calls forwarded to the smartphones in the home"\) \+ trsl.empty/, "message: (trsl.language === \"de\" ? \"Anrufe an Home Assistant weitergeleitet\" : (trsl.language === \"it\" ? \"Chiamate inoltrate a Home Assistant\" : (trsl.language === \"fr\" ? \"Appels renvoyés vers Home Assistant\" : (trsl.language === \"es\" ? \"Llamadas enviadas a Home Assistant\" : \"Calls forwarded to Home Assistant\")))) + trsl.empty")
+            print
+            message_patched=1
+            next
+        }
+        /\/\/\{text: qsTr\("Forward calls to the smartphones in the home"\).*AnsweringMachine\.InHouseOnly/ {
+            print "                    {text: (trsl.language === \"de\" ? \"Anrufe an Home Assistant\" : (trsl.language === \"it\" ? \"Inoltra chiamate a Home Assistant\" : (trsl.language === \"fr\" ? \"Renvoyer les appels vers Home Assistant\" : (trsl.language === \"es\" ? \"Envía llamadas a Home Assistant\" : \"Forward calls to Home Assistant\")))) + trsl.empty, action: AnsweringMachine.InHouseOnly},"
+            button_patched=1
+            next
+        }
+        { print }
+        END {
+            if (!message_patched || !button_patched) {
+                exit 12
+            }
+        }
+    ' "$1"
+}
+
 patch_call_block_popup() {
     output_dir="${PATCH_OUTPUT_DIR:-$GUI_DIR}"
     popup="$output_dir/Components/Settings/CallBlockPopup.qml"
@@ -1965,25 +2029,7 @@ patch_call_block_popup() {
     fi
     mkdir -p "$output_dir"
     require_clean_call_block_popup "$source_popup"
-    awk '
-        /message: qsTr\("Calls forwarded to the smartphones in the home"\)/ {
-            sub(/message: qsTr\("Calls forwarded to the smartphones in the home"\) \+ trsl.empty/, "message: (trsl.language === \"de\" ? \"Anrufe an Home Assistant weitergeleitet\" : (trsl.language === \"it\" ? \"Chiamate inoltrate a Home Assistant\" : (trsl.language === \"fr\" ? \"Appels renvoyés vers Home Assistant\" : \"Calls forwarded to Home Assistant\"))) + trsl.empty")
-            print
-            message_patched=1
-            next
-        }
-        /\/\/\{text: qsTr\("Forward calls to the smartphones in the home"\).*AnsweringMachine\.InHouseOnly/ {
-            print "                    {text: (trsl.language === \"de\" ? \"Anrufe an Home Assistant\" : (trsl.language === \"it\" ? \"Inoltra chiamate a Home Assistant\" : (trsl.language === \"fr\" ? \"Renvoyer les appels vers Home Assistant\" : \"Forward calls to Home Assistant\"))) + trsl.empty, action: AnsweringMachine.InHouseOnly},"
-            button_patched=1
-            next
-        }
-        { print }
-        END {
-            if (!message_patched || !button_patched) {
-                exit 12
-            }
-        }
-    ' "$source_popup" > "$temp_file"
+    render_call_block_popup "$source_popup" > "$temp_file"
     verify_generated_page \
         "$temp_file" \
         "Components/Settings/CallBlockPopup.qml" \
@@ -2643,6 +2689,21 @@ cleanup_staging() {
     fi
 }
 
+# A run the agent had to SIGKILL at its job deadline could not remove its
+# staged files, and /tmp is in RAM. A later write removes those of runs that
+# have ended; a run still going keeps its own. A PID another program got
+# since then counts as ended.
+remove_ended_staging() {
+    [ -z "${C300X_QML_STAGING_DIR:-}" ] || return 0
+    for ended_dir in "${TMPDIR:-/tmp}"/c300x-qml-patch.*; do
+        ended_pid="${ended_dir##*.}"
+        case "$ended_pid" in ""|*[!0-9]*) continue ;; esac
+        if [ "$ended_pid" != "$$" ] && ! transaction_owner_running "$ended_pid"; then
+            rm -rf "$ended_dir"
+        fi
+    done
+}
+
 generate_core_patch_stage() {
     cleanup_staging
     trap cleanup_staging EXIT
@@ -2693,6 +2754,17 @@ generate_full_patch_stage() {
     unset PATCH_OUTPUT_DIR
 }
 
+stage_stale_media_user_label() {
+    RENEWED_LABEL_FILES=
+    media_user_label_renewable || return 0
+    mkdir -p "$STAGING_DIR/Components/Settings"
+    PATCH_OUTPUT_DIR="$STAGING_DIR"
+    export PATCH_OUTPUT_DIR
+    patch_call_block_popup
+    unset PATCH_OUTPUT_DIR
+    RENEWED_LABEL_FILES="$MEDIA_USER_LABEL_FILES"
+}
+
 generate_media_user_label_stage() {
     cleanup_staging
     trap cleanup_staging EXIT
@@ -2728,7 +2800,7 @@ apply_feature_stage_changed_count() {
 }
 
 apply_full_stage_changed_count() {
-    changed="$(apply_stage_changed_count $PATCH_FILES)"
+    changed="$(apply_stage_changed_count $PATCH_FILES $RENEWED_LABEL_FILES)"
     for rel in $OBSOLETE_GUI_FILES; do
         if [ -e "$GUI_DIR/$rel" ]; then
             changed=$((changed + 1))
@@ -2752,12 +2824,12 @@ copy_changed_feature_patch_files() {
 }
 
 copy_changed_full_patch_files() {
-    copy_changed_patch_files $PATCH_FILES
+    copy_changed_patch_files $PATCH_FILES $RENEWED_LABEL_FILES
     remove_obsolete_gui_files
 }
 
 copy_changed_core_patch_files() {
-    copy_changed_patch_files $CORE_PATCH_FILES
+    copy_changed_patch_files $CORE_PATCH_FILES $RENEWED_LABEL_FILES
 }
 
 copy_changed_media_user_label_files() {
@@ -2931,7 +3003,8 @@ patch_main_app() {
 
 apply_core_patch_files() {
     generate_core_patch_stage
-    changed_count="$(apply_stage_changed_count $CORE_PATCH_FILES)"
+    stage_stale_media_user_label
+    changed_count="$(apply_stage_changed_count $CORE_PATCH_FILES $RENEWED_LABEL_FILES)"
     apply_generated_patch_if_changed "$changed_count" copy_changed_core_patch_files
     cleanup_staging
 }
@@ -2952,6 +3025,7 @@ apply_feature_patch_files() {
 
 apply_patch_files() {
     generate_full_patch_stage
+    stage_stale_media_user_label
     changed_count="$(apply_full_stage_changed_count)"
     apply_generated_patch_if_changed "$changed_count" copy_changed_full_patch_files
     cleanup_staging
@@ -3127,6 +3201,25 @@ restore_all_patch_files() {
     restore_media_user_label_files
 }
 
+# A C100X has no Display patch and its display program cannot be restarted:
+# everything but the status is refused there. A station whose own model name
+# and display program disagree gets no new Display patch either; what is
+# already there can still be restored. Status stays readable everywhere.
+action_refused() {
+    [ "$ACTION" = "status" ] && return 1
+    [ "$DEVICE_DISPLAY" = "qt5_ondisk" ] && return 0
+    [ "$DEVICE_MODEL_CHECK" = "mismatch" ] || return 1
+    case "$ACTION" in
+        apply|core-apply|media-user-label-apply|qt5-import) return 0 ;;
+    esac
+    return 1
+}
+
+if action_refused; then
+    printf '{"ok":false,"available":false,"state":"unsupported_display"}\n'
+    exit 3
+fi
+
 case "$ACTION" in
     status)
         transaction_report
@@ -3139,6 +3232,7 @@ case "$ACTION" in
             printf 'An unfinished GUI write is still in place\n' >&2
             exit 1
         fi
+        remove_ended_staging
         trap 'exit 130' HUP INT TERM
         ;;
 esac

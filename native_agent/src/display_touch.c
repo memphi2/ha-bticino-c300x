@@ -1,3 +1,8 @@
+#ifdef __arm__
+#ifndef _LARGEFILE64_SOURCE
+#define _LARGEFILE64_SOURCE 1
+#endif
+#endif
 #define _POSIX_C_SOURCE 200809L
 
 #include "display_touch.h"
@@ -7,12 +12,28 @@
 #include "string_util.h"
 
 #include <errno.h>
+#include <fcntl.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#ifdef __arm__
+#include <sys/syscall.h>
+#endif
 #include <unistd.h>
+
+/* The station's libc has no fstatat symbol: the raw call is used there, and
+ * it fills the kernel's layout, which only with 32-bit time is glibc's. */
+#ifdef __arm__
+_Static_assert(sizeof(struct stat64) == 104, "struct stat64 must match the kernel's stat64");
+#define TOUCH_STAT struct stat64
+#define touch_lstat_at(directory, name, info) \
+    ((int)syscall(SYS_fstatat64, (directory), (name), (info), AT_SYMLINK_NOFOLLOW))
+#else
+#define TOUCH_STAT struct stat
+#define touch_lstat_at(directory, name, info) fstatat((directory), (name), (info), AT_SYMLINK_NOFOLLOW)
+#endif
 
 #ifndef C300X_DISPLAY_TOUCH_TARGET_DIR
 #define C300X_DISPLAY_TOUCH_TARGET_DIR "/usr/lib"
@@ -194,19 +215,34 @@ static int write_and_replace(
     return 1;
 }
 
-/* A run that was cut off while writing leaves its temporary file behind. */
+/* A run that was cut off while writing leaves its temporary file behind.
+ * It is looked up and removed through one descriptor of the library
+ * directory, so the name checked is the name removed; a link is removed
+ * itself, never followed. Nothing there: / stays read-only. */
 static void drop_stale_temp(void)
 {
     char tmp_path[C300X_MAX_PATH_LEN];
+    const char *name;
+    TOUCH_STAT info;
+    int directory;
 
-    if (
-        touch_path(tmp_path, sizeof(tmp_path), C300X_DISPLAY_TOUCH_TARGET_DIR, ".tmp")
-        && access(tmp_path, F_OK) == 0
-        && c300x_patch_remount_root("rw")
-    ) {
-        (void)unlink(tmp_path);
+    if (!touch_path(tmp_path, sizeof(tmp_path), C300X_DISPLAY_TOUCH_TARGET_DIR, ".tmp")) {
+        return;
+    }
+    name = strrchr(tmp_path, '/');
+    directory = open(C300X_DISPLAY_TOUCH_TARGET_DIR, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+    if (name == NULL || directory < 0) {
+        if (directory >= 0) {
+            (void)close(directory);
+        }
+        return;
+    }
+    name++;
+    if (touch_lstat_at(directory, name, &info) == 0 && c300x_patch_remount_root("rw")) {
+        (void)unlinkat(directory, name, 0);
         (void)c300x_patch_remount_root("ro");
     }
+    (void)close(directory);
 }
 
 /* A job stopped between the rw and the ro remount would leave / writable

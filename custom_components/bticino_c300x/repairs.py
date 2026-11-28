@@ -29,6 +29,7 @@ from .agent_update_followup import (
 )
 from .api import C300XAgentApiError
 from .api_errors import C300XAgentApiUnsupportedError, C300XAgentUpdateError
+from .c100x_display_activation import async_renew_c100x_display_after_update
 from .callback_url import async_suggest_callback_base_url
 from .callback_url import (
     validated_callback_base_url as _validated_callback_base_url,
@@ -40,14 +41,13 @@ from .capabilities import (
     maintenance_action_is_advertised,
     qml_patch_status_is_active,
 )
+from .config_flow_forms import ssh_login_fields
 from .const import (
     CONF_AGENT_HOST,
     CONF_AGENT_PORT,
     CONF_AGENT_TOKEN,
     CONF_AGENT_UPDATE_PAYLOAD_PENDING,
     CONF_AGENT_UPDATE_QML_PENDING,
-    CONF_BOOTSTRAP_SSH_PASSWORD,
-    CONF_BOOTSTRAP_SSH_USERNAME,
     CONF_CALLBACK_BASE_URL,
     CONF_DEVICE_ACTIVATION_MODE,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
@@ -67,16 +67,25 @@ from .const import (
 )
 from .device_installer import (
     DISPLAY_WRITE_TIMEOUT,
+    FIREWALL_HOOK_CHANGED,
     C300XDeviceInstallError,
     C300XDeviceInstallRequest,
     async_ensure_installer_dependencies,
     async_install_device_agent,
 )
+from .device_profile import NOT_A_BTICINO_STATION, remember_station_model
+from .device_ssh_login import (
+    INVALID_SSH_KEY,
+    SSH_PASSWORD_LOGIN_DISABLED,
+    SSH_UNREACHABLE,
+    SSH_USER_NOT_ROOT,
+)
 from .device_user import homeassistant_account_label
 from .display_activation import display_is_qt5, display_unsupported
+from .display_support import setup_is_c100x
 from .entry_config import entry_config_value
 from .error_text import compact_error_text
-from .factory_login import LOGIN_REFUSED, ssh_login
+from .factory_login import LOGIN_REFUSED, install_login, login_model
 from .media_readiness import media_readiness
 from .mqtt_migration import async_migrate_legacy_mqtt_if_available
 from .qml_patch import (
@@ -98,6 +107,7 @@ from .repair_issues import (
 )
 from .repair_work import OTHER_FLOW_FINISHED, RepairStepWork, async_run_repair_step
 from .schema_compat import vol
+from .station_identity import WRONG_STATION
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -490,7 +500,11 @@ def _ssh_install_error(err: BaseException) -> str:
     """Return the translated error of a failed SSH install."""
 
     reason = err.reason if isinstance(err, C300XDeviceInstallError) else ""
-    return reason if reason in (LOGIN_REFUSED, DISPLAY_WRITE_TIMEOUT) else "ssh_install_failed"
+    shown = (
+        LOGIN_REFUSED, DISPLAY_WRITE_TIMEOUT, NOT_A_BTICINO_STATION, INVALID_SSH_KEY, SSH_USER_NOT_ROOT,
+        SSH_UNREACHABLE, SSH_PASSWORD_LOGIN_DISABLED, FIREWALL_HOOK_CHANGED, WRONG_STATION,
+    )
+    return reason if reason in shown else "ssh_install_failed"
 
 
 def _install_error_log_text(err: BaseException) -> str:
@@ -647,6 +661,7 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
                 setup_data,
             )
             _settle_display_followup(self.hass, entry, display, full=display_full)
+            await async_renew_c100x_display_after_update(self.hass, entry)
             clear_followup(self.hass, entry)
             await _async_migrate_mqtt_after_update(entry.runtime_data.api)
             setup_data = await entry.runtime_data.api.async_validate_setup()
@@ -701,9 +716,7 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
                 data_schema=_ssh_install_schema(self._ask_ssh_login),
                 description_placeholders=placeholders,
             )
-        ssh_username, ssh_password = ssh_login(
-            user_input, CONF_BOOTSTRAP_SSH_USERNAME, CONF_BOOTSTRAP_SSH_PASSWORD
-        )
+        login = install_login(user_input, login_model(getattr(entry.runtime_data, "agent_info", None)))
 
         try:
             patch_state = await _async_capture_external_patch_state(entry)
@@ -714,8 +727,10 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
                 install_result = await async_install_device_agent(
                     C300XDeviceInstallRequest(
                         host=str(entry_config_value(entry, CONF_AGENT_HOST, "")).strip(),
-                        ssh_username=ssh_username,
-                        ssh_password=ssh_password,
+                        **login,
+                        # The entry exists: its station was accepted at setup.
+                        c100x_confirmed=True,
+                        station_id=str(entry.unique_id or ""),
                         agent_port=int(
                             entry_config_value(entry, CONF_AGENT_PORT, DEFAULT_AGENT_PORT)
                         ),
@@ -789,13 +804,17 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
                 # The installer's core step failed and nothing ran it again.
                 display = False
             _settle_display_followup(self.hass, entry, display, full=display_full)
+            await async_renew_c100x_display_after_update(self.hass, entry)
             self._ssh_install_followup = None
             clear_followup(self.hass, entry)
             await _async_migrate_mqtt_after_update(entry.runtime_data.api)
             setup_data = await entry.runtime_data.api.async_validate_setup()
         except Exception as err:  # noqa: BLE001 - Repairs shows a translated failure
             _LOGGER.warning("C300X SSH install failed: %s", _install_error_log_text(err))
-            refused = isinstance(err, C300XDeviceInstallError) and err.reason == LOGIN_REFUSED
+            # Another login is needed: refused, or one without root rights.
+            refused = isinstance(err, C300XDeviceInstallError) and err.reason in (
+                LOGIN_REFUSED, SSH_USER_NOT_ROOT, SSH_PASSWORD_LOGIN_DISABLED,
+            )
             self._ask_ssh_login = self._ask_ssh_login or refused
             return self.async_show_form(
                 step_id="ssh_install",
@@ -824,6 +843,11 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
         return self.async_create_entry(data={})
 
 
+# The init script waits up to 20 s for a slow agent shutdown before SIGKILL,
+# then starts the new agent; one try per second covers both.
+_AGENT_RESTART_WAIT_ATTEMPTS = 35
+
+
 async def _async_wait_for_agent_after_update(
     api: Any,
     *,
@@ -836,7 +860,7 @@ async def _async_wait_for_agent_after_update(
     saw_stale_setup = False
     if initial_delay > 0:
         await asyncio.sleep(initial_delay)
-    for attempt in range(12):
+    for attempt in range(_AGENT_RESTART_WAIT_ATTEMPTS):
         try:
             setup_data = cast(dict[str, Any], await api.async_validate_setup())
             if target_bundle is None or _agent_setup_matches_bundle(
@@ -847,7 +871,7 @@ async def _async_wait_for_agent_after_update(
             saw_stale_setup = True
         except Exception as err:  # noqa: BLE001 - retry during controlled restart
             last_error = err
-        if attempt < 11:
+        if attempt < _AGENT_RESTART_WAIT_ATTEMPTS - 1:
             await asyncio.sleep(1)
     if last_error is not None and not saw_stale_setup:
         raise last_error
@@ -910,9 +934,11 @@ async def _async_apply_repaired_agent_setup(
     if not isinstance(capabilities, dict):
         capabilities = {}
     entry.runtime_data.agent_info = setup_data
+    remember_station_model(hass, entry, setup_data)
     entry.runtime_data.capabilities = gate_capabilities(
         capabilities,
         doorbell_video_enabled=bool(entry_config_value(entry, CONF_VIDEO_ENABLED, False)),
+        c100x=setup_is_c100x(setup_data),
     )
     entry.runtime_data.agent_update_state = compare_agent_bundle(
         setup_data,
@@ -1173,7 +1199,7 @@ async def _async_restore_external_patch_state(
         await busy_retry(api.async_apply_ipv6_firewall)
     if _agent_offers_no_display_patch(setup_data):
         return None
-    qt5 = display_is_qt5(getattr(entry.runtime_data, "qml_patch_status", None))
+    qt5 = display_is_qt5(entry)
     owed = CONF_DISPLAY_FOLLOWUP_PENDING in entry.data
 
     async def full_patch_due() -> bool:
@@ -1246,12 +1272,7 @@ def _ssh_install_schema(ask_login: bool) -> vol.Schema:
 
     if not ask_login:
         return vol.Schema({})
-    return vol.Schema(
-        {
-            vol.Optional(CONF_BOOTSTRAP_SSH_USERNAME, default=""): str,
-            vol.Optional(CONF_BOOTSTRAP_SSH_PASSWORD, default=""): str,
-        }
-    )
+    return vol.Schema(ssh_login_fields())
 
 
 def _core_hook_placeholders(entry: Any) -> dict[str, str]:

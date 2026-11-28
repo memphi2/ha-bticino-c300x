@@ -1,5 +1,6 @@
 #include "picture_worker.h"
 #include "picture_source.h"
+#include "device_detect.h"
 #include "firmware_version.h"
 #include "time_util.h"
 #include <string.h>
@@ -31,12 +32,14 @@ void picture_worker_execute(struct c300x_video_control_job *job)
     if (!active(job)) return;
     if (!job->picture_profile) {
         char firmware[C300X_MAX_VERSION_LEN];
-        /* A configured display version is not proof of the installed capture ABI. */
+        /* Neither a configured display version nor the configured model (the
+         * installer writes C300X on every station) proves the capture ABI. */
         resolve_device_firmware(NULL, firmware, sizeof(firmware));
-        job->picture_profile = picture_source_supported(job->picture_config->device_model, firmware) ? 1 : -1;
+        int profile = picture_source_supported(c300x_device_model_name(c300x_device_model()), firmware);
+        job->picture_profile = profile ? profile : -1;
     }
     if (job->picture_profile > 0)
-        job->result = picture_source_execute(&job->picture, job->values, active, job);
+        job->result = picture_source_execute(job->picture_profile, &job->picture, job->values, active, job);
 }
 
 enum picture_route picture_worker_request(struct c300x_video_control *c,
@@ -57,8 +60,9 @@ enum picture_route picture_worker_request(struct c300x_video_control *c,
         int ok = c->job.result == PICTURE_SOURCE_OK;
         c->baseline_owner = current;
         c->baseline_session = s->picture_session;
-        /* A failed write is never replayed; the next status must verify anew. */
-        c->picture_baseline = ok ? 1 :
+        /* A failed write is never replayed; the next status must verify anew.
+         * A verified baseline keeps the profile, which the next job reuses. */
+        c->picture_baseline = ok ? c->job.picture_profile :
             (c->job.picture_profile < 0 || c->job.picture.field == PICTURE_READ ? -1 : 0);
         if (c->job.picture_profile < 0)
             return current == OWNER_RING ? PICTURE_LEGACY : PICTURE_UNAVAILABLE;

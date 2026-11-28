@@ -12,11 +12,8 @@ from homeassistant.data_entry_flow import AbortFlow
 
 from . import config_flow_auth
 from .api import (
-    C300XAgentApi,
     C300XAgentApiAuthError,
     C300XAgentApiError,
-    C300XAgentApiUnsupportedError,
-    build_agent_base_url,
 )
 from .config_flow_activations import (
     ACTIVATION_STEP_DONE as _ACTIVATION_STEP_DONE,
@@ -44,6 +41,12 @@ from .config_flow_activations import (
 )
 from .config_flow_activations import (
     activation_settings_step as _activation_settings_step,
+)
+from .config_flow_agent import (
+    async_agent_ready_for_setup as _async_agent_ready_for_setup,
+)
+from .config_flow_agent import (
+    async_agent_setup_data as _async_agent_setup_data,
 )
 from .config_flow_alarm import alarm_step as _alarm_step
 from .config_flow_alarm import alarm_values as _alarm_values
@@ -86,6 +89,12 @@ from .config_flow_display_menu import (
     single_page_errors,
     single_page_post,
     single_page_schema,
+)
+from .config_flow_features import (
+    RECONFIGURED_OPTION_KEYS as _RECONFIGURED_OPTION_KEYS,
+)
+from .config_flow_features import (
+    clear_reconfigured_option_overrides as _clear_reconfigured_option_overrides,
 )
 from .config_flow_features import (
     current_connection_options as _current_connection_options,
@@ -165,18 +174,14 @@ from .config_schemas import (
 from .config_schemas import (
     setup_features_schema as _setup_features_schema,
 )
-from .config_snapshots import SNAPSHOT_DEFAULTS
 from .const import (
     CONF_ACTIONS,
     CONF_ACTIONS_JSON,
     CONF_AGENT_HOST,
     CONF_AGENT_PORT,
     CONF_AGENT_TOKEN,
-    CONF_ALARM_ENTITY_ID,
-    CONF_ALARM_PAGE_ENTITY_ID,
+    CONF_AUDIO_FINE_GAIN_DB,
     CONF_BOOTSTRAP_INSTALL_AGENT,
-    CONF_BOOTSTRAP_SSH_PASSWORD,
-    CONF_BOOTSTRAP_SSH_USERNAME,
     CONF_CALLBACK_BASE_URL,
     CONF_CREATE_HOMEASSISTANT_USER,
     CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
@@ -186,44 +191,46 @@ from .const import (
     CONF_DASHBOARD_PAGES,
     CONF_DASHBOARD_PREVENT_RETURN,
     CONF_DASHBOARD_STATUS_PAGE_ENABLED,
-    CONF_DEVICE_ACTIVATION_MODE,
-    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
-    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
     CONF_DEVICE_ACTIVATIONS,
     CONF_DEVICE_UI_ENABLED,
     CONF_DISPLAY_FOLLOWUP_PENDING,
     CONF_DISPLAY_SETTING_PENDING,
-    CONF_DOORSTATION_AUDIO_GAIN_DB,
+    CONF_DOOR_AUDIO_LEVEL_DB,
     CONF_ENERGY_PAGE,
     CONF_EVENT_WEBHOOK_ID,
     CONF_EVENT_WEBHOOK_TOKEN,
     CONF_MAINTENANCE_TOKEN,
     CONF_NATIVE_TWO_WAY_AUDIO,
-    CONF_RING_CAPTURE_AUDIO_GAIN_DB,
     CONF_ROTATE_SHARED_SECRET,
     CONF_SHARED_SECRET,
     CONF_VIDEO_ENABLED,
-    CONF_VIDEO_PORT,
-    CONF_VIDEO_STREAM_PATH,
-    CONF_WEATHER_ENTITY_ID,
     CONF_WEBHOOK_ID,
     CONF_WEBRTC_ICE_POLICY,
     DEFAULT_AGENT_PORT,
     DEFAULT_NAME,
     DOMAIN,
 )
-from .dashboard_optional_config import OPTIONAL_PAGE_KEYS, optional_page_values
+from .dashboard_optional_config import optional_page_values
 from .device_installer import (
     C300XDeviceInstallError,
     C300XDeviceInstallRequest,
     async_ensure_installer_dependencies,
     async_install_device_agent,
 )
+from .device_profile import station_model_data
 from .discovery_move import async_follow_proven_move
 from .display_patch_sync import async_mark_display_setting
-from .entry_config import entry_config_value
+from .display_support import (
+    DISPLAY_SUPPORTED,
+    device_display_support,
+    entry_display_supported,
+    entry_is_c100x,
+    setup_display_pages_default,
+    setup_is_c100x,
+)
 from .entry_types import BticinoC300XConfigEntry
-from .factory_login import ssh_login
+from .factory_login import install_login, login_model
+from .model_names import ModelTextConfigFlow, ModelTextOptionsFlow
 from .mqtt_migration import async_migrate_legacy_mqtt_for_connection
 
 __all__ = [
@@ -233,6 +240,7 @@ __all__ = [
     "_agent_missing_schema",
     "_alarm_entity_id",
     "_bootstrap_install_schema",
+    "_clear_reconfigured_option_overrides",
     "_connection_input",
     "_feature_input",
     "_initial_connection_input",
@@ -248,45 +256,9 @@ else:
 
 _SETUP_VIDEO_ENABLED_DEFAULT = True
 _CREATE_HOMEASSISTANT_USER_DEFAULT = True
-_RECONFIGURED_OPTION_KEYS = frozenset(
-    {
-        *SNAPSHOT_DEFAULTS,
-        *OPTIONAL_PAGE_KEYS,
-        CONF_ACTIONS,
-        CONF_AGENT_HOST,
-        CONF_AGENT_PORT,
-        CONF_AGENT_TOKEN,
-        CONF_CALLBACK_BASE_URL,
-        CONF_CREATE_HOMEASSISTANT_USER,
-        CONF_ALARM_ENTITY_ID,
-        CONF_ALARM_PAGE_ENTITY_ID,
-        CONF_DASHBOARD_ENTITIES,
-        CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
-        CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
-        CONF_DASHBOARD_NAVIGATION,
-        CONF_DASHBOARD_PAGES,
-        CONF_ENERGY_PAGE,
-        CONF_DASHBOARD_STATUS_PAGE_ENABLED,
-        CONF_DASHBOARD_PREVENT_RETURN,
-        CONF_DEVICE_ACTIVATION_MODE,
-        CONF_DEVICE_ACTIVATIONS,
-        CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
-        CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
-        CONF_DEVICE_UI_ENABLED,
-        CONF_DOORSTATION_AUDIO_GAIN_DB,
-        CONF_MAINTENANCE_TOKEN,
-        CONF_NATIVE_TWO_WAY_AUDIO,
-        CONF_RING_CAPTURE_AUDIO_GAIN_DB,
-        CONF_VIDEO_ENABLED,
-        CONF_VIDEO_PORT,
-        CONF_VIDEO_STREAM_PATH,
-        CONF_WEATHER_ENTITY_ID,
-        CONF_WEBRTC_ICE_POLICY,
-    }
-)
 
 
-class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps, config_entries.ConfigFlow, domain=DOMAIN):
+class BticinoC300XConfigFlow(ModelTextConfigFlow, config_flow_auth.AuthFlowSteps, SnapshotWizardSteps, config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for BTicino C300X."""
 
     VERSION = 1
@@ -298,10 +270,10 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
         super().__init__()
         self._setup_connection: dict[str, Any] = {}
         self._setup_unique_id: str | None = None
+        self._setup_agent_info: dict[str, Any] = {}
         self._setup_agent_needs_token = False
         self._setup_bootstrapped = False
         self._setup_pending_features: dict[str, Any] | None = None
-        self._setup_device_ui_default = False
         self._setup_feature_data: dict[str, Any] = {}
         self._setup_device_activations: list[dict[str, Any]] = []
         self._setup_activation_edit_id: str | None = None
@@ -394,19 +366,15 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
         if user_input is not None or not self._factory_login_tried:
             self._factory_login_tried = True
             await self._async_abort_if_manual_setup_duplicate()
-            api_token = secrets.token_urlsafe(32)
-            maintenance_token = secrets.token_urlsafe(32)
-            ssh_username, ssh_password = ssh_login(
-                user_input, CONF_BOOTSTRAP_SSH_USERNAME, CONF_BOOTSTRAP_SSH_PASSWORD
-            )
+            api_token, maintenance_token = self._setup_install_keys()
             request = C300XDeviceInstallRequest(
                 host=self._setup_connection[CONF_AGENT_HOST],
-                ssh_username=ssh_username,
-                ssh_password=ssh_password,
+                **install_login(user_input, login_model(self._setup_agent_info)),
                 agent_port=int(
                     self._setup_connection.get(CONF_AGENT_PORT, DEFAULT_AGENT_PORT)
                 ),
                 apply_gui_patch=False,
+                c100x_confirmed=self._c100x_confirmed,
             )
             try:
                 await async_ensure_installer_dependencies(self.hass)
@@ -416,7 +384,10 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
                     maintenance_token=maintenance_token,
                 )
             except C300XDeviceInstallError as err:
+                if self._c100x_install_refused(err):
+                    return await self._async_ask_c100x_opt_in("install", user_input)
                 errors["base"] = err.reason
+                await self._async_keep_written_keys(err, api_token, maintenance_token)
             else:
                 if getattr(install_result, "display_pending", False):
                     # The core display step failed on the Qt 5 display: the
@@ -436,13 +407,19 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
                 if probe != "reachable":
                     errors["base"] = "device_install_verify_failed"
                 else:
+                    await self._async_adopt_agent_unique_id(api_token=api_token)
+                    if done := await self._async_hand_keys_to_station_entry(install_result):
+                        return done
+                    self._note_installed_station(install_result)
                     try:
-                        await async_migrate_legacy_mqtt_for_connection(
-                            self.hass,
-                            self._setup_connection,
-                            api_token=api_token,
-                            maintenance_token=maintenance_token,
-                        )
+                        # Legacy MQTT is migrated on a C300X only.
+                        if login_model(self._setup_agent_info) == "C300X":
+                            await async_migrate_legacy_mqtt_for_connection(
+                                self.hass,
+                                self._setup_connection,
+                                api_token=api_token,
+                                maintenance_token=maintenance_token,
+                            )
                     except C300XAgentApiError:
                         errors["base"] = "device_install_verify_failed"
                         return self.async_show_form(
@@ -450,7 +427,6 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
                             data_schema=_bootstrap_install_schema(),
                             errors=errors,
                         )
-                    await self._async_adopt_agent_unique_id(api_token=api_token)
                     self._setup_agent_needs_token = False
                     return await self.async_step_user_features()
 
@@ -466,7 +442,11 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
         await self.async_set_unique_id(_manual_setup_unique_id(self._setup_connection))
         self._abort_if_unique_id_configured()
         for entry in self._async_current_entries():
-            if _entry_connection_matches_discovery(entry, self._setup_connection):
+            # The entry a failed install of this setup handed its keys to is no duplicate.
+            handed = self._setup_keys_entry is not None and entry.entry_id == self._setup_keys_entry
+            if not handed and _entry_connection_matches_discovery(
+                entry, self._setup_connection,
+            ):
                 raise AbortFlow("already_configured")
 
     async def _async_adopt_agent_unique_id(self, *, api_token: str = "") -> None:
@@ -476,34 +456,24 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
             self.hass,
             self._setup_connection,
             api_token=api_token,
+            setup_data_target=self._setup_agent_info,
         )
         if unique_id is None:
             return
         self._setup_unique_id = unique_id
         self._async_abort_duplicate_setup_flows(unique_id)
 
-    @callback
-    def _async_abort_duplicate_setup_flows(self, unique_id: str) -> None:
-        """Abort parallel discovery flows that target the same just-installed agent."""
-
-        flow_manager = getattr(getattr(self.hass, "config_entries", None), "flow", None)
-        if flow_manager is None:
-            return
-        for progress in self._async_in_progress(
-            include_uninitialized=True,
-            match_context={"unique_id": unique_id},
-        ):
-            flow_manager.async_abort(progress["flow_id"])
-
     async def async_step_zeroconf(
         self, discovery_info: Any
     ) -> FlowResult:
-        """Start setup from a C300X native-agent mDNS advertisement."""
+        """Start setup from a C300X or C100X native-agent mDNS advertisement."""
 
         from .discovery import (
             discovery_connection_updates,
             discovery_display_name,
             discovery_matches_entry,
+            discovery_model,
+            discovery_model_conflicts,
             discovery_unique_id,
         )
 
@@ -518,6 +488,15 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
             return self.async_abort(reason="cannot_connect")
 
         discovered_unique_id = discovery_unique_id(properties)
+        model = discovery_model(getattr(discovery_info, "type", ""), getattr(discovery_info, "name", ""))
+        self._model_hint = model
+        # A known entry of the other model is never matched, renewed or moved.
+        if discovered_unique_id is not None and any(
+            discovery_matches_entry(discovered_unique_id, entry.unique_id)
+            and discovery_model_conflicts(entry, model)
+            for entry in self._async_current_entries()
+        ):
+            return self.async_abort(reason="model_mismatch")
         unique_id = discovered_unique_id or DOMAIN
         await self.async_set_unique_id(unique_id)
         self._async_request_existing_entry_event_registration(
@@ -527,16 +506,14 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
         )
         # mDNS is untrusted: a known station is followed to a new address only
         # after it proves the saved identity there (discovery_move).
-        if await async_follow_proven_move(self, discovered_unique_id, connection):
+        if await async_follow_proven_move(self, discovered_unique_id, connection, model=model):
             return self.async_abort(reason="already_configured")
         self._abort_if_unique_id_configured()
-        existing_entry_abort = (
-            await self._async_abort_if_zeroconf_targets_existing_manual_entry(
-                discovered_unique_id,
-                connection,
-                discovery_matches_entry=discovery_matches_entry,
-            )
-        )
+        # A later mDNS identity merges into an existing manual setup entry.
+        existing_entry_abort = cast(FlowResult | None, await _async_existing_manual_discovery(
+            self, discovered_unique_id, connection,
+            discovery_matches_entry, _async_agent_setup_data, model=model,
+        ))
         if existing_entry_abort is not None:
             return existing_entry_abort
         display_name = discovery_display_name(
@@ -556,20 +533,6 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
         if probe == "missing":
             return self.async_abort(reason="cannot_connect")
         return await self.async_step_agent_auth()
-
-    async def _async_abort_if_zeroconf_targets_existing_manual_entry(
-        self,
-        discovered_unique_id: str | None,
-        connection: dict[str, Any],
-        *,
-        discovery_matches_entry: Any,
-    ) -> FlowResult | None:
-        """Merge a later mDNS identity into an existing manual setup entry."""
-
-        return cast(FlowResult | None, await _async_existing_manual_discovery(
-            self, discovered_unique_id, connection,
-            discovery_matches_entry, _async_agent_setup_data,
-        ))
 
     @callback
     def _async_request_existing_entry_event_registration(
@@ -617,11 +580,13 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
         if not self._setup_connection:
             return await self.async_step_user()
 
+        media = _SETUP_VIDEO_ENABLED_DEFAULT
         errors: dict[str, str] = {}
         if user_input is not None:
             feature_data, errors = _feature_input(
                 user_input,
-                default_video_enabled=_SETUP_VIDEO_ENABLED_DEFAULT,
+                default_video_enabled=media,
+                default_create_homeassistant_user=media,
             )
             if errors:
                 return self.async_show_form(
@@ -630,13 +595,13 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
                         bool(
                             user_input.get(
                                 CONF_VIDEO_ENABLED,
-                                _SETUP_VIDEO_ENABLED_DEFAULT,
+                                media,
                             )
                         ),
                         default_create_homeassistant_user=bool(
                             user_input.get(
                                 CONF_CREATE_HOMEASSISTANT_USER,
-                                _CREATE_HOMEASSISTANT_USER_DEFAULT,
+                                media,
                             )
                         ),
                         default_native_two_way_audio=feature_data[CONF_NATIVE_TWO_WAY_AUDIO],
@@ -656,8 +621,8 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
         return self.async_show_form(
             step_id="user_features",
             data_schema=_setup_features_schema(
-                _SETUP_VIDEO_ENABLED_DEFAULT,
-                default_create_homeassistant_user=_CREATE_HOMEASSISTANT_USER_DEFAULT,
+                media,
+                default_create_homeassistant_user=media,
             ),
             errors=errors,
         )
@@ -761,6 +726,11 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
 
         if not self._setup_feature_data:
             return await self.async_step_user_features()
+        if device_display_support(self._setup_agent_info) is False:
+            self._setup_dashboard_input = {
+                **_dashboard_input_defaults({CONF_DEVICE_UI_ENABLED: False}), **self._setup_alarm,
+            }
+            return await self._async_create_setup_entry_from_dashboard({})
         errors: dict[str, str] = {}
         if user_input is not None:
             self._setup_dashboard_input = {
@@ -782,6 +752,8 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
     ) -> FlowResult:
         """Collect the pages of the initial C300X display dashboard."""
 
+        if device_display_support(self._setup_agent_info) is False:
+            return self.async_abort(reason="unsupported_display")
         if not self._setup_dashboard_input:
             return await self.async_step_user_dashboard()
         errors: dict[str, str] = {}
@@ -820,6 +792,8 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
     ) -> FlowResult:
         """Collect per-entity display labels for the initial C300X dashboard."""
 
+        if device_display_support(self._setup_agent_info) is False:
+            return self.async_abort(reason="unsupported_display")
         if not self._setup_dashboard_input:
             return await self.async_step_user_dashboard()
         errors: dict[str, str] = {}
@@ -881,10 +855,11 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
                 default_device_ui_enabled=bool(
                     (user_input or {}).get(
                         CONF_DEVICE_UI_ENABLED,
-                        self._setup_device_ui_default,
+                        setup_display_pages_default(self._setup_agent_info),
                     )
                 ),
                 default_dashboard_navigation=(user_input or {}).get(CONF_DASHBOARD_NAVIGATION),
+                home_buttons=not setup_is_c100x(self._setup_agent_info),
             ),
             errors=errors,
             description_placeholders={
@@ -928,6 +903,9 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
             self._note_setup_rejection(errors, self._setup_connection)
             return self._show_agent_auth(errors)
         self._setup_pending_features = None
+        display_supported = device_display_support(self._setup_agent_info)
+        if display_supported is False:
+            feature_data = {**feature_data, CONF_DEVICE_UI_ENABLED: False}
 
         if self._setup_unique_id is not None:
             self._async_abort_duplicate_setup_flows(self._setup_unique_id)
@@ -947,6 +925,8 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
             data={
                 **self._setup_connection,
                 **feature_data,
+                **({DISPLAY_SUPPORTED: display_supported} if display_supported is not None else {}),
+                **station_model_data(self._setup_agent_info),
                 CONF_WEBHOOK_ID: secrets.token_urlsafe(24),
                 CONF_SHARED_SECRET: secrets.token_urlsafe(32),
                 CONF_EVENT_WEBHOOK_ID: secrets.token_urlsafe(24),
@@ -1043,12 +1023,8 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
                                 feature_defaults[CONF_CREATE_HOMEASSISTANT_USER],
                             )
                         ),
-                        default_doorstation_audio_gain_db=float(
-                            feature_data[CONF_DOORSTATION_AUDIO_GAIN_DB]
-                        ),
-                        default_ring_capture_audio_gain_db=float(
-                            feature_data[CONF_RING_CAPTURE_AUDIO_GAIN_DB]
-                        ),
+                        default_door_audio_level_db=int(feature_data[CONF_DOOR_AUDIO_LEVEL_DB]),
+                        default_audio_fine_gain_db=int(feature_data[CONF_AUDIO_FINE_GAIN_DB]),
                         default_webrtc_ice_policy=_webrtc_ice_policy_or_default(
                             user_input.get(
                                 CONF_WEBRTC_ICE_POLICY,
@@ -1185,6 +1161,12 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
         feature_defaults = _current_feature_options(entry)
         if not self._reconfigure_feature_data:
             return await self.async_step_reconfigure_features()
+        if not entry_display_supported(entry):
+            # Keep saved layouts intact; the capability gate makes them inert.
+            self._reconfigure_dashboard_input = {
+                **_dashboard_input_defaults({}, feature_defaults), **self._reconfigure_alarm,
+            }
+            return await self._async_finish_reconfigure_from_dashboard(feature_defaults, {})
         errors: dict[str, str] = {}
         if user_input is not None:
             self._reconfigure_dashboard_input = {
@@ -1221,6 +1203,8 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
         """Reconfigure the pages of the C300X display dashboard."""
 
         entry = self._get_reconfigure_entry()
+        if not entry_display_supported(entry):
+            return self.async_abort(reason="unsupported_display")
         feature_defaults = _current_feature_options(entry)
         if not self._reconfigure_dashboard_input:
             return await self.async_step_reconfigure_dashboard()
@@ -1268,6 +1252,8 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
         """Reconfigure per-entity C300X display dashboard labels."""
 
         entry = self._get_reconfigure_entry()
+        if not entry_display_supported(entry):
+            return self.async_abort(reason="unsupported_display")
         feature_defaults = _current_feature_options(entry)
         if not self._reconfigure_dashboard_input:
             return await self.async_step_reconfigure_dashboard()
@@ -1352,6 +1338,7 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
                 default_dashboard_navigation=(user_input or {}).get(
                     CONF_DASHBOARD_NAVIGATION, feature_defaults.get(CONF_DASHBOARD_NAVIGATION),
                 ),
+                home_buttons=not entry_is_c100x(entry),
             ),
             errors=errors,
             description_placeholders=await _async_qml_patch_description_placeholders(
@@ -1423,8 +1410,8 @@ class BticinoC300XConfigFlow(config_flow_auth.AuthFlowSteps, SnapshotWizardSteps
 
 
 class BticinoC300XOptionsFlow(
-    SnapshotOptionsStep, CameraQualityOptionsStep, SpeechOptionsStep, DisplayMenuSteps, OptionsMenuSteps,
-    config_entries.OptionsFlow,
+    ModelTextOptionsFlow, SnapshotOptionsStep, CameraQualityOptionsStep, SpeechOptionsStep, DisplayMenuSteps,
+    OptionsMenuSteps, config_entries.OptionsFlow,
 ):
     """Handle C300X options.
 
@@ -1642,6 +1629,8 @@ class BticinoC300XOptionsFlow(
     ) -> FlowResult:
         """Manage the Display patch and what the display shows besides pages."""
 
+        if not entry_display_supported(self._config_entry):
+            return self.async_abort(reason="unsupported_display")
         feature_defaults = self._load_saved()
         errors: dict[str, str] = {}
         if user_input is not None:
@@ -1687,6 +1676,8 @@ class BticinoC300XOptionsFlow(
     ) -> FlowResult:
         """Manage the pages of the C300X display dashboard."""
 
+        if not entry_display_supported(self._config_entry):
+            return self.async_abort(reason="unsupported_display")
         feature_defaults = self._load_saved()
         errors: dict[str, str] = {}
         if user_input is not None:
@@ -1729,6 +1720,8 @@ class BticinoC300XOptionsFlow(
     ) -> FlowResult:
         """Manage per-entity display labels for C300X dashboard options."""
 
+        if not entry_display_supported(self._config_entry):
+            return self.async_abort(reason="unsupported_display")
         feature_defaults = self._load_saved()
         errors: dict[str, str] = {}
         if user_input is not None:
@@ -1810,6 +1803,7 @@ class BticinoC300XOptionsFlow(
                 default_dashboard_navigation=(user_input or {}).get(
                     CONF_DASHBOARD_NAVIGATION, feature_defaults.get(CONF_DASHBOARD_NAVIGATION),
                 ),
+                home_buttons=not entry_is_c100x(self._config_entry),
             ),
             errors=errors,
             description_placeholders=await _async_qml_patch_description_placeholders(
@@ -1866,6 +1860,7 @@ async def _async_agent_stable_unique_id(
     connection: dict[str, Any],
     *,
     api_token: str = "",
+    setup_data_target: dict[str, Any] | None = None,
 ) -> str | None:
     """Return the stable agent ID that mDNS advertises for this device."""
 
@@ -1877,79 +1872,7 @@ async def _async_agent_stable_unique_id(
         )
     except C300XAgentApiError:
         return None
+    if setup_data_target is not None:
+        setup_data_target.clear()
+        setup_data_target.update(setup_data)
     return _stable_unique_id_from_setup_data(setup_data)
-
-
-async def _async_agent_setup_data(
-    hass: Any,
-    connection: dict[str, Any],
-    *,
-    api_token: str = "",
-) -> dict[str, Any]:
-    """Return setup data from the configured agent endpoint."""
-
-    from homeassistant.helpers.aiohttp_client import async_get_clientsession
-
-    base_url = build_agent_base_url(
-        str(connection.get(CONF_AGENT_HOST, "")),
-        int(connection.get(CONF_AGENT_PORT, DEFAULT_AGENT_PORT)),
-    )
-    api = C300XAgentApi(async_get_clientsession(hass), base_url, api_token)
-    return cast(dict[str, Any], await api.async_validate_setup())
-
-
-async def _async_agent_ready_for_setup(
-    hass: Any,
-    connection: dict[str, Any],
-    *,
-    api_token: str = "",
-) -> dict[str, Any]:
-    """Validate the agent endpoints required for a usable config entry."""
-
-    from homeassistant.helpers.aiohttp_client import async_get_clientsession
-
-    base_url = build_agent_base_url(
-        str(connection.get(CONF_AGENT_HOST, "")),
-        int(connection.get(CONF_AGENT_PORT, DEFAULT_AGENT_PORT)),
-    )
-    api = C300XAgentApi(async_get_clientsession(hass), base_url, api_token)
-    setup_data = cast(dict[str, Any], await api.async_validate_setup())
-    try:
-        await api.async_self_test()
-    except C300XAgentApiAuthError:
-        raise
-    except C300XAgentApiUnsupportedError:
-        pass
-    except C300XAgentApiError:
-        pass
-    await api.async_list_event_subscriptions()
-    return setup_data
-
-
-def _clear_reconfigured_option_overrides(
-    hass: Any,
-    config_entry: BticinoC300XConfigEntry,
-    data_updates: dict[str, Any],
-) -> None:
-    """Clear stale option values for settings written through reconfigure."""
-
-    options = dict(config_entry.options)
-    keys_to_clear = _RECONFIGURED_OPTION_KEYS & data_updates.keys()
-    if not options or not keys_to_clear:
-        return
-    updated_options = {
-        key: value for key, value in options.items() if key not in keys_to_clear
-    }
-    if updated_options == options:
-        return
-    hass.config_entries.async_update_entry(config_entry, options=updated_options)
-
-
-def _config_default(
-    config_entry: BticinoC300XConfigEntry,
-    key: str,
-    default: Any,
-) -> Any:
-    """Return an option override when present, otherwise setup data."""
-
-    return entry_config_value(config_entry, key, default)

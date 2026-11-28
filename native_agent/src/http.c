@@ -1,7 +1,12 @@
 #include "activations.h"
+#include "audio_level.h"
 #include "activation_discovery.h"
 #include "agent_update.h"
 #include "c300x_agent.h"
+#include "device_detect.h"
+#include "c100x_gui_presence.h"
+#include "http_c100x_display.h"
+#include "http_ui_preferences.h"
 #include "capabilities.h"
 #include "callback_queue.h"
 #include "qml_recovery.h"
@@ -33,6 +38,8 @@
 #include "json_util.h"
 #include "local_action_events.h"
 #include "audio_codec.h"
+#include "legacy_bridge.h"
+#include "answering_scope.h"
 #include "memo_store.h"
 #include "memo_led.h"
 #include "media_bridge.h"
@@ -48,6 +55,7 @@
 #include "system_metrics.h"
 #include "system_metrics_monitor.h"
 #include "self_test.h"
+#include "proc_probe.h"
 #include "signal_wakeup.h"
 #include "time_util.h"
 #include "ui_homeassistant.h"
@@ -105,11 +113,9 @@
 #define C300X_FIREWALL_BUFFER_SIZE 49152
 #define C300X_NETWORK_ONLINE_RECHECK_SECONDS 5
 #define C300X_NETWORK_OFFLINE_RECHECK_SECONDS 30
-#define C300X_LEGACY_MQTT_DIR "/etc/tcpdump2mqtt"
-#define C300X_LEGACY_MQTT_CONFIG "/etc/tcpdump2mqtt/TcpDump2Mqtt.conf"
-#define C300X_LEGACY_MQTT_SCRIPT "/etc/tcpdump2mqtt/TcpDump2Mqtt.sh"
-#define C300X_LEGACY_MQTT_INIT_LINK "/etc/rc5.d/S99TcpDump2Mqtt"
-#define C300X_LEGACY_MQTT_INIT_TARGET "../tcpdump2mqtt/TcpDump2Mqtt.sh"
+#define C300X_LEGACY_MQTT_DIR C300X_FOREIGN_ROOT "/etc/tcpdump2mqtt"
+#define C300X_LEGACY_MQTT_CONFIG C300X_LEGACY_MQTT_DIR "/TcpDump2Mqtt.conf"
+#define C300X_LEGACY_MQTT_SCRIPT C300X_LEGACY_MQTT_DIR "/TcpDump2Mqtt.sh"
 #define C300X_LEGACY_MQTT_BACKUP_DIR "/home/bticino/cfg/extra/c300x-device-file-backups/legacy-mqtt"
 #define C300X_LEGACY_MQTT_BACKUP_MARKER "/home/bticino/cfg/extra/c300x-device-file-backups/legacy-mqtt/.complete"
 #define C300X_FLEXISIP_INIT_SCRIPT "/etc/init.d/flexisipsh"
@@ -234,6 +240,8 @@ struct agent_runtime {
     struct voicemail_runtime voice_memos;
     struct c300x_ui_events ui_events;
     struct c300x_touch_tone touch_tone;
+    struct c100x_gui_presence c100x_presence;
+    struct c100x_activation c100x_activation;
     struct c300x_display_alerts display_alerts;
     struct c300x_http_clients http_clients;
     struct c300x_http_file_transfers file_transfers;
@@ -2650,7 +2658,7 @@ static void handle_camera_resolution(
             send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_high_resolution\"}\n");
             return;
         }
-        if (enabled && c300x_device_display_is_qt5()) {
+        if (enabled && c300x_device_camera_resolution_fixed()) {
             send_json(client_fd, 409, "Conflict", "{\"ok\":false,\"error\":\"high_resolution_unsupported\"}\n");
             return;
         }
@@ -2725,6 +2733,7 @@ static void handle_diagnostics_get(int client_fd, const struct agent_runtime *ru
             "\"open_fd_count\":%d,"
             "\"agent_init_script_present\":%s,"
             "\"agent_init_link_ok\":%s,"
+            "\"agent_started_after_boot_seconds\":%lld,"
             "\"subscription_count\":%d,"
             "\"recent_event_count\":%d,"
             "\"recent_event_capacity\":%d,"
@@ -2778,6 +2787,7 @@ static void handle_diagnostics_get(int client_fd, const struct agent_runtime *ru
             open_fd_count,
             agent_init_script_present ? "true" : "false",
             agent_init_link_ok ? "true" : "false",
+            runtime->start_monotonic_ms / 1000,
             runtime->subscription_count,
             c300x_recent_events_count(&runtime->recent_events),
             C300X_RECENT_EVENTS_CAPACITY,
@@ -3385,58 +3395,6 @@ static int mqtt_runtime_config_is_valid(const struct c300x_config *config, const
 #define firewall_remount_rw_if_needed(path) ((void)c300x_firewall_remount(path, "rw"))
 #define firewall_remount_ro_if_needed(path) ((void)c300x_firewall_remount(path, "ro"))
 
-static int process_cmdline_contains(const char *needle)
-{
-    DIR *directory;
-    struct dirent *entry;
-
-    directory = opendir("/proc");
-    if (directory == NULL) {
-        return 0;
-    }
-    while ((entry = readdir(directory)) != NULL) {
-        char path[512];
-        char buffer[512];
-        FILE *file;
-        size_t read_len;
-        int is_pid = 1;
-
-        for (const char *ptr = entry->d_name; *ptr != '\0'; ptr++) {
-            if (!isdigit((unsigned char)*ptr)) {
-                is_pid = 0;
-                break;
-            }
-        }
-        if (!is_pid) {
-            continue;
-        }
-        if (snprintf(path, sizeof(path), "/proc/%s/cmdline", entry->d_name) >= (int)sizeof(path)) {
-            continue;
-        }
-        file = fopen(path, "r");
-        if (file == NULL) {
-            continue;
-        }
-        read_len = fread(buffer, 1, sizeof(buffer) - 1, file);
-        fclose(file);
-        if (read_len == 0) {
-            continue;
-        }
-        buffer[read_len] = '\0';
-        for (size_t index = 0; index < read_len; index++) {
-            if (buffer[index] == '\0') {
-                buffer[index] = ' ';
-            }
-        }
-        if (strstr(buffer, needle) != NULL) {
-            closedir(directory);
-            return 1;
-        }
-    }
-    closedir(directory);
-    return 0;
-}
-
 static int legacy_mqtt_installed(void)
 {
     return path_exists(C300X_LEGACY_MQTT_SCRIPT)
@@ -3457,9 +3415,9 @@ static int legacy_mqtt_backup_available(void)
 
 static int legacy_mqtt_bridge_running(void)
 {
-    return process_cmdline_contains("TcpDump2Mqtt")
-        || process_cmdline_contains("StartMqttSend")
-        || process_cmdline_contains("StartMqttReceive");
+    return c300x_process_cmdline_contains("TcpDump2Mqtt")
+        || c300x_process_cmdline_contains("StartMqttSend")
+        || c300x_process_cmdline_contains("StartMqttReceive");
 }
 
 static int legacy_mqtt_running(void)
@@ -3467,28 +3425,14 @@ static int legacy_mqtt_running(void)
     return legacy_mqtt_bridge_running();
 }
 
-static int file_contains_literal(const char *path, const char *needle)
-{
-    char buffer[8192];
-    int truncated = 0;
-
-    if (path == NULL || needle == NULL || needle[0] == '\0') {
-        return 0;
-    }
-    if (!read_bounded_text_file(path, buffer, sizeof(buffer), &truncated)) {
-        return 0;
-    }
-    return strstr(buffer, needle) != NULL;
-}
-
 static int flexisip_restart_marker_present(void)
 {
-    return file_contains_literal(C300X_FLEXISIP_INIT_SCRIPT, C300X_FLEXISIP_RESTART_MARKER);
+    return c300x_file_contains_literal(C300X_FLEXISIP_INIT_SCRIPT, C300X_FLEXISIP_RESTART_MARKER);
 }
 
 static int flexisip_backup_marker_present(void)
 {
-    return file_contains_literal(C300X_FLEXISIP_INIT_BACKUP, C300X_FLEXISIP_RESTART_MARKER);
+    return c300x_file_contains_literal(C300X_FLEXISIP_INIT_BACKUP, C300X_FLEXISIP_RESTART_MARKER);
 }
 
 static const char *flexisip_reference_state(void)
@@ -3745,43 +3689,6 @@ static int legacy_mqtt_restore_from_backup(int *changed)
     return 1;
 }
 
-static int ensure_symlink_target(const char *link_path, const char *target, int *changed)
-{
-    char current[256];
-    ssize_t len;
-
-    len = readlink(link_path, current, sizeof(current) - 1);
-    if (len >= 0) {
-        current[len] = '\0';
-        if (strcmp(current, target) == 0) {
-            return 1;
-        }
-        if (unlink(link_path) != 0) {
-            return 0;
-        }
-    } else if (errno != ENOENT) {
-        return 0;
-    }
-    if (symlink(target, link_path) != 0) {
-        return 0;
-    }
-    if (changed != NULL) {
-        *changed = 1;
-    }
-    return 1;
-}
-
-static int unlink_if_exists(const char *path, int *changed)
-{
-    if (unlink(path) == 0) {
-        if (changed != NULL) {
-            *changed = 1;
-        }
-        return 1;
-    }
-    return errno == ENOENT;
-}
-
 static int legacy_mqtt_enable_patch(int *changed)
 {
     if (changed != NULL) {
@@ -3792,7 +3699,7 @@ static int legacy_mqtt_enable_patch(int *changed)
             return 0;
         }
     }
-    return ensure_symlink_target(C300X_LEGACY_MQTT_INIT_LINK, C300X_LEGACY_MQTT_INIT_TARGET, changed);
+    return c300x_legacy_mqtt_start_on(changed);
 }
 
 static int legacy_mqtt_disable_patch(int *changed)
@@ -3800,10 +3707,7 @@ static int legacy_mqtt_disable_patch(int *changed)
     if (changed != NULL) {
         *changed = 0;
     }
-    if (!unlink_if_exists(C300X_LEGACY_MQTT_INIT_LINK, changed)) {
-        return 0;
-    }
-    return 1;
+    return c300x_legacy_mqtt_start_off(changed);
 }
 
 static void handle_legacy_mqtt_status(
@@ -3818,7 +3722,7 @@ static void handle_legacy_mqtt_status(
     snprintf(
         body,
         sizeof(body),
-        "{\"ok\":true,\"available\":true,\"installed\":%s,\"enabled\":%s,\"running\":%s,\"backup_available\":%s,\"native_enabled\":%s,\"exclusive\":true,\"script_path\":\"%s\",\"init_link\":\"%s\",\"flexisip_backup_available\":%s,\"flexisip_restart_marker\":%s,\"flexisip_reference_state\":\"%s\"}\n",
+        "{\"ok\":true,\"available\":true,\"installed\":%s,\"enabled\":%s,\"running\":%s,\"backup_available\":%s,\"native_enabled\":%s,\"exclusive\":true,\"script_path\":\"%s\",\"init_link\":\"%s\",\"flexisip_backup_available\":%s,\"flexisip_restart_marker\":%s,\"flexisip_reference_state\":\"%s\",\"bridge_blocked\":%s,\"watchdog\":%s}\n",
         legacy_mqtt_installed() ? "true" : "false",
         legacy_mqtt_startup_enabled() ? "true" : "false",
         legacy_mqtt_running() ? "true" : "false",
@@ -3828,7 +3732,9 @@ static void handle_legacy_mqtt_status(
         C300X_LEGACY_MQTT_INIT_LINK,
         flexisip_backup_available ? "true" : "false",
         flexisip_restart_marker ? "true" : "false",
-        flexisip_reference_state()
+        flexisip_reference_state(),
+        c300x_legacy_bridge_blocked() ? "true" : "false",
+        c300x_legacy_bridge_watchdog() ? "true" : "false"
     );
     send_json(client_fd, 200, "OK", body);
 }
@@ -4995,6 +4901,7 @@ static void handle_udp_event(
     memcpy(msg, buffer + msg_start, (size_t)(msg_end - msg_start));
     msg[msg_end - msg_start] = '\0';
     c300x_announce_door_frame(&runtime->announce, msg);
+    c100x_activation_door_frame(&runtime->c100x_activation, msg, c300x_monotonic_ms());
     int confirmed_muted;
     if (c300x_ringer_muted_from_reply(msg, &confirmed_muted)) {
         /* A multicast write echo is intent, not completed hardware state. */
@@ -5005,6 +4912,9 @@ static void handle_udp_event(
         } else if (c300x_ringer_control_confirm(
                        &runtime->ringer_control, confirmed_muted)) {
             return;
+        } else {
+            c300x_ringer_control_observe(&runtime->ringer_control, confirmed_muted,
+                c100x_activation_confirmed(&runtime->c100x_activation));
         }
     }
     if (map_openwebnet_event(runtime, msg, type, sizeof(type), data, sizeof(data))) {
@@ -5195,6 +5105,7 @@ static void api_capabilities(
     char bundle_hash[C300X_AGENT_BUNDLE_HASH_LEN];
     char bundle_agent_version[C300X_MAX_VERSION_LEN];
     char bundle_api_version[16];
+    char c100x[768] = "";
     struct c300x_video_status video_status = {0};
 
     if (body == NULL) {
@@ -5213,8 +5124,18 @@ static void api_capabilities(
     enum picture_route picture = runtime ? picture_worker_request(&runtime->video_control,
         runtime->video, &video_status, config, NULL, NULL) : PICTURE_UNAVAILABLE;
     if (picture == PICTURE_DEFERRED) { free(body); return; }
+    if (runtime != NULL) c100x_display_capability(&runtime->c100x_activation, c100x, sizeof(c100x));
+    const struct c300x_device_profile profile = c300x_device_profile();
+    char board[C300X_DEVICE_BOARD_LEN], article[C300X_DEVICE_ARTICLE_LEN];
+    c300x_device_board(board, sizeof(board));
+    c300x_device_article(article, sizeof(article));
     const struct c300x_capabilities_context context = {
         .device_id = device_id,
+        .device_model = c300x_device_model_name(profile.model),
+        .display_kind = c300x_display_kind_name(profile.display),
+        .model_check = c300x_device_model_check_name(profile.model_check),
+        .board = board,
+        .article = article,
         .memo_led_present = runtime != NULL && runtime->memo_led.claim_dir >= 0,
         /* Firmware 3.0.x has no IPv6 firewall start script to patch. */
         .ipv6_firewall_hook = access(config->maintenance_ipv6_firewall_path, F_OK) == 0,
@@ -5224,13 +5145,15 @@ static void api_capabilities(
         .maintenance_supported = maintenance_auth_available(config),
         .activations_count = activation_total_count(config, runtime),
         .device_codec_pcmu = video_status.device_codec_pcmu,
-        .camera_resolution_fixed = c300x_device_display_is_qt5(),
+        .camera_resolution_fixed = c300x_device_camera_resolution_fixed(),
+        .display_features = c300x_device_display_features(),
         .announcements_supported = runtime != NULL && c300x_announce_supported(&runtime->announce),
         .https_callbacks = c300x_https_available(),
         .https_callbacks_enabled = c300x_https_enabled(),
         .ringer_min_volume = C300X_RINGER_VOLUME_ACTIVE_MIN,
         .ringer_max_volume = C300X_RINGER_VOLUME_MAX,
         .ringer_volume_step = C300X_RINGER_VOLUME_STEP,
+        .c100x = c100x,
     };
     if (!c300x_capabilities_json(config, &context, body, C300X_LARGE_RESPONSE_SIZE)) {
         send_response_too_large(client_fd);
@@ -5387,7 +5310,7 @@ static void handle_doorbell_video_get(
     struct agent_runtime *runtime
 )
 {
-    enum { VIDEO_STATUS_BODY_LEN = 12288 };
+    enum { VIDEO_STATUS_BODY_LEN = 12544 };
     char *body = malloc(VIDEO_STATUS_BODY_LEN);
     struct c300x_video_status video_status = {0};
     int running = 0;
@@ -5433,7 +5356,7 @@ static void handle_doorbell_video_get(
     unsigned long long rtsp_rejected_clients = 0;
     unsigned long long rtsp_rejected_describes = 0;
     unsigned long long rtsp_play_failures = 0;
-    int doorstation_audio_gain_tenths = 0;
+    char audio_level_json[C300X_AUDIO_LEVEL_JSON_MAX];
     unsigned long long bt_media_start_attempts = 0;
     unsigned long long bt_media_stop_attempts = 0;
     const char *last_rtp_at_json = "null";
@@ -5501,7 +5424,6 @@ static void handle_doorbell_video_get(
         rtsp_rejected_clients = video_status.rtsp_rejected_clients;
         rtsp_rejected_describes = video_status.rtsp_rejected_describes;
         rtsp_play_failures = video_status.rtsp_play_failures;
-        doorstation_audio_gain_tenths = video_status.doorstation_audio_gain_tenths;
         c300x_json_string(
             video_status.last_rtsp_method,
             last_rtsp_method_json,
@@ -5540,6 +5462,9 @@ static void handle_doorbell_video_get(
             && (bridge_media_active || call_active)
         )
     );
+    if (c300x_audio_level_json(audio_level_json, sizeof(audio_level_json)) == 0) {
+        snprintf(audio_level_json, sizeof(audio_level_json), "null");
+    }
     c300x_json_escape_string(config->video_rtsp_video_path, stream_path, sizeof(stream_path));
     c300x_json_escape_string(config->video_rtsp_path, audio_stream_path, sizeof(audio_stream_path));
     c300x_json_escape_string(config->video_rtsp_recorder_path, recorder_stream_path, sizeof(recorder_stream_path));
@@ -5587,7 +5512,7 @@ static void handle_doorbell_video_get(
         "\"ring_preview_sharing\":%s,"
         "\"media_starting\":%s,"
         "\"audio_enabled\":%s,"
-        "\"doorstation_audio_gain_db\":%.1f,"
+        "\"audio_level\":%s,"
         "\"bt_media_start_attempts\":%llu,"
         "\"bt_media_stop_attempts\":%llu,"
         "\"rtsp_options_requests\":%llu,"
@@ -5657,7 +5582,7 @@ static void handle_doorbell_video_get(
         max_clients > 1 ? "true" : "false",
         media_starting ? "true" : "false",
         stream_audio ? "true" : "false",
-        (double)doorstation_audio_gain_tenths / 10.0,
+        audio_level_json,
         bt_media_start_attempts,
         bt_media_stop_attempts,
         rtsp_options_requests,
@@ -6328,12 +6253,13 @@ static void handle_ringer_get(
         remember_ringer_volume(runtime, volume, volume_raw[0] ? volume_raw : NULL);
         /* Report the setting, not the call's mute, so a reading client keeps it. */
         static const char call_muted[] = "{\"ok\":true,\"muted\":true,";
-        if (strncmp(body, call_muted, sizeof(call_muted) - 1) == 0) {
+        const size_t call_muted_len = sizeof(call_muted) - 1;
+        if (strncmp(body, call_muted, call_muted_len) == 0) {
             char reported[sizeof(body)];
             const char *setting = !runtime->ringer_muted_state.known ? "null"
                 : runtime->ringer_muted_state.last_valid ? "true" : "false";
             int length = snprintf(reported, sizeof(reported), "{\"ok\":true,\"muted\":%s,%s",
-                                  setting, body + sizeof(call_muted) - 1);
+                                  setting, &body[call_muted_len]);
             if (length > 0 && (size_t)length < sizeof(reported)) memcpy(body, reported, (size_t)length + 1);
         }
     } else {
@@ -6380,6 +6306,10 @@ static int handle_ringer_post(
         }
     }
     has_volume = c300x_json_int_field(request_body, "volume", &volume);
+    if (has_muted && !c300x_device_display_features()) {
+        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"ringer_mute_unsupported\"}\n");
+        return 1;
+    }
     if (!has_muted && !has_volume) {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"ringer_muted_required\"}\n");
         return 1;
@@ -8491,6 +8421,11 @@ static void handle_agent_update_apply(
         free(workspace);
         return;
     }
+    if (!agent_update_model_compatible(workspace->manifest)) {
+        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"update_model_incompatible\"}\n");
+        free(workspace);
+        return;
+    }
     c300x_json_string_field(
         workspace->manifest,
         "bundle_hash",
@@ -8543,6 +8478,7 @@ static void handle_agent_update_apply(
         (void)remove_tree(workspace->stage_dir);
     }
     record_agent_write(config, runtime, "agent_update", "apply");
+    c100x_activation_payload_changed(&runtime->c100x_activation);
     if (summary.runtime_changed) {
         (void)c300x_run_detached_command(C300X_AGENT_INIT_SCRIPT, "restart", 500);
     }
@@ -8653,7 +8589,8 @@ static void handle_api_request(
 
     if (strcmp(request->method, "POST") == 0
         && strncmp(request->path, "/api/v1/maintenance/", sizeof("/api/v1/maintenance/") - 1) == 0
-        && (c300x_http_maintenance_busy(&runtime->maintenance))) {
+        && (c300x_http_maintenance_busy(&runtime->maintenance)
+            || c100x_activation_writing(&runtime->c100x_activation))) {
         if (!api_request_authorized(config, request)) {
             send_auth_required(client_fd);
         } else if (!maintenance_authorized(config, request)) {
@@ -8692,7 +8629,8 @@ static void handle_api_request(
             c300x_run_detached_command)
         || c300x_http_service_commands_route(&runtime->maintenance, client_fd, config, request,
             c300x_run_detached_command)
-        || c300x_http_announce_route(&runtime->announce, client_fd, request)) {
+        || c300x_http_announce_route(&runtime->announce, client_fd, request)
+        || c100x_display_route(&runtime->c100x_activation, client_fd, config, request)) {
         return;
     }
 
@@ -8820,7 +8758,6 @@ static void handle_api_request(
     }
     if (c300x_try_handle_doorbell_video_audio_settings_route(
             client_fd,
-            runtime != NULL ? runtime->video : NULL,
             request->method,
             request->path,
             request->body
@@ -8872,6 +8809,7 @@ static void handle_api_request(
         handle_ringer_post(client_fd, config, runtime, request->body, 0);
         return;
     }
+    if (c300x_answering_route_refused(client_fd, request)) return;
     if (strcmp(request->method, "GET") == 0 && strcmp(request->path, "/api/v1/answering-machine") == 0) {
         handle_answering_get(client_fd, config);
         return;
@@ -9073,41 +9011,6 @@ static void handle_api_request(
     send_json(client_fd, 501, "Not Implemented", "{\"ok\":false,\"error\":\"not_implemented\"}\n");
 }
 
-static void handle_ui_preferences(int client_fd, struct c300x_config *config,
-                                  const struct request *request)
-{
-    if (!client_is_loopback(client_fd)) {
-        send_loopback_required(client_fd);
-        return;
-    }
-    if (strcmp(request->method, "POST") == 0) {
-        char header[3];
-        int enabled, changed;
-        char error[C300X_MAX_ERROR_LEN];
-        /* Browsers cannot send this custom header cross-origin without preflight. */
-        if (header_value(request, "origin", header, sizeof(header))
-            || !header_value(request, "x-c300x-ui", header, sizeof(header))
-            || strcmp(header, "1") != 0) {
-            send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"ui_header_required\"}\n");
-            return;
-        }
-        if (!c300x_json_bool_field(request->body, "feedback_enabled", &enabled)) {
-            send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_feedback_enabled\"}\n");
-            return;
-        }
-        if (!c300x_save_display_feedback(config, enabled, error, sizeof(error), &changed)) {
-            send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"config_save_failed\"}\n");
-            return;
-        }
-    } else if (strcmp(request->method, "GET") != 0) {
-        send_json(client_fd, 405, "Method Not Allowed", "{\"ok\":false,\"error\":\"method_not_allowed\"}\n");
-        return;
-    }
-    send_json(client_fd, 200, "OK", config->display_feedback_enabled
-        ? "{\"ok\":true,\"feedback_enabled\":true}\n"
-        : "{\"ok\":true,\"feedback_enabled\":false}\n");
-}
-
 static int handle_ui_request(
     int client_fd,
     struct c300x_config *config,
@@ -9115,10 +9018,13 @@ static int handle_ui_request(
     struct request *request
 )
 {
+    if (!strcmp(request->path, "/ui/c100x/presence/next") || !strcmp(request->path, "/ui/c100x/presence/status")
+        || !strcmp(request->path, "/ui/c100x/presence/probe"))
+        return c100x_gui_presence_route(&runtime->c100x_presence, client_fd, request, client_is_loopback(client_fd));
     if (!strncmp(request->path, "/ui/maintenance", sizeof("/ui/maintenance") - 1))
         return c300x_display_maintenance(&runtime->maintenance, client_fd, config, request, c300x_run_detached_command);
     if (strcmp(request->path, "/ui/preferences") == 0) {
-        handle_ui_preferences(client_fd, config, request);
+        c300x_http_ui_preferences(client_fd, config, request, client_is_loopback(client_fd));
         return 1;
     }
     if (strcmp(request->path, "/ui/touch-tone/next") == 0 || strcmp(request->path, "/ui/touch-tone/state") == 0)
@@ -9430,7 +9336,7 @@ static int agent_has_home_assistant_connection(
 int c300x_run(struct c300x_config *config)
 {
     struct listener listeners[2];
-    struct pollfd poll_fds[1 + 2 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 4 + 2 + C300X_HTTP_MAX_CLIENTS + C300X_HTTP_MAX_OUTPUTS + C300X_HTTP_MAX_FILE_TRANSFERS + C300X_UI_EVENT_MAX_WAITERS + C300X_RINGER_CONTROL_POLL_FDS + C300X_TOUCH_TONE_POLL_FDS + C300X_DISPLAY_ALERTS_POLL_FDS + C300X_VIDEO_MAX_POLL_FDS];
+    struct pollfd poll_fds[1 + 2 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 4 + 2 + C300X_HTTP_MAX_CLIENTS + C300X_HTTP_MAX_OUTPUTS + C300X_HTTP_MAX_FILE_TRANSFERS + C300X_UI_EVENT_MAX_WAITERS + C300X_RINGER_CONTROL_POLL_FDS + C300X_TOUCH_TONE_POLL_FDS + C300X_DISPLAY_ALERTS_POLL_FDS + C100X_GUI_PRESENCE_POLL_FDS + C100X_ACTIVATION_POLL_FDS + C300X_VIDEO_MAX_POLL_FDS];
     nfds_t listener_count = 0;
     int udp_fd = -1;
     int memo_led_fd = -1;
@@ -9471,6 +9377,8 @@ int c300x_run(struct c300x_config *config)
     c300x_ui_events_init(&runtime->ui_events);
     c300x_ringer_control_init(&runtime->ringer_control);
     c300x_touch_tone_init(&runtime->touch_tone, touch_tone_changed, runtime);
+    c100x_gui_presence_init(&runtime->c100x_presence);
+    c100x_display_init(&runtime->c100x_activation, config);
     c300x_display_alerts_init(&runtime->display_alerts);
     c300x_http_maintenance_init(&runtime->maintenance, maintenance_record_write, runtime);
     c300x_qml_recovery_start(&runtime->maintenance, config);
@@ -9575,6 +9483,7 @@ int c300x_run(struct c300x_config *config)
         int ui_event_poll_slots[C300X_UI_EVENT_MAX_WAITERS];
         int ringer_poll_index, ringer_poll_count;
         int touch_tone_poll_index;
+        int c100x_presence_poll_index;
         int display_alerts_poll_index;
         int video_poll_index = -1, video_poll_count = 0;
         int poll_timeout_ms = -1;
@@ -9705,6 +9614,12 @@ int c300x_run(struct c300x_config *config)
         poll_timeout_ms = min_timeout_ms(poll_timeout_ms,
             c300x_touch_tone_prepare(&runtime->touch_tone, &poll_fds[poll_count]));
         poll_count += C300X_TOUCH_TONE_POLL_FDS;
+        c100x_presence_poll_index = (int)poll_count;
+        poll_timeout_ms = min_timeout_ms(poll_timeout_ms,
+            c100x_gui_presence_prepare(&runtime->c100x_presence, &poll_fds[poll_count++]));
+        /* Wakes the loop on the job's output; the step reads it. */
+        poll_timeout_ms = min_timeout_ms(poll_timeout_ms,
+            c100x_activation_prepare(&runtime->c100x_activation, &poll_fds[poll_count++]));
         display_alerts_poll_index = (int)poll_count;
         (void)c300x_display_alerts_prepare(&runtime->display_alerts, &poll_fds[poll_count]);
         poll_count += C300X_DISPLAY_ALERTS_POLL_FDS;
@@ -9771,6 +9686,9 @@ int c300x_run(struct c300x_config *config)
         c300x_ringer_control_handle_pollfds(&runtime->ringer_control, &poll_fds[ringer_poll_index], ringer_poll_count);
         c300x_ringer_control_expire(&runtime->ringer_control);
         c300x_touch_tone_tick(&runtime->touch_tone, &poll_fds[touch_tone_poll_index]);
+        c100x_gui_presence_tick(&runtime->c100x_presence, &poll_fds[c100x_presence_poll_index]);
+        c100x_display_step(&runtime->c100x_activation, config, video, &runtime->announce, &runtime->maintenance,
+            &runtime->c100x_presence, c300x_run_detached_command);
         c300x_display_alerts_tick(&runtime->display_alerts, &poll_fds[display_alerts_poll_index]);
         if (poll_fds[callback_poll_index].revents) {
             apply_callback_results(runtime, time(NULL));
@@ -9914,6 +9832,8 @@ cleanup:
         c300x_ui_events_close_all(&runtime->ui_events, ui_event_send_json, NULL);
         c300x_ringer_control_close(&runtime->ringer_control);
         c300x_touch_tone_close(&runtime->touch_tone);
+        c100x_gui_presence_close(&runtime->c100x_presence);
+        c100x_activation_close(&runtime->c100x_activation);
         c300x_display_alerts_close(&runtime->display_alerts);
         c300x_http_maintenance_close(&runtime->maintenance);
         c300x_openwebnet_async_close(&runtime->openwebnet);

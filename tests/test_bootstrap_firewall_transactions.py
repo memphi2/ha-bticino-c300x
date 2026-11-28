@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import stat
 import subprocess
 from pathlib import Path
@@ -13,14 +14,16 @@ SCRIPT = Path(__file__).resolve().parents[1] / "native_agent/scripts/bootstrap_f
 ORIGINAL = "#!/bin/sh\n# Firmware rules\niptables -P INPUT DROP\n"
 
 
-def _run(tmp_path: Path, fault: str = "") -> subprocess.CompletedProcess[str]:
+def _run(
+    tmp_path: Path, fault: str = "", shell: list[str] | None = None, **env: str,
+) -> subprocess.CompletedProcess[str]:
     # Shell functions intercept every privileged operation, even with a fixed PATH.
     harness = """
 mount() { printf '%s\\n' "$*" >> "$MOUNT_LOG"; }
-iptables() { return 0; }
+iptables() { printf '%s\n' "$*" >> "$IPTABLES_LOG"; [ "$1" = "-A" ]; }
 """
     return subprocess.run(
-        ["/bin/sh"],
+        shell or ["/bin/sh"],
         input=harness + fault + SCRIPT.read_text(encoding="utf-8"),
         text=True,
         capture_output=True,
@@ -31,6 +34,9 @@ iptables() { return 0; }
             "C300X_IPTABLES_BACKUP": str(tmp_path / "backup"),
             "C300X_API_PORT": "8089",
             "MOUNT_LOG": str(tmp_path / "mount.log"),
+            "IPTABLES_LOG": str(tmp_path / "iptables.log"),
+            "C300X_QML_C100X_MARKER": str(tmp_path / "BtClass100"),
+            **env,
         },
     )
 
@@ -40,6 +46,26 @@ def _live(tmp_path: Path) -> Path:
     path.write_text(ORIGINAL, encoding="utf-8")
     path.chmod(0o750)
     return path
+
+
+@pytest.mark.parametrize(("c100x", "enabled", "want_media"), [
+    (True, None, True), (True, "0", False), (True, "1", True), (False, None, True),
+])
+def test_bootstrap_media_policy_matches_live_and_persistent_rules(
+    tmp_path, c100x, enabled, want_media,
+):
+    path = _live(tmp_path)
+    if c100x:
+        (tmp_path / "BtClass100").touch()
+    env = {"C300X_RTSP_PORT": "7654"}
+    if enabled is not None:
+        env["C300X_VIDEO_ENABLED"] = enabled
+    result = _run(tmp_path, **env)
+    assert result.returncode == 0, result.stderr
+    for rules in (path.read_text(), (tmp_path / "iptables.log").read_text()):
+        assert "-A INPUT -p tcp --dport 8089" in rules
+        for port in ("tcp --dport 7654", "udp --dport 40004"):
+            assert (port in rules) is want_media
 
 
 @pytest.mark.parametrize("failure", ["write", "rename", "metadata"])
@@ -127,24 +153,23 @@ cp() {
     assert stat.S_IMODE(backup.stat().st_mode) == 0o600
 
 
-@pytest.mark.parametrize("already_patched", [False, True])
-def test_existing_corrupt_backup_fails_closed(
-    tmp_path: Path, already_patched: bool
-) -> None:
+def test_a_backup_that_no_longer_matches_a_patched_hook_fails_with_its_own_status(tmp_path: Path) -> None:
+    """Our block is in the hook and its other rules changed: the backup would
+    restore something else. Nothing is changed, and the status says why."""
     live = _live(tmp_path)
-    if already_patched:
-        assert _run(tmp_path).returncode == 0
-        (tmp_path / "mount.log").unlink()
+    assert _run(tmp_path).returncode == 0
+    (tmp_path / "mount.log").unlink()
     before = live.read_bytes()
     backup = tmp_path / "backup"
     backup.write_text("# corrupt backup\n", encoding="utf-8")
 
     result = _run(tmp_path)
 
-    assert result.returncode != 0
-    assert "backup cannot be verified" in result.stderr
+    assert result.returncode == 3
+    assert "firewall hook changed" in result.stderr
     assert live.read_bytes() == before
     assert backup.read_text() == "# corrupt backup\n"
+    assert not list(tmp_path.glob("backup.stale-*"))
     assert not (tmp_path / "mount.log").exists()
 
 
@@ -171,4 +196,109 @@ def test_existing_backup_symlink_fails_closed(tmp_path: Path) -> None:
 
     assert result.returncode != 0
     assert live.read_text() == ORIGINAL
+    assert not (tmp_path / "mount.log").exists()
+
+
+@pytest.mark.parametrize("video", ["0", "1"])
+def test_missing_hook_opens_the_live_ports_and_writes_nothing(tmp_path: Path, video: str) -> None:
+    # Some rooted stations have no boot hook at all (moved away by other tools).
+    result = _run(tmp_path, C300X_VIDEO_ENABLED=video)
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "changed_files=0\n"
+    assert not (tmp_path / "iptables").exists()
+    assert not (tmp_path / "backup").exists()
+    assert not (tmp_path / "mount.log").exists()
+    rules = (tmp_path / "iptables.log").read_text()
+    assert "-A INPUT -p tcp --dport 8089 -j ACCEPT" in rules
+    assert ("--dport 6554" in rules) is (video == "1")
+
+
+def test_a_hook_that_is_no_regular_file_still_fails_closed(tmp_path: Path) -> None:
+    (tmp_path / "iptables").mkdir()
+
+    result = _run(tmp_path)
+
+    assert result.returncode != 0
+    assert not (tmp_path / "iptables.log").exists()
+    assert not (tmp_path / "mount.log").exists()
+
+
+# The station's own shell and tools: BusyBox of each firmware under qemu-arm.
+# "host" runs the same cases with the host /bin/sh and tools, so CI, which has
+# no extracted firmware, still guards the backup decisions.
+FIRMWARE_WORK = Path(os.environ.get("C300X_FIRMWARE_WORK", Path(__file__).resolve().parents[2] / "c300x-fwpatch/work"))
+STATION_TOOLS = ("awk", "cat", "chmod", "cmp", "cp", "date", "dirname", "grep", "mkdir", "mktemp", "mv", "rm", "tail")
+FIRMWARES = ("1.7.19", "2.0.2", "3.0.6", "c100x-1.5.8")
+SHELLS = ("host", *FIRMWARES)
+IPV6_BLOCK = (
+    "# c300x-native-agent ipv6 firewall begin\n"
+    "ip6tables -A INPUT -p tcp --dport 8089 -j ACCEPT\n"
+    "# c300x-native-agent ipv6 firewall end\n"
+)
+
+
+def _station_shell(firmware: str) -> tuple[list[str], str]:
+    if firmware == "host":
+        return ["/bin/sh"], ""
+    root = FIRMWARE_WORK / f"rootfs-{firmware}"
+    busybox = root / "bin/busybox"
+    qemu = shutil.which("qemu-arm")
+    if not qemu or not busybox.exists():
+        pytest.skip("needs qemu-arm and the extracted firmware (C300X_FIRMWARE_WORK)")
+    station = f'"{qemu}" -L "{root}" "{busybox}"'
+    # Functions win over PATH: every tool the script calls is the station's applet.
+    tools = "".join(f'{name}() {{ {station} {name} "$@"; }}\n' for name in STATION_TOOLS)
+    return [qemu, "-L", str(root), str(busybox), "sh"], tools
+
+
+@pytest.mark.parametrize("firmware", SHELLS)
+def test_a_stale_backup_of_a_reflashed_station_is_archived(tmp_path, firmware):
+    """A root tool flashed the station again (other options): the hook has no
+    block of ours and other rules than the backup. The backup is kept beside
+    a new one of the hook as it is now, and the install goes on."""
+    shell, tools = _station_shell(firmware)
+    live = _live(tmp_path)
+    reflashed = ORIGINAL + "iptables -A INPUT -p tcp --dport 22 -j ACCEPT\n"
+    live.write_text(reflashed, encoding="utf-8")
+    backup = tmp_path / "backup"
+    backup.write_text(ORIGINAL, encoding="utf-8")
+
+    result = _run(tmp_path, tools, shell=shell)
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "changed_files=3\n"
+    assert "archived stale firewall backup" in result.stderr
+    assert backup.read_text() == reflashed
+    assert stat.S_IMODE(backup.stat().st_mode) == 0o600
+    stale, = tmp_path.glob("backup.stale-*")
+    assert stale.read_text() == ORIGINAL
+    assert live.read_text().startswith(reflashed) and "--dport 8089" in live.read_text()
+    # Patched now: the next run finds everything in place.
+    assert _run(tmp_path, tools, shell=shell).stdout == "changed_files=0\n"
+
+
+@pytest.mark.parametrize("block", ["ipv4", "ipv6"])
+@pytest.mark.parametrize("firmware", SHELLS)
+def test_a_changed_patched_hook_stops_with_its_own_status(tmp_path, firmware, block):
+    """A block of ours (the agent's, or only the IPv6 one) is in the hook and
+    its other rules changed: nothing is archived or written, the status is 3."""
+    shell, tools = _station_shell(firmware)
+    live = _live(tmp_path)
+    if block == "ipv4":
+        assert _run(tmp_path, tools, shell=shell).returncode == 0
+        (tmp_path / "mount.log").unlink()
+    else:
+        (tmp_path / "backup").write_text(ORIGINAL, encoding="utf-8")
+        live.write_text(ORIGINAL + IPV6_BLOCK, encoding="utf-8")
+    live.write_text("# rules of another tool\n" + live.read_text(), encoding="utf-8")
+    before = live.read_bytes()
+
+    result = _run(tmp_path, tools, shell=shell)
+
+    assert result.returncode == 3, result.stderr
+    assert "firewall hook changed" in result.stderr
+    assert live.read_bytes() == before
+    assert (tmp_path / "backup").read_text() == ORIGINAL
+    assert not list(tmp_path.glob("backup.stale-*"))
     assert not (tmp_path / "mount.log").exists()

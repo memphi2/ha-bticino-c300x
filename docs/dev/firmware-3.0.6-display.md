@@ -650,12 +650,15 @@ unchanged recovery artifacts on failed restoration, not merely a diagnostic.
 
 ## Shared Code On 1.7.19 And 2.0.2
 
-The branch takes the release work over completely (its base is the internal
-`work/2.9.3`, released together with 3.0.6 as 2.10.0); on 1.7.19 and 2.0.2
-it must behave like that base. Every wait or tolerance the Qt 5
-restart needs is therefore behind the firmware check, in the agent
-`c300x_device_display_is_qt5()` and in Home Assistant the cached display
-status (`qt5_overlay`, sent by `qml_patch.sh` only on the Qt 5 display):
+3.0.6 support was released with 2.10.0 and is part of the joint tree; on
+1.7.19 and 2.0.2 the shared code must behave as it did before. Every wait or
+tolerance the Qt 5 restart needs is therefore behind the firmware check: in
+the agent `c300x_device_display_is_qt5()` (display kind `qt5_rcc` of the
+device profile in `device_detect.c`), and in Home Assistant `entry_profile()`
+of `device_profile.py`. That takes the agent's own answer
+(`device.display_kind`) first and falls back to the cached display status
+(`qt5_overlay`, sent by `qml_patch.sh` only on the Qt 5 display) for an agent
+that names no display:
 
 | Where | Qt 5 display | 1.7.19 / 2.0.2 (as stable) |
 | --- | --- | --- |
@@ -673,13 +676,14 @@ display write on both (30 s, SIGTERM, 15 s grace; a Qt 5 write answers
 media-user label is the same job on both.
 
 Each gate has a test for both sides. Offline proofs for 2.10.0:
-`qml_patch.sh` from this branch and from the base give byte-identical station
-files and backups on the 1.7.19 and 2.0.2 skins, both home layouts, through
-core apply, apply, label apply, layout switch, partial restores and
+`qml_patch.sh` of 2.10.0 and of the release before it give byte-identical
+station files and backups on the 1.7.19 and 2.0.2 skins, both home layouts,
+through core apply, apply, label apply, layout switch, partial restores and
 `restore-all`, which leaves the stock files. Remaining shared differences are
 inert on Qt 4: the Qt 5 status fields (absent there), the overlay library
-carried in the agent, `qt5_recovery_version` in the bundle manifest (bundle
-identity), and the release tooling that allows a beta from this branch.
+carried in the agent and `qt5_recovery_version` in the bundle manifest (bundle
+identity). The joint tree is held to 2.10.0 the same way by
+`tests/test_c300x_same_as_2_10_0.py`.
 
 On 3.0.6 the firmware has no `/etc/network/if-pre-up.d/iptables6`, so the
 agent reports `ipv6_firewall_hook: false` and the IPv6 firewall switch is not
@@ -687,21 +691,22 @@ offered, as on any station without that script.
 
 ## Known Trap: One Marker For Camera And Display
 
-`/usr/lib/libQt5Core.so.5` is the only firmware marker on this branch, and it
-drives two unrelated paths:
+Until the C100X was merged, `/usr/lib/libQt5Core.so.5` was the only firmware
+marker, and it drove two unrelated paths: the camera (low-resolution stream
+only, in `camera_quality.c`, `camera_restore.c`, the capability
+`camera_resolution_fixed` and the video config in `http.c`) and the display
+(`qml_patch.sh` and the installer taking the rcc overlay path instead of QML
+files on disk). The C100X also ships Qt 5 (5.10), but with QML files on disk,
+so the one marker would have sent it down both 3.0.x paths.
 
-- the camera: `c300x_device_display_is_qt5()` in `config.c` makes
-  `camera_quality.c` (`low_stream()`), `camera_restore.c`, the capability
-  `camera_resolution_fixed` and the video config in `http.c` use the
-  low-resolution stream only (3.0.x has no high-resolution branch);
-- the display: `qml_patch.sh` (`C300X_QML_QT5_MARKER`) and the installer take
-  the rcc overlay path instead of QML files on disk.
-
-The C100X (branch `c100x_1.5.8`) also ships Qt 5 (5.10), but with QML files on
-disk, and its camera need not share the 3.0.x limit. When the C100X work is
-merged, the marker would send it down both 3.0.x paths at once. Split the decision into a camera fact
-and a display fact before that merge; until then, do not reuse this marker for
-anything new.
+The split is done. The device profile (`device_detect.c`, mirrored by the
+profile block of `qml_patch.sh` and `remove_agent.sh` and by
+`device_profile.py` in Home Assistant) holds two separate facts: the display
+kind (`qt4_ondisk`, `qt5_rcc`, `qt5_ondisk`) and whether the camera is fixed to
+the low stream. The C100X is recognised by its display program
+`/home/bticino/bin/gui/BtClass100` before the Qt 5 library is looked at. New
+code asks the profile for the fact it needs and never reads
+`libQt5Core.so.5` itself.
 
 ## Before Merge On Devices
 

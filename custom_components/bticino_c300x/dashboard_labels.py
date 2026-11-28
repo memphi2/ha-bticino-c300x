@@ -161,11 +161,47 @@ _DASHBOARD_STATE_LABELS_IT = {
     "unavailable": "Offline",
     "unknown": "Sconosciuto",
 }
+_DASHBOARD_STATE_LABELS_ES = {
+    "not_home": "Fuera",
+    "locked": "Bloqueado",
+    "unlocked": "Desbloqueado",
+    "locking": "Bloqueando",
+    "unlocking": "Desbloqueando",
+    "jammed": "Atascado",
+    "opening": "Abriendo",
+    "closing": "Cerrando",
+    "cleaning": "Limpiando",
+    "docked": "En la base",
+    "returning": "Volviendo",
+    "error": "Error",
+    "armed_away": "Ausente",
+    "armed_custom_bypass": "Bypass",
+    "armed_home": "En casa",
+    "armed_night": "Noche",
+    "armed_vacation": "Vacaciones",
+    "arming": "Armando",
+    "closed": "Cerrado",
+    "disarmed": "Desarmada",
+    "home": "En casa",
+    "idle": "Listo",
+    "off": "Apagado",
+    "on": "Encendido",
+    "open": "Abierto",
+    "pending": "Pendiente",
+    "playing": "Activo",
+    "paused": "En pausa",
+    "standby": "En espera",
+    "buffering": "Cargando",
+    "triggered": "Alarma",
+    "unavailable": "Sin conexión",
+    "unknown": "Desconocido",
+}
 _DASHBOARD_STATE_LABELS_BY_LANGUAGE = {
     "de": _DASHBOARD_STATE_LABELS_DE,
     "en": _DASHBOARD_STATE_LABELS_EN,
     "fr": _DASHBOARD_STATE_LABELS_FR,
     "it": _DASHBOARD_STATE_LABELS_IT,
+    "es": _DASHBOARD_STATE_LABELS_ES,
 }
 _BINARY_SENSOR_DEVICE_CLASS_LABELS_DE = {
     "battery": ("Normal", "Niedrig"),
@@ -283,11 +319,41 @@ _BINARY_SENSOR_DEVICE_CLASS_LABELS_IT = {
     "vibration": ("Calmo", "Vibrazione"),
     "window": ("Chiuso", "Aperto"),
 }
+_BINARY_SENSOR_DEVICE_CLASS_LABELS_ES = {
+    "battery": ("Normal", "Baja"),
+    "battery_charging": ("No carga", "Cargando"),
+    "cold": ("Normal", "Frío"),
+    "connectivity": ("Desconectado", "Conectado"),
+    "door": ("Cerrado", "Abierto"),
+    "garage_door": ("Cerrado", "Abierto"),
+    "gas": ("OK", "Gas detectado"),
+    "heat": ("Normal", "Caliente"),
+    "light": ("Oscuro", "Claro"),
+    "lock": ("Bloqueado", "Desbloqueado"),
+    "moisture": ("Seco", "Húmedo"),
+    "motion": ("Sin movimiento", "Movimiento"),
+    "moving": ("Parado", "En movimiento"),
+    "occupancy": ("Libre", "Ocupado"),
+    "opening": ("Cerrado", "Abierto"),
+    "plug": ("Desconectado", "Conectado"),
+    "power": ("Apagado", "Encendido"),
+    "presence": ("Ausente", "Presente"),
+    "problem": ("OK", "Problema"),
+    "running": ("Parado", "En marcha"),
+    "safety": ("Seguro", "Inseguro"),
+    "smoke": ("OK", "Humo detectado"),
+    "sound": ("Silencio", "Sonido"),
+    "tamper": ("OK", "Manipulación"),
+    "update": ("Actualizado", "Actualización"),
+    "vibration": ("Sin vibración", "Vibración"),
+    "window": ("Cerrado", "Abierto"),
+}
 _BINARY_SENSOR_DEVICE_CLASS_LABELS_BY_LANGUAGE = {
     "de": _BINARY_SENSOR_DEVICE_CLASS_LABELS_DE,
     "en": _BINARY_SENSOR_DEVICE_CLASS_LABELS_EN,
     "fr": _BINARY_SENSOR_DEVICE_CLASS_LABELS_FR,
     "it": _BINARY_SENSOR_DEVICE_CLASS_LABELS_IT,
+    "es": _BINARY_SENSOR_DEVICE_CLASS_LABELS_ES,
 }
 _BINARY_SENSOR_DEVICE_CLASS_COLORS = {
     "battery": (_DASHBOARD_COLOR_GOOD, _DASHBOARD_COLOR_BAD),
@@ -386,11 +452,29 @@ _WEATHER_STATE_LABELS_IT = {
     "windy": "Ventoso",
     "windy-variant": "Ventoso",
 }
+_WEATHER_STATE_LABELS_ES = {
+    "clear-night": "Despejado",
+    "cloudy": "Nublado",
+    "exceptional": "Extremo",
+    "fog": "Niebla",
+    "hail": "Granizo",
+    "lightning": "Tormenta",
+    "lightning-rainy": "Tormenta",
+    "partlycloudy": "Parcialmente nublado",
+    "pouring": "Lluvia intensa",
+    "rainy": "Lluvia",
+    "snowy": "Nieve",
+    "snowy-rainy": "Aguanieve",
+    "sunny": "Soleado",
+    "windy": "Ventoso",
+    "windy-variant": "Ventoso",
+}
 _WEATHER_STATE_LABELS_BY_LANGUAGE = {
     "de": _WEATHER_STATE_LABELS_DE,
     "en": _WEATHER_STATE_LABELS_EN,
     "fr": _WEATHER_STATE_LABELS_FR,
     "it": _WEATHER_STATE_LABELS_IT,
+    "es": _WEATHER_STATE_LABELS_ES,
 }
 
 
@@ -444,6 +528,18 @@ ENERGY_LABELS_BY_LANGUAGE = {
         "autarky": "Autosufficienza", "net_grid": "Netto dalla rete", "cost": "Costo di oggi",
         "other_grid": "Altri contatori",
     },
+    "es": {
+        "title": "Energía", "now": "Ahora", "today": "Hoy", "power": "Potencia", "balance": "Balance",
+        "power_interval": "Medias de 15 min", "power_empty": "No hay historial de potencia",
+        "consumers": "Consumidores",
+        "consumers_incomplete": "Algunas medidas de potencia no disponibles",
+        "consumers_empty": "No hay medidas de potencia de los consumidores",
+        "solar": "Solar", "grid": "Red", "home": "Casa", "battery": "Batería",
+        "export": "Vertido", "charge": "Carga de batería", "discharge": "Descarga de batería",
+        "grid_total": "Red total", "self_use": "Autoconsumo",
+        "autarky": "Autosuficiencia", "net_grid": "Neto de la red", "cost": "Coste de hoy",
+        "other_grid": "Otros contadores",
+    },
 }
 
 
@@ -453,7 +549,7 @@ _DECIMAL_NUMBER = re.compile(r"-?\d+\.\d+")
 def decimal_text(value: Any, language: str) -> str:
     """Return a number's text with the decimal sign of the display language.
 
-    English keeps the point; German, French and Italian write a comma. Text
+    English keeps the point; German, French, Italian and Spanish write a comma. Text
     that is not a plain decimal number is returned as it is.
     """
 

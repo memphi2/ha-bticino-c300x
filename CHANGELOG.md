@@ -1,5 +1,149 @@
 # Changelog
 
+## v3.0.0 - 2026-11-28
+
+3.0.0 puts the Classe 300X and, as an experiment, the Classe 100X into one
+package. Everything below is new against 2.10.0. The betas of 3.0.0 ran on a
+Classe 300X with firmware 1.7.19: the agent update from 2.10.0, the entities,
+the Display patch, the live view, an answered call, the door level in the
+station's audio chip and a function test (picture controls, display notice,
+ringer mute, text memo, display reload, agent restart, diagnostics) were fine.
+Firmware 2.0.2 and 3.0.6 and the Classe 100X on 1.5.8 are checked offline
+against their original files.
+
+Breaking changes:
+
+- **Door station sound: two settings instead of two gains.** "Live audio
+  level" and "Volume of ring recordings" are replaced by **Door level** and
+  **Fine adjustment** under **Configure > Video and audio** (details below).
+  The old values are not taken over; the new defaults (Stock, 0 dB) apply.
+  Ring recordings now have the live level, so with the old default of +6 dB
+  they are about 6 dB quieter than in 2.10.0. For about the old recording
+  level, set **Door level** to +6 dB; this also raises the live sound.
+- The camera attribute `doorstation_audio_gain_db` is removed; templates that
+  read it need a change.
+- The native agent is rebuilt as **3.0.0**; an agent update is required.
+
+Sound and picture:
+
+- **Clean picture from the first frame.** Live video starts with a complete
+  picture in the live view, the ring preview and an answered call, instead of
+  a grey or broken image until the next full frame.
+- **Door level** (Stock, +3, +6, +9, +12 dB; default Stock) raises the voice at
+  the source: on a Classe 300X in the station's audio chip, before the sound
+  is compressed; on the Classe 100X in the agent. **Fine adjustment** (-10 to
+  +10 dB) adds to it. Both work the same with Speex and PCMU, in the live
+  view, during a call and in ring recordings, which now have the same level
+  as the live sound. On a Classe 300X a door level above Stock also makes
+  calls answered in the BTicino app louder; set it to Stock (or remove the
+  agent) before going back to 2.10.0 or older. The card plays the sound as it
+  comes and no longer adds its own gain.
+
+Setup and installation over SSH:
+
+- A new Classe 300X setup offers **Home Assistant pages on the display**
+  switched on where its display can take them, so the station gets the
+  display pages right away. Existing
+  entries keep their setting; on a Classe 100X it stays off, because its
+  pages are activated separately.
+- **Reinstall when the keys are lost.** When Home Assistant no longer has the
+  agent's keys, for example after Home Assistant or the integration was
+  installed again without a backup, the key dialog in setup and in the
+  re-authentication offers **Reinstall the agent**. Home Assistant installs
+  the agent again over SSH with new keys and keeps them; the display pages
+  stay. An existing entry of the station gets the new keys, no second entry is
+  created. Once the keys are on the station, Home Assistant keeps them even
+  when a later step fails, and a retry finishes cleanly. A reinstall from
+  the re-authentication or the agent update Repair stops before changing
+  anything when the address leads to a different station.
+- Adding a station again with its keys while an entry from an older release
+  still points at it updates that entry instead of creating a second one.
+- Setup can log in with an SSH key (OpenSSH or PEM, optional passphrase)
+  instead of or next to a password; it is used for the installation only and
+  not stored. RSA and ECDSA keys work on every firmware, Ed25519 keys only on
+  3.0.6.
+- A login without root rights (for example `bticino2`) gets a clear message.
+- Own messages when SSH on the station cannot be reached, when the station
+  accepts key logins only, and when Home Assistant cannot load its SSH
+  package. When Home Assistant cannot install its SSH package but a usable
+  one is already there, the installation goes on with it.
+- Setup installs nothing on a device that is not a BTicino station.
+- Stations whose SSH offers an ECDSA, Ed25519 or SHA-2 RSA host key are
+  accepted.
+- After the station was flashed again, an outdated firewall backup no longer
+  stops the installation.
+- A station without the firewall file `/etc/network/if-pre-up.d/iptables` is
+  installed with firewall management switched off instead of failing. Where
+  that file or a directory above it is a link, the installation stops before
+  it changes anything. On the Classe 300X firmwares 1.7.19, 2.0.2 and 3.0.6
+  the file is a regular file, so nothing changes there.
+- Manual setup says **C300X/C100X** in its texts until the station has
+  answered and its model is known. While the model is still unknown, setup
+  tries the C100X factory password after the station refused the C300X one,
+  before it asks for a login.
+
+Names and languages:
+
+- **New name: BTicino C300X/C100X.** HACS and Home Assistant show the
+  integration under this name; entries, entities and services keep theirs.
+- **Names without the model.** The card picker lists the card as **BTicino
+  Doorbell Call Card** (before: C300X Doorbell Call Card). The blueprints are
+  called **BTicino ...** instead of **C300X ...**, their device input is called
+  **Door station**, and the services are listed without "C300X" in their names
+  (for example **Run action** instead of Run C300X action). Only the displayed
+  names changed: the card type `custom:c300x-doorbell-call-card`, the service
+  IDs, the blueprint files and every entity stay as they are, so existing
+  dashboards and automations keep working without a change.
+- The device page shows the station's board as hardware version and its
+  article number as model ID.
+- **Spanish.** Home Assistant texts, the card, event labels, memo and video
+  message names and the station display pages are available in Spanish. The
+  station pages follow the station's language on the Classe 300X; the Classe
+  100X shows English, because its firmware reports no language. The
+  forwarding text on the station is renewed by the agent update Repair.
+
+Switches:
+
+- **SSH:** where another tool runs its own SSH service, the switch shows SSH
+  as on, names that tool and cannot be switched.
+- **Legacy MQTT bridge:** when switched off, the old bridge stays off even when
+  a watchdog of the rooting tool tries to start it again; switching it on, or
+  removing the agent, gives it back.
+
+Classe 100X (experimental):
+
+- Setup recognises a Classe 100X on firmware 1.5.8 and asks for an explicit
+  confirmation before it installs anything. A Classe 300X is never asked.
+  It is checked against the original firmware files offline only and not yet
+  confirmed on a device ([issue #51](https://github.com/memphi2/ha-bticino-c300x/issues/51)).
+- With active display pages, the agent update Repair renews the pages when the
+  update brings newer ones: the station reboots once, after it has been idle
+  for about two minutes, never during a call and only while the maintenance
+  reboot is allowed. A station with the original display is not rebooted.
+
+Fixed:
+
+- After the camera's entity ID was changed, the camera refused every stream
+  with "Camera is unloading" until the integration was reloaded.
+- After the audio codec select's entity ID was changed, a codec change did not
+  finish after the station's restart and the select stopped updating until
+  the integration was reloaded.
+- A Display patch write that failed and could not be rolled back, or that had
+  to be stopped, left a copy of the display files in the station's memory
+  until the next restart.
+- The SSH password in the agent update Repair is now hidden while you type.
+
+Documentation:
+
+- The documentation is rewritten per model. The README is a short overview
+  with five steps for each model (setup, use, station display,
+  troubleshooting, update and removal); every page ends with a link to the
+  next step. One reference page lists the features per model, the options,
+  entities, actions, Notify fields and events.
+- The setup page names the third-party projects for SSH access per firmware,
+  also davemajor's USB root for 3.0.6, which sets up SSH key login, and
+  assumes a clean firmware with only SSH enabled.
+
 ## v2.10.0 - 2026-11-25
 
 2.10.0 adds firmware 3.0.6 (Classe 300X hardware revision 4) to 1.7.x and
@@ -647,7 +791,8 @@ Doorstation card:
   arbitrary historic MP4s or device answering-machine recordings. Automatic
   images still require **Save images**; clips require a separate capture
   automation. Hiding history or expiring its links does not delete MP4 files.
-  See [Media history](docs/visitor-journal.md) for setup and retention.
+  See [Visitor Images](docs/classe-300x/2-use.md#visitor-images) and
+  [Recording a Ring](docs/classe-300x/2-use.md#recording-a-ring).
 - A running stream or call stays in the card when a dashboard with columns
   rebuilds its layout, for example after the browser window is resized or
   enters full screen.

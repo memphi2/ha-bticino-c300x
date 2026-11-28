@@ -17,6 +17,7 @@ from .capabilities import entry_device_ui_enabled_or_patch_active
 from .const import DOMAIN
 from .display_alerts import alert_options, async_send_display_alert
 from .entry_types import BticinoC300XConfigEntry
+from .model_names import entry_model
 from .notify_names import notify_names
 from .notify_speech import async_speak, prepare_speech
 from .service_authorization import authorized_service
@@ -94,7 +95,7 @@ class C300XNotificationService(BaseNotificationService):
         if "target" in kwargs:
             raise ServiceValidationError("C300X notify targets are fixed per config entry")
         # Everything is checked before anything is shown or spoken.
-        options = alert_options(kwargs.get("data"))
+        options = alert_options(kwargs.get("data"), entry_model(self.entry))
         speech = None if not options["tts"] else prepare_speech(
             self.hass, self.entry, message,
             engine=options.get("tts_engine"), language=options.get("language"),

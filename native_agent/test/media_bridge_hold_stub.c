@@ -120,12 +120,6 @@ void c300x_media_ring_call_hangup(struct c300x_video *video)
     c300x_media_session_stop(video);
 }
 
-void c300x_media_bridge_set_doorstation_audio_gain_tenths(struct c300x_video *video, int gain_tenths)
-{
-    (void)video;
-    (void)gain_tenths;
-}
-
 bool c300x_media_talkback_running(const struct c300x_video *video)
 {
     (void)video;

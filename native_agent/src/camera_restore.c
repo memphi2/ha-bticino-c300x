@@ -4,6 +4,7 @@
 #include "camera_files.h"
 #include "camera_update.h"
 #include "camera_update_lock.h"
+#include "device_detect.h"
 #include "device_file.h"
 #include "media_geometry_patch.h"
 
@@ -15,7 +16,7 @@ static int camera_quality_remove_patches_locked(const char **error)
     char backup[C300X_MAX_PATH_LEN], cut_backup[C300X_MAX_PATH_LEN];
     struct c300x_camera_values current, original;
     const char *settings = c300x_camera_settings_path(), *crop = c300x_camera_crop_path();
-    int low = c300x_device_display_is_qt5(), ro_failed = 0;
+    int low = c300x_device_camera_resolution_fixed(), ro_failed = 0;
     int geometry = c300x_media_geometry_state(NULL);
 
     *error = "backup_path_invalid";

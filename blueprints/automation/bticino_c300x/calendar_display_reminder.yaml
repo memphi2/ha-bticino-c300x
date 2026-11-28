@@ -1,6 +1,6 @@
 blueprint:
-  name: C300X Calendar display reminder
-  description: Show a temporary reminder on the native C300X Home Assistant page. Uses an existing HA calendar; does not wake the display or interrupt calls.
+  name: BTicino Calendar display reminder
+  description: Show a temporary reminder on the Home Assistant page of the station display. Uses an existing HA calendar; does not wake the display or interrupt calls.
   domain: automation
   source_url: https://github.com/memphi2/ha-bticino-c300x/blob/main/blueprints/automation/bticino_c300x/calendar_display_reminder.yaml
   input:
@@ -10,7 +10,7 @@ blueprint:
         entity:
           domain: calendar
     entry_id:
-      name: C300X integration
+      name: BTicino C300X/C100X integration
       selector:
         config_entry:
           integration: bticino_c300x

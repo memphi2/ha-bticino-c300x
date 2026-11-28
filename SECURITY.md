@@ -26,7 +26,7 @@ gate.
   reviewing them for private hosts and local identifiers.
 
 Maintenance steps for keys, noAuth and SSH are in
-[Tokens and Access](docs/advanced-maintenance.md#tokens-and-access).
+[Keys and access](docs/classe-300x/5-update-and-removal.md#keys-and-access).
 
 ## Home Assistant Service Permissions
 
@@ -85,7 +85,7 @@ from Home Assistant. It never returns the token, and the address binding means
 a relay gets a proof for the station's address, not for its own. The route is
 disabled while `api.noAuth` is on and for API tokens shorter than 32
 characters, which a single proof would expose to offline guessing. See
-[Station Changed Its Address](docs/media-troubleshooting.md#station-changed-its-address).
+[The station has a new address](docs/classe-300x/4-troubleshooting.md#the-station-has-a-new-address).
 
 Home Assistant stores the configured agent token, maintenance token, webhook id,
 and webhook secret in its config entry storage. The native agent stores its
@@ -97,7 +97,7 @@ do not echo token values back.
 
 Reconfigure and options forms never display saved access and maintenance keys;
 an empty key field keeps the stored key. Changing keys:
-[Tokens and Access](docs/advanced-maintenance.md#tokens-and-access).
+[Keys and access](docs/classe-300x/5-update-and-removal.md#keys-and-access).
 
 ### RTSP Access
 
@@ -138,6 +138,9 @@ by removing that dependency, not by hiding the scanner result.
 - **Scope:** only the explicit installer connection to a supported local C300X.
   RSA/SHA-1 host signatures and legacy key exchange/cipher fallbacks are enabled
   per connection. No global SSH configuration or library defaults are changed.
+  A station whose SSH server offers an ECDSA or Ed25519 host key (as set up by
+  some root tools), or signs its RSA host key with SHA-2 (rsa-sha2-512/256),
+  is accepted as well; these are preferred over RSA/SHA-1 when offered.
 - **Reason:** the device's SSH implementation needs legacy interoperability.
   Updating the client does not modernize the device protocol. Paramiko 5 removes
   the required RSA/SHA-1 support; AsyncSSH retains a configurable legacy path.
@@ -146,10 +149,11 @@ by removing that dependency, not by hiding the scanner result.
   for a device you control on an isolated/trusted network.
 - **Credentials:** the installer first tries the C300X factory root login,
   which is the same on every device and therefore no secret. It is built in
-  encoded only so that it is not plain text in the code. A typed password is
-  used only when the device refuses that login, in process memory. No local
-  key discovery, SSH agent, user SSH config, proxy or interactive terminal is
-  used. Credentials are not stored by the integration.
+  encoded only so that it is not plain text in the code. A typed password, or
+  a private key pasted into the form (with its passphrase), is used only when
+  the device refuses that login, in process memory. No local key discovery,
+  SSH agent, user SSH config, proxy or interactive terminal is used.
+  Credentials and keys are not stored or logged by the integration.
 - **Exposure:** temporary first installation or explicit SSH recovery.
   Normal operation and supported agent self-updates use the authenticated agent
   API and existing maintenance credentials, not SSH. Startup never silently

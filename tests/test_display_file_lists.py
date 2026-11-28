@@ -30,7 +30,7 @@ def test_every_list_of_the_display_files_names_the_same_files() -> None:
     assert set(generated.group(1).split()) | (set(core.group(1).split()) - {"EventManager.qml"}) == expected
 
     update_paths = (ROOT / "native_agent/src/agent_update_paths.h").read_text()
-    assert set(re.findall(r'"device_agent/qml/([^"]+)"', update_paths)) == standalone
+    assert set(re.findall(r'"device_agent/qml/([^"]+)"', update_paths)) == standalone | {"c100x_bundle.sh"}
 
     installer = (ROOT / "scripts/install_c300x_device.sh").read_text()
     assert set(re.findall(r'"\$QML_STAGE_DIR/([^"]+)"', installer)) == expected
@@ -40,7 +40,23 @@ def test_every_list_of_the_display_files_names_the_same_files() -> None:
         "C300XRingerControl.qml"
     } >= expected
     assert {path.relative_to(ROOT / "device_qml").as_posix()
-            for path in (ROOT / "device_qml").rglob("*") if path.suffix in {".qml", ".js"}} == expected
+            for path in (ROOT / "device_qml").rglob("*") if path.suffix in {".qml", ".js"}
+            and path.relative_to(ROOT / "device_qml").parts[0] != "c100x"} == expected
+
+
+def test_c100x_templates_are_all_present_in_the_generated_adapter(tmp_path: Path) -> None:
+    from c100x_qml_builder import build
+    from device_file_strip import STRIPPED_SUFFIXES, strip_device_source
+
+    destination = tmp_path / "adapter"
+    build(destination)
+    source = ROOT / "device_qml/c100x"
+    templates = [path for path in source.rglob("*") if path.is_file()]
+    assert templates
+    for path in templates:
+        expected = (strip_device_source(path.read_text(), name=path.name).encode()
+                    if path.suffix in STRIPPED_SUFFIXES else path.read_bytes())
+        assert (destination / path.relative_to(source)).read_bytes() == expected
 
 
 def test_manual_installer_preserves_javascript_subdirectory() -> None:

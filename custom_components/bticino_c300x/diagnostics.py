@@ -43,6 +43,11 @@ from .const import (
     MEDIA_USER_SETUP_ENTITY_KEY,
 )
 from .device_installer import installer_bundle_status
+from .doorstation_audio import (
+    agent_audio_level,
+    audio_fine_gain_db,
+    door_audio_level_db,
+)
 from .entity import entry_config_value, entry_entity_unique_id, entry_video_enabled
 from .entry_types import BticinoC300XConfigEntry
 from .fingerprint import fnv1a64_fingerprint
@@ -110,6 +115,7 @@ _SAFE_AGENT_DIAGNOSTIC_KEYS = (
     "open_fd_count",
     "agent_init_script_present",
     "agent_init_link_ok",
+    "agent_started_after_boot_seconds",
     "subscription_count",
     "recent_event_count",
     "recent_event_capacity",
@@ -147,6 +153,15 @@ _SAFE_AGENT_DIAGNOSTIC_KEYS = (
     "flexisip_restart_marker",
     "flexisip_backup_marker",
     "flexisip_reference_state",
+)
+# The agent's door level and fine adjustment, and where the door level went.
+_AUDIO_LEVEL_DIAGNOSTIC_KEYS = (
+    "door_level_db",
+    "fine_gain_db",
+    "door_level_path",
+    "chip_lever",
+    "chip_gain_db",
+    "software_gain_db",
 )
 _SAFE_AGENT_DIAGNOSTIC_RUNTIME_KEYS = (
     "agent_diagnostics_updated_by",
@@ -259,6 +274,7 @@ async def async_get_config_entry_diagnostics(
                 else None
             ),
             "device_user": _device_user_diagnostics(runtime),
+            "ssh": _ssh_diagnostics(runtime),
             # Entry-side fact, not device state: it separates "never set up"
             # from "set up once and later lost", which the device status alone
             # cannot answer.
@@ -564,6 +580,11 @@ def _agent_info_diagnostics(runtime: Any | None) -> dict[str, Any] | None:
         "implementation": info.get("implementation"),
         "api_version": info.get("api_version"),
         "model": info.get("model"),
+        "display_kind": info.get("display_kind"),
+        "camera": info.get("camera"),
+        "model_check": info.get("model_check"),
+        "board": info.get("board"),
+        "article": info.get("article"),
         "firmware": info.get("firmware"),
         "device_id_configured": bool(device_id),
         "device_id_fingerprint": fnv1a64_fingerprint(str(device_id))
@@ -687,6 +708,16 @@ async def _async_video_bridge_diagnostics(
     }
     # Presence, not text: a device error message is not redactable in general.
     result["last_error_present"] = bool(bridge.get("last_error"))
+    level = agent_audio_level(status)
+    result["audio_level"] = {
+        key: value
+        for key in _AUDIO_LEVEL_DIAGNOSTIC_KEYS
+        if isinstance(value := level.get(key), int | str) and len(str(value)) <= 32
+    }
+    result["audio_level_configured"] = {
+        "door_level_db": door_audio_level_db(entry),
+        "fine_gain_db": audio_fine_gain_db(entry),
+    }
     return result
 
 
@@ -787,6 +818,18 @@ def _device_user_diagnostics(runtime: Any | None) -> dict[str, Any] | None:
         getattr(runtime, "device_user_status_updated_at", None)
     )
     return data
+
+
+_SSH_DIAGNOSTIC_KEYS = ("running", "state", "manager", "listening", "factory_running")
+
+
+def _ssh_diagnostics(runtime: Any | None) -> dict[str, Any] | None:
+    """Return the last SSH state read: whether another tool keeps SSH running."""
+
+    status = getattr(runtime, "ssh_status", None) if runtime is not None else None
+    if not isinstance(status, Mapping) or not status:
+        return None
+    return {key: status.get(key) for key in _SSH_DIAGNOSTIC_KEYS}
 
 
 def _self_test_diagnostics(runtime: Any | None) -> dict[str, Any] | None:

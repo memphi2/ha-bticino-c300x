@@ -18,6 +18,7 @@ pending check; a wrong proof plans none.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import ipaddress
@@ -25,6 +26,7 @@ import json
 import logging
 import re
 import secrets
+import socket
 from collections.abc import Callable, Coroutine
 from time import monotonic
 from typing import Any
@@ -41,7 +43,7 @@ from .config_flow_identity import (
     entry_uses_manual_setup_unique_id,
 )
 from .const import CONF_AGENT_HOST, CONF_AGENT_PORT, CONF_AGENT_TOKEN, DOMAIN
-from .discovery import discovery_matches_entry
+from .discovery import discovery_matches_entry, discovery_model_conflicts
 from .http_body import read_capped_body
 
 _LOGGER = logging.getLogger(__name__)
@@ -60,6 +62,7 @@ _MAX_REPLY_BYTES = 4096
 # The agent refuses proofs for shorter tokens: they could be guessed offline.
 _MIN_TOKEN_LENGTH = 32
 _PROOF = re.compile(r"[0-9a-f]{64}")
+_RESOLVE_SECONDS = 5.0
 
 
 def identity_proof(token: str, device_id: str, host: str, port: int, nonce: str) -> str:
@@ -69,13 +72,14 @@ def identity_proof(token: str, device_id: str, host: str, port: int, nonce: str)
 
 
 async def async_follow_proven_move(
-    flow: Any, discovered_unique_id: str | None, connection: dict[str, Any],
+    flow: Any, discovered_unique_id: str | None, connection: dict[str, Any], *, model: str = "",
 ) -> bool:
     """Move the matching entry to the announced IPv4 endpoint once proven.
 
-    The announcement replaces a pending re-check of the same entry.
+    The announcement replaces a pending re-check of the same entry. An entry
+    whose agent reported the other model never follows it.
     """
-    return await _async_check(flow, discovered_unique_id, connection, MOVE_RECHECKS, recheck=False)
+    return await _async_check(flow, discovered_unique_id, connection, MOVE_RECHECKS, recheck=False, model=model)
 
 
 def async_cancel_move_recheck(hass: Any, entry_id: str) -> None:
@@ -87,7 +91,7 @@ def async_cancel_move_recheck(hass: Any, entry_id: str) -> None:
 
 async def _async_check(
     flow: Any, discovered_unique_id: str | None, connection: dict[str, Any],
-    rechecks_left: int, *, recheck: bool,
+    rechecks_left: int, *, recheck: bool, model: str = "",
 ) -> bool:
     """Run one attempt; plan the next check of this announcement if it may help."""
     host = _routable_ipv4(connection.get(CONF_AGENT_HOST))
@@ -97,7 +101,7 @@ async def _async_check(
         entry for entry in flow._async_current_entries()
         if discovery_matches_entry(discovered_unique_id, entry.unique_id)
     ), None)
-    if entry is None:
+    if entry is None or discovery_model_conflicts(entry, model):
         return False
     rechecks = _rechecks(flow.hass)
     ticket = rechecks.begin(entry.entry_id)
@@ -111,7 +115,7 @@ async def _async_check(
         return outcome == _MOVED
 
     def check() -> Coroutine[Any, Any, bool]:
-        return _async_check(flow, discovered_unique_id, connection, rechecks_left, recheck=True)
+        return _async_check(flow, discovered_unique_id, connection, rechecks_left, recheck=True, model=model)
 
     if rechecks.schedule(entry.entry_id, ticket, delay, check):
         _LOGGER.debug(
@@ -266,6 +270,48 @@ def _proves(
     ):
         return False
     return hmac.compare_digest(proof, identity_proof(token, device_id, host, port, nonce))
+
+
+async def async_ipv4_addresses(host: str) -> list[str]:
+    """The routable IPv4 addresses a saved host stands for, at most four.
+
+    A proof binds the address the agent saw itself reached on, its IPv4
+    address: a host name is resolved first. An IPv6 address, or a name
+    without an IPv4 address, gives none.
+    """
+    host = str(host or "").strip()
+    literal = _routable_ipv4(host)
+    if literal is not None:
+        return [literal]
+    try:
+        ipaddress.ip_address(host.strip("[]"))
+    except ValueError:
+        pass
+    else:
+        return []
+    try:
+        async with asyncio.timeout(_RESOLVE_SECONDS):
+            infos = await asyncio.get_running_loop().getaddrinfo(
+                host, None, family=socket.AF_INET, type=socket.SOCK_STREAM,
+            )
+    except (OSError, UnicodeError, TimeoutError):
+        return []
+    found: list[str] = []
+    for *_, sockaddr in infos:
+        address = _routable_ipv4(sockaddr[0])
+        if address is not None and address not in found:
+            found.append(address)
+    return found[:4]
+
+
+async def async_identity_proven(
+    hass: Any, host: str, port: int, unique_id: str, token: str,
+) -> bool | None:
+    """Ask IPv4 host:port to prove the identity; None when it gave no proof reply.
+
+    The request carries the nonce only, never the token.
+    """
+    return await _async_identity_proven(hass, host, port, unique_id, token)
 
 
 async def _async_identity_proven(

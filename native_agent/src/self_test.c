@@ -43,6 +43,9 @@ static const char *firmware_family(const struct c300x_config *config)
 {
     char version[C300X_MAX_VERSION_LEN];
     resolve_device_firmware(config, version, sizeof(version));
+    if (strncmp(version, "1.5.", 4) == 0) {
+        return "1.5.x";
+    }
     if (strncmp(version, "1.7.", 4) == 0) {
         return "1.7.x";
     }

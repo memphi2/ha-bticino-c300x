@@ -1,11 +1,13 @@
 #include "c300x_agent.h"
 #include "audio_codec.h"
+#include "audio_level.h"
 #include "camera_quality.h"
 #include "device_routing.h"
 #include "display_qt5.h"
 #include "camera_running.h"
 #include "display_touch.h"
 #include "https_client.h"
+#include "c100x_gui_response.h"
 #include "media_geometry_patch.h"
 
 #include <signal.h>
@@ -20,8 +22,9 @@ static void print_usage(const char *program)
         "Usage: %s [--config PATH] [--check-config] [--diagnose-startup]"
         " [--audio-codec status|apply|restore] [--display-touch status|apply|restore]"
         " [--display-qt5 extract DIR REL...|pack ROOT OUT REL...|overlay PATH]"
-        " [--restore-media-patches] [--version]\n",
-        program
+        " [--restore-media-patches] [--version]\n"
+        "       %s --c100x-gui-response MODE GENERATION PROBE < response.json\n",
+        program, program
     );
 }
 
@@ -143,6 +146,10 @@ static void print_startup_diagnosis(const struct c300x_config *config)
 
 int main(int argc, char **argv)
 {
+    if (argc >= 2 && !strcmp(argv[1], "--c100x-gui-response")) {
+        if (argc != 5) return 2;
+        return c100x_gui_response_cli(argv[2], argv[3], argv[4]);
+    }
     const char *config_path = "config.json";
     int check_config = 0;
     int diagnose_startup = 0;
@@ -202,6 +209,10 @@ int main(int argc, char **argv)
             fprintf(stderr, "Failed to restore media patches: %s\n", error);
             return 1;
         }
+        if (!c300x_audio_level_remove_patches(error, sizeof(error))) {
+            fprintf(stderr, "Failed to restore the audio state hook: %s\n", error);
+            return 1;
+        }
         const char *quality_error = "";
         if (!c300x_camera_quality_remove_patches(&quality_error)) {
             fprintf(stderr, "Failed to restore the camera quality: %s\n", quality_error);
@@ -244,5 +255,6 @@ int main(int argc, char **argv)
     /* The device libcurl must initialize before workers, and only on opt-in. */
     c300x_https_init(config.https_callbacks_enabled);
     (void)signal(SIGPIPE, SIG_IGN);
+    c300x_audio_level_start();
     return c300x_run(&config);
 }

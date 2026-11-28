@@ -120,6 +120,7 @@ def video_message_title(
         de="Video-Nachricht",
         it="Messaggio video",
         fr="Message video",
+        es="Mensaje de vídeo",
         en="Video message",
     )
     timestamp = message.get("iso_time") or message.get("date")

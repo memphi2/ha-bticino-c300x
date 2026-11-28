@@ -196,8 +196,10 @@ def test_metadata_sort_key_can_preserve_video_time_coercion() -> None:
     assert metadata_sort_key({"unix_time": "bad"}, coerce_unix_time=True) == (0, "", "")
 
 
-def test_localized_choice_supports_de_it_and_default_en() -> None:
-    assert localized_choice("de-DE", de="de", it="it", fr="fr", en="en") == "de"
-    assert localized_choice("it-IT", de="de", it="it", fr="fr", en="en") == "it"
-    assert localized_choice("fr-FR", de="de", it="it", fr="fr", en="en") == "fr"
-    assert localized_choice("es-ES", de="de", it="it", fr="fr", en="en") == "en"
+def test_localized_choice_supports_de_it_fr_es_and_default_en() -> None:
+    texts = {"de": "de", "it": "it", "fr": "fr", "es": "es", "en": "en"}
+    assert localized_choice("de-DE", **texts) == "de"
+    assert localized_choice("it-IT", **texts) == "it"
+    assert localized_choice("fr-FR", **texts) == "fr"
+    assert localized_choice("es-ES", **texts) == "es"
+    assert localized_choice("pt-PT", **texts) == "en"

@@ -22,7 +22,7 @@ HARNESS = r'''
 #include <stdlib.h>
 #include <string.h>
 static int committed, disk_reads, config_reads, low, state, drop_running;
-int c300x_device_display_is_qt5(void) { return low; }
+int c300x_device_camera_resolution_fixed(void) { return low; }
 enum c300x_media_geometry_state c300x_media_geometry_state(const char *path) {
     if (path) return drop_running && committed ? C300X_MEDIA_GEOMETRY_UNKNOWN : state;
     if (committed) { disk_reads++; return C300X_MEDIA_GEOMETRY_UNKNOWN; }

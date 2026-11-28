@@ -32,6 +32,8 @@ def test_validation_runs_pytest_once_with_coverage(monkeypatch, pytest_result):
     assert len(commands) == 1
     command = list(commands[0])
     assert command[:3] == [check_validate.sys.executable, "-m", "pytest"]
+    assert "--numprocesses=logical" in command
+    assert "--dist=worksteal" in command
     assert "--cov=custom_components/bticino_c300x" in command
     assert f"--cov-fail-under={check_coverage.MINIMUM_COVERAGE}" in command
     assert check_coverage.MINIMUM_COVERAGE == 95
@@ -51,3 +53,24 @@ def test_validation_fails_before_suite_on_missing_turbojpeg(monkeypatch):
     assert check_validate.main() == 1
     assert len(steps) == 1
     assert steps[0].command == (check_validate.sys.executable, "scripts/check_turbojpeg.py")
+
+
+def test_armhf_checks_compile_on_every_cpu(monkeypatch, tmp_path):
+    (tmp_path / "lib").mkdir()
+    monkeypatch.setenv("C300X_DEVICE_SYSROOT", str(tmp_path))
+    steps = []
+
+    def run_step(step):
+        steps.append(step)
+        return 0
+
+    monkeypatch.setattr(check_validate, "_run_step", run_step)
+    monkeypatch.setattr(check_coverage, "main", lambda: 0)
+    assert check_validate.main() == 0
+    make = [step.command for step in steps if step.command[0] == "make"]
+    jobs = f"-j{check_validate.os.cpu_count() or 1}"
+    assert jobs == check_validate.MAKE_JOBS
+    assert make == [
+        ("make", "-C", "native_agent", "armhf-stack-check", jobs),
+        ("make", "-C", "native_agent", "armhf-abi-check", jobs),
+    ]

@@ -267,6 +267,9 @@ def test_event_label_returns_localized_event_names() -> None:
     assert event_label("door_unlock_started", "de-DE") == "Türöffner gestartet"
     assert event_label("door_unlock_started", "it-IT") == "Apertura porta avviata"
     assert event_label("door_unlock_started", "fr") == "Ouverture porte demarree"
+    assert event_label("door_unlock_started", "es") == "Apertura de puerta iniciada"
+    assert event_label("door_unlock_started", "es-ES") == "Apertura de puerta iniciada"
+    assert event_label("door_unlock_started", "pt") == "Door unlock started"
     assert event_label("unknown_vendor_event", "de") is None
 
 

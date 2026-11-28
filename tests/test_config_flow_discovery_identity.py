@@ -85,3 +85,36 @@ def test_setup_finish_cannot_change_authenticated_identity(monkeypatch, identity
     result = asyncio.run(flow._async_create_setup_entry({}))
     assert result["errors"] == {"base": error}
     flow.async_create_entry.assert_not_called()
+
+
+@pytest.mark.parametrize(("entry_model", "announced", "merged"), [
+    ("C300X", "C100X", False), ("C100X", "C300X", False), ("C100X", "C100X", True), ("", "C100X", True),
+])
+def test_a_manual_entry_takes_no_identity_from_the_other_model(entry_model, announced, merged) -> None:
+    import asyncio
+    from types import SimpleNamespace
+
+    from custom_components.bticino_c300x import config_flow_identity
+
+    reads: list[object] = []
+    entry = SimpleNamespace(
+        unique_id="bticino_c300x:192.0.2.5:8091", data={"agent_host": "192.0.2.5", "agent_port": 8091},
+        options={}, runtime_data=SimpleNamespace(agent_info={"model": entry_model}, resources=None),
+    )
+    flow = SimpleNamespace(
+        hass=SimpleNamespace(), _async_current_entries=lambda: [entry],
+        async_abort=lambda reason: {"type": "abort", "reason": reason},
+        _async_request_event_registration=lambda _entry: None,
+    )
+
+    async def read_setup(*_args, **_kwargs):
+        reads.append(_args)
+        return {}
+
+    result = asyncio.run(config_flow_identity.async_existing_manual_discovery(
+        flow, "c100xaabbcc001122", {"agent_host": "192.0.2.5", "agent_port": 8091},
+        lambda a, b: a == b, read_setup, model=announced,
+    ))
+    assert (result == {"type": "abort", "reason": "already_configured"}) is merged
+    if not merged:
+        assert result is None and reads == []

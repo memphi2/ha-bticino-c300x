@@ -6,6 +6,7 @@ Split out of api.py so the api mixins can share these without a cycle.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Mapping
 from typing import Any
 
@@ -283,6 +284,7 @@ def normalize_agent_diagnostics(data: Any) -> AgentDiagnosticsStatus:
         open_fd_count=_optional_int(data.get("open_fd_count")),
         agent_init_script_present=_optional_bool(data.get("agent_init_script_present")),
         agent_init_link_ok=_optional_bool(data.get("agent_init_link_ok")),
+        agent_started_after_boot_seconds=_optional_int(data.get("agent_started_after_boot_seconds")),
         subscription_count=_optional_int(data.get("subscription_count")),
         recent_event_count=_optional_int(data.get("recent_event_count")),
         recent_event_capacity=_optional_int(data.get("recent_event_capacity")),
@@ -460,14 +462,26 @@ def normalize_auth_config_status(data: Any) -> AuthConfigStatus:
     )
 
 
+_SSH_STATES = frozenset({"running", "stopped", "managed_externally"})
+_SSH_MANAGER = re.compile(r"[a-z0-9_-]{1,32}")
+
+
 def normalize_ssh_status(data: Any) -> dict[str, Any]:
     """Normalize maintenance SSH status responses."""
 
     if not isinstance(data, dict):
         raise C300XAgentApiResponseError("SSH status returned non-object JSON")
     raw_value = data.get("running", data.get("enabled"))
+    # Who keeps SSH listening besides the factory dropbear: a short name only.
+    manager = data.get("manager")
+    facts = {
+        "state": data.get("state") if data.get("state") in _SSH_STATES else None,
+        "manager": manager if isinstance(manager, str) and _SSH_MANAGER.fullmatch(manager) else None,
+        "listening": _optional_bool(data.get("listening")),
+        "factory_running": _optional_bool(data.get("factory_running")),
+    }
     if raw_value is None:
-        return {"running": None, "enabled": None, "raw": data}
+        return {"running": None, "enabled": None, **facts, "raw": data}
     if isinstance(raw_value, str):
         normalized = raw_value.strip().lower()
         if normalized in {"true", "1", "on", "running", "enabled"}:
@@ -481,6 +495,7 @@ def normalize_ssh_status(data: Any) -> dict[str, Any]:
     return {
         "running": running,
         "enabled": running,
+        **facts,
         "raw": data.get("raw", data),
     }
 
@@ -623,6 +638,8 @@ def normalize_legacy_mqtt_status(data: Any) -> dict[str, Any]:
         "flexisip_reference_state": _optional_string(
             data.get("flexisip_reference_state")
         ),
+        "bridge_blocked": _optional_bool(data.get("bridge_blocked")),
+        "watchdog": _optional_bool(data.get("watchdog")),
         "raw": data,
     }
 

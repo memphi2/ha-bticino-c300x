@@ -1,32 +1,33 @@
 import {
   C300X_TRANSLATIONS,
   c300xLocalize,
-} from "./c300x-translations.js?v=ebfcfca6e627d88b";
+  c300xModelLabel,
+} from "./c300x-translations.js?v=edf8e259c990f730";
 import {
-  C300X_AUDIO_CODEC_OBJECT_ID,
   C300X_CAMERA_OBJECT_ID,
   C300X_CARD_TAG,
   C300X_CARD_TYPE,
   C300X_DEFAULT_CONFIG,
-  C300X_DOCUMENTATION_URL,
   C300X_MEDIA_READINESS_OBJECT_ID,
   c300xDeviceActionEntity,
+  c300xDeviceModel,
+  c300xDocumentationUrlOfPage,
   c300xEntryId,
   c300xObjectSuffix,
   c300xRelatedEntity,
   c300xResolveEntity,
-} from "./c300x-entity-resolver.js?v=ebfcfca6e627d88b";
+} from "./c300x-entity-resolver.js?v=edf8e259c990f730";
 import {
   C300X_CARD_EDITOR_TAG,
   c300xDoorbellCardStubConfig,
-} from "./c300x-card-editor.js?v=ebfcfca6e627d88b";
-import { C300XCardActions } from "./c300x-card-actions.js?v=ebfcfca6e627d88b";
+} from "./c300x-card-editor.js?v=edf8e259c990f730";
+import { C300XCardActions } from "./c300x-card-actions.js?v=edf8e259c990f730";
 import {
   C300XCardLifecycleState,
   c300xAnsweredRingKey,
-} from "./c300x-card-lifecycle.js?v=ebfcfca6e627d88b";
-import { c300xRingLifecycleActive } from "./c300x-ring-preview-state.js?v=ebfcfca6e627d88b";
-import { C300X_DOORBELL_CARD_TEMPLATE } from "./c300x-card-template.js?v=ebfcfca6e627d88b";
+} from "./c300x-card-lifecycle.js?v=edf8e259c990f730";
+import { c300xRingLifecycleActive } from "./c300x-ring-preview-state.js?v=edf8e259c990f730";
+import { C300X_DOORBELL_CARD_TEMPLATE } from "./c300x-card-template.js?v=edf8e259c990f730";
 import {
   c300xCardViewModel,
   c300xIsHomeCallActive,
@@ -34,13 +35,13 @@ import {
   c300xMediaReadinessHasRepair,
   c300xMediaReadinessLabelKey,
   c300xMediaState,
-} from "./c300x-state-model.js?v=ebfcfca6e627d88b";
-import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=ebfcfca6e627d88b";
-import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=ebfcfca6e627d88b";
-import { C300XStreamSnapshots } from "./c300x-stream-snapshots.js?v=ebfcfca6e627d88b";
-import { C300XCardMedia } from "./c300x-card-media.js?v=ebfcfca6e627d88b";
-import { c300xFollowPictureSize } from "./c300x-picture-frame.js?v=ebfcfca6e627d88b";
-import { mediaStamp } from "./c300x-media-translations.js?v=ebfcfca6e627d88b";
+} from "./c300x-state-model.js?v=edf8e259c990f730";
+import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=edf8e259c990f730";
+import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=edf8e259c990f730";
+import { C300XStreamSnapshots } from "./c300x-stream-snapshots.js?v=edf8e259c990f730";
+import { C300XCardMedia } from "./c300x-card-media.js?v=edf8e259c990f730";
+import { c300xFollowPictureSize } from "./c300x-picture-frame.js?v=edf8e259c990f730";
+import { mediaStamp } from "./c300x-media-translations.js?v=edf8e259c990f730";
 
 const C300X_NOTICE_TIMEOUT_MS = 2000;
 const C300X_RING_ANSWER_LAUNCH_PARAM = "c300x_ring_answer";
@@ -173,8 +174,6 @@ class C300XDoorbellCallCard extends HTMLElement {
     this._actions = new C300XCardActions(this);
     this._webrtc = this._createWebrtcClient();
     this._transitionWebrtc = null;
-    this._lastCardGainDb = 0;
-    this._audioCodecEntityId = "";
     this._cameraEntityState = null;
     this._stateSubscriptionConnection = null;
     this._stateSubscriptionEntityId = "";
@@ -221,66 +220,9 @@ class C300XDoorbellCallCard extends HTMLElement {
       isHomeCallMode: () => this._lifecycle.activeHomeCallSession || this._isHomeCallMode(),
       onClosed: onClosed || ((reason) => this._handleWebrtcClosed(reason)),
       onTrack: onTrack || (() => this._scheduleUpdate()),
-      getCardGainDb: () => this._cardGainDb(),
       getPlayback: () => ({ volume: this._playbackVolume, muted: this._playbackMuted }),
-      onGainChanged: () => this._scheduleUpdate(),
       onPlaybackBlocked: () => this._scheduleUpdate(),
     });
-  }
-
-  // The doorstation gain is applied agent-side for speex; in PCMU mode the
-  // agent runs passthrough, so the card applies the configured gain in the
-  // browser instead. All state is read from HA (the codec select entity and
-  // the camera's gain attribute), never fetched from the agent.
-  _cardGainDb() {
-    if (this._audioCodecMode() !== "pcmu") {
-      return 0;
-    }
-    const cameraEntityId = this._resolvedCameraEntityId();
-    const gainDb = this._hass?.states?.[cameraEntityId]?.attributes?.doorstation_audio_gain_db;
-    const value = Number(gainDb);
-    return Number.isFinite(value) ? value : 0;
-  }
-
-  _audioCodecMode() {
-    // Cache the resolved select entity id so the common path is an O(1) state
-    // lookup; invalidate when HA replaces registry data or the camera changes.
-    const cameraEntityId = this._resolvedCameraEntityId();
-    let entityId = this._audioCodecEntityId;
-    if (!entityId || !this._hass?.states?.[entityId]
-      || this._audioCodecRegistry !== this._hass?.entities
-      || this._audioCodecDevices !== this._hass?.devices
-      || this._audioCodecCamera !== cameraEntityId) {
-      entityId = c300xRelatedEntity(
-        this._hass,
-        this._config,
-        "select",
-        C300X_AUDIO_CODEC_OBJECT_ID,
-        "audio_codec_entity",
-      );
-      this._audioCodecEntityId = entityId;
-      this._audioCodecRegistry = this._hass?.entities;
-      this._audioCodecDevices = this._hass?.devices;
-      this._audioCodecCamera = cameraEntityId;
-    }
-    return entityId ? this._hass?.states?.[entityId]?.state : null;
-  }
-
-  _maybeRefreshCardGain() {
-    // Ignore transient indeterminate states (the select entity blips to
-    // unavailable/unknown on a reload): keep the current gain instead of
-    // disengaging it mid-call, which would abruptly change the audio level.
-    const mode = this._audioCodecMode();
-    if (mode !== "pcmu" && mode !== "speex") {
-      return;
-    }
-    const gainDb = this._cardGainDb();
-    if (gainDb === this._lastCardGainDb) {
-      return;
-    }
-    this._lastCardGainDb = gainDb;
-    this._webrtc?.refreshGain();
-    this._transitionWebrtc?.refreshGain();
   }
 
   set hass(hass) {
@@ -288,7 +230,6 @@ class C300XDoorbellCallCard extends HTMLElement {
     this._syncCameraEntityFromHass();
     this._ensureStateSubscription();
     this._ensureLocationChangeListener();
-    this._maybeRefreshCardGain();
     this._ensureRendered();
     this._pictureFrame?.sync();
     this._cardMedia?.configure();
@@ -449,7 +390,6 @@ class C300XDoorbellCallCard extends HTMLElement {
       hasRemoteStream: !!this._webrtc?.remoteStream,
       hasRemoteAudio: !!this._webrtc?.remoteStream?.getAudioTracks?.().length,
       hasRemoteVideo: !!this._webrtc?.remoteStream?.getVideoTracks?.().length,
-      scaledVolume: !!this._webrtc?.gainEngaged,
       soundBlocked: this._soundBlocked(),
       isStreaming: attributes.is_streaming === true,
       lifecycle: {
@@ -873,8 +813,7 @@ class C300XDoorbellCallCard extends HTMLElement {
       this._transitionWebrtc = null;
       previous.close();
       // After previous.close() has released the main element, move next's
-      // client-side gain/muting onto it, so PCMU gain plays once (via Web
-      // Audio) instead of doubling with the element's direct output.
+      // volume and muting onto it.
       next.retargetMedia(this._videoEl);
       onPromoted();
       this._updateState();
@@ -1560,7 +1499,10 @@ class C300XDoorbellCallCard extends HTMLElement {
   }
 
   _defaultName() {
-    return this._label(this._isHomeCallMode() ? "home_call_name" : "door_station");
+    return c300xModelLabel(
+      this._label(this._isHomeCallMode() ? "home_call_name" : "door_station"),
+      c300xDeviceModel(this._hass, this._resolvedCameraEntityId()),
+    );
   }
 
   _deviceActionEntity(key) {
@@ -1610,9 +1552,11 @@ window.customCards = window.customCards || [];
 window.customCards = window.customCards.filter((card) => card.type !== C300X_CARD_TAG);
 window.customCards.push({
   type: C300X_CARD_TAG,
-  name: "C300X Doorbell Call Card",
+  name: "BTicino Doorbell Call Card",
   preview: false,
-  description: "Doorbell video and Home Call controls for BTicino C300X.",
-  documentationURL: C300X_DOCUMENTATION_URL,
+  description: "Doorbell video and Home Call controls of the BTicino door station.",
+  get documentationURL() {
+    return c300xDocumentationUrlOfPage();
+  },
   getEntitySuggestion: (hass, entityId) => C300XDoorbellCallCard.getEntitySuggestion(hass, entityId),
 });

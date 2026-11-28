@@ -122,9 +122,13 @@ def test_failed_start_and_failed_rollback_retain_recovery_without_restart(tmp_pa
                     '  */.c300x-qml-transaction.*/MainApp.qml) exit 1;;\nesac\n'
                     f'exec "{shutil.which("mv")}" "$@"\n')
     move.chmod(0o700)
-    result = _run_qml_patch_raw(tmp_path, gui, backup, "apply", env_overrides=env)
+    temp = tmp_path / "temp"
+    temp.mkdir()
+    result = _run_qml_patch_raw(tmp_path, gui, backup, "apply", env_overrides={**env, "TMPDIR": str(temp)})
     assert result.returncode != 0
     assert "recovery files retained" in result.stderr
     recovery = list(gui.glob(".c300x-qml-transaction.*/MainApp.qml"))
     assert len(recovery) == 1 and recovery[0].read_bytes() == original
     assert observations.joinpath("count").read_text() == "1"
+    # The staged copy of the new files is of no use to the recovery: it goes.
+    assert not list(temp.glob("c300x-qml-patch.*"))

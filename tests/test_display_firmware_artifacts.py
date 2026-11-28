@@ -98,6 +98,13 @@ class ArmElf:
         raise AssertionError(f"No Qt 5 metaobject for {name}")
 
 
+def _c300x_display_files() -> list[Path]:
+    """The pages of the C300X; device_qml/c100x holds the C100X adapter, which no C300X display gets."""
+
+    source = ROOT / "device_qml"
+    return [path for path in source.rglob("*") if path.relative_to(source).parts[0] != "c100x"]
+
+
 def test_real_qt5_patch_restore_and_manifest(programs: dict[str, Path], tmp_path: Path) -> None:
     rootfs = Path(os.environ["C300X_QT5_FIRMWARE"])
     stock = rootfs / "home/bticino/bin"
@@ -109,7 +116,7 @@ def test_real_qt5_patch_restore_and_manifest(programs: dict[str, Path], tmp_path
     assert device.ok("media-user-label-apply")["media_user_label_patched"] is True
     assert device.ok("apply")["patched"] is True
     assert device.ok("apply")["changed_files"] == 0
-    for path in (ROOT / "device_qml").rglob("*"):
+    for path in _c300x_display_files():
         if path.suffix in {".qml", ".js"}:
             rel = str(path.relative_to(ROOT / "device_qml"))
             packed = device.packed(rel)
@@ -128,7 +135,7 @@ def test_all_custom_page_literal_assets_exist_in_both_firmwares() -> None:
     skins = [Path(os.environ["C300X_QT5_SKIN"]),
              Path(os.environ["C300X_DEVICE_SYSROOT"]) / "home/bticino/bin/gui/skins/default"]
     references = set()
-    for path in (ROOT / "device_qml").rglob("*"):
+    for path in _c300x_display_files():
         if path.suffix in {".qml", ".js"}:
             references.update(re.findall(r'''["']((?:images|js)/[^"']+\.(?:svg|png|js))["']''', path.read_text()))
     for skin in skins:

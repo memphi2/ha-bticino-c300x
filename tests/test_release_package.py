@@ -380,7 +380,7 @@ def test_release_builder_cleans_before_source_build(tmp_path, monkeypatch):
     ]
 
 
-@pytest.mark.parametrize("document", ["README.md", "docs/quickstart.md"])
+@pytest.mark.parametrize("document", ["README.md", "docs/classe-300x/1-setup.md", "docs/classe-100x/1-setup.md"])
 def test_installation_docs_match_supported_minimum(document: str) -> None:
     versions = json.loads(PROJECT_VERSIONS_PATH.read_text(encoding="utf-8"))
     minimum = versions["min_homeassistant"]
@@ -787,7 +787,7 @@ def test_staged_self_update_bundle_contains_agent_managed_files(
     paths = {entry["path"] for entry in bundle["files"]}
     assert bundle["integration_version"] == version
     assert bundle["agent_version"] == version
-    assert bundle["update_file_set_version"] == 6
+    assert bundle["update_file_set_version"] == 7
     probe = tmp_path / "update_paths.c"
     probe.write_text(
         '#include <stdio.h>\n#include "agent_update_paths.h"\n'
@@ -988,7 +988,7 @@ def test_native_self_update_reserves_external_patch_scripts_without_staging() ->
     assert "return optional && !agent_update_manifest_sha_for_path" in apply_file
     assert "c300x_agent_update_patch_path(bundle_path)" in apply_file
     assert "C300X_AGENT_UPDATE_FILE_COUNT" in apply_files
-    assert "C300X_AGENT_UPDATE_FILES[index].optional" in apply_files
+    assert "update_file_may_be_absent(&C300X_AGENT_UPDATE_FILES[index])" in apply_files
     for path in RESERVED_DEVICE_PATCH_PATHS:
         assert f'"{path}"' in update_paths
 

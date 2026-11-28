@@ -339,6 +339,21 @@ static int rtsp_play(int fd, const char *path) {
 
 static void status(struct c300x_video_status *out) { c300x_video_status(runtime->video, out); }
 
+/* The agent drops a closed client when that client's thread reads the end
+ * of its socket, which takes longer under load. A client opened before
+ * then still meets the old one: another path or both slots taken, and the
+ * answer is not the one the case is about. */
+static void wait_clients(int count) {
+    struct c300x_video_status current;
+    long long deadline = __real_c300x_monotonic_ms() + WAIT_MS;
+    for (;;) {
+        status(&current);
+        if (current.clients <= count) return;
+        assert(__real_c300x_monotonic_ms() < deadline);
+        usleep(5000);
+    }
+}
+
 static void ring_starts(int *preview) {
     char ring_sdp[1024];
     snprintf(ring_sdp, sizeof(ring_sdp), "%s", station_sdp);
@@ -360,6 +375,7 @@ static void stream_press_refused(const char *reason) {
     int fd = rtsp_open();
     assert(rtsp_play(fd, "/doorbell") == 503);
     close(fd);
+    wait_clients(0);
 }
 
 /* (a) Capture 13:37:27-13:38:35: the display answers, flexisip cancels the
@@ -380,6 +396,7 @@ static void display_answer(bool end_frame_lost) {
     wait_event("doorbell.media.closed", 1, data, sizeof(data));
     assert(payload_external(data));
     close(preview);
+    wait_clients(0);
     struct c300x_video_status current;
     status(&current);
     assert(current.external_media_active);
@@ -395,6 +412,7 @@ static void display_answer(bool end_frame_lost) {
         int fd = rtsp_open();
         assert(rtsp_play(fd, "/doorbell") == 503);
         close(fd);
+        wait_clients(0);
     }
     assert(atomic_load(&ondemand_invites) == 0);
     status(&current);
@@ -422,6 +440,7 @@ static void display_answer(bool end_frame_lost) {
         assert(rtsp_play(fd, "/doorbell") == 200);
         assert(atomic_load(&ondemand_invites) == 1);
         close(fd);
+        wait_clients(0);
         assert(count_events("doorbell.media.closed") == 1);
         return;
     }
@@ -449,6 +468,7 @@ static void unanswered(void) {
     wait_event("doorbell.media.closed", 1, data, sizeof(data));
     assert(!payload_external(data));
     close(preview);
+    wait_clients(0);
     usleep(300000);
     assert(count_events("doorbell.media.closed") == 1);
     struct c300x_video_status current;
@@ -478,6 +498,7 @@ static void ha_answer(void) {
     wait_event("doorbell.media.closed", 1, data, sizeof(data));
     assert(!payload_external(data));
     close(preview);
+    wait_clients(0);
     usleep(300000);
     assert(count_events("doorbell.media.closed") == 1);
     status(&current);
@@ -492,6 +513,7 @@ static void station_busy_case(bool freed_by_bus) {
     int fd = rtsp_open();
     assert(rtsp_play(fd, "/doorbell") == 500);
     close(fd);
+    wait_clients(0);
     assert(atomic_load(&ondemand_invites) == 1);
     status(&current);
     assert(strcmp(current.last_error, "ondemand_sip_setup_failed:answer_486") == 0);
@@ -499,6 +521,7 @@ static void station_busy_case(bool freed_by_bus) {
         fd = rtsp_open();
         assert(rtsp_play(fd, "/doorbell") == 503);
         close(fd);
+        wait_clients(0);
     }
     assert(!c300x_video_activate(runtime->video, 1));
     status(&current);
@@ -523,6 +546,7 @@ static void station_busy_case(bool freed_by_bus) {
     status(&current);
     assert(strcmp(current.media_owner, "agent") == 0);
     close(fd);
+    wait_clients(0);
 }
 
 /* (e) The call the station was busy with ends while the failed start still
@@ -534,6 +558,7 @@ static void station_freed_during_start(bool before_486) {
     int fd = rtsp_open();
     assert(rtsp_play(fd, "/doorbell") == 500);
     close(fd);
+    wait_clients(0);
     assert(atomic_load(&ondemand_invites) == 1);
     assert(!atomic_load(&end_before_486) && !atomic_load(&end_after_486));
     usleep(100000);
@@ -546,6 +571,7 @@ static void station_freed_during_start(bool before_486) {
     status(&current);
     assert(strcmp(current.media_owner, "agent") == 0);
     close(fd);
+    wait_clients(0);
 }
 
 static uint16_t bound_port(int fd) {

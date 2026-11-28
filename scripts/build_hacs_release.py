@@ -29,6 +29,15 @@ PACKAGE_METADATA = (
     "PRIVACY.md",
     "SECURITY.md",
     "docs/legal.md",
+    "docs/classe-100x/1-setup.md",
+    "docs/classe-100x/2-use.md",
+    "docs/classe-100x/3-display.md",
+    "docs/classe-100x/4-troubleshooting.md",
+    "docs/classe-100x/5-update-and-removal.md",
+    "docs/dev/c100x-device-test.md",
+    "docs/dev/c100x-display-parity.md",
+    "docs/dev/c100x-field-report.md",
+    "docs/dev/c100x-audio-analysis.md",
 )
 
 

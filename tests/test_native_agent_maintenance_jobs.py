@@ -11,6 +11,7 @@ from http.client import HTTPConnection
 from pathlib import Path
 
 import pytest
+from native_build import default_host_agent
 
 from native_agent.test.smoke import TOKEN, api_get, free_tcp_ports, wait_for_health
 
@@ -30,10 +31,7 @@ def wait_until(predicate, timeout=3):
 
 @pytest.fixture(scope="module")
 def binary(tmp_path_factory):
-    build = tmp_path_factory.mktemp("maintenance-build")
-    subprocess.run(["make", "-C", str(ROOT / "native_agent"), f"BUILD_DIR={build}",
-                    "-j2", "all"], check=True, capture_output=True, text=True)
-    return build / "host/c300x-agent-native"
+    return default_host_agent(tmp_path_factory)
 
 
 @dataclass
@@ -228,6 +226,16 @@ def test_completed_jobs_leave_no_fd_timer_or_write_churn(lab):
     assert response(lab.request(QML + "/actions/apply", {"confirm": "apply_qml_patch"}))["ok"]
     changed = api_get(lab.port, "/api/v1/diagnostics")
     assert changed["agent_write_count"] == before["agent_write_count"] + 1
+
+
+def test_diagnostics_tell_how_long_after_boot_the_agent_started(lab):
+    # A reboot test needs to see that the agent came up with this boot, not
+    # from a later manual start. The monotonic clock counts from boot.
+    diagnostics = api_get(lab.port, "/api/v1/diagnostics")
+    host_uptime = float(Path("/proc/uptime").read_text().split()[0])
+    started = diagnostics["agent_started_after_boot_seconds"]
+    assert isinstance(started, int) and 0 <= started <= host_uptime
+    assert abs(host_uptime - started - diagnostics["uptime_seconds"]) <= 3
 
 
 def test_confirmation_and_missing_script_do_not_start_jobs(lab):

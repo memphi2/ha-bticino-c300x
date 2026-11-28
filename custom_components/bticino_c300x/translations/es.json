@@ -1,0 +1,2062 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "BTicino C300X/C100X",
+        "description": "Introduce primero la dirección del {model}. Si no se puede acceder al agente nativo del dispositivo, Home Assistant puede guiarte en una instalación única del agente antes de pedir las claves y las opciones de funciones.",
+        "data": {
+          "name": "Nombre",
+          "agent_host": "Dirección del {model}",
+          "agent_port": "Puerto",
+          "callback_base_url": "Dirección de Home Assistant para el {model} (opcional)"
+        },
+        "data_description": {
+          "agent_host": "Dirección IP o nombre de host de tu {model}.",
+          "agent_port": "Puerto en el que el {model} responde a Home Assistant. Déjalo en 8091 salvo que lo hayas cambiado durante la instalación.",
+          "callback_base_url": "El {model} comunica las llamadas y otros eventos a esta dirección. Déjala vacía para usar la dirección que Home Assistant conoce de sí mismo. Una dirección https cifra la conexión; necesita un certificado válido y carga más el {model}. Cambiar entre http y https reinicia el servicio en el {model} en cuanto no haya ninguna llamada ni transmisión en curso."
+        }
+      },
+      "agent_missing": {
+        "title": "No se ha encontrado el agente nativo",
+        "description": "Home Assistant no ha podido acceder al agente nativo del {model} en la dirección configurada. Puedes instalar ahora el agente nativo incluido o continuar si quieres configurar manualmente un agente ya instalado.",
+        "data": {
+          "bootstrap_install_agent": "Instalar el agente nativo en el {model}"
+        }
+      },
+      "bootstrap_install": {
+        "title": "Instalar el agente nativo del {model}",
+        "description": "Home Assistant inicia sesión primero con el acceso de fábrica del {model}. Introduce el usuario y la contraseña SSH, o una clave privada, solo si el dispositivo lo ha rechazado; si se dejan vacíos, se vuelve a probar el acceso de fábrica. Este paso escribe en el {model}, por SSH, el agente nativo, una configuración con claves generadas, el script de arranque y los archivos de soporte de pantalla. Las credenciales SSH y las claves solo se usan para este paso de instalación y no se guardan.",
+        "data": {
+          "bootstrap_ssh_username": "Usuario SSH del {model}",
+          "bootstrap_ssh_password": "Contraseña SSH del {model}",
+          "bootstrap_ssh_key": "Clave privada SSH del {model} (opcional)",
+          "bootstrap_ssh_key_passphrase": "Frase de contraseña de la clave (opcional)"
+        },
+        "data_description": {
+          "bootstrap_ssh_key": "Pega la clave privada completa (OpenSSH o PEM). Tipo de clave: RSA o ECDSA en 1.7.x, 2.0.2 y C100X 1.5.8; ed25519 solo en 3.0.6. Con una clave y sin usuario se usa root; una contraseña introducida además se prueba si la clave es rechazada."
+        }
+      },
+      "c100x_experimental": {
+        "title": "Classe 100X: compatibilidad experimental",
+        "description": "Este videoportero es un Classe 100X. Su compatibilidad es experimental: está hecha para el firmware 1.5.8 y hasta ahora se ha comprobado sin dispositivo, aún no se ha confirmado en un Classe 100X y no todas las funciones del Classe 300X están disponibles. No se cambia nada en el videoportero antes de que confirmes; cierra este diálogo para dejarlo como está.",
+        "data": {
+          "c100x_experimental": "Configurar la compatibilidad experimental con el Classe 100X"
+        }
+      },
+      "agent_auth": {
+        "title": "Credenciales del agente del dispositivo",
+        "description": "Introduce las claves del agente nativo accesible. Deja vacía la clave de acceso solo mientras el agente siga en modo de arranque noAuth.",
+        "data": {
+          "agent_token": "Clave de acceso",
+          "maintenance_token": "Clave de mantenimiento",
+          "reinstall_agent": "No tengo las claves: reinstalar el agente"
+        },
+        "data_description": {
+          "agent_token": "Clave con la que Home Assistant inicia sesión en el {model}. Se creó durante la instalación.",
+          "maintenance_token": "Clave independiente para el mantenimiento: actualizaciones, cambios en la pantalla y reinicios.",
+          "reinstall_agent": "Vuelve a instalar por SSH el agente incluido con claves recién generadas. Las claves usadas hasta ahora dejan de funcionar; todo lo demás en el {model} queda como está."
+        }
+      },
+      "user_features": {
+        "title": "Funciones del BTicino {model}",
+        "description": "Selecciona las funciones multimedia de Home Assistant que ofrece esta instalación del {model}.",
+        "data": {
+          "video_enabled": "Vídeo y audio del videoportero",
+          "create_homeassistant_user": "Configurar el acceso de vídeo y audio en el {model}",
+          "door_audio_level_db": "Nivel del videoportero",
+          "audio_fine_gain_db": "Ajuste fino (dB)",
+          "webrtc_ice_policy": "Rutas de conexión para la imagen en directo",
+          "native_two_way_audio": "Hablar desde la vista de cámara de Home Assistant"
+        },
+        "data_description": {
+          "video_enabled": "Imagen y sonido del videoportero en Home Assistant: al llamar, a petición y para Home Call.",
+          "create_homeassistant_user": "El vídeo y el audio necesitan un acceso propio en el {model}. Con esta opción activada, la integración lo configura durante la instalación o mediante su reparación.",
+          "door_audio_level_db": "Sube el sonido del videoportero en la vista en directo, durante una llamada y en las grabaciones de llamada. En el Classe 300X en el chip de audio de la estación, lo que también sube las llamadas contestadas en la app BTicino; en el Classe 100X mediante el agente. Predeterminado: valor de fábrica.",
+          "audio_fine_gain_db": "Añade de -10 a +10 dB al nivel del videoportero, igual en cada estación y con cada códec de audio. Predeterminado: 0.",
+          "webrtc_ice_policy": "Qué direcciones de red puede usar el navegador para la imagen en directo. Cámbialo solo si la imagen en directo no conecta.",
+          "native_two_way_audio": "Opcional, desactivado de forma predeterminada. Requiere Home Assistant 2026.11 o posterior, \"Audio bidireccional\" activado en Ajustes > Sistema > Labs, la imagen en directo por WebRTC, acceso por HTTPS y que el navegador tenga permiso para usar el micrófono. Responde antes a la llamada en la tarjeta del {model}; esta opción no la responde. Hablar en la tarjeta del {model} sigue igual."
+        }
+      },
+      "user_visitor_snapshot": {
+        "title": "Instantánea del visitante",
+        "description": "Se guarda una imagen del visitante en cada llamada y al iniciar una transmisión de vídeo. Estos ajustes se aplican a esa imagen.",
+        "data": {
+          "snapshot_width": "Ancho de la imagen (píxeles)",
+          "snapshot_height": "Alto de la imagen (píxeles)",
+          "snapshot_delay_seconds": "Retardo de la imagen (segundos)",
+          "snapshot_retention_days": "Conservar las imágenes (días)",
+          "snapshot_timestamp": "Escribir fecha y hora en la imagen"
+        },
+        "data_description": {
+          "snapshot_width": "Valor predeterminado 800: las instantáneas leen el framebuffer de la pantalla de 800×480, con independencia del tamaño de la transmisión de vídeo. El agente redimensiona el fotograma completo a las dimensiones elegidas; Home Assistant no lo vuelve a redimensionar. Rango 64-800.",
+          "snapshot_height": "Valor predeterminado 480. Usa 800×480 para los píxeles nativos de la pantalla o, por ejemplo, 400×240 para conservar su proporción 5:3. Otras proporciones deforman la imagen. Incluso una transmisión de 960×576 se captura de la pantalla de 800×480. Rango 64-480.",
+          "snapshot_delay_seconds": "Captura tras la llamada o el inicio de una transmisión de vídeo; valor predeterminado 3 segundos. No hace falta tener una tarjeta abierta.",
+          "snapshot_retention_days": "Valor predeterminado 14 días. Las imágenes caducadas se eliminan aunque el guardado esté desactivado. Límite: 1000 imágenes o 128 MiB por dispositivo; se eliminan primero las más antiguas.",
+          "snapshot_timestamp": "La fecha y la hora de la captura se dibujan en la esquina inferior derecha de la imagen guardada. Activado de forma predeterminada."
+        }
+      },
+      "user_device_activations": {
+        "title": "Activaciones adicionales del dispositivo",
+        "description": "Aquí se añaden más cerraduras y luces de la instalación de videoportero, una activación por cada una, por ejemplo para una segunda puerta.\n\nActivaciones adicionales configuradas: {device_activation_count}\n\n{device_activation_items}\n\nAñadir, editar o eliminar solo cambia la configuración pendiente de Home Assistant. El agente del dispositivo se sincroniza después de guardar y solo cuando su configuración de activaciones difiere.",
+        "data": {
+          "device_activation_mode": "Dirección de la luz de escalera",
+          "device_activation_stair_light_p": "Luz de escalera P",
+          "device_activation_stair_light_n": "Luz de escalera N",
+          "device_activation_flow_action": "Acción",
+          "device_activation_flow_target": "Activación"
+        },
+        "data_description": {
+          "device_activation_mode": "Automático usa las activaciones tal como están configuradas aquí o como las comunica el dispositivo. Manual añade una activación de luz de escalera formada con los valores P y N de abajo.",
+          "device_activation_stair_light_p": "Solo en modo manual: parte P de la dirección de la luz de escalera, de 0 a 99.",
+          "device_activation_stair_light_n": "Solo en modo manual: parte N de la dirección de la luz de escalera, de 0 a 99.",
+          "device_activation_flow_action": "Añade, edita o elimina una activación, o termina y guarda.",
+          "device_activation_flow_target": "La activación que se va a editar o eliminar."
+        }
+      },
+      "user_device_activation_item": {
+        "title": "Activación del dispositivo",
+        "description": "Configura un botón de activación basado en una dirección.",
+        "data": {
+          "device_activation_item_id": "ID",
+          "device_activation_item_name": "Nombre",
+          "device_activation_item_type": "Tipo",
+          "device_activation_item_address": "Dirección"
+        },
+        "data_description": {
+          "device_activation_item_id": "Letras, números, _ y -, hasta 32 caracteres. Cada ID solo se puede usar una vez.",
+          "device_activation_item_name": "Nombre del botón en Home Assistant, hasta 63 caracteres.",
+          "device_activation_item_type": "Lo que acciona la dirección: una cerradura, una luz o la luz de escalera.",
+          "device_activation_item_address": "Dirección de la instalación de videoportero a la que se envía la activación (\"where\" de OpenWebNet), hasta 31 caracteres."
+        }
+      },
+      "user_dashboard": {
+        "title": "Panel de pantalla del C300X",
+        "description": "Configura el panel de pantalla opcional del C300X y el parche de pantalla.\n\nEstado actual del parche de pantalla: {qml_patch_status}.\n\nAplicar o restaurar el parche de pantalla escribe archivos de pantalla en el dispositivo, recarga la interfaz del dispositivo y puede tardar hasta unos 60 segundos. El estado solo cambia cuando el agente confirma el estado resultante.\n\nCon el parche de pantalla aplicado, el siguiente paso configura las páginas de pantalla: el tiempo y las entidades de cada página.",
+        "data": {
+          "device_ui_enabled": "Páginas de Home Assistant en la pantalla",
+          "actions_json": "Acciones permitidas (para expertos)",
+          "dashboard_prevent_return": "Mantener la página abierta con la pantalla en reposo",
+          "dashboard_navigation": "Navegación entre páginas",
+          "dashboard_dynamic_homepage": "Botones de la página de inicio"
+        },
+        "data_description": {
+          "device_ui_enabled": "Activado: instala las páginas de Home Assistant en la pantalla del C300X (parche de pantalla). Desactivado: restaura la pantalla original y descarta los ajustes del tiempo, de las páginas, de los mosaicos y de las acciones. Los ajustes de Alarmo se conservan.",
+          "actions_json": "Acciones que la pantalla y sus notificaciones pueden ejecutar, escritas en JSON: una entrada por acción con domain y service y, opcionalmente, target y data. Déjalo vacío si no usas ninguna.",
+          "dashboard_prevent_return": "Activado: las páginas Home Assistant y Alarma permanecen abiertas cuando la pantalla pasa a reposo. Desactivado: la pantalla vuelve entonces a su página de inicio.",
+          "dashboard_navigation": "Cómo cambia de página la pantalla. La barra de favoritos muestra las cuatro primeras páginas como botones en el borde inferior. Con más de cuatro páginas, el cuarto botón es Más y abre la lista de las demás páginas. El orden sigue las posiciones de las páginas.",
+          "dashboard_dynamic_homepage": "Dónde se sitúan los botones Alarma y Home Assistant en la página de inicio del C300X. Vista de fábrica: cada botón aparece solo mientras tiene algo que abrir y ocupa su lugar entre los botones originales, también debajo de ellos cuando la fila está llena. Fijos uno junto al otro: ambos conservan dos lugares fijos contiguos; un botón sin nada que abrir deja su lugar vacío. Un cambio vuelve a aplicar el parche de pantalla y reinicia la pantalla una vez."
+        }
+      },
+      "user_dashboard_c100x": {
+        "title": "Panel de pantalla del C100X",
+        "description": "Configura el panel de pantalla opcional del C100X.\n\n**Activar páginas de pantalla** en la página del dispositivo activa las páginas de Home Assistant en el C100X, **Restaurar pantalla original** las desactiva. Cada una surte efecto con un reinicio del C100X cuando lleva unos dos minutos inactivo. No hay parche de pantalla ni recarga de pantalla.\n\nCon las páginas activas, el siguiente paso configura las páginas de pantalla: el tiempo y las entidades de cada página.",
+        "data": {
+          "device_ui_enabled": "Páginas de Home Assistant en la pantalla",
+          "actions_json": "Acciones permitidas (para expertos)",
+          "dashboard_prevent_return": "Mantener la página abierta con la pantalla en reposo",
+          "dashboard_navigation": "Navegación entre páginas"
+        },
+        "data_description": {
+          "device_ui_enabled": "Activado mientras las páginas de Home Assistant están activas en la pantalla del C100X; llegan con Activar páginas de pantalla. Desactivado: restaura la pantalla original con un reinicio del C100X y descarta los ajustes del tiempo, de las páginas, de los mosaicos y de las acciones. Los ajustes de Alarmo se conservan.",
+          "actions_json": "Acciones que la pantalla y sus notificaciones pueden ejecutar, escritas en JSON: una entrada por acción con domain y service y, opcionalmente, target y data. Déjalo vacío si no usas ninguna.",
+          "dashboard_prevent_return": "Activado: las páginas Home Assistant y Alarmo permanecen abiertas cuando la pantalla pasa a reposo. Desactivado: la pantalla vuelve entonces a su página de inicio.",
+          "dashboard_navigation": "No se usa en el {model}: sus páginas se suceden como los menús propios del videoportero. Arriba y Abajo cambian de página, Retorno entra en ella y la última entrada es EXIT. El orden sigue las posiciones de las páginas."
+        }
+      },
+      "user_dashboard_entity_display": {
+        "title": "Mosaicos de la pantalla",
+        "description": "Cada mosaico tiene su propia sección, en el orden en que los muestra la pantalla: primero la página, luego la entidad. Abre una sección para cambiar su mosaico.\n\n- **Ancho** y **Alto**: medio o completo. Automático usa el tamaño habitual del tipo de entidad. A altura completa, el mosaico lleva los botones propios de la entidad.\n- **Nombre**: escribe un nombre propio. Si se deja vacío, el mosaico muestra el nombre de Home Assistant.\n- **Línea secundaria**: la segunda línea debajo del nombre.\n\nLa acción rápida de Alarmo no está en ninguna página; solo tiene nombre y línea secundaria."
+      },
+      "reconfigure": {
+        "title": "Reconfigurar BTicino {model}",
+        "description": "Actualiza la conexión con el agente del dispositivo o la clave de mantenimiento, o renueva las credenciales del webhook.",
+        "data": {
+          "agent_host": "Dirección del {model}",
+          "agent_port": "Puerto",
+          "agent_token": "Clave de acceso",
+          "maintenance_token": "Clave de mantenimiento",
+          "callback_base_url": "Dirección de Home Assistant para el {model} (opcional)",
+          "rotate_shared_secret": "Renovar el secreto compartido"
+        },
+        "data_description": {
+          "agent_host": "Dirección IP o nombre de host de tu {model}.",
+          "agent_port": "Puerto en el que el {model} responde a Home Assistant. Déjalo en 8091 salvo que lo hayas cambiado durante la instalación.",
+          "agent_token": "Clave con la que Home Assistant inicia sesión en el {model}. Se creó durante la instalación. Déjala vacía para conservar la clave guardada.",
+          "maintenance_token": "Clave independiente para el mantenimiento: actualizaciones, cambios en la pantalla y reinicios. Déjala vacía para conservar la clave guardada.",
+          "callback_base_url": "El {model} comunica las llamadas y otros eventos a esta dirección. Déjala vacía para usar la dirección que Home Assistant conoce de sí mismo. Una dirección https cifra la conexión; necesita un certificado válido y carga más el {model}. Cambiar entre http y https reinicia el servicio en el {model} en cuanto no haya ninguna llamada ni transmisión en curso."
+        }
+      },
+      "reconfigure_features": {
+        "title": "Reconfigurar las funciones del BTicino {model}",
+        "description": "Actualiza los ajustes multimedia y del usuario multimedia de Home Assistant.",
+        "data": {
+          "video_enabled": "Vídeo y audio del videoportero",
+          "create_homeassistant_user": "Configurar el acceso de vídeo y audio en el {model}",
+          "door_audio_level_db": "Nivel del videoportero",
+          "audio_fine_gain_db": "Ajuste fino (dB)",
+          "webrtc_ice_policy": "Rutas de conexión para la imagen en directo",
+          "native_two_way_audio": "Hablar desde la vista de cámara de Home Assistant"
+        },
+        "data_description": {
+          "video_enabled": "Imagen y sonido del videoportero en Home Assistant: al llamar, a petición y para Home Call.",
+          "create_homeassistant_user": "El vídeo y el audio necesitan un acceso propio en el {model}. Con esta opción activada, la integración lo configura durante la instalación o mediante su reparación.",
+          "door_audio_level_db": "Sube el sonido del videoportero en la vista en directo, durante una llamada y en las grabaciones de llamada. En el Classe 300X en el chip de audio de la estación, lo que también sube las llamadas contestadas en la app BTicino; en el Classe 100X mediante el agente. Predeterminado: valor de fábrica.",
+          "audio_fine_gain_db": "Añade de -10 a +10 dB al nivel del videoportero, igual en cada estación y con cada códec de audio. Predeterminado: 0.",
+          "webrtc_ice_policy": "Qué direcciones de red puede usar el navegador para la imagen en directo. Cámbialo solo si la imagen en directo no conecta.",
+          "native_two_way_audio": "Opcional, desactivado de forma predeterminada. Requiere Home Assistant 2026.11 o posterior, \"Audio bidireccional\" activado en Ajustes > Sistema > Labs, la imagen en directo por WebRTC, acceso por HTTPS y que el navegador tenga permiso para usar el micrófono. Responde antes a la llamada en la tarjeta del {model}; esta opción no la responde. Hablar en la tarjeta del {model} sigue igual."
+        }
+      },
+      "reconfigure_visitor_snapshot": {
+        "title": "Instantánea del visitante",
+        "description": "Se guarda una imagen del visitante en cada llamada y al iniciar una transmisión de vídeo. Estos ajustes se aplican a esa imagen.",
+        "data": {
+          "snapshot_width": "Ancho de la imagen (píxeles)",
+          "snapshot_height": "Alto de la imagen (píxeles)",
+          "snapshot_delay_seconds": "Retardo de la imagen (segundos)",
+          "snapshot_retention_days": "Conservar las imágenes (días)",
+          "snapshot_timestamp": "Escribir fecha y hora en la imagen"
+        },
+        "data_description": {
+          "snapshot_width": "Valor predeterminado 800: las instantáneas leen el framebuffer de la pantalla de 800×480, con independencia del tamaño de la transmisión de vídeo. El agente redimensiona el fotograma completo a las dimensiones elegidas; Home Assistant no lo vuelve a redimensionar. Rango 64-800.",
+          "snapshot_height": "Valor predeterminado 480. Usa 800×480 para los píxeles nativos de la pantalla o, por ejemplo, 400×240 para conservar su proporción 5:3. Otras proporciones deforman la imagen. Incluso una transmisión de 960×576 se captura de la pantalla de 800×480. Rango 64-480.",
+          "snapshot_delay_seconds": "Captura tras la llamada o el inicio de una transmisión de vídeo; valor predeterminado 3 segundos. No hace falta tener una tarjeta abierta.",
+          "snapshot_retention_days": "Valor predeterminado 14 días. Las imágenes caducadas se eliminan aunque el guardado esté desactivado. Límite: 1000 imágenes o 128 MiB por dispositivo; se eliminan primero las más antiguas.",
+          "snapshot_timestamp": "La fecha y la hora de la captura se dibujan en la esquina inferior derecha de la imagen guardada. Activado de forma predeterminada."
+        }
+      },
+      "reconfigure_device_activations": {
+        "title": "Activaciones adicionales del dispositivo",
+        "description": "Aquí se añaden más cerraduras y luces de la instalación de videoportero, una activación por cada una, por ejemplo para una segunda puerta.\n\nActivaciones adicionales configuradas: {device_activation_count}\n\n{device_activation_items}\n\nAñadir, editar o eliminar solo cambia la configuración pendiente de Home Assistant. El agente del dispositivo se sincroniza después de guardar y solo cuando su configuración de activaciones difiere.",
+        "data": {
+          "device_activation_mode": "Dirección de la luz de escalera",
+          "device_activation_stair_light_p": "Luz de escalera P",
+          "device_activation_stair_light_n": "Luz de escalera N",
+          "device_activation_flow_action": "Acción",
+          "device_activation_flow_target": "Activación"
+        },
+        "data_description": {
+          "device_activation_mode": "Automático usa las activaciones tal como están configuradas aquí o como las comunica el dispositivo. Manual añade una activación de luz de escalera formada con los valores P y N de abajo.",
+          "device_activation_stair_light_p": "Solo en modo manual: parte P de la dirección de la luz de escalera, de 0 a 99.",
+          "device_activation_stair_light_n": "Solo en modo manual: parte N de la dirección de la luz de escalera, de 0 a 99.",
+          "device_activation_flow_action": "Añade, edita o elimina una activación, o termina y guarda.",
+          "device_activation_flow_target": "La activación que se va a editar o eliminar."
+        }
+      },
+      "reconfigure_device_activation_item": {
+        "title": "Activación del dispositivo",
+        "description": "Configura un botón de activación basado en una dirección.",
+        "data": {
+          "device_activation_item_id": "ID",
+          "device_activation_item_name": "Nombre",
+          "device_activation_item_type": "Tipo",
+          "device_activation_item_address": "Dirección"
+        },
+        "data_description": {
+          "device_activation_item_id": "Letras, números, _ y -, hasta 32 caracteres. Cada ID solo se puede usar una vez.",
+          "device_activation_item_name": "Nombre del botón en Home Assistant, hasta 63 caracteres.",
+          "device_activation_item_type": "Lo que acciona la dirección: una cerradura, una luz o la luz de escalera.",
+          "device_activation_item_address": "Dirección de la instalación de videoportero a la que se envía la activación (\"where\" de OpenWebNet), hasta 31 caracteres."
+        }
+      },
+      "reconfigure_dashboard": {
+        "title": "Reconfigurar el panel de pantalla del C300X",
+        "description": "Configura el panel de pantalla opcional del C300X y el parche de pantalla.\n\nEstado actual del parche de pantalla: {qml_patch_status}.\n\nAplicar o restaurar el parche de pantalla escribe archivos de pantalla en el dispositivo, recarga la interfaz del dispositivo y puede tardar hasta unos 60 segundos. El estado solo cambia cuando el agente confirma el estado resultante.\n\nCon el parche de pantalla aplicado, el siguiente paso configura las páginas de pantalla: el tiempo y las entidades de cada página.",
+        "data": {
+          "device_ui_enabled": "Páginas de Home Assistant en la pantalla",
+          "actions_json": "Acciones permitidas (para expertos)",
+          "dashboard_prevent_return": "Mantener la página abierta con la pantalla en reposo",
+          "dashboard_navigation": "Navegación entre páginas",
+          "dashboard_dynamic_homepage": "Botones de la página de inicio"
+        },
+        "data_description": {
+          "device_ui_enabled": "Activado: instala las páginas de Home Assistant en la pantalla del C300X (parche de pantalla). Desactivado: restaura la pantalla original y descarta los ajustes del tiempo, de las páginas, de los mosaicos y de las acciones. Los ajustes de Alarmo se conservan.",
+          "actions_json": "Acciones que la pantalla y sus notificaciones pueden ejecutar, escritas en JSON: una entrada por acción con domain y service y, opcionalmente, target y data. Déjalo vacío si no usas ninguna.",
+          "dashboard_prevent_return": "Activado: las páginas Home Assistant y Alarma permanecen abiertas cuando la pantalla pasa a reposo. Desactivado: la pantalla vuelve entonces a su página de inicio.",
+          "dashboard_navigation": "Cómo cambia de página la pantalla. La barra de favoritos muestra las cuatro primeras páginas como botones en el borde inferior. Con más de cuatro páginas, el cuarto botón es Más y abre la lista de las demás páginas. El orden sigue las posiciones de las páginas.",
+          "dashboard_dynamic_homepage": "Dónde se sitúan los botones Alarma y Home Assistant en la página de inicio del C300X. Vista de fábrica: cada botón aparece solo mientras tiene algo que abrir y ocupa su lugar entre los botones originales, también debajo de ellos cuando la fila está llena. Fijos uno junto al otro: ambos conservan dos lugares fijos contiguos; un botón sin nada que abrir deja su lugar vacío. Un cambio vuelve a aplicar el parche de pantalla y reinicia la pantalla una vez."
+        }
+      },
+      "reconfigure_dashboard_c100x": {
+        "title": "Reconfigurar el panel de pantalla del C100X",
+        "description": "Configura el panel de pantalla opcional del C100X.\n\n**Activar páginas de pantalla** en la página del dispositivo activa las páginas de Home Assistant en el C100X, **Restaurar pantalla original** las desactiva. Cada una surte efecto con un reinicio del C100X cuando lleva unos dos minutos inactivo. No hay parche de pantalla ni recarga de pantalla.\n\nCon las páginas activas, el siguiente paso configura las páginas de pantalla: el tiempo y las entidades de cada página.",
+        "data": {
+          "device_ui_enabled": "Páginas de Home Assistant en la pantalla",
+          "actions_json": "Acciones permitidas (para expertos)",
+          "dashboard_prevent_return": "Mantener la página abierta con la pantalla en reposo",
+          "dashboard_navigation": "Navegación entre páginas"
+        },
+        "data_description": {
+          "device_ui_enabled": "Activado mientras las páginas de Home Assistant están activas en la pantalla del C100X; llegan con Activar páginas de pantalla. Desactivado: restaura la pantalla original con un reinicio del C100X y descarta los ajustes del tiempo, de las páginas, de los mosaicos y de las acciones. Los ajustes de Alarmo se conservan.",
+          "actions_json": "Acciones que la pantalla y sus notificaciones pueden ejecutar, escritas en JSON: una entrada por acción con domain y service y, opcionalmente, target y data. Déjalo vacío si no usas ninguna.",
+          "dashboard_prevent_return": "Activado: las páginas Home Assistant y Alarmo permanecen abiertas cuando la pantalla pasa a reposo. Desactivado: la pantalla vuelve entonces a su página de inicio.",
+          "dashboard_navigation": "No se usa en el {model}: sus páginas se suceden como los menús propios del videoportero. Arriba y Abajo cambian de página, Retorno entra en ella y la última entrada es EXIT. El orden sigue las posiciones de las páginas."
+        }
+      },
+      "reconfigure_dashboard_entity_display": {
+        "title": "Mosaicos de la pantalla",
+        "description": "Cada mosaico tiene su propia sección, en el orden en que los muestra la pantalla: primero la página, luego la entidad. Abre una sección para cambiar su mosaico.\n\n- **Ancho** y **Alto**: medio o completo. Automático usa el tamaño habitual del tipo de entidad. A altura completa, el mosaico lleva los botones propios de la entidad.\n- **Nombre**: escribe un nombre propio. Si se deja vacío, el mosaico muestra el nombre de Home Assistant.\n- **Línea secundaria**: la segunda línea debajo del nombre.\n\nLa acción rápida de Alarmo no está en ninguna página; solo tiene nombre y línea secundaria."
+      },
+      "user_dashboard_alarm": {
+        "title": "Alarma (Alarmo)",
+        "description": "Alarmo gestiona los comandos de alarma y la página Alarma de la pantalla, que se abre con el botón Alarma de la página de inicio del {model}. Elige el panel de alarma de Alarmo y, si quieres, una acción rápida junto a él en la página Alarma.",
+        "data": {
+          "alarm_entity_id": "Panel de alarma de Alarmo",
+          "alarm_page_entity_id": "Acción rápida"
+        },
+        "data_description": {
+          "alarm_entity_id": "Panel de alarma que Home Assistant arma y desarma desde el {model} y que muestra la página Alarma. Déjalo vacío si no usas Alarmo: el botón Alarma no aparece entonces.",
+          "alarm_page_entity_id": "Entidad opcional en la página Alarma de la pantalla (parche de pantalla), por ejemplo la luz de escalera. Allí se pueden manejar botones, interruptores, escenas y scripts; las demás entidades solo se muestran. Déjalo vacío para ocultarla."
+        }
+      },
+      "user_dashboard_alarm_c100x": {
+        "title": "Alarmo",
+        "description": "Alarmo gestiona los comandos de alarma y la página Alarmo de la pantalla, que se abre con el elemento Alarmo del menú principal del {model}. Elige el panel de alarma de Alarmo y, si quieres, una acción rápida junto a él en la página Alarmo.",
+        "data": {
+          "alarm_entity_id": "Panel de alarma de Alarmo",
+          "alarm_page_entity_id": "Acción rápida"
+        },
+        "data_description": {
+          "alarm_entity_id": "Panel de alarma que Home Assistant arma y desarma desde el {model} y que muestra la página Alarmo. Déjalo vacío si no usas Alarmo: el elemento Alarmo no aparece entonces en el menú principal.",
+          "alarm_page_entity_id": "Entidad opcional en la página Alarmo de la pantalla, por ejemplo la luz de escalera. Allí se pueden manejar botones, interruptores, escenas y scripts; las demás entidades solo se muestran. Déjalo vacío para ocultarla."
+        }
+      },
+      "reconfigure_dashboard_alarm": {
+        "title": "Alarma (Alarmo)",
+        "description": "Alarmo gestiona los comandos de alarma y la página Alarma de la pantalla, que se abre con el botón Alarma de la página de inicio del {model}. Elige el panel de alarma de Alarmo y, si quieres, una acción rápida junto a él en la página Alarma.",
+        "data": {
+          "alarm_entity_id": "Panel de alarma de Alarmo",
+          "alarm_page_entity_id": "Acción rápida"
+        },
+        "data_description": {
+          "alarm_entity_id": "Panel de alarma que Home Assistant arma y desarma desde el {model} y que muestra la página Alarma. Déjalo vacío si no usas Alarmo: el botón Alarma no aparece entonces.",
+          "alarm_page_entity_id": "Entidad opcional en la página Alarma de la pantalla (parche de pantalla), por ejemplo la luz de escalera. Allí se pueden manejar botones, interruptores, escenas y scripts; las demás entidades solo se muestran. Déjalo vacío para ocultarla."
+        }
+      },
+      "reconfigure_dashboard_alarm_c100x": {
+        "title": "Alarmo",
+        "description": "Alarmo gestiona los comandos de alarma y la página Alarmo de la pantalla, que se abre con el elemento Alarmo del menú principal del {model}. Elige el panel de alarma de Alarmo y, si quieres, una acción rápida junto a él en la página Alarmo.",
+        "data": {
+          "alarm_entity_id": "Panel de alarma de Alarmo",
+          "alarm_page_entity_id": "Acción rápida"
+        },
+        "data_description": {
+          "alarm_entity_id": "Panel de alarma que Home Assistant arma y desarma desde el {model} y que muestra la página Alarmo. Déjalo vacío si no usas Alarmo: el elemento Alarmo no aparece entonces en el menú principal.",
+          "alarm_page_entity_id": "Entidad opcional en la página Alarmo de la pantalla, por ejemplo la luz de escalera. Allí se pueden manejar botones, interruptores, escenas y scripts; las demás entidades solo se muestran. Déjalo vacío para ocultarla."
+        }
+      },
+      "user_dashboard_pages": {
+        "title": "Páginas de pantalla",
+        "description": "Una sección por página: la página de estado, hasta siete páginas propias y las páginas integradas Energía, Agenda, Salir de casa y Situaciones. Una sección sin nombre ni entidades queda sin usar; \"Página +\" está libre. Las posiciones van de 1 a 12; las páginas con la misma posición se ordenan Energía, Agenda, Salir de casa y Situaciones, y después las demás páginas.",
+        "sections": {
+          "page_1": {
+            "name": "Página{page_1_position}: página de estado",
+            "description": "La página de estado de Home Assistant muestra los indicadores de HA, alarma y hora. Actívala o desactívala aquí, con independencia de su tarjeta del tiempo opcional y de sus entidades. Su título en la pantalla es Home Assistant.",
+            "data": {
+              "enabled": "Mostrar la página de estado",
+              "weather_entity_id": "Tiempo",
+              "position": "Posición",
+              "entities": "Entidades"
+            },
+            "data_description": {
+              "enabled": "Muestra esta página con independencia del tiempo y de las entidades. Al desactivarla se conservan sus ajustes.",
+              "weather_entity_id": "Entidad meteorológica para la tarjeta del tiempo de la parte superior de esta página. Déjalo vacío para no mostrar la tarjeta del tiempo.",
+              "position": "1 = primera página",
+              "entities": "Orden de los mosaicos; arrastra para reordenar"
+            }
+          },
+          "page_2": {
+            "name": "Página{page_2_position}{page_2_name}",
+            "data": {
+              "name": "Nombre",
+              "position": "Posición",
+              "entities": "Entidades"
+            },
+            "data_description": {
+              "name": "Título de esta página en la pantalla",
+              "position": "1 = primera página",
+              "entities": "Orden de los mosaicos; arrastra para reordenar"
+            }
+          },
+          "page_3": {
+            "name": "Página{page_3_position}{page_3_name}",
+            "data": {
+              "name": "Nombre",
+              "position": "Posición",
+              "entities": "Entidades"
+            },
+            "data_description": {
+              "name": "Título de esta página en la pantalla",
+              "position": "1 = primera página",
+              "entities": "Orden de los mosaicos; arrastra para reordenar"
+            }
+          },
+          "page_4": {
+            "name": "Página{page_4_position}{page_4_name}",
+            "data": {
+              "name": "Nombre",
+              "position": "Posición",
+              "entities": "Entidades"
+            },
+            "data_description": {
+              "name": "Título de esta página en la pantalla",
+              "position": "1 = primera página",
+              "entities": "Orden de los mosaicos; arrastra para reordenar"
+            }
+          },
+          "page_5": {
+            "name": "Página{page_5_position}{page_5_name}",
+            "data": {
+              "name": "Nombre",
+              "position": "Posición",
+              "entities": "Entidades"
+            },
+            "data_description": {
+              "name": "Título de esta página en la pantalla",
+              "position": "1 = primera página",
+              "entities": "Orden de los mosaicos; arrastra para reordenar"
+            }
+          },
+          "page_6": {
+            "name": "Página{page_6_position}{page_6_name}",
+            "data": {
+              "name": "Nombre",
+              "position": "Posición",
+              "entities": "Entidades"
+            },
+            "data_description": {
+              "name": "Título de esta página en la pantalla",
+              "position": "1 = primera página",
+              "entities": "Orden de los mosaicos; arrastra para reordenar"
+            }
+          },
+          "page_7": {
+            "name": "Página{page_7_position}{page_7_name}",
+            "data": {
+              "name": "Nombre",
+              "position": "Posición",
+              "entities": "Entidades"
+            },
+            "data_description": {
+              "name": "Título de esta página en la pantalla",
+              "position": "1 = primera página",
+              "entities": "Orden de los mosaicos; arrastra para reordenar"
+            }
+          },
+          "page_8": {
+            "name": "Página{page_8_position}{page_8_name}",
+            "data": {
+              "name": "Nombre",
+              "position": "Posición",
+              "entities": "Entidades"
+            },
+            "data_description": {
+              "name": "Título de esta página en la pantalla",
+              "position": "1 = primera página",
+              "entities": "Orden de los mosaicos; arrastra para reordenar"
+            }
+          },
+          "agenda_page": {
+            "name": "Página{agenda_page_position}: Agenda",
+            "description": "Los cinco próximos eventos en siete días. Solo lectura desde Home Assistant.",
+            "data": {
+              "enabled": "Mostrar Agenda",
+              "position": "Posición",
+              "calendars": "Calendarios"
+            },
+            "data_description": {
+              "enabled": "Los cinco próximos eventos en siete días. Solo lectura desde Home Assistant.",
+              "calendars": "Selecciona hasta ocho calendarios.",
+              "position": "1 = primera página; posiciones de 1 a 12. En caso de empate: Energía, Agenda, Salir de casa, Situaciones y después las páginas normales. Posición predeterminada: 10."
+            }
+          },
+          "leave_home_page": {
+            "name": "Página{leave_home_page_position}: Salir de casa",
+            "description": "Comprobaciones de solo lectura para las entidades seleccionadas expresamente. Las acciones requieren confirmación; la alarma abre sus controles existentes protegidos con PIN.",
+            "data": {
+              "enabled": "Mostrar Salir de casa",
+              "position": "Posición",
+              "contacts": "Ventanas y puertas",
+              "lights": "Luces",
+              "actions": "Acciones",
+              "show_alarm": "Mostrar la disponibilidad de Alarmo"
+            },
+            "data_description": {
+              "enabled": "Comprobaciones de solo lectura para las entidades seleccionadas expresamente. Las acciones requieren confirmación; la alarma abre sus controles existentes protegidos con PIN.",
+              "contacts": "Selecciona hasta 24 sensores de puerta o ventana.",
+              "lights": "Selecciona hasta 24 luces.",
+              "actions": "Selecciona hasta ocho acciones existentes de la lista de permitidas.",
+              "show_alarm": "Usa la alarma ya configurada para esta pantalla.",
+              "position": "1 = primera página; posiciones de 1 a 12. En caso de empate: Energía, Agenda, Salir de casa, Situaciones y después las páginas normales. Posición predeterminada: 11."
+            }
+          },
+          "energy_page": {
+            "name": "Página{energy_page_position}: Energía",
+            "description": "Una página adicional opcional. Muestra la configuración de Energía propia de Home Assistant (Ajustes > Paneles de control > Energía): contadores de red, solar y batería, sus sensores de potencia, nombres y precios. Un tipo de fuente que no esté configurado allí se omite, y sin ninguna fuente la página no se muestra.",
+            "data": {
+              "enabled": "Mostrar la página de energía",
+              "position": "Posición",
+              "view_now": "Ahora",
+              "view_today": "Hoy",
+              "view_power": "Historial de potencia",
+              "view_consumers": "Consumidores",
+              "view_balance": "Balance"
+            },
+            "data_description": {
+              "enabled": "Las vistas desactivadas no generan consultas ni caché propias; los datos compartidos con vistas activas se mantienen. Con todas las vistas desactivadas, la página se oculta y se vacían sus cachés sin perder los ajustes.",
+              "position": "1 = primera página; posiciones de 1 a 12. En caso de empate: Energía, Agenda, Salir de casa, Situaciones y después las páginas normales. Posición predeterminada: 2.",
+              "view_now": "Flujo en directo entre red, solar, batería y hogar",
+              "view_today": "Energía por horas y totales de hoy",
+              "view_power": "Potencia media de hoy en intervalos de 15 minutos a partir de las estadísticas existentes de Home Assistant, no valores en tiempo real",
+              "view_consumers": "Los diez dispositivos eléctricos configurados con mayor potencia actual en W; las lecturas no disponibles se omiten, sin consultas de historial",
+              "view_balance": "Autosuficiencia, solar usada en casa y costes"
+            }
+          },
+          "situations_page": {
+            "name": "Página{situations_page_position}: Situaciones",
+            "description": "Incidencias del hogar seleccionadas, solo lectura. Sin acciones ni navegación automática.",
+            "data": {
+              "enabled": "Mostrar Situaciones",
+              "position": "Posición",
+              "contacts": "Ventanas y puertas",
+              "garages": "Puertas de garaje",
+              "lights": "Luces",
+              "tasks": "Listas de tareas"
+            },
+            "data_description": {
+              "enabled": "Selecciona hasta 24 entidades en total entre los cuatro campos. Los estados desconocido y no disponible siguen visibles. Desactivado de forma predeterminada.",
+              "position": "1 = primera página; posiciones de 1 a 12. Predeterminada: 12.",
+              "contacts": "Hasta 24 contactos; se muestran los contactos abiertos.",
+              "garages": "Hasta 24 puertas de garaje; se muestran las puertas abiertas o en movimiento.",
+              "lights": "Hasta 24 luces; se muestran las luces encendidas.",
+              "tasks": "Hasta 24 listas de tareas; solo el número de elementos pendientes. No se cambia ninguna tarea."
+            }
+          }
+        }
+      },
+      "reconfigure_dashboard_pages": {
+        "title": "Páginas de pantalla",
+        "description": "Una sección por página: la página de estado, hasta siete páginas propias y las páginas integradas Energía, Agenda, Salir de casa y Situaciones. Una sección sin nombre ni entidades queda sin usar; \"Página +\" está libre. Las posiciones van de 1 a 12; las páginas con la misma posición se ordenan Energía, Agenda, Salir de casa y Situaciones, y después las demás páginas.",
+        "sections": {
+          "page_1": {
+            "name": "Página{page_1_position}: página de estado",
+            "description": "La página de estado de Home Assistant muestra los indicadores de HA, alarma y hora. Actívala o desactívala aquí, con independencia de su tarjeta del tiempo opcional y de sus entidades. Su título en la pantalla es Home Assistant.",
+            "data": {
+              "enabled": "Mostrar la página de estado",
+              "weather_entity_id": "Tiempo",
+              "position": "Posición",
+              "entities": "Entidades"
+            },
+            "data_description": {
+              "enabled": "Muestra esta página con independencia del tiempo y de las entidades. Al desactivarla se conservan sus ajustes.",
+              "weather_entity_id": "Entidad meteorológica para la tarjeta del tiempo de la parte superior de esta página. Déjalo vacío para no mostrar la tarjeta del tiempo.",
+              "position": "1 = primera página",
+              "entities": "Orden de los mosaicos; arrastra para reordenar"
+            }
+          },
+          "page_2": {
+            "name": "Página{page_2_position}{page_2_name}",
+            "data": {
+              "name": "Nombre",
+              "position": "Posición",
+              "entities": "Entidades"
+            },
+            "data_description": {
+              "name": "Título de esta página en la pantalla",
+              "position": "1 = primera página",
+              "entities": "Orden de los mosaicos; arrastra para reordenar"
+            }
+          },
+          "page_3": {
+            "name": "Página{page_3_position}{page_3_name}",
+            "data": {
+              "name": "Nombre",
+              "position": "Posición",
+              "entities": "Entidades"
+            },
+            "data_description": {
+              "name": "Título de esta página en la pantalla",
+              "position": "1 = primera página",
+              "entities": "Orden de los mosaicos; arrastra para reordenar"
+            }
+          },
+          "page_4": {
+            "name": "Página{page_4_position}{page_4_name}",
+            "data": {
+              "name": "Nombre",
+              "position": "Posición",
+              "entities": "Entidades"
+            },
+            "data_description": {
+              "name": "Título de esta página en la pantalla",
+              "position": "1 = primera página",
+              "entities": "Orden de los mosaicos; arrastra para reordenar"
+            }
+          },
+          "page_5": {
+            "name": "Página{page_5_position}{page_5_name}",
+            "data": {
+              "name": "Nombre",
+              "position": "Posición",
+              "entities": "Entidades"
+            },
+            "data_description": {
+              "name": "Título de esta página en la pantalla",
+              "position": "1 = primera página",
+              "entities": "Orden de los mosaicos; arrastra para reordenar"
+            }
+          },
+          "page_6": {
+            "name": "Página{page_6_position}{page_6_name}",
+            "data": {
+              "name": "Nombre",
+              "position": "Posición",
+              "entities": "Entidades"
+            },
+            "data_description": {
+              "name": "Título de esta página en la pantalla",
+              "position": "1 = primera página",
+              "entities": "Orden de los mosaicos; arrastra para reordenar"
+            }
+          },
+          "page_7": {
+            "name": "Página{page_7_position}{page_7_name}",
+            "data": {
+              "name": "Nombre",
+              "position": "Posición",
+              "entities": "Entidades"
+            },
+            "data_description": {
+              "name": "Título de esta página en la pantalla",
+              "position": "1 = primera página",
+              "entities": "Orden de los mosaicos; arrastra para reordenar"
+            }
+          },
+          "page_8": {
+            "name": "Página{page_8_position}{page_8_name}",
+            "data": {
+              "name": "Nombre",
+              "position": "Posición",
+              "entities": "Entidades"
+            },
+            "data_description": {
+              "name": "Título de esta página en la pantalla",
+              "position": "1 = primera página",
+              "entities": "Orden de los mosaicos; arrastra para reordenar"
+            }
+          },
+          "agenda_page": {
+            "name": "Página{agenda_page_position}: Agenda",
+            "description": "Los cinco próximos eventos en siete días. Solo lectura desde Home Assistant.",
+            "data": {
+              "enabled": "Mostrar Agenda",
+              "position": "Posición",
+              "calendars": "Calendarios"
+            },
+            "data_description": {
+              "enabled": "Los cinco próximos eventos en siete días. Solo lectura desde Home Assistant.",
+              "calendars": "Selecciona hasta ocho calendarios.",
+              "position": "1 = primera página; posiciones de 1 a 12. En caso de empate: Energía, Agenda, Salir de casa, Situaciones y después las páginas normales. Posición predeterminada: 10."
+            }
+          },
+          "leave_home_page": {
+            "name": "Página{leave_home_page_position}: Salir de casa",
+            "description": "Comprobaciones de solo lectura para las entidades seleccionadas expresamente. Las acciones requieren confirmación; la alarma abre sus controles existentes protegidos con PIN.",
+            "data": {
+              "enabled": "Mostrar Salir de casa",
+              "position": "Posición",
+              "contacts": "Ventanas y puertas",
+              "lights": "Luces",
+              "actions": "Acciones",
+              "show_alarm": "Mostrar la disponibilidad de Alarmo"
+            },
+            "data_description": {
+              "enabled": "Comprobaciones de solo lectura para las entidades seleccionadas expresamente. Las acciones requieren confirmación; la alarma abre sus controles existentes protegidos con PIN.",
+              "contacts": "Selecciona hasta 24 sensores de puerta o ventana.",
+              "lights": "Selecciona hasta 24 luces.",
+              "actions": "Selecciona hasta ocho acciones existentes de la lista de permitidas.",
+              "show_alarm": "Usa la alarma ya configurada para esta pantalla.",
+              "position": "1 = primera página; posiciones de 1 a 12. En caso de empate: Energía, Agenda, Salir de casa, Situaciones y después las páginas normales. Posición predeterminada: 11."
+            }
+          },
+          "energy_page": {
+            "name": "Página{energy_page_position}: Energía",
+            "description": "Una página adicional opcional. Muestra la configuración de Energía propia de Home Assistant (Ajustes > Paneles de control > Energía): contadores de red, solar y batería, sus sensores de potencia, nombres y precios. Un tipo de fuente que no esté configurado allí se omite, y sin ninguna fuente la página no se muestra.",
+            "data": {
+              "enabled": "Mostrar la página de energía",
+              "position": "Posición",
+              "view_now": "Ahora",
+              "view_today": "Hoy",
+              "view_power": "Historial de potencia",
+              "view_consumers": "Consumidores",
+              "view_balance": "Balance"
+            },
+            "data_description": {
+              "enabled": "Las vistas desactivadas no generan consultas ni caché propias; los datos compartidos con vistas activas se mantienen. Con todas las vistas desactivadas, la página se oculta y se vacían sus cachés sin perder los ajustes.",
+              "position": "1 = primera página; posiciones de 1 a 12. En caso de empate: Energía, Agenda, Salir de casa, Situaciones y después las páginas normales. Posición predeterminada: 2.",
+              "view_now": "Flujo en directo entre red, solar, batería y hogar",
+              "view_today": "Energía por horas y totales de hoy",
+              "view_power": "Potencia media de hoy en intervalos de 15 minutos a partir de las estadísticas existentes de Home Assistant, no valores en tiempo real",
+              "view_consumers": "Los diez dispositivos eléctricos configurados con mayor potencia actual en W; las lecturas no disponibles se omiten, sin consultas de historial",
+              "view_balance": "Autosuficiencia, solar usada en casa y costes"
+            }
+          },
+          "situations_page": {
+            "name": "Página{situations_page_position}: Situaciones",
+            "description": "Incidencias del hogar seleccionadas, solo lectura. Sin acciones ni navegación automática.",
+            "data": {
+              "enabled": "Mostrar Situaciones",
+              "position": "Posición",
+              "contacts": "Ventanas y puertas",
+              "garages": "Puertas de garaje",
+              "lights": "Luces",
+              "tasks": "Listas de tareas"
+            },
+            "data_description": {
+              "enabled": "Selecciona hasta 24 entidades en total entre los cuatro campos. Los estados desconocido y no disponible siguen visibles. Desactivado de forma predeterminada.",
+              "position": "1 = primera página; posiciones de 1 a 12. Predeterminada: 12.",
+              "contacts": "Hasta 24 contactos; se muestran los contactos abiertos.",
+              "garages": "Hasta 24 puertas de garaje; se muestran las puertas abiertas o en movimiento.",
+              "lights": "Hasta 24 luces; se muestran las luces encendidas.",
+              "tasks": "Hasta 24 listas de tareas; solo el número de elementos pendientes. No se cambia ninguna tarea."
+            }
+          }
+        }
+      },
+      "reauth_confirm": {
+        "title": "Actualizar las claves del {model}",
+        "description": "Introduce las claves actuales de {name}. Deja una clave vacía para conservar su valor guardado.",
+        "data": {
+          "agent_token": "Clave de acceso",
+          "maintenance_token": "Clave de mantenimiento",
+          "reinstall_agent": "No tengo las claves: reinstalar el agente"
+        },
+        "data_description": {
+          "reinstall_agent": "Vuelve a instalar por SSH el agente incluido con claves recién generadas y las guarda en esta entrada. Las claves usadas hasta ahora dejan de funcionar; todo lo demás en el {model} queda como está."
+        }
+      },
+      "reauth_reinstall": {
+        "title": "Reinstalar el agente del {model}",
+        "description": "Home Assistant inicia sesión primero con el acceso de fábrica del {model}. Introduce el usuario y la contraseña SSH, o una clave privada, solo si el dispositivo lo ha rechazado; si se dejan vacíos, se vuelve a probar el acceso de fábrica. Este paso detiene el agente instalado, escribe en el {model}, por SSH, el agente incluido y una configuración con claves recién generadas, y lo vuelve a iniciar. Las claves nuevas se guardan para {name}; las antiguas dejan de funcionar. Las páginas de pantalla y los demás ajustes del {model} se conservan, y el dispositivo no se reinicia. Las credenciales SSH y las claves solo se usan para este paso y no se guardan.",
+        "data": {
+          "bootstrap_ssh_username": "Usuario SSH del {model}",
+          "bootstrap_ssh_password": "Contraseña SSH del {model}",
+          "bootstrap_ssh_key": "Clave privada SSH del {model} (opcional)",
+          "bootstrap_ssh_key_passphrase": "Frase de contraseña de la clave (opcional)"
+        },
+        "data_description": {
+          "bootstrap_ssh_key": "Pega la clave privada completa (OpenSSH o PEM). Tipo de clave: RSA o ECDSA en 1.7.x, 2.0.2 y C100X 1.5.8; ed25519 solo en 3.0.6. Con una clave y sin usuario se usa root; una contraseña introducida además se prueba si la clave es rechazada."
+        }
+      }
+    },
+    "abort": {
+      "model_mismatch": "Este anuncio procede de un modelo de videoportero distinto al de la entrada configurada con la misma identidad. No se ha cambiado nada.",
+      "already_configured": "BTicino C300X/C100X ya está configurado.",
+      "reconfigure_successful": "BTicino {model} se ha reconfigurado. Actualiza la configuración local del agente del dispositivo o del puente de pantalla si has renovado las credenciales.",
+      "cannot_connect": "No se ha podido acceder al agente del dispositivo. Comprueba la dirección y que el agente esté en ejecución.",
+      "unique_id_mismatch": "Este dispositivo es distinto del que está configurado. Reconfigura la entrada que le corresponde o añade el dispositivo como una entrada nueva.",
+      "reauth_wrong_device": "El agente tiene una identidad distinta. La entrada guardada no se ha cambiado.",
+      "reauth_another_station": "Esta dirección lleva ahora a otra estación. No se ha cambiado nada, ni en ella ni en la entrada guardada.",
+      "reauth_successful": "Las credenciales se han actualizado.",
+      "reinstall_entry_updated": "El agente se ha vuelto a instalar en una estación que ya está configurada como {name}. Esa entrada usa ahora las nuevas claves y esta dirección; no se ha creado una segunda entrada.",
+      "station_entry_updated": "Esta estación ya está configurada como {name}. Esa entrada usa ahora estas claves y esta dirección; no se ha creado una segunda entrada.",
+      "unsupported_display": "Este dispositivo no admite páginas de pantalla de Home Assistant ni notificaciones en pantalla. Los diseños guardados no se han cambiado."
+    },
+    "error": {
+      "agent_bundle_missing": "Falta el paquete del agente ARMHF incluido. Compila o empaqueta el paquete de la versión antes de usar el instalador.",
+      "device_install_failed": "La instalación por SSH ha fallado. Comprueba el acceso SSH e inténtalo de nuevo.",
+      "device_display_timeout": "Los archivos de pantalla no se han escrito dentro del tiempo límite; se ha indicado al dispositivo que reponga los archivos anteriores. Comprueba que la pantalla funciona y vuelve a intentarlo.",
+      "device_install_verify_failed": "El instalador ha terminado, pero el agente nativo no ha respondido con la clave de acceso generada.",
+      "invalid_agent_port": "Introduce un puerto válido del agente del dispositivo.",
+      "invalid_agent_host": "Introduce el host del agente del dispositivo.",
+      "invalid_callback_base_url": "Introduce una URL base HTTP o HTTPS de Home Assistant accesible, o déjala vacía.",
+      "invalid_device_host": "Introduce la dirección del {model}.",
+      "installer_dependency_missing": "Home Assistant no ha podido instalar o cargar el paquete SSH opcional (asyncssh==2.24.1). No es un error de inicio de sesión SSH. Home Assistant recuerda una instalación de paquete fallida hasta una comprobación de la configuración o un reinicio, aunque el paquete haya llegado después: ejecuta Herramientas para desarrolladores > YAML > Verificar configuración (o reinicia Home Assistant) y vuelve a intentarlo. Si falla de nuevo, Ajustes > Sistema > Registros indica la causa y la versión de asyncssh instalada.",
+      "invalid_ssh_password": "Introduce la contraseña SSH del {model}.",
+      "invalid_ssh_username": "Introduce el usuario SSH del {model}.",
+      "invalid_alarm_entity": "Selecciona una entidad de panel de control de alarma de Alarmo o deja el campo vacío.",
+      "invalid_alarm_page_entity": "Selecciona una entidad de panel compatible para la página de alarma o deja el campo vacío.",
+      "invalid_weather_entity": "Selecciona una entidad meteorológica o deja el campo vacío.",
+      "invalid_audio_level": "Elige un nivel de la lista y un ajuste fino entre -10 dB y +10 dB.",
+      "invalid_device_activations": "Comprueba el ID, el nombre, el tipo y la dirección de la activación. Los ID deben ser únicos; el modo manual de luz de escalera ya reserva stair_light.",
+      "invalid_stair_light_part": "Introduce un valor P/N numérico de 0 a 99.",
+      "required": "Este campo es obligatorio.",
+      "invalid_dashboard_entities": "Una entidad no se puede mostrar en la pantalla.",
+      "invalid_device_activation_mode": "Elige automático o manual para el modo de dirección de las activaciones.",
+      "invalid_action_map": "El JSON de la lista de acciones permitidas no es válido.",
+      "invalid_dashboard_entity_display_overrides": "Un ajuste de pantalla no es válido. Comprueba los nombres personalizados y los nombres de las páginas (hasta 60 caracteres).",
+      "dashboard_page_name_reserved": "C300X es el nombre interno de la página de estado; elige otro nombre de página.",
+      "dashboard_page_name_duplicate": "Dos páginas tienen el mismo nombre; da a cada página el suyo.",
+      "dashboard_entity_on_several_pages": "Una entidad está elegida en más de una página; mantenla en una sola.",
+      "invalid_dashboard_pages": "Las páginas de pantalla guardadas no son válidas; vuelve a configurar las páginas.",
+      "dashboard_page_name_missing": "Una página con entidades necesita un nombre; la pantalla lo muestra como título de la página.",
+      "invalid_snapshot_option": "Introduce números enteros: 1-300 segundos, 1-365 días, ancho 64-800 y alto 64-480. La imagen se lee de la pantalla de 800×480.",
+      "invalid_auth": "El {model} ha rechazado la clave de acceso. Introduce la clave actual.",
+      "wrong_device": "Esta dirección pertenece a otro {model}. El dispositivo existente no se ha cambiado.",
+      "invalid_maintenance_auth": "El {model} ha rechazado la clave de mantenimiento. Introduce la clave de mantenimiento actual.",
+      "cannot_connect": "No se ha podido validar el {model}. Comprueba su dirección y la conexión e inténtalo de nuevo.",
+      "ssh_login_refused": "El {model} ha rechazado el inicio de sesión SSH. Introduce el usuario y la contraseña SSH del dispositivo.",
+      "invalid_ssh_key": "No se ha podido leer la clave privada. Pega la clave completa con sus líneas BEGIN y END, y su frase de contraseña si tiene una.",
+      "ssh_user_not_root": "Este usuario SSH no tiene derechos de root. Inicia sesión como root o root2, no como bticino2.",
+      "ssh_unreachable": "El {model} no responde por SSH (puerto 22). SSH está desactivado o bloqueado en la estación; comprueba la dirección y que la herramienta de root haya activado SSH.",
+      "ssh_password_login_disabled": "El {model} no acepta inicio de sesión con contraseña, solo claves SSH. Pega la clave privada que configuró la herramienta de root, o crea la imagen con inicio de sesión por contraseña.",
+      "installer_firewall_hook_unsupported": "El hook de cortafuegos del dispositivo no se puede inspeccionar de forma segura. La instalación se ha detenido antes de cambiar el videoportero. Comprueba el tipo de hook y los permisos; no crees un marcador de posición.",
+      "firewall_hook_changed": "El script de arranque del cortafuegos del {model} (/etc/network/if-pre-up.d/iptables) fue modificado por otra cosa después de que el agente añadiera sus puertos; el original guardado ya no coincide. El script se dejó como estaba. Restáuralo, o quita de él el bloque del agente, y vuelve a intentarlo.",
+      "device_model_incompatible": "Este paquete no es compatible con este videoportero, o no se ha podido confirmar el modelo del videoportero. No se ha sustituido ningún archivo del dispositivo.",
+      "c100x_confirmation_required": "Marca la casilla para configurar el Classe 100X o cierra este diálogo para dejar el videoportero sin cambios.",
+      "not_a_bticino_station": "El dispositivo de esta dirección no es un videoportero BTicino. No se ha escrito nada en él. Comprueba la dirección."
+    }
+  },
+  "options": {
+    "abort": {
+      "unique_id_mismatch": "Este dispositivo es distinto del que está configurado. Reconfigura la entrada que le corresponde o añade el dispositivo como una entrada nueva.",
+      "unsupported_display": "Este dispositivo no admite páginas de pantalla de Home Assistant ni notificaciones en pantalla. Los diseños guardados no se han cambiado."
+    },
+    "step": {
+      "connection": {
+        "title": "Conexión con el {model}",
+        "description": "Cómo se comunican Home Assistant y el {model}.",
+        "data": {
+          "agent_host": "Dirección del {model}",
+          "agent_port": "Puerto",
+          "agent_token": "Clave de acceso",
+          "maintenance_token": "Clave de mantenimiento",
+          "callback_base_url": "Dirección de Home Assistant para el {model} (opcional)"
+        },
+        "data_description": {
+          "agent_host": "Dirección IP o nombre de host de tu {model}.",
+          "agent_port": "Puerto en el que el {model} responde a Home Assistant. Déjalo en 8091 salvo que lo hayas cambiado durante la instalación.",
+          "agent_token": "Clave con la que Home Assistant inicia sesión en el {model}. Se creó durante la instalación. Déjala vacía para conservar la clave guardada.",
+          "maintenance_token": "Clave independiente para el mantenimiento: actualizaciones, cambios en la pantalla y reinicios. Déjala vacía para conservar la clave guardada.",
+          "callback_base_url": "El {model} comunica las llamadas y otros eventos a esta dirección. Déjala vacía para usar la dirección que Home Assistant conoce de sí mismo. Una dirección https cifra la conexión; necesita un certificado válido y carga más el {model}. Cambiar entre http y https reinicia el servicio en el {model} en cuanto no haya ninguna llamada ni transmisión en curso."
+        }
+      },
+      "features": {
+        "title": "Vídeo y audio",
+        "description": "Imagen y sonido del videoportero en Home Assistant.",
+        "data": {
+          "video_enabled": "Vídeo y audio del videoportero",
+          "create_homeassistant_user": "Configurar el acceso de vídeo y audio en el {model}",
+          "door_audio_level_db": "Nivel del videoportero",
+          "audio_fine_gain_db": "Ajuste fino (dB)",
+          "webrtc_ice_policy": "Rutas de conexión para la imagen en directo",
+          "native_two_way_audio": "Hablar desde la vista de cámara de Home Assistant"
+        },
+        "data_description": {
+          "video_enabled": "Imagen y sonido del videoportero en Home Assistant: al llamar, a petición y para Home Call.",
+          "create_homeassistant_user": "El vídeo y el audio necesitan un acceso propio en el {model}. Con esta opción activada, la integración lo configura durante la instalación o mediante su reparación.",
+          "door_audio_level_db": "Sube el sonido del videoportero en la vista en directo, durante una llamada y en las grabaciones de llamada. En el Classe 300X en el chip de audio de la estación, lo que también sube las llamadas contestadas en la app BTicino; en el Classe 100X mediante el agente. Predeterminado: valor de fábrica.",
+          "audio_fine_gain_db": "Añade de -10 a +10 dB al nivel del videoportero, igual en cada estación y con cada códec de audio. Predeterminado: 0.",
+          "webrtc_ice_policy": "Qué direcciones de red puede usar el navegador para la imagen en directo. Cámbialo solo si la imagen en directo no conecta.",
+          "native_two_way_audio": "Opcional, desactivado de forma predeterminada. Requiere Home Assistant 2026.11 o posterior, \"Audio bidireccional\" activado en Ajustes > Sistema > Labs, la imagen en directo por WebRTC, acceso por HTTPS y que el navegador tenga permiso para usar el micrófono. Responde antes a la llamada en la tarjeta del {model}; esta opción no la responde. Hablar en la tarjeta del {model} sigue igual."
+        }
+      },
+      "visitor_snapshot": {
+        "title": "Instantánea del visitante",
+        "description": "Se guarda una imagen del visitante en cada llamada y al iniciar una transmisión de vídeo. Estos ajustes se aplican a esa imagen.",
+        "data": {
+          "snapshot_width": "Ancho de la imagen (píxeles)",
+          "snapshot_height": "Alto de la imagen (píxeles)",
+          "snapshot_delay_seconds": "Retardo de la imagen (segundos)",
+          "snapshot_retention_days": "Conservar las imágenes (días)",
+          "snapshot_timestamp": "Escribir fecha y hora en la imagen"
+        },
+        "data_description": {
+          "snapshot_width": "Valor predeterminado 800: las instantáneas leen el framebuffer de la pantalla de 800×480, con independencia del tamaño de la transmisión de vídeo. El agente redimensiona el fotograma completo a las dimensiones elegidas; Home Assistant no lo vuelve a redimensionar. Rango 64-800.",
+          "snapshot_height": "Valor predeterminado 480. Usa 800×480 para los píxeles nativos de la pantalla o, por ejemplo, 400×240 para conservar su proporción 5:3. Otras proporciones deforman la imagen. Incluso una transmisión de 960×576 se captura de la pantalla de 800×480. Rango 64-480.",
+          "snapshot_delay_seconds": "Captura tras la llamada o el inicio de una transmisión de vídeo; valor predeterminado 3 segundos. No hace falta tener una tarjeta abierta.",
+          "snapshot_retention_days": "Valor predeterminado 14 días. Las imágenes caducadas se eliminan aunque el guardado esté desactivado. Límite: 1000 imágenes o 128 MiB por dispositivo; se eliminan primero las más antiguas.",
+          "snapshot_timestamp": "La fecha y la hora de la captura se dibujan en la esquina inferior derecha de la imagen guardada. Activado de forma predeterminada."
+        }
+      },
+      "camera_quality": {
+        "title": "Calidad de la cámara",
+        "description": "Estos ajustes afectan a la transmisión Alta de **Resolución de la cámara**, o a la Baja en el firmware 3.0.x. Guardar los cambios reinicia automáticamente el dispositivo; cuenta con un minuto aproximadamente.\n\nEn ejecución actualmente: {running}",
+        "data": {
+          "size": "Tamaño de la imagen",
+          "bitrate_kbps": "Tasa de bits",
+          "fps": "Fotogramas por segundo",
+          "use_recommended_snapshot_size": "Usar el tamaño de instantánea recomendado (800×480)"
+        },
+        "data_description": {
+          "size": "Los tamaños dependen del firmware y del agente del dispositivo instalado. El tamaño opcional 960x576 coincide con las proporciones de la pantalla cuando se ofrece.",
+          "bitrate_kbps": "Los valores más altos mejoran la calidad de la imagen, pero aumentan el tráfico de red.",
+          "fps": "Los valores más altos dan un movimiento más fluido; el selector muestra los límites admitidos.",
+          "use_recommended_snapshot_size": "Usa las proporciones de la pantalla para las instantáneas futuras. Déjalo sin marcar para conservar tu tamaño."
+        }
+      },
+      "speech": {
+        "title": "Voz",
+        "description": "Las notificaciones habladas (acción Notify con tts: true, o el modo heredado speech o both) usan este motor y este idioma. Con un motor local como Piper, nada sale de tu red. Sin elección, Home Assistant usa su motor predeterminado, que es el de la nube cuando Home Assistant Cloud está configurado. tts_engine y language en una notificación tienen prioridad sobre estos ajustes.",
+        "data": {
+          "tts_engine": "Motor de texto a voz",
+          "tts_language": "Idioma"
+        },
+        "data_description": {
+          "tts_engine": "Una entidad de texto a voz de Home Assistant, por ejemplo tts.piper. Déjalo vacío para el motor predeterminado.",
+          "tts_language": "Déjalo vacío para el idioma del motor. Un idioma que el motor nombra de otra forma, por ejemplo de para de_DE, se guarda como lo nombra el motor."
+        }
+      },
+      "device_activations": {
+        "title": "Activaciones: cerraduras, luces, luz de escalera",
+        "description": "Aquí se añaden más cerraduras y luces de la instalación de videoportero, una activación por cada una, por ejemplo para una segunda puerta.\n\nActivaciones adicionales: {device_activation_count}\n\n{device_activation_items}\n\nElige qué hacer y envía. Los cambios se recogen primero aquí; con **Terminar y guardar** se guardan y se actualiza el dispositivo, y solo si sus activaciones difieren.",
+        "data": {
+          "device_activation_mode": "Dirección de la luz de escalera",
+          "device_activation_stair_light_p": "Luz de escalera P",
+          "device_activation_stair_light_n": "Luz de escalera N",
+          "device_activation_flow_action": "Acción",
+          "device_activation_flow_target": "Activación"
+        },
+        "data_description": {
+          "device_activation_mode": "Automático usa las activaciones tal como están configuradas aquí o como las comunica el dispositivo. Manual añade una activación de luz de escalera formada con los valores P y N de abajo.",
+          "device_activation_stair_light_p": "Solo en modo manual: parte P de la dirección de la luz de escalera, de 0 a 99.",
+          "device_activation_stair_light_n": "Solo en modo manual: parte N de la dirección de la luz de escalera, de 0 a 99.",
+          "device_activation_flow_action": "Añade, edita o elimina una activación, o termina y guarda.",
+          "device_activation_flow_target": "La activación que se va a editar o eliminar."
+        }
+      },
+      "device_activation_item": {
+        "title": "Activación",
+        "description": "Una activación de la instalación de videoportero, que se muestra en Home Assistant como un botón.",
+        "data": {
+          "device_activation_item_id": "ID",
+          "device_activation_item_name": "Nombre",
+          "device_activation_item_type": "Tipo",
+          "device_activation_item_address": "Dirección"
+        },
+        "data_description": {
+          "device_activation_item_id": "Letras, números, _ y -, hasta 32 caracteres. Cada ID solo se puede usar una vez.",
+          "device_activation_item_name": "Nombre del botón en Home Assistant, hasta 63 caracteres.",
+          "device_activation_item_type": "Lo que acciona la dirección: una cerradura, una luz o la luz de escalera.",
+          "device_activation_item_address": "Dirección de la instalación de videoportero a la que se envía la activación (\"where\" de OpenWebNet), hasta 31 caracteres."
+        }
+      },
+      "dashboard": {
+        "title": "Pantalla y parche de pantalla",
+        "description": "Páginas de Home Assistant en la pantalla del C300X.\n\nParche de pantalla en el dispositivo: {qml_patch_status}.\n\nActivar o desactivar el parche de pantalla escribe archivos de pantalla en el dispositivo y recarga su pantalla; puede tardar hasta unos 60 segundos. El estado cambia cuando el dispositivo lo confirma.\n\nCon el parche de pantalla activado, el menú Pantalla ofrece también **Páginas de pantalla** (el tiempo y qué se muestra dónde) y **Mosaicos de la pantalla**.",
+        "data": {
+          "device_ui_enabled": "Páginas de Home Assistant en la pantalla",
+          "actions_json": "Acciones permitidas (para expertos)",
+          "dashboard_prevent_return": "Mantener la página abierta con la pantalla en reposo",
+          "dashboard_navigation": "Navegación entre páginas",
+          "dashboard_dynamic_homepage": "Botones de la página de inicio"
+        },
+        "data_description": {
+          "device_ui_enabled": "Activado: instala las páginas de Home Assistant en la pantalla del C300X (parche de pantalla). Desactivado: restaura la pantalla original y descarta los ajustes del tiempo, de las páginas, de los mosaicos y de las acciones. Los ajustes de Alarmo se conservan.",
+          "actions_json": "Acciones que la pantalla y sus notificaciones pueden ejecutar, escritas en JSON: una entrada por acción con domain y service y, opcionalmente, target y data. Déjalo vacío si no usas ninguna.",
+          "dashboard_prevent_return": "Activado: las páginas Home Assistant y Alarma permanecen abiertas cuando la pantalla pasa a reposo. Desactivado: la pantalla vuelve entonces a su página de inicio.",
+          "dashboard_navigation": "Cómo cambia de página la pantalla. La barra de favoritos muestra las cuatro primeras páginas como botones en el borde inferior. Con más de cuatro páginas, el cuarto botón es Más y abre la lista de las demás páginas. El orden sigue las posiciones de las páginas.",
+          "dashboard_dynamic_homepage": "Dónde se sitúan los botones Alarma y Home Assistant en la página de inicio del C300X. Vista de fábrica: cada botón aparece solo mientras tiene algo que abrir y ocupa su lugar entre los botones originales, también debajo de ellos cuando la fila está llena. Fijos uno junto al otro: ambos conservan dos lugares fijos contiguos; un botón sin nada que abrir deja su lugar vacío. Un cambio vuelve a aplicar el parche de pantalla y reinicia la pantalla una vez."
+        }
+      },
+      "dashboard_c100x": {
+        "title": "Páginas de Home Assistant en la pantalla",
+        "description": "Páginas de Home Assistant en la pantalla del C100X.\n\n**Activar páginas de pantalla** en la página del dispositivo las activa; **Restaurar pantalla original**, o este interruptor desactivado, recupera la pantalla original. Cada una surte efecto con un reinicio del C100X cuando lleva unos dos minutos inactivo. No hay parche de pantalla ni recarga de pantalla.\n\nCon las páginas activas, el menú Pantalla ofrece también **Páginas de pantalla** (el tiempo y qué se muestra dónde) y **Mosaicos de la pantalla**.",
+        "data": {
+          "device_ui_enabled": "Páginas de Home Assistant en la pantalla",
+          "actions_json": "Acciones permitidas (para expertos)",
+          "dashboard_prevent_return": "Mantener la página abierta con la pantalla en reposo",
+          "dashboard_navigation": "Navegación entre páginas"
+        },
+        "data_description": {
+          "device_ui_enabled": "Activado mientras las páginas de Home Assistant están activas en la pantalla del C100X; llegan con Activar páginas de pantalla. Desactivado: restaura la pantalla original con un reinicio del C100X y descarta los ajustes del tiempo, de las páginas, de los mosaicos y de las acciones. Los ajustes de Alarmo se conservan.",
+          "actions_json": "Acciones que la pantalla y sus notificaciones pueden ejecutar, escritas en JSON: una entrada por acción con domain y service y, opcionalmente, target y data. Déjalo vacío si no usas ninguna.",
+          "dashboard_prevent_return": "Activado: las páginas Home Assistant y Alarmo permanecen abiertas cuando la pantalla pasa a reposo. Desactivado: la pantalla vuelve entonces a su página de inicio.",
+          "dashboard_navigation": "No se usa en el {model}: sus páginas se suceden como los menús propios del videoportero. Arriba y Abajo cambian de página, Retorno entra en ella y la última entrada es EXIT. El orden sigue las posiciones de las páginas."
+        }
+      },
+      "dashboard_entity_display": {
+        "title": "Mosaicos de la pantalla",
+        "description": "Cada mosaico tiene su propia sección, en el orden en que los muestra la pantalla: primero la página, luego la entidad. Abre una sección para cambiar su mosaico.\n\n- **Ancho** y **Alto**: medio o completo. Automático usa el tamaño habitual del tipo de entidad. A altura completa, el mosaico lleva los botones propios de la entidad.\n- **Nombre**: escribe un nombre propio. Si se deja vacío, el mosaico muestra el nombre de Home Assistant.\n- **Línea secundaria**: la segunda línea debajo del nombre.\n\nLa acción rápida de Alarmo no está en ninguna página; solo tiene nombre y línea secundaria."
+      },
+      "init": {
+        "title": "Ajustes del C300X",
+        "description": "Elige qué quieres cambiar. Cada área se guarda por separado al enviarla y te devuelve al menú desde el que se abrió; las demás áreas conservan sus ajustes. Para salir de un área sin cambios, envíala tal como está.",
+        "menu_options": {
+          "connection": "Conexión con el C300X",
+          "features": "Vídeo y audio",
+          "visitor_snapshot": "Instantánea del visitante",
+          "camera_quality": "Calidad de la cámara",
+          "device_activations": "Activaciones: cerraduras, luces, luz de escalera",
+          "speech": "Voz",
+          "display": "Pantalla",
+          "done": "Listo",
+          "dashboard_alarm": "Alarmo"
+        },
+        "menu_option_descriptions": {
+          "connection": "Dirección, clave de acceso y clave de mantenimiento del C300X, dirección de Home Assistant.",
+          "features": "Imagen en directo, conversación, volúmenes y el acceso de vídeo y audio en el C300X.",
+          "visitor_snapshot": "Tamaño de la imagen del visitante guardada, retardo de captura, conservación y la fecha escrita en la imagen.",
+          "camera_quality": "Tamaño, tasa de bits y fotogramas por segundo de la transmisión de la cámara; un cambio reinicia el dispositivo.",
+          "device_activations": "Cerraduras y luces adicionales de la instalación de videoportero que Home Assistant puede accionar, y la dirección de la luz de escalera.",
+          "speech": "Motor de texto a voz e idioma para las notificaciones habladas.",
+          "display": "Parche de pantalla, páginas, mosaicos y Alarmo.",
+          "done": "Cierra los ajustes. Todo lo enviado ya está guardado.",
+          "dashboard_alarm": "Integración con Alarmo, independiente de la compatibilidad de pantalla del dispositivo."
+        }
+      },
+      "init_c100x": {
+        "title": "Ajustes del C100X",
+        "description": "Elige qué quieres cambiar. Cada área se guarda por separado al enviarla y te devuelve al menú desde el que se abrió; las demás áreas conservan sus ajustes. Para salir de un área sin cambios, envíala tal como está.",
+        "menu_options": {
+          "connection": "Conexión con el C100X",
+          "features": "Vídeo y audio",
+          "visitor_snapshot": "Instantánea del visitante",
+          "camera_quality": "Calidad de la cámara",
+          "device_activations": "Activaciones: cerraduras, luces, luz de escalera",
+          "speech": "Voz",
+          "display": "Pantalla",
+          "done": "Listo",
+          "dashboard_alarm": "Alarmo"
+        },
+        "menu_option_descriptions": {
+          "connection": "Dirección, clave de acceso y clave de mantenimiento del C100X, dirección de Home Assistant.",
+          "features": "Imagen en directo, conversación, volúmenes y el acceso de vídeo y audio en el C100X.",
+          "visitor_snapshot": "Tamaño de la imagen del visitante guardada, retardo de captura, conservación y la fecha escrita en la imagen.",
+          "camera_quality": "Tamaño, tasa de bits y fotogramas por segundo de la transmisión de la cámara; un cambio reinicia el dispositivo.",
+          "device_activations": "Cerraduras y luces adicionales de la instalación de videoportero que Home Assistant puede accionar, y la dirección de la luz de escalera.",
+          "speech": "Motor de texto a voz e idioma para las notificaciones habladas.",
+          "display": "Páginas, mosaicos y Alarmo.",
+          "done": "Cierra los ajustes. Todo lo enviado ya está guardado.",
+          "dashboard_alarm": "Integración con Alarmo, independiente de la compatibilidad de pantalla del dispositivo."
+        }
+      },
+      "display": {
+        "title": "Pantalla",
+        "description": "Todo lo que la pantalla del C300X muestra de Home Assistant. Las páginas y los mosaicos aparecen aquí cuando el parche de pantalla está activado.",
+        "menu_options": {
+          "dashboard": "Pantalla y parche de pantalla",
+          "dashboard_page_list": "Páginas de pantalla",
+          "dashboard_entity_display": "Mosaicos de la pantalla",
+          "dashboard_alarm": "Alarma (Alarmo)",
+          "init": "Atrás"
+        },
+        "menu_option_descriptions": {
+          "dashboard": "Páginas de Home Assistant en la pantalla activadas o desactivadas, navegación entre páginas, la página con la pantalla en reposo y acciones permitidas.",
+          "dashboard_page_list": "El tiempo, y qué entidades aparecen en qué página y en qué orden.",
+          "dashboard_entity_display": "Tamaño, nombre y línea secundaria de cada mosaico.",
+          "dashboard_alarm": "Panel de alarma de Alarmo y la acción rápida de la página Alarma.",
+          "init": "Volver al menú de ajustes."
+        }
+      },
+      "display_c100x": {
+        "title": "Pantalla",
+        "description": "Todo lo que la pantalla del C100X muestra de Home Assistant. Las páginas y los mosaicos aparecen aquí cuando las páginas de pantalla están activadas.",
+        "menu_options": {
+          "dashboard": "Páginas de Home Assistant en la pantalla",
+          "dashboard_page_list": "Páginas de pantalla",
+          "dashboard_entity_display": "Mosaicos de la pantalla",
+          "dashboard_alarm": "Alarmo",
+          "init": "Atrás"
+        },
+        "menu_option_descriptions": {
+          "dashboard": "Páginas de Home Assistant en la pantalla activadas o desactivadas, navegación entre páginas, la página con la pantalla en reposo y acciones permitidas.",
+          "dashboard_page_list": "El tiempo, y qué entidades aparecen en qué página y en qué orden.",
+          "dashboard_entity_display": "Tamaño, nombre y línea secundaria de cada mosaico.",
+          "dashboard_alarm": "Panel de alarma de Alarmo y la acción rápida de la página Alarmo.",
+          "init": "Volver al menú de ajustes."
+        }
+      },
+      "dashboard_page_list": {
+        "title": "Páginas de pantalla",
+        "description": "Elige una página para cambiarla. La lista sigue el orden de la pantalla. Una página sin número no se muestra: está desactivada o no tiene entidades.",
+        "menu_options": {
+          "page_1": "Página{page_1_position}: página de estado",
+          "page_2": "Página{page_2_position}{page_2_name}",
+          "page_3": "Página{page_3_position}{page_3_name}",
+          "page_4": "Página{page_4_position}{page_4_name}",
+          "page_5": "Página{page_5_position}{page_5_name}",
+          "page_6": "Página{page_6_position}{page_6_name}",
+          "page_7": "Página{page_7_position}{page_7_name}",
+          "page_8": "Página{page_8_position}{page_8_name}",
+          "agenda_page": "Página{agenda_page_position}: Agenda",
+          "leave_home_page": "Página{leave_home_page_position}: Salir de casa",
+          "energy_page": "Página{energy_page_position}: Energía",
+          "situations_page": "Página{situations_page_position}: Situaciones",
+          "page_new": "Añadir una página",
+          "display": "Atrás"
+        },
+        "menu_option_descriptions": {
+          "page_new": "Hasta siete páginas propias.",
+          "display": "Volver al menú Pantalla."
+        }
+      },
+      "dashboard_alarm": {
+        "title": "Alarma (Alarmo)",
+        "description": "Alarmo gestiona los comandos de alarma y la página Alarma de la pantalla, que se abre con el botón Alarma de la página de inicio del {model}. Elige el panel de alarma de Alarmo y, si quieres, una acción rápida junto a él en la página Alarma.",
+        "data": {
+          "alarm_entity_id": "Panel de alarma de Alarmo",
+          "alarm_page_entity_id": "Acción rápida"
+        },
+        "data_description": {
+          "alarm_entity_id": "Panel de alarma que Home Assistant arma y desarma desde el {model} y que muestra la página Alarma. Déjalo vacío si no usas Alarmo: el botón Alarma no aparece entonces.",
+          "alarm_page_entity_id": "Entidad opcional en la página Alarma de la pantalla (parche de pantalla), por ejemplo la luz de escalera. Allí se pueden manejar botones, interruptores, escenas y scripts; las demás entidades solo se muestran. Déjalo vacío para ocultarla."
+        }
+      },
+      "dashboard_alarm_c100x": {
+        "title": "Alarmo",
+        "description": "Alarmo gestiona los comandos de alarma y la página Alarmo de la pantalla, que se abre con el elemento Alarmo del menú principal del {model}. Elige el panel de alarma de Alarmo y, si quieres, una acción rápida junto a él en la página Alarmo.",
+        "data": {
+          "alarm_entity_id": "Panel de alarma de Alarmo",
+          "alarm_page_entity_id": "Acción rápida"
+        },
+        "data_description": {
+          "alarm_entity_id": "Panel de alarma que Home Assistant arma y desarma desde el {model} y que muestra la página Alarmo. Déjalo vacío si no usas Alarmo: el elemento Alarmo no aparece entonces en el menú principal.",
+          "alarm_page_entity_id": "Entidad opcional en la página Alarmo de la pantalla, por ejemplo la luz de escalera. Allí se pueden manejar botones, interruptores, escenas y scripts; las demás entidades solo se muestran. Déjalo vacío para ocultarla."
+        }
+      },
+      "dashboard_pages": {
+        "title": "Páginas de pantalla",
+        "description": "Los ajustes de esta página. La posición es su lugar entre las páginas, de 1 a 12; las demás páginas se numeran en torno a ella. Una entidad elegida aquí que muestre otra página pasa a esta página. Una página propia sin nombre ni entidades se elimina.",
+        "sections": {
+          "page_1": {
+            "name": "Página{page_1_position}: página de estado",
+            "description": "La página de estado de Home Assistant muestra los indicadores de HA, alarma y hora. Actívala o desactívala aquí, con independencia de su tarjeta del tiempo opcional y de sus entidades. Su título en la pantalla es Home Assistant.",
+            "data": {
+              "enabled": "Mostrar la página de estado",
+              "weather_entity_id": "Tiempo",
+              "position": "Posición",
+              "entities": "Entidades"
+            },
+            "data_description": {
+              "enabled": "Muestra esta página con independencia del tiempo y de las entidades. Al desactivarla se conservan sus ajustes.",
+              "weather_entity_id": "Entidad meteorológica para la tarjeta del tiempo de la parte superior de esta página. Déjalo vacío para no mostrar la tarjeta del tiempo.",
+              "position": "1 = primera página",
+              "entities": "Orden de los mosaicos; arrastra para reordenar"
+            }
+          },
+          "page_2": {
+            "name": "Página{page_2_position}{page_2_name}",
+            "data": {
+              "name": "Nombre",
+              "position": "Posición",
+              "entities": "Entidades"
+            },
+            "data_description": {
+              "name": "Título de esta página en la pantalla",
+              "position": "1 = primera página",
+              "entities": "Orden de los mosaicos; arrastra para reordenar"
+            }
+          },
+          "page_3": {
+            "name": "Página{page_3_position}{page_3_name}",
+            "data": {
+              "name": "Nombre",
+              "position": "Posición",
+              "entities": "Entidades"
+            },
+            "data_description": {
+              "name": "Título de esta página en la pantalla",
+              "position": "1 = primera página",
+              "entities": "Orden de los mosaicos; arrastra para reordenar"
+            }
+          },
+          "page_4": {
+            "name": "Página{page_4_position}{page_4_name}",
+            "data": {
+              "name": "Nombre",
+              "position": "Posición",
+              "entities": "Entidades"
+            },
+            "data_description": {
+              "name": "Título de esta página en la pantalla",
+              "position": "1 = primera página",
+              "entities": "Orden de los mosaicos; arrastra para reordenar"
+            }
+          },
+          "page_5": {
+            "name": "Página{page_5_position}{page_5_name}",
+            "data": {
+              "name": "Nombre",
+              "position": "Posición",
+              "entities": "Entidades"
+            },
+            "data_description": {
+              "name": "Título de esta página en la pantalla",
+              "position": "1 = primera página",
+              "entities": "Orden de los mosaicos; arrastra para reordenar"
+            }
+          },
+          "page_6": {
+            "name": "Página{page_6_position}{page_6_name}",
+            "data": {
+              "name": "Nombre",
+              "position": "Posición",
+              "entities": "Entidades"
+            },
+            "data_description": {
+              "name": "Título de esta página en la pantalla",
+              "position": "1 = primera página",
+              "entities": "Orden de los mosaicos; arrastra para reordenar"
+            }
+          },
+          "page_7": {
+            "name": "Página{page_7_position}{page_7_name}",
+            "data": {
+              "name": "Nombre",
+              "position": "Posición",
+              "entities": "Entidades"
+            },
+            "data_description": {
+              "name": "Título de esta página en la pantalla",
+              "position": "1 = primera página",
+              "entities": "Orden de los mosaicos; arrastra para reordenar"
+            }
+          },
+          "page_8": {
+            "name": "Página{page_8_position}{page_8_name}",
+            "data": {
+              "name": "Nombre",
+              "position": "Posición",
+              "entities": "Entidades"
+            },
+            "data_description": {
+              "name": "Título de esta página en la pantalla",
+              "position": "1 = primera página",
+              "entities": "Orden de los mosaicos; arrastra para reordenar"
+            }
+          },
+          "agenda_page": {
+            "name": "Página{agenda_page_position}: Agenda",
+            "description": "Los cinco próximos eventos en siete días. Solo lectura desde Home Assistant.",
+            "data": {
+              "enabled": "Mostrar Agenda",
+              "position": "Posición",
+              "calendars": "Calendarios"
+            },
+            "data_description": {
+              "enabled": "Los cinco próximos eventos en siete días. Solo lectura desde Home Assistant.",
+              "calendars": "Selecciona hasta ocho calendarios.",
+              "position": "1 = primera página; posiciones de 1 a 12. En caso de empate: Energía, Agenda, Salir de casa, Situaciones y después las páginas normales. Posición predeterminada: 10."
+            }
+          },
+          "leave_home_page": {
+            "name": "Página{leave_home_page_position}: Salir de casa",
+            "description": "Comprobaciones de solo lectura para las entidades seleccionadas expresamente. Las acciones requieren confirmación; la alarma abre sus controles existentes protegidos con PIN.",
+            "data": {
+              "enabled": "Mostrar Salir de casa",
+              "position": "Posición",
+              "contacts": "Ventanas y puertas",
+              "lights": "Luces",
+              "actions": "Acciones",
+              "show_alarm": "Mostrar la disponibilidad de Alarmo"
+            },
+            "data_description": {
+              "enabled": "Comprobaciones de solo lectura para las entidades seleccionadas expresamente. Las acciones requieren confirmación; la alarma abre sus controles existentes protegidos con PIN.",
+              "contacts": "Selecciona hasta 24 sensores de puerta o ventana.",
+              "lights": "Selecciona hasta 24 luces.",
+              "actions": "Selecciona hasta ocho acciones existentes de la lista de permitidas.",
+              "show_alarm": "Usa la alarma ya configurada para esta pantalla.",
+              "position": "1 = primera página; posiciones de 1 a 12. En caso de empate: Energía, Agenda, Salir de casa, Situaciones y después las páginas normales. Posición predeterminada: 11."
+            }
+          },
+          "energy_page": {
+            "name": "Página{energy_page_position}: Energía",
+            "description": "Una página adicional opcional. Muestra la configuración de Energía propia de Home Assistant (Ajustes > Paneles de control > Energía): contadores de red, solar y batería, sus sensores de potencia, nombres y precios. Un tipo de fuente que no esté configurado allí se omite, y sin ninguna fuente la página no se muestra.",
+            "data": {
+              "enabled": "Mostrar la página de energía",
+              "position": "Posición",
+              "view_now": "Ahora",
+              "view_today": "Hoy",
+              "view_power": "Historial de potencia",
+              "view_consumers": "Consumidores",
+              "view_balance": "Balance"
+            },
+            "data_description": {
+              "enabled": "Las vistas desactivadas no generan consultas ni caché propias; los datos compartidos con vistas activas se mantienen. Con todas las vistas desactivadas, la página se oculta y se vacían sus cachés sin perder los ajustes.",
+              "position": "1 = primera página; posiciones de 1 a 12. En caso de empate: Energía, Agenda, Salir de casa, Situaciones y después las páginas normales. Posición predeterminada: 2.",
+              "view_now": "Flujo en directo entre red, solar, batería y hogar",
+              "view_today": "Energía por horas y totales de hoy",
+              "view_power": "Potencia media de hoy en intervalos de 15 minutos a partir de las estadísticas existentes de Home Assistant, no valores en tiempo real",
+              "view_consumers": "Los diez dispositivos eléctricos configurados con mayor potencia actual en W; las lecturas no disponibles se omiten, sin consultas de historial",
+              "view_balance": "Autosuficiencia, solar usada en casa y costes"
+            }
+          },
+          "situations_page": {
+            "name": "Página{situations_page_position}: Situaciones",
+            "description": "Incidencias del hogar seleccionadas, solo lectura. Sin acciones ni navegación automática.",
+            "data": {
+              "enabled": "Mostrar Situaciones",
+              "position": "Posición",
+              "contacts": "Ventanas y puertas",
+              "garages": "Puertas de garaje",
+              "lights": "Luces",
+              "tasks": "Listas de tareas"
+            },
+            "data_description": {
+              "enabled": "Selecciona hasta 24 entidades en total entre los cuatro campos. Los estados desconocido y no disponible siguen visibles. Desactivado de forma predeterminada.",
+              "position": "1 = primera página; posiciones de 1 a 12. Predeterminada: 12.",
+              "contacts": "Hasta 24 contactos; se muestran los contactos abiertos.",
+              "garages": "Hasta 24 puertas de garaje; se muestran las puertas abiertas o en movimiento.",
+              "lights": "Hasta 24 luces; se muestran las luces encendidas.",
+              "tasks": "Hasta 24 listas de tareas; solo el número de elementos pendientes. No se cambia ninguna tarea."
+            }
+          }
+        }
+      }
+    },
+    "error": {
+      "invalid_action_map": "El JSON de la lista de acciones permitidas no es válido.",
+      "invalid_agent_host": "Introduce el host del agente del dispositivo.",
+      "invalid_agent_port": "Introduce un puerto válido del agente del dispositivo.",
+      "invalid_callback_base_url": "Introduce una URL base HTTP o HTTPS de Home Assistant accesible, o déjala vacía.",
+      "invalid_alarm_entity": "Selecciona una entidad de panel de control de alarma de Alarmo o deja el campo vacío.",
+      "invalid_alarm_page_entity": "Selecciona una entidad de panel compatible para la página de alarma o deja el campo vacío.",
+      "invalid_weather_entity": "Selecciona una entidad meteorológica o deja el campo vacío.",
+      "invalid_audio_level": "Elige un nivel de la lista y un ajuste fino entre -10 dB y +10 dB.",
+      "invalid_device_activations": "Comprueba el ID, el nombre, el tipo y la dirección de la activación. Los ID deben ser únicos; el modo manual de luz de escalera ya reserva stair_light.",
+      "invalid_stair_light_part": "Introduce un valor P/N numérico de 0 a 99.",
+      "invalid_dashboard_entities": "Una entidad no se puede mostrar en la pantalla.",
+      "invalid_device_activation_mode": "Elige automático o manual para el modo de dirección de las activaciones.",
+      "invalid_dashboard_entity_display_overrides": "Un ajuste de pantalla no es válido. Comprueba los nombres personalizados y los nombres de las páginas (hasta 60 caracteres).",
+      "dashboard_page_name_reserved": "C300X es el nombre interno de la página de estado; elige otro nombre de página.",
+      "dashboard_page_name_duplicate": "Dos páginas tienen el mismo nombre; da a cada página el suyo.",
+      "dashboard_entity_on_several_pages": "Una entidad está elegida en más de una página; mantenla en una sola.",
+      "invalid_dashboard_pages": "Las páginas de pantalla guardadas no son válidas; vuelve a configurar las páginas.",
+      "dashboard_page_name_missing": "Una página con entidades necesita un nombre; la pantalla lo muestra como título de la página.",
+      "required": "Este campo es obligatorio.",
+      "invalid_snapshot_option": "Introduce números enteros: 1-300 segundos, 1-365 días, ancho 64-800 y alto 64-480. La imagen se lee de la pantalla de 800×480.",
+      "invalid_auth": "El {model} ha rechazado la clave de acceso. Introduce la clave actual.",
+      "wrong_device": "Esta dirección pertenece a otro {model}. El dispositivo existente no se ha cambiado.",
+      "invalid_maintenance_auth": "El {model} ha rechazado la clave de mantenimiento. Introduce la clave de mantenimiento actual.",
+      "cannot_connect": "No se ha podido validar el {model}. Comprueba su dirección y la conexión e inténtalo de nuevo.",
+      "camera_quality_failed": "El {model} no ha guardado los valores. Comprueba la conexión e inténtalo de nuevo.",
+      "camera_quality_unsupported": "Este {model} no ofrece el ajuste de calidad de la cámara.",
+      "camera_quality_out_of_range": "Fuera de lo que el dispositivo admite para esta transmisión; solo el valor guardado en el dispositivo puede quedarse como está.",
+      "camera_quality_restart_pending": "Guardado, pero el dispositivo no se ha reiniciado. Usará los valores nuevos tras su próximo reinicio.",
+      "tts_engine_missing": "Esta entidad de texto a voz no existe.",
+      "tts_language_unsupported": "El motor no puede hablar este idioma."
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "home_call_active": {
+        "name": "Home Call activo"
+      }
+    },
+    "button": {
+      "delete_latest_video_message": {
+        "name": "Eliminar el último mensaje de vídeo"
+      },
+      "delete_latest_text_memo": {
+        "name": "Eliminar la última nota de texto"
+      },
+      "door_unlock": {
+        "name": "Abrir puerta"
+      },
+      "activate_display_pages": {
+        "name": "Activar páginas de pantalla"
+      },
+      "reboot": {
+        "name": "Reiniciar"
+      },
+      "restore_display_pages": {
+        "name": "Restaurar pantalla original"
+      },
+      "remove_agent": {
+        "name": "Eliminar el agente del dispositivo"
+      },
+      "restart_agent": {
+        "name": "Reiniciar el agente del dispositivo"
+      },
+      "reload_gui": {
+        "name": "Recargar la pantalla del dispositivo"
+      },
+      "stair_light": {
+        "name": "Luz de escalera"
+      },
+      "stop_doorbell_video": {
+        "name": "Detener el vídeo del timbre"
+      },
+      "delete_latest_voice_memo": {
+        "name": "Eliminar la última nota de voz"
+      }
+    },
+    "camera": {
+      "doorbell_camera": {
+        "name": "Cámara del timbre"
+      }
+    },
+    "event": {
+      "doorbell_event": {
+        "name": "Evento de llamada del timbre",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "ring": "Llamada"
+            }
+          }
+        }
+      },
+      "agent_event": {
+        "name": "Evento del dispositivo",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "agent_restarted": "Agente reiniciado",
+              "answering_machine_messages_changed": "Mensajes de vídeo cambiados",
+              "call_ended": "Llamada finalizada",
+              "call_started": "Llamada iniciada",
+              "door_unlock_ended": "Apertura de puerta finalizada",
+              "door_unlock_started": "Apertura de puerta iniciada",
+              "doorbell_media_closed": "Transmisión de la cámara del timbre finalizada",
+              "doorbell_pressed": "Timbre pulsado",
+              "doorbell_view_requested": "Vista del timbre solicitada",
+              "home_call_answered": "Home Call respondida",
+              "home_call_ended": "Home Call finalizada",
+              "home_call_started": "Home Call iniciada",
+              "memos_changed": "Notas cambiadas",
+              "display_touch_tone_changed": "Tono de teclas cambiado",
+              "ringer_muted": "Timbre silenciado",
+              "ringer_unmuted": "Sonido del timbre activado",
+              "ringer_volume_changed": "Volumen del timbre cambiado",
+              "smartphone_forwarding_changed": "Desvío al smartphone cambiado",
+              "stair_light_activated": "Luz de escalera activada",
+              "stair_light_released": "Luz de escalera liberada",
+              "system_metrics_changed": "Métricas del sistema actualizadas",
+              "agent_diagnostics_changed": "Diagnóstico de escrituras del agente actualizado",
+              "activation_executed": "Activación del dispositivo ejecutada"
+            }
+          }
+        }
+      }
+    },
+    "media_player": {
+      "speaker": {
+        "name": "Altavoz",
+        "state": {
+          "idle": "Listo",
+          "playing": "Reproduciendo"
+        },
+        "state_attributes": {
+          "last_result": {
+            "name": "Último sonido",
+            "state": {
+              "played": "Reproducido",
+              "preempted": "Interrumpido por una llamada o una vista de cámara",
+              "stopped": "Detenido",
+              "device_busy": "Altavoz en uso",
+              "sound_path_failed": "No se ha podido encender el altavoz",
+              "play_failed": "No se ha podido reproducir",
+              "failed": "Ha terminado de forma inesperada",
+              "not_played": "No reproducido",
+              "unknown": "Desconocido"
+            }
+          }
+        }
+      }
+    },
+    "select": {
+      "smartphone_forwarding_mode": {
+        "name": "Desvío",
+        "state": {
+          "enabled": "Smartphone",
+          "homeassistant": "Home Assistant",
+          "blocked": "Bloqueado"
+        }
+      },
+      "audio_codec": {
+        "name": "Códec de audio",
+        "state": {
+          "speex": "Speex",
+          "pcmu": "PCMU"
+        }
+      },
+      "camera_resolution": {
+        "name": "Resolución de la cámara",
+        "state": {
+          "high": "Alta",
+          "low": "Baja"
+        }
+      }
+    },
+    "number": {
+      "ringer_volume": {
+        "name": "Volumen del timbre"
+      }
+    },
+    "sensor": {
+      "agent_status": {
+        "name": "Estado del agente del dispositivo",
+        "state": {
+          "ok": "Correcto",
+          "warning": "Advertencia",
+          "error": "Error"
+        }
+      },
+      "media_readiness": {
+        "name": "Disponibilidad multimedia",
+        "state": {
+          "ready": "Listo",
+          "warning": "Advertencia",
+          "blocked": "Bloqueado",
+          "unavailable": "No disponible"
+        }
+      },
+      "agent_diagnostics": {
+        "name": "Diagnóstico del agente del dispositivo",
+        "state": {
+          "unknown": "Diagnóstico no cargado",
+          "agent_offline": "Agente sin conexión",
+          "agent_reconnecting": "Reconectando",
+          "repair_required": "Reparación necesaria",
+          "subscription_missing": "Falta la suscripción",
+          "display_event_watchdog": "Vigilancia de eventos de pantalla activa",
+          "media_watchdog_tripped": "Vigilancia de CPU alta activa",
+          "external_media_active": "Multimedia externa activa",
+          "media_stopping": "Deteniendo multimedia",
+          "home_call_active": "Home Call activo",
+          "home_call_starting": "Iniciando Home Call",
+          "ring_media_active": "Multimedia de llamada activa",
+          "ring_call_active": "Llamada de timbre activa",
+          "doorbell_call_active": "Llamada de puerta activa",
+          "media_starting": "Iniciando multimedia",
+          "doorbell_media_active": "Multimedia del timbre activa",
+          "rtsp_busy": "RTSP ocupado",
+          "media_resources_open": "Recursos multimedia abiertos",
+          "idle": "Inactivo"
+        }
+      },
+      "device_cpu": {
+        "name": "CPU del dispositivo"
+      },
+      "device_load": {
+        "name": "Carga del dispositivo"
+      },
+      "device_memory": {
+        "name": "Memoria del dispositivo"
+      },
+      "device_temperature": {
+        "name": "Temperatura del dispositivo"
+      },
+      "voicemail_messages": {
+        "name": "Mensajes de vídeo"
+      },
+      "text_memos": {
+        "name": "Notas de texto"
+      },
+      "voice_memos": {
+        "name": "Notas de voz"
+      },
+      "doorbell_state": {
+        "name": "Estado del timbre",
+        "state": {
+          "idle": "Inactivo",
+          "ringing": "Llamando",
+          "view_requested": "Vista de cámara activa"
+        }
+      }
+    },
+    "switch": {
+      "answering_machine": {
+        "name": "Contestador"
+      },
+      "touch_tone": {
+        "name": "Tono de teclas"
+      },
+      "ringer_mute": {
+        "name": "Silenciar timbre"
+      },
+      "maintenance_ssh": {
+        "name": "SSH",
+        "state_attributes": {
+          "ssh_state": {
+            "name": "Estado de SSH",
+            "state": {
+              "running": "En ejecución",
+              "stopped": "Detenido",
+              "managed_externally": "Gestionado por otra herramienta"
+            }
+          },
+          "managed_by": {
+            "name": "Gestionado por"
+          }
+        }
+      },
+      "maintenance_no_auth": {
+        "name": "noAuth del agente"
+      },
+      "maintenance_no_auth_access": {
+        "name": "Mantenimiento noAuth del agente"
+      },
+      "maintenance_mdns_discovery": {
+        "name": "Descubrimiento mDNS del agente"
+      },
+      "gui_function_patch": {
+        "name": "Parche de pantalla"
+      },
+      "firewall_patch": {
+        "name": "Parche de cortafuegos de la API"
+      },
+      "ipv6_firewall_patch": {
+        "name": "Parche de cortafuegos IPv6"
+      },
+      "native_mqtt_bridge": {
+        "name": "Puente MQTT nativo"
+      },
+      "legacy_mqtt_bridge": {
+        "name": "Puente MQTT heredado"
+      },
+      "homeassistant_media_user_setup": {
+        "name": "Usuario multimedia de Home Assistant"
+      },
+      "stream_snapshots": {
+        "name": "Guardar imágenes",
+        "state_attributes": {
+          "last_failure": {
+            "name": "Último fallo",
+            "state": {
+              "snapshot_unavailable": "No se ha podido leer la imagen de la pantalla",
+              "snapshot_throttled": "Solicitada demasiado pronto tras la imagen anterior",
+              "invalid_snapshot_size": "El videoportero ha rechazado el tamaño de la imagen",
+              "invalid_image": "El videoportero ha entregado una imagen no válida",
+              "agent_unreachable": "No se puede acceder al agente del dispositivo",
+              "agent_error": "El agente del dispositivo ha informado de un error",
+              "save_failed": "Home Assistant no ha podido guardar la imagen"
+            }
+          }
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "alarm_not_configured": {
+      "message": "No hay ninguna entidad de panel de control de alarma configurada."
+    },
+    "agent_command_failed": {
+      "message": "El comando del agente del dispositivo del {model} ha fallado o el agente instalado no lo admite."
+    },
+    "station_busy": {
+      "message": "El videoportero está ocupado con una llamada. Inténtalo de nuevo cuando termine."
+    },
+    "ssh_managed_externally": {
+      "message": "El SSH del videoportero lo gestiona otra herramienta ({manager}). Actívalo o desactívalo con esa herramienta."
+    },
+    "gui_function_patch_required": {
+      "message": "Esta acción requiere el parche de pantalla del {model}. Activa y aplica primero el parche de pantalla en las opciones de la integración."
+    },
+    "gui_function_patch_required_c100x": {
+      "message": "Esta acción necesita las páginas de Home Assistant en la pantalla del C100X. Actívalas primero con Activar páginas de pantalla en la página del dispositivo; el C100X se reinicia una vez."
+    },
+    "display_disabled": {
+      "message": "Las notificaciones en pantalla necesitan las páginas de Home Assistant en la pantalla del {model}. Actívalas primero en las opciones de la integración."
+    },
+    "display_disabled_c100x": {
+      "message": "Las notificaciones en pantalla necesitan las páginas de Home Assistant en la pantalla del C100X. Actívalas primero con Activar páginas de pantalla en la página del dispositivo."
+    },
+    "unknown_notification_action": {
+      "message": "Un botón de notificación usa un ID de acción que no está configurado en las acciones del {model}."
+    },
+    "display_notification_queue_full": {
+      "message": "La pantalla del {model} ya contiene el número máximo de notificaciones con la misma prioridad o una superior. Descarta una o espera a que caduque alguna."
+    },
+    "display_notifications_unloaded": {
+      "message": "Las notificaciones en pantalla del {model} se están recargando. Inténtalo de nuevo en un momento."
+    },
+    "doorbell_video_not_available": {
+      "message": "El vídeo del timbre no está activado o el agente del dispositivo instalado en el {model} no lo admite."
+    },
+    "home_call_not_available": {
+      "message": "Home Call no está activado o el agente del dispositivo instalado en el {model} no lo admite."
+    },
+    "ring_capture_busy": {
+      "message": "La captura de llamada del {model} está ocupada porque ya hay otro cliente de vídeo conectado."
+    },
+    "capture_announcement_requires_ring": {
+      "message": "Los anuncios solo están disponibles en el modo de captura de llamada. Quita announcement_path para una grabación a petición."
+    },
+    "on_demand_capture_busy": {
+      "message": "La captura a petición requiere que no haya multimedia en uso. Cierra otras transmisiones de cámara o llamadas e inténtalo de nuevo."
+    },
+    "entry_id_required": {
+      "message": "El ID de la entrada es obligatorio cuando existe más de una entrada BTicino C300X/C100X."
+    },
+    "invalid_action_id": {
+      "message": "El ID de la acción no es válido."
+    },
+    "invalid_alarm_command": {
+      "message": "El comando de alarma no es válido."
+    },
+    "maintenance_action_not_supported": {
+      "message": "La acción de mantenimiento del agente del dispositivo del {model} no se admite, no está activada o no hay ninguna clave de mantenimiento configurada."
+    },
+    "video_message_not_available": {
+      "message": "No hay ningún mensaje de vídeo del {model} disponible."
+    },
+    "text_memo_not_available": {
+      "message": "No hay ninguna nota de texto del {model} disponible."
+    },
+    "text_memo_write_not_supported": {
+      "message": "El agente del dispositivo instalado en el {model} no admite escribir una nota de texto."
+    },
+    "text_memo_write_not_supported_c100x": {
+      "message": "El {model} no tiene notas de texto: el videoportero no puede mostrarlas."
+    },
+    "unknown_action": {
+      "message": "El ID de acción {action_id} no está configurado."
+    },
+    "unknown_entry": {
+      "message": "La entrada BTicino C300X/C100X seleccionada no existe."
+    },
+    "entry_not_loaded": {
+      "message": "La entrada BTicino C300X/C100X no está cargada. Actívala o espera a que se haya iniciado."
+    },
+    "voice_memo_not_available": {
+      "message": "No hay ninguna nota de voz del {model} disponible."
+    },
+    "alarm_not_ready": {
+      "message": "No se puede armar la alarma porque uno o varios sensores lo impiden."
+    },
+    "alarm_invalid_code": {
+      "message": "El código de la alarma ha sido rechazado."
+    },
+    "alarm_state_unconfirmed": {
+      "message": "El estado de alarma solicitado no se ha confirmado. Comprueba el estado de la alarma antes de volver a intentarlo."
+    },
+    "alarm_command_rejected": {
+      "message": "El comando de alarma ha sido rechazado. Consulta el estado de la alarma y su integración para más detalles."
+    }
+  },
+  "issues": {
+    "c100x_display_boot_check_failed": {
+      "title": "La comprobación de la pantalla del C100X ha fallado al arrancar el videoportero",
+      "description": "{entry_title}: al arrancar el videoportero, el agente del dispositivo no ha podido comprobar la activación de pantalla pendiente (faltaba su paquete de pantalla o la comprobación ha fallado, por ejemplo tras una actualización de firmware). El agente se ha iniciado igualmente. La activación de pantalla sigue desactivada y se conservan las copias de seguridad de las páginas originales. Pulsa Restaurar pantalla original para volver a ella; si falla, actualiza primero el agente del dispositivo con su reparación. Si vuelve a ocurrir, notifícalo con el diagnóstico del agente."
+    },
+    "c100x_display_rolled_back": {
+      "title": "Las páginas de pantalla del C100X se han revertido",
+      "description": "{entry_title}: las páginas de Home Assistant no se han iniciado en la pantalla del C100X tras el reinicio, por lo que el videoportero ha vuelto a su pantalla original en el arranque siguiente. No se ha cambiado nada más. Pulsa Activar páginas de pantalla para intentarlo de nuevo. Si se revierte otra vez, notifícalo con el diagnóstico del agente."
+    },
+    "agent_capability_mismatch": {
+      "title": "Faltan las capacidades del agente del dispositivo del {model}",
+      "description": "El agente del dispositivo del {model} configurado para {entry_title} ha respondido sin capacidades utilizables. Actualiza o reconfigura el agente local del dispositivo y después recarga la integración."
+    },
+    "device_agent_update_required": {
+      "title": "Es necesario actualizar el agente del dispositivo del {model}",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Actualizar el agente del dispositivo del {model}",
+            "description": "Home Assistant subirá el agente nativo incluido a través de la API de mantenimiento configurada actualmente. No se necesitan credenciales SSH. Los parches de pantalla y de cortafuegos activos se comprueban primero en solo lectura y solo se renuevan si ya estaban activos y ha cambiado el origen del parche incluido. Si usas la gestión local de llamadas de timbre, comprueba también la configuración del usuario multimedia de Home Assistant en las opciones de la integración después de la actualización.\n\nInstalado: {installed_version} (API {installed_api_version}, paquete {installed_bundle_hash})\nIncluido: {available_version} (API {available_api_version}, paquete {available_bundle_hash})\nRuta de actualización: {update_path}\nEstado del parche de pantalla: {qml_patch_status}\nMotivo: {reason}"
+          },
+          "ssh_install": {
+            "title": "Reinstalar por SSH el agente del dispositivo del {model}",
+            "description": "Este agente instalado aún no puede actualizarse por sí mismo. Home Assistant iniciará sesión con el acceso de fábrica del {model}, o con las credenciales SSH o la clave privada introducidas aquí cuando el dispositivo lo haya rechazado, para instalar el agente incluido, y después renovará solo los parches de pantalla y de cortafuegos activos cuando haya cambiado el origen del parche incluido. Las credenciales SSH y la clave no se guardan. Si usas la gestión local de llamadas de timbre, comprueba también la configuración del usuario multimedia de Home Assistant en las opciones de la integración después de la actualización.\n\nInstalado: {installed_version} (API {installed_api_version}, paquete {installed_bundle_hash})\nIncluido: {available_version} (API {available_api_version}, paquete {available_bundle_hash})\nRuta de actualización: {update_path}\nEstado del parche de pantalla: {qml_patch_status}\nMotivo: {reason}",
+            "data": {
+              "bootstrap_ssh_username": "Usuario SSH",
+              "bootstrap_ssh_password": "Contraseña SSH",
+              "bootstrap_ssh_key": "Clave privada SSH (opcional)",
+              "bootstrap_ssh_key_passphrase": "Frase de contraseña de la clave (opcional)"
+            }
+          }
+        },
+        "error": {
+          "ssh_install_failed": "La instalación de reparación por SSH ha fallado. Comprueba el acceso SSH y vuelve a intentarlo.",
+          "device_display_timeout": "Los archivos de pantalla no se han escrito dentro del tiempo límite; se ha indicado al dispositivo que reponga los archivos anteriores. Comprueba que la pantalla funciona y vuelve a intentarlo.",
+          "update_failed": "La actualización del agente del dispositivo ha fallado. Comprueba que el acceso de mantenimiento esté activado y vuelve a intentarlo.",
+          "update_root_already_writable": "La actualización se ha rechazado antes de aplicarse porque el sistema de archivos raíz (/) ya era escribible. Si antes volviste a montar / como escribible manualmente, reinicia el dispositivo con normalidad y vuelve a intentar esta reparación. En caso contrario, averigua por qué / es escribible antes de volver a intentarlo.",
+          "update_root_readonly_failed": "La actualización no ha podido devolver el sistema de archivos raíz (/) a solo lectura. El estado final del dispositivo es incierto; no se ha confirmado que la reversión haya tenido éxito. Conserva los archivos de recuperación y comprueba el estado del agente y del sistema de archivos antes de cualquier otra actualización.",
+          "update_apply_failed": "El agente ha informado de un fallo de actualización genérico; se desconocen la causa y el estado final del dispositivo. Si antes volviste a montar / como escribible manualmente, un reinicio normal del dispositivo puede ayudar. Comprueba el estado del dispositivo antes de volver a intentarlo; este error no confirma la reversión.",
+          "update_verify_failed": "La actualización se ha enviado, pero el agente sigue informando de un paquete anterior o incompatible.",
+          "ssh_login_refused": "El {model} ha rechazado el inicio de sesión SSH. Introduce el usuario y la contraseña SSH del dispositivo.",
+          "invalid_ssh_key": "No se ha podido leer la clave privada. Pega la clave completa con sus líneas BEGIN y END, y su frase de contraseña si tiene una.",
+          "ssh_user_not_root": "Este usuario SSH no tiene derechos de root. Inicia sesión como root o root2, no como bticino2.",
+          "ssh_unreachable": "El {model} no responde por SSH (puerto 22). SSH está desactivado o bloqueado en la estación; comprueba la dirección y que la herramienta de root haya activado SSH.",
+          "ssh_password_login_disabled": "El {model} no acepta inicio de sesión con contraseña, solo claves SSH. Pega la clave privada que configuró la herramienta de root, o crea la imagen con inicio de sesión por contraseña.",
+          "firewall_hook_changed": "El script de arranque del cortafuegos del {model} (/etc/network/if-pre-up.d/iptables) fue modificado por otra cosa después de que el agente añadiera sus puertos; el original guardado ya no coincide. El script se dejó como estaba. Restáuralo, o quita de él el bloque del agente, y vuelve a intentarlo.",
+          "not_a_bticino_station": "El dispositivo de esta dirección no es un videoportero BTicino. No se ha escrito nada en él. Comprueba la dirección.",
+          "wrong_device": "Esta dirección lleva ahora a otra estación. No se ha cambiado nada en ella."
+        },
+        "abort": {
+          "entry_not_loaded": "La entrada BTicino C300X/C100X no está cargada."
+        }
+      }
+    },
+    "device_agent_startup_disabled": {
+      "title": "El agente del dispositivo del {model} no se inicia tras un reinicio",
+      "description": "{entry_title} puede acceder ahora al agente del dispositivo del {model}, pero el enlace de arranque del dispositivo falta o no es válido. El agente dejará de funcionar de nuevo tras el próximo reinicio del {model}. Ejecuta la acción de reparación o actualización del agente del dispositivo, o reinstala el agente por SSH, para volver a crear el enlace de arranque."
+    },
+    "device_agent_self_test_failed": {
+      "title": "La autocomprobación del agente del dispositivo del {model} ha encontrado un problema",
+      "description": "{entry_title} ha accedido al agente del dispositivo del {model}, pero la autocomprobación de solo lectura ha informado de una comprobación de configuración fallida. Comprobaciones fallidas: {failed_checks}. Motivos: {reasons}. Qué hacer: {actions}. No se ha ejecutado ninguna reparación automática. El cortafuegos IPv6 es opcional salvo que esta instancia de HA acceda al dispositivo por IPv6."
+    },
+    "device_agent_ui_event_watchdog": {
+      "title": "Se ha protegido el observador de eventos de pantalla del {model}",
+      "description": "{entry_title} ha detectado demasiados observadores de eventos de pantalla simultáneos del {model}. El agente del dispositivo ha rechazado el observador adicional para evitar un bucle local de consultas de pantalla que puede sobrecargar el {model}. Observadores activos: {waiters}/{capacity}. Observadores rechazados: {overflows}. Recarga la interfaz de pantalla del {model} desde la integración si el panel de pantalla o la vista de notas ya no se actualizan, y después actualiza el diagnóstico."
+    },
+    "device_display_unsupported": {
+      "title": "Las páginas de pantalla del C300X no están disponibles en este videoportero",
+      "description": "{entry_title}: el agente del dispositivo no conoce el programa de pantalla o el script de arranque de pantalla de este videoportero ({reason}). Ha dejado la pantalla tal como viene de fábrica y funciona sin las páginas de pantalla: el videoportero no muestra páginas ni botones de Home Assistant, y el parche de pantalla sigue desactivado. Las demás funciones del agente funcionan como antes de que la integración ofreciera páginas de pantalla para el firmware 3.0.x. Al aplicar de nuevo el parche de pantalla se vuelve a comprobar el videoportero."
+    },
+    "device_core_qml_hook_required": {
+      "title": "Falta el hook multimedia básico del {model}",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Aplicar el hook multimedia básico del {model}",
+            "description": "Home Assistant aplicará solo el hook multimedia básico mínimo necesario para detectar cuándo la pantalla del {model} u otro cliente multimedia cierra una sesión multimedia. Es independiente del parche de pantalla opcional del panel.\n\nEstado actual del hook básico: {qml_patch_status}"
+          }
+        },
+        "error": {
+          "core_patch_failed": "No se ha podido aplicar el hook multimedia básico. Comprueba el acceso de mantenimiento y vuelve a intentarlo.",
+          "core_patch_verify_failed": "La acción del hook multimedia básico se ha ejecutado, pero el agente no ha confirmado el estado parcheado."
+        },
+        "abort": {
+          "entry_not_loaded": "La entrada BTicino C300X/C100X no está cargada.",
+          "core_patch_unsupported": "El agente del dispositivo instalado en el {model} no admite aplicar el hook multimedia básico.",
+          "display_unsupported": "El agente del dispositivo no conoce la pantalla de este videoportero; funciona sin las páginas de pantalla y no hay ningún hook multimedia básico que aplicar."
+        }
+      }
+    },
+    "device_display_followup_pending": {
+      "title": "Las páginas de pantalla del C300X aún deben aplicarse tras la actualización",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Aplicar de nuevo las páginas de pantalla del C300X",
+            "description": "{entry_title}: la actualización o la instalación del agente se ha completado, pero los pasos de pantalla posteriores no han tenido éxito en la pantalla del videoportero. Las páginas de pantalla del agente nuevo aún no están confirmadas; el videoportero puede seguir mostrando las páginas del agente anterior o la pantalla original.\n\nHome Assistant ejecuta los pasos de pantalla que la actualización dejó sin hacer: el hook multimedia básico, las páginas de pantalla cuando el parche de pantalla está activado y un reinicio de la pantalla del videoportero. La pantalla se apaga y se reinicia durante la corrección; puede tardar unos minutos."
+          }
+        },
+        "error": {
+          "core_patch_failed": "Los pasos de pantalla no han tenido éxito. Comprueba que se puede acceder al videoportero y que su pantalla funciona, y vuelve a intentarlo.",
+          "core_patch_verify_failed": "Los pasos de pantalla se han ejecutado, pero el agente no ha confirmado el hook multimedia básico."
+        },
+        "abort": {
+          "entry_not_loaded": "La entrada BTicino C300X/C100X no está cargada.",
+          "core_patch_unsupported": "El agente del dispositivo instalado en el C300X no admite los pasos de pantalla.",
+          "display_unsupported": "El agente del dispositivo no conoce la pantalla de este videoportero; funciona sin las páginas de pantalla y no hay pasos de pantalla que ejecutar."
+        }
+      }
+    },
+    "device_qml_transaction_stuck": {
+      "title": "Una escritura de pantalla del {model} ha quedado sin terminar",
+      "description": "Una escritura del parche de pantalla en {entry_title} se ha interrumpido (corte de corriente, fallo o una parada forzada) y el agente del dispositivo no ha podido terminarla automáticamente. Los archivos de pantalla se han dejado como están; no se pierde nada: los archivos anteriores a esa escritura se conservan en el dispositivo en una carpeta oculta `.c300x-qml-transaction.*` dentro de /home/bticino/bin/gui/skins/default.\n\nQué hacer: comprueba la pantalla del {model}. Si funciona, aplica de nuevo el parche de pantalla desde la integración (desactívalo y actívalo), lo que reconstruye todos los archivos de pantalla a partir de las copias de seguridad de fábrica. Si la advertencia persiste, reinicia el {model} para que el agente lo intente de nuevo al arrancar. Un resto del agente 2.9.0 o anterior nunca se restaura automáticamente: cuando la pantalla funcione, elimina esa carpeta por SSH (consulta Troubleshooting, Display problems, en la documentación)."
+    },
+    "device_user_required": {
+      "title": "Es necesario configurar el usuario multimedia del {model}",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Crear el usuario multimedia de Home Assistant",
+            "description": "Home Assistant pedirá al agente del dispositivo que cree o repare el usuario multimedia dedicado `homeassistant` del {model}. Los usuarios multimedia existentes se conservan. El agente escribe solo el usuario y el estado de enrutamiento necesarios en el dispositivo."
+          }
+        },
+        "error": {
+          "device_user_setup_failed": "La configuración del usuario del dispositivo ha fallado. Comprueba el acceso de mantenimiento y vuelve a intentarlo.",
+          "device_not_registered": "El {model} aún no se ha añadido en la app BTicino Door Entry. Flexisip, en el dispositivo, obtiene su usuario SIP, su dominio y sus certificados únicamente de ese registro. Añade el dispositivo una vez en la app y vuelve a intentarlo. Después, el desvío puede quedarse en Smartphone."
+        },
+        "abort": {
+          "entry_not_loaded": "La entrada BTicino C300X/C100X no está cargada."
+        }
+      }
+    },
+    "media_setup_repair_required": {
+      "title": "Comprobaciones de la configuración multimedia del {model} fallidas: {failed_checks}",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Reparar la configuración multimedia del {model}",
+            "description": "Home Assistant puede ejecutar ahora la reparación correspondiente a las comprobaciones de disponibilidad multimedia fallidas. Según las comprobaciones fallidas, puede volver a comprobar el acceso al agente, actualizar los metadatos de configuración del agente, aplicar el cortafuegos multimedia IPv4 o reparar la configuración del usuario multimedia y del enrutamiento de Home Assistant. Esta reparación nunca cambia el desvío de las llamadas de timbre. IPv6 es opcional y esta reparación no lo cambia.\n\nComprobaciones fallidas: {failed_checks}\nComprobaciones reparables: {fixable_checks}\nAcción recomendada: {recommended_action}"
+          }
+        },
+        "error": {
+          "media_setup_repair_failed": "La reparación de la configuración multimedia ha fallado. Comprueba el acceso de mantenimiento y vuelve a intentarlo."
+        },
+        "abort": {
+          "entry_not_loaded": "La entrada BTicino C300X/C100X no está cargada."
+        }
+      }
+    },
+    "invalid_action_map": {
+      "title": "La lista de acciones permitidas del panel del {model} no es válida",
+      "description": "No se puede interpretar la lista de acciones permitidas de {entry_title}: {error}. Corrige el mapa de acciones configurado y después recarga la integración."
+    },
+    "missing_alarm_entity": {
+      "title": "Falta la entidad de alarma configurada del {model}",
+      "description": "{entry_title} hace referencia a {entity_id}, pero Home Assistant no conoce esa entidad. Elige una entidad de panel de control de alarma existente en las opciones de la integración o borra el ajuste de alarma."
+    },
+    "media_watchdog_timeout": {
+      "title": "La vigilancia multimedia del {model} ha detenido una sesión de carga alta",
+      "description": "{entry_title} ha informado de una carga de CPU sostenida en el dispositivo durante al menos {duration_seconds} segundos ({cpu_percent}%). Home Assistant ha cerrado sus sesiones multimedia activas del {model} para no mantener el dispositivo bajo carga. Motivo: {reason}."
+    },
+    "frontend_card_setup_hint": {
+      "title": "Añadir la tarjeta Lovelace del {model}",
+      "fix_flow": {
+        "step": {
+          "init": {
+            "title": "Configurar la tarjeta Lovelace del {model}",
+            "description": "Esta actualización requiere renovar las tarjetas Lovelace generadas del {model}. Ejecuta esta reparación una vez para actualizar la vista del panel del {model} en {dashboard_path} y sustituir los antiguos diseños generados de tarjetas separadas. Ignórala solo si ya has actualizado manualmente todas las tarjetas del {model}.",
+            "menu_options": {
+              "confirm": "Crear o renovar la tarjeta",
+              "ignore": "Ignorar este aviso"
+            }
+          },
+          "confirm": {
+            "title": "Crear o renovar la tarjeta Lovelace del {model}",
+            "description": "Home Assistant añadirá o actualizará una vista del {model} en un panel Lovelace en modo de almacenamiento. La vista contiene la tarjeta unificada Doorstation/Home Call de {entry_title}. Los antiguos diseños generados de tarjetas separadas del panel seleccionado se sustituyen.",
+            "data": {
+              "dashboard_path": "Panel",
+              "view_path": "Ruta de la vista"
+            }
+          }
+        },
+        "error": {
+          "camera_entity_missing": "Home Assistant no ha encontrado la entidad de cámara del {model} de esta entrada de configuración.",
+          "lovelace_config_invalid": "La configuración del panel Lovelace seleccionado no se puede escribir en el formato esperado.",
+          "lovelace_storage_unavailable": "No hay ningún panel Lovelace en modo de almacenamiento disponible. Los paneles YAML deben editarse manualmente.",
+          "lovelace_unavailable": "Lovelace aún no está disponible."
+        },
+        "abort": {
+          "entry_not_loaded": "La entrada BTicino C300X/C100X no está cargada."
+        }
+      }
+    },
+    "unsupported_callback_url": {
+      "title": "El agente del dispositivo no puede usar la URL de retorno del {model}",
+      "fix_flow": {
+        "step": {
+          "configure": {
+            "title": "Configurar la URL de retorno local",
+            "description": "Introduce una URL base de Home Assistant accesible desde el {model}. HTTP mantiene TLS desactivado. HTTPS activa TLS expresamente y requiere un agente actualizado y un certificado de confianza que coincida con el nombre de host. Cambiar entre los modos HTTP y HTTPS reinicia solo el agente cuando no hay multimedia en uso; HTTPS añade carga al dispositivo. Comprueba el DNS y la hora del dispositivo si la entrega falla.\n\nValor sugerido: {suggested_callback_base_url}",
+            "data": {
+              "callback_base_url": "URL base de retorno (HTTP o HTTPS)"
+            }
+          }
+        },
+        "error": {
+          "invalid_callback_base_url": "Introduce una URL base HTTP o HTTPS de Home Assistant accesible."
+        },
+        "abort": {
+          "entry_not_loaded": "La entrada BTicino C300X/C100X no está cargada."
+        }
+      }
+    }
+  },
+  "selector": {
+    "door_audio_level": {
+      "options": {
+        "0": "Valor de fábrica",
+        "3": "+3 dB",
+        "6": "+6 dB",
+        "9": "+9 dB",
+        "12": "+12 dB"
+      }
+    },
+    "capture_mode": {
+      "options": {
+        "ring": "Llamada de timbre",
+        "on_demand": "Grabación en directo sin llamada"
+      }
+    },
+    "tile_field": {
+      "options": {
+        "width": "Ancho",
+        "height": "Alto",
+        "name": "Nombre",
+        "secondary": "Línea secundaria",
+        "status_page": "Página de estado",
+        "untitled_page": "Página sin título",
+        "alarm_page": "Página de alarma"
+      }
+    },
+    "tile_size": {
+      "options": {
+        "auto": "Automático",
+        "half": "Medio",
+        "full": "Completo"
+      }
+    },
+    "tile_name": {
+      "options": {
+        "friendly_name": "Nombre de Home Assistant",
+        "entity_id": "ID de la entidad",
+        "custom": "Texto propio"
+      }
+    },
+    "tile_secondary": {
+      "options": {
+        "state": "Estado",
+        "entity_id": "ID de la entidad",
+        "last_changed": "Último cambio",
+        "last_updated": "Última actualización",
+        "none": "Nada"
+      }
+    },
+    "device_activation_flow_action": {
+      "options": {
+        "done": "Terminar y guardar",
+        "add": "Añadir una activación",
+        "edit": "Editar una activación",
+        "remove": "Eliminar una activación"
+      }
+    },
+    "device_activation_item_type": {
+      "options": {
+        "lock": "Cerradura",
+        "light": "Luz",
+        "stair_light": "Luz de escalera"
+      }
+    },
+    "device_activation_mode": {
+      "options": {
+        "automatic": "Automático",
+        "manual": "Manual (P y N)"
+      }
+    },
+    "webrtc_ice_policy": {
+      "options": {
+        "all": "Todas las direcciones",
+        "drop_link_local": "Sin direcciones de enlace local (fe80::, 169.254.x.x)",
+        "prefer_ipv4_ula": "IPv4 e IPv6 local (ULA): recomendado",
+        "ipv4_only": "Solo IPv4"
+      }
+    },
+    "dashboard_navigation": {
+      "options": {
+        "pager": "Flechas (anterior / siguiente)",
+        "tabs": "Barra de favoritos"
+      }
+    },
+    "dashboard_dynamic_homepage": {
+      "options": {
+        "stock": "Vista de fábrica (si hace falta, también apilados)",
+        "side_by_side": "Fijos uno junto al otro"
+      }
+    },
+    "display_patch_status": {
+      "options": {
+        "patched": "aplicado",
+        "original": "no aplicado (archivos originales)",
+        "unknown": "desconocido",
+        "unavailable": "no disponible",
+        "display_failed": "aplicado, pero la pantalla se ha iniciado como viene de fábrica",
+        "display_unsupported": "no disponible para la pantalla de este videoportero"
+      }
+    }
+  },
+  "services": {
+    "camera_picture": {
+      "name": "Ajustar la imagen de la cámara",
+      "description": "Lee los tres ajustes de la imagen en directo, o indica un control y un valor (de 0 a 100 % en pasos de 10) para cambiar uno. Requiere el agente del dispositivo actualizado y un vídeo de llamada de timbre activo o un vídeo a petición con valores de origen y rangos verificados. Los archivos multimedia guardados no cambian.",
+      "fields": {
+        "entry_id": {
+          "name": "Entrada de la integración"
+        },
+        "control": {
+          "name": "Control"
+        },
+        "value": {
+          "name": "Valor"
+        }
+      }
+    },
+    "capture_doorbell_call": {
+      "name": "Capturar el vídeo del timbre",
+      "description": "Graba un vídeo corto en Home Assistant de una llamada de timbre entrante o de una transmisión a petición en reposo.",
+      "fields": {
+        "capture_mode": {
+          "name": "Modo de captura",
+          "description": "Llamada de timbre graba una llamada entrante. A petición graba sin llamada cuando no hay ninguna otra sesión multimedia activa."
+        }
+      }
+    }
+  }
+}

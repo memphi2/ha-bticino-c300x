@@ -22,7 +22,7 @@ from custom_components.bticino_c300x.camera_media.state_machine import (
     derive_media_state,
     media_state_input_from_video_status,
 )
-from custom_components.bticino_c300x.const import CONF_DOORSTATION_AUDIO_GAIN_DB
+from custom_components.bticino_c300x.const import CONF_DOOR_AUDIO_LEVEL_DB
 
 
 def test_media_decision_maps_to_rtsp_consumers() -> None:
@@ -76,16 +76,16 @@ def test_warmup_video_refreshes_after_activation_failure() -> None:
     assert owner.state_writes == 1
 
 
-def test_prepare_doorbell_rtsp_stream_sets_audio_gain_only_when_changed() -> None:
+def test_prepare_doorbell_rtsp_stream_sets_audio_level_only_when_changed() -> None:
     owner = _FakeOwner(
         status_queue=[
             {
                 "media_owner": "idle",
-                "bridge": {"doorstation_audio_gain_db": 0.0},
+                "bridge": {"audio_level": {"door_level_db": 0, "fine_gain_db": 0}},
             }
         ],
     )
-    owner._entry.options[CONF_DOORSTATION_AUDIO_GAIN_DB] = 6.0
+    owner._entry.options[CONF_DOOR_AUDIO_LEVEL_DB] = 6
     orchestrator = _orchestrator(owner)
     ready_urls: list[str] = []
     orchestrator.async_wait_for_rtsp_ready = _record_ready(ready_urls)  # type: ignore[method-assign]
@@ -93,27 +93,42 @@ def test_prepare_doorbell_rtsp_stream_sets_audio_gain_only_when_changed() -> Non
     result = asyncio.run(orchestrator.async_prepare_rtsp_stream(audio=True))
 
     assert result == "rtsp://agent.local:6554/doorbell-audio"
-    assert owner.api.doorstation_audio_gain_calls == [6.0]
+    assert owner.api.doorstation_audio_level_calls == [(6, 0)]
     assert owner.api.activate_audio == [True]
     assert ready_urls == ["rtsp://agent.local:6554/doorbell-audio"]
 
 
-def test_prepare_doorbell_rtsp_stream_skips_audio_gain_when_current_matches() -> None:
+def test_prepare_doorbell_rtsp_stream_skips_audio_level_when_current_matches() -> None:
     owner = _FakeOwner(
         status_queue=[
             {
                 "media_owner": "idle",
-                "bridge": {"doorstation_audio_gain_db": 6.0},
+                "bridge": {"audio_level": {"door_level_db": 6, "fine_gain_db": 0}},
             }
         ],
     )
-    owner._entry.options[CONF_DOORSTATION_AUDIO_GAIN_DB] = 6.0
+    owner._entry.options[CONF_DOOR_AUDIO_LEVEL_DB] = 6
     orchestrator = _orchestrator(owner)
     orchestrator.async_wait_for_rtsp_ready = _record_ready([])  # type: ignore[method-assign]
 
     asyncio.run(orchestrator.async_prepare_rtsp_stream(audio=True))
 
-    assert owner.api.doorstation_audio_gain_calls == []
+    assert owner.api.doorstation_audio_level_calls == []
+    assert owner.api.activate_audio == [True]
+
+
+def test_prepare_doorbell_rtsp_stream_adds_no_level_request_for_an_unread_status() -> None:
+    """An agent whose status read failed gets no further request under the lock."""
+
+    owner = _FakeOwner(status_queue=[None])
+    owner._entry.options[CONF_DOOR_AUDIO_LEVEL_DB] = 9
+    orchestrator = _orchestrator(owner)
+    orchestrator.async_wait_for_rtsp_ready = _record_ready([])  # type: ignore[method-assign]
+
+    asyncio.run(orchestrator.async_prepare_rtsp_stream(audio=True))
+
+    assert owner.api.status_reads == 0
+    assert owner.api.doorstation_audio_level_calls == []
     assert owner.api.activate_audio == [True]
 
 
@@ -407,16 +422,21 @@ class _FakeApi:
     fail_activate: bool = False
     home_call_statuses: list[dict[str, Any]] = field(default_factory=list)
     activate_audio: list[bool] = field(default_factory=list)
-    doorstation_audio_gain_calls: list[float] = field(default_factory=list)
+    doorstation_audio_level_calls: list[tuple[int, int]] = field(default_factory=list)
+    status_reads: int = 0
     stop_calls: int = 0
+
+    async def async_doorbell_video_status(self) -> dict[str, Any]:
+        self.status_reads += 1
+        return {"media_owner": "idle", "bridge": {}}
 
     async def async_activate_doorbell_video(self, *, audio: bool) -> None:
         self.activate_audio.append(audio)
         if self.fail_activate:
             raise RuntimeError("activate failed")
 
-    async def async_set_doorstation_audio_gain_db(self, gain_db: float) -> None:
-        self.doorstation_audio_gain_calls.append(gain_db)
+    async def async_set_doorstation_audio_level(self, door_level_db: int, fine_gain_db: int) -> None:
+        self.doorstation_audio_level_calls.append((door_level_db, fine_gain_db))
 
     async def async_stop_doorbell_video(self) -> None:
         self.stop_calls += 1

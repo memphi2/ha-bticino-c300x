@@ -1,5 +1,6 @@
 """The installed manifest commits only a completely verified bootstrap bundle."""
 
+import hashlib
 import json
 import subprocess
 from pathlib import Path
@@ -13,6 +14,9 @@ from custom_components.bticino_c300x.agent_update import compare_agent_bundle
 
 @pytest.fixture
 def transaction(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    # Keep shared Qt4 transaction/failure coverage; C100X package admission is
+    # exercised without this double in test_c100x_ssh_admission.py.
+    monkeypatch.setattr(installer, "_admit_station_sync", lambda *_: "qt4_ondisk")
     component = tmp_path / "component"
     manifest = {
         "agent_version": "same-version", "api_version": "1",
@@ -22,7 +26,7 @@ def transaction(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     for name in (
         "armhf/c300x-agent-native", "init/c300x-native-agent",
         "scripts/qml_patch.sh", "scripts/remove_agent.sh", "scripts/bootstrap_firewall.sh",
-        *(f"qml/{name}" for name in installer.DISPLAY_FILES), "bundle.json",
+        *(f"qml/{name}" for name in installer.DISPLAY_FILES), "qml/c100x_bundle.sh", "bundle.json",
     ):
         path = component / "device_agent" / name
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -68,14 +72,24 @@ def transaction(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
             return self.run(command)
 
         def run(self, command: str, input_data: bytes | None = None) -> str:
+            if command.startswith("p=") and "printf absent" in command:
+                self.stage("firewall-preflight")
+                return "absent" if self.failure == "missing-hook" else ""
             if "libQt5Core" in command:
                 # By default a device with the Qt 4 display, which the Display patch edits.
-                return "yes\n" if self.qt5 else "no\n"
+                return "qt5\nc300x\n" if self.qt5 else "qt4\nc300x\n"
             if command.startswith("if [ -L ") and obsolete_path in command:
                 self.stage("cleanup-source")
                 self.files.pop(obsolete_path, None)
             elif command.endswith(" restart"):
                 self.stage("restart")
+            elif command.startswith("sha256sum "):
+                # After a failed configuration write: is the file there?
+                data = self.files.get(command.split(" ", 1)[1])
+                return f"{hashlib.sha256(data).hexdigest()}  -" if data is not None else ""
+            elif command.endswith(" start; fi"):
+                # A failed restart starts the agent again with what is there.
+                self.stage("start-again")
             elif "qml_patch.sh " in command:
                 action = command.rsplit(" ", 1)[1]
                 self.stage(action)
@@ -104,17 +118,23 @@ def transaction(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setattr(installer, "_write_remote_file_sync", write_config)
     monkeypatch.setattr(installer, "_install_startup_script_sync", startup)
-    monkeypatch.setattr(installer, "_apply_firewall_patch_sync", lambda *_args: client.stage("firewall"))
+    firewall_configs: list[bytes | None] = []
+
+    def firewall(*_args, config_bytes: bytes | None = None):
+        client.stage("firewall")
+        firewall_configs.append(config_bytes)
+
+    monkeypatch.setattr(installer, "_apply_firewall_patch_sync", firewall)
     monkeypatch.setattr(installer, "_verify_startup_sync", lambda *_args: client.stage("verify"))
 
-    def install(*, apply_gui_patch: bool):
+    def install(*, apply_gui_patch: bool, display: installer._DisplaySteps | None = None):
         client.closed = False
         return installer._install_device_agent_sync(
             installer.C300XDeviceInstallRequest(
                 host="unused.invalid", ssh_username="unused", ssh_password="unused",
                 remote_dir=remote_dir, apply_gui_patch=apply_gui_patch,
             ),
-            bundle, b"{}",
+            bundle, b"{}", display,
         )
 
     def update_required() -> bool:
@@ -128,7 +148,7 @@ def transaction(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     return SimpleNamespace(
         client=client, install=install, update_required=update_required,
         manifest_path=manifest_path, old_manifest=old_manifest,
-        obsolete_path=obsolete_path,
+        obsolete_path=obsolete_path, firewall_configs=firewall_configs,
     )
 
 
@@ -149,6 +169,7 @@ def test_failed_install_preserves_manifest_and_retry_is_idempotent(
     assert transaction.update_required()
     if failure != "manifest":
         assert "manifest" not in client.operations
+    assert ("start-again" in client.operations) is (failure == "restart")
 
     client.failure = None
     client.operations.clear()
@@ -163,6 +184,131 @@ def test_failed_install_preserves_manifest_and_retry_is_idempotent(
     assert transaction.install(apply_gui_patch=apply_gui_patch) == ()
     assert client.writes == writes
     assert client.writes.count(transaction.manifest_path) == 1
+
+
+# 3.0.6 (Qt 5 overlay) and the C100X (Qt 5 on disk) go through the same
+# transaction: the manifest is published last, and only after a complete install.
+QT5_FAILURES = {
+    "qt5_rcc": ["payload", "qml-transfer", "config", "startup", "firewall", "restart", "verify", "core-apply",
+                "manifest"],
+    # No display step on the C100X; its adapter is the only file below qml/.
+    "qt5_ondisk": ["payload", "qml-transfer", "config", "startup", "firewall", "restart", "verify", "manifest"],
+}
+
+
+@pytest.mark.parametrize("kind,failure", [(kind, failure) for kind, failures in QT5_FAILURES.items()
+                                          for failure in failures])
+def test_a_failed_qt5_install_preserves_the_manifest_and_its_retry_is_idempotent(
+    transaction, monkeypatch, kind, failure,
+) -> None:
+    monkeypatch.setattr(installer, "_admit_station_sync", lambda *_: kind)
+    client = transaction.client
+    client.qt5 = True
+    client.failure = failure
+    with pytest.raises(installer.C300XDeviceInstallError):
+        transaction.install(apply_gui_patch=False)
+    assert client.closed
+    assert client.files[transaction.manifest_path] == transaction.old_manifest
+    assert client.files[transaction.obsolete_path] == b"old distribution"
+    assert transaction.update_required()
+    if failure != "manifest":
+        assert "manifest" not in client.operations
+    assert ("start-again" in client.operations) is (failure == "restart")
+
+    client.failure = None
+    client.operations.clear()
+    display = installer._DisplaySteps()
+    changed = transaction.install(apply_gui_patch=False, display=display)
+    assert changed[-1] == transaction.manifest_path
+    assert client.operations[-2:] == ["manifest", "cleanup-source"]
+    assert ("core-apply" in client.operations) is (kind == "qt5_rcc")
+    assert (display.kind, display.pending) == (kind, False)
+    assert not transaction.update_required()
+    # The C100X adapter goes only to the C100X.
+    adapter = f"/synthetic/custom-agent/{installer.C100X_ADAPTER_NAME}"
+    assert (adapter in client.files) is (kind == "qt5_ondisk")
+    # The C100X firewall step gets the merged configuration with the low video stream.
+    config = transaction.firewall_configs[-1]
+    if kind == "qt5_ondisk":
+        assert config is not None and json.loads(config)["video"]["av"]["highResolution"] is False
+    else:
+        assert config is None
+    writes = client.writes.copy()
+    assert transaction.install(apply_gui_patch=False) == ()
+    assert client.writes == writes
+
+
+def test_a_failed_3_0_6_display_step_is_owed_and_the_manifest_published(transaction, monkeypatch) -> None:
+    monkeypatch.setattr(installer, "_admit_station_sync", lambda *_: "qt5_rcc")
+    transaction.client.qt5 = True
+    transaction.client.failure = "bad-core-apply"
+    display = installer._DisplaySteps()
+    changed = transaction.install(apply_gui_patch=True, display=display)
+    assert display.pending is True
+    # The full patch waits for the core step it needs; the core Repair runs both.
+    assert "apply" not in transaction.client.operations
+    assert changed[-1] == transaction.manifest_path
+    assert not transaction.update_required()
+
+
+def test_the_c100x_refuses_the_display_patch_before_any_write(transaction, monkeypatch) -> None:
+    monkeypatch.setattr(installer, "_admit_station_sync", lambda *_: "qt5_ondisk")
+    with pytest.raises(installer.C300XDeviceInstallError, match="device_install_verify_failed"):
+        transaction.install(apply_gui_patch=True)
+    assert transaction.client.writes == []
+    assert transaction.client.files[transaction.manifest_path] == transaction.old_manifest
+
+
+def test_missing_hook_leaves_firewall_alone_and_completes_install(transaction, monkeypatch) -> None:
+    monkeypatch.setattr(installer, "_admit_station_sync", lambda *_: "qt5_ondisk")
+    transaction.client.failure = "missing-hook"
+    transaction.install(apply_gui_patch=False)
+    assert "firewall-preflight" in transaction.client.operations
+    assert "firewall" not in transaction.client.operations
+    for phase in ("startup", "restart", "verify", "manifest"):
+        assert phase in transaction.client.operations
+    config = next(data for path, data in transaction.client.files.items() if path.endswith("/config.json"))
+    assert json.loads(config)["maintenance"]["firewall"]["enabled"] is False
+    assert transaction.client.closed
+
+
+@pytest.mark.parametrize("kind", ["missing", "missing-directory", "file", "directory", "symlink", "dangling",
+                                  "linked-ancestor-present", "linked-ancestor-absent", "non-executable"])
+def test_firewall_preflight_checks_real_file_type(tmp_path, monkeypatch, kind):
+    path = tmp_path / "path with spaces"
+    source = tmp_path / "source"
+    if kind == "missing-directory":
+        path = path / "missing parent" / "iptables"
+    elif kind in ("file", "non-executable"):
+        path.write_text("#!/bin/sh\n")
+        path.chmod(0o755 if kind == "file" else 0o644)
+    elif kind == "directory":
+        path.mkdir()
+    elif kind in ("symlink", "dangling"):
+        if kind == "symlink":
+            source.touch()
+        path.symlink_to(source)
+    elif kind.startswith("linked-ancestor"):
+        (source / "if-pre-up.d").mkdir(parents=True)
+        path.symlink_to(source, target_is_directory=True)
+        path = path / "if-pre-up.d" / "iptables"
+        if kind.endswith("present"):
+            path.touch()
+    monkeypatch.setattr(installer, "REMOTE_FIREWALL_PATH", str(path))
+    client = SimpleNamespace(run=lambda command: subprocess.check_output(["sh", "-c", command], text=True))
+    if kind in ("file", "missing", "missing-directory"):
+        assert installer._firewall_hook_present_sync(client) is (kind == "file")
+    else:
+        with pytest.raises(installer.C300XDeviceInstallError, match="installer_firewall_hook_unsupported"):
+            installer._firewall_hook_present_sync(client)
+
+
+def test_failed_firewall_does_not_install_autostart(transaction) -> None:
+    transaction.client.failure = "firewall"
+    with pytest.raises(installer.C300XDeviceInstallError):
+        transaction.install(apply_gui_patch=False)
+    assert "startup" not in transaction.client.operations
+    assert "restart" not in transaction.client.operations
 
 
 def test_full_patch_failure_does_not_publish_manifest(transaction) -> None:
@@ -260,7 +406,7 @@ int main(int argc, char **argv)
         "cc", "-std=c11", "-D_DEFAULT_SOURCE", "-D_POSIX_C_SOURCE=200809L",
         "-Wall", "-Wextra", "-Werror", "-O2", "-I", str(native), str(source),
         *(str(native / name) for name in (
-            "agent_update.c", "file_io.c", "string_util.c", "json_util.c", "json_parse.c", "sha256.c",
+            "agent_update.c", "device_detect.c", "file_io.c", "string_util.c", "json_util.c", "json_parse.c", "sha256.c",
         )), "-o", str(binary),
     ], capture_output=True, text=True, check=False, timeout=30)
     assert compiled.returncode == 0, compiled.stderr

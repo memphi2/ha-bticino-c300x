@@ -2,33 +2,11 @@
 #include "http_service_dispatch.h"
 #include "http_util.h"
 #include "json_util.h"
+#include "ssh_status.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#ifndef C300X_SSH_INIT_SCRIPT
-#define C300X_SSH_INIT_SCRIPT "/etc/init.d/dropbear"
-#endif
-#ifndef C300X_SSH_STATUS_COMMAND
-/* The stock init script stops the listener by pidfile. Established SSH
- * sessions can keep their own dropbear processes after a successful stop. */
-#define C300X_SSH_STATUS_COMMAND \
-    "file=/var/run/dropbear.pid; [ -e \"$file\" ] || exit 1; " \
-    "read -r pid < \"$file\" || exit 2; case $pid in ''|*[!0-9]*) exit 2;; esac; " \
-    "[ /proc/\"$pid\"/exe -ef /usr/sbin/dropbear ]"
-#endif
-/* A hanging init script or status check must not hold the maintenance
- * slot, and with it every other maintenance request, for good. */
-#ifndef C300X_SSH_COMMAND_TIMEOUT_MS
-#define C300X_SSH_COMMAND_TIMEOUT_MS 60000
-#endif
-#ifndef C300X_SSH_STATUS_TIMEOUT_MS
-#define C300X_SSH_STATUS_TIMEOUT_MS 15000
-#endif
-#ifndef C300X_REBOOT_PROGRAM
-#define C300X_REBOOT_PROGRAM "/sbin/reboot"
-#endif
 
 enum service_action { SSH_STATUS, SSH_START, SSH_STOP, SSH_SET, REBOOT, REMOVE };
 enum service_phase { SERVICE_COMMAND, STATUS_COMMAND, START_SSH };
@@ -58,20 +36,12 @@ static void command_failed(int fd)
     c300x_http_send_json(fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"maintenance_command_failed\"}\n");
 }
 
-static void ssh_status(int fd, int running)
-{
-    char body[96];
-    snprintf(body, sizeof(body), "{\"ok\":true,\"enabled\":%s,\"running\":%s}\n",
-        running ? "true" : "false", running ? "true" : "false");
-    c300x_http_send_json(fd, 200, "OK", body);
-}
-
 static void probe_failed(int fd, const struct service_request *state)
 {
     if (state->display) {
         command_failed(fd);
     } else {
-        ssh_status(fd, 0);
+        (void)c300x_ssh_send_status(fd, -1, -1);
     }
 }
 
@@ -138,14 +108,12 @@ static int finish_service(struct c300x_http_maintenance *owner)
         return 1;
     }
     if (state->phase == STATUS_COMMAND) {
-        int running = !owner->job.failed;
-        /* The probe returns 1 for no listener. A timeout or failed probe is unknown,
-         * not proof that a requested stop succeeded. */
-        if (state->display && ((owner->job.failed && owner->job.exit_status != 1)
-            || (state->action == SSH_SET && state->requested_ssh != running))) {
+        /* The probe returns 1 for no factory dropbear. A timeout or failed probe
+         * is unknown, not proof that a requested stop succeeded. */
+        int factory = !owner->job.failed ? 1 : owner->job.exit_status == 1 ? 0 : -1;
+        int require = state->display && state->action == SSH_SET ? state->requested_ssh : -1;
+        if ((state->display && factory < 0) || !c300x_ssh_send_status(fd, factory, require)) {
             command_failed(fd);
-        } else {
-            ssh_status(fd, running);
         }
     } else if (owner->job.failed) {
         command_failed(fd);
@@ -237,6 +205,10 @@ int c300x_service_dispatch(int display, struct c300x_http_maintenance *owner, in
     }
     if (action == SSH_SET && !c300x_json_bool_field(request->body, "enabled", &enabled)) {
         c300x_http_send_json(fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"maintenance_ssh_enabled_required\"}\n");
+        return 1;
+    }
+    /* Never stop, nor fight over port 22 with, a dropbear another tool keeps. */
+    if (action != SSH_STATUS && action < REBOOT && c300x_ssh_refuse_managed(fd)) {
         return 1;
     }
     struct service_request *state = calloc(1, sizeof(*state));

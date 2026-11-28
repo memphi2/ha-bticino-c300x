@@ -20,7 +20,8 @@ def ringer_response_binary(request, tmp_path_factory):
     build = subprocess.run(
         ["cc", "-std=c11", "-O1", "-g", "-D_DEFAULT_SOURCE", "-D_POSIX_C_SOURCE=200809L",
          "-ffunction-sections", "-fdata-sections", "-Wl,--gc-sections",
-         "-Wl,--wrap=nanosleep", *flags, str(native / "test/ringer_response_test.c"),
+         "-Wl,--wrap=nanosleep", "-Wl,--wrap=c300x_device_display_features",
+         *flags, str(native / "test/ringer_response_test.c"),
          *sources, "-pthread", "-ldl", "-o", str(binary)],
         capture_output=True, text=True, timeout=120,
     )
@@ -31,7 +32,7 @@ def ringer_response_binary(request, tmp_path_factory):
 @pytest.mark.parametrize("case", [
     "malformed", "mismatch", "volume", "combined",
     "normal-volume", "normal-combined", "normal-muted",
-    "short-malformed", "short-mismatch",
+    "short-malformed", "short-mismatch", "unpatchable",
 ])
 def test_ringer_response_is_bounded_json(ringer_response_binary, case):
     result = subprocess.run([str(ringer_response_binary), case],

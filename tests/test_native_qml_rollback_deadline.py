@@ -37,7 +37,7 @@ def test_rollback_restart_survives_ten_seconds_and_keeps_single_writer(lab):
     pending = lab.request(QML + "/actions/apply", {"confirm": "apply_qml_patch"})
     pending.sock.settimeout(25)
     lab.started()
-    wait_until(lambda: observations.joinpath("probed").exists())
+    wait_until(lambda: observations.joinpath("probed").exists(), timeout=60)
     time.sleep(10.2)
     assert api_get(lab.port, "/api/v1/health")["ok"]
     # The write's transaction directory stays until the restarted GUI is up.

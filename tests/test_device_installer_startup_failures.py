@@ -73,6 +73,9 @@ rm() {
 
     client = Client()
     monkeypatch.setattr(installer, "_connect_device_client", lambda _request: client)
+    # Isolate startup failures after admission; model rejection is tested
+    # separately with real manifests in test_c100x_ssh_admission.
+    monkeypatch.setattr(installer, "_admit_station_sync", lambda *_args: "qt4_ondisk")
     monkeypatch.setattr(installer, "_read_remote_config_sync", lambda *_args: {})
     monkeypatch.setattr(installer, "_write_remote_file_sync", lambda *_args, **_kwargs: False)
     monkeypatch.setattr(installer, "_remote_content_matches_sync", lambda *_args: not init_changed)

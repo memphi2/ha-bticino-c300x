@@ -1,4 +1,5 @@
 #include "../src/display_alerts.h"
+#include "../src/device_detect.h"
 #include "../src/http_util.h"
 
 #include <assert.h>
@@ -8,6 +9,8 @@
 #include <unistd.h>
 
 static long long now = 1000;
+static enum c300x_device_model model = C300X_DEVICE_MODEL_C300X;
+enum c300x_device_model c300x_device_model(void) { return model; }
 static int status, writes, write_success = 1;
 static char response[8192];
 static struct request request;
@@ -48,17 +51,41 @@ static int listen_gui(struct c300x_display_alerts *alerts)
     return listen_gui_mode(alerts, 0);
 }
 
-static void post(struct c300x_display_alerts *alerts, int id)
+static void post_sound(struct c300x_display_alerts *alerts, int id, int sound)
 {
     memset(&request, 0, sizeof(request));
     strcpy(request.method, "POST");
     snprintf(request.body, sizeof(request.body),
         "{\"id\":\"%032x\",\"notification_id\":\"n\",\"revision\":\"%032x\","
         "\"severity\":\"info\",\"title\":\"\",\"message\":\"\","
-        "\"wake_duration\":0,\"sound_duration\":300,\"expires_in\":1}", id, id);
+        "\"wake_duration\":0,\"sound_duration\":%d,\"expires_in\":1}", id, id, sound);
     request.body_len = strlen(request.body);
     status = 0;
     c300x_display_alerts_handle_api(alerts, -1, &request);
+}
+
+static void post(struct c300x_display_alerts *alerts, int id)
+{
+    post_sound(alerts, id, 300);
+}
+
+/* A tone the C100X adapter cannot play is refused before it is queued. */
+static void c100x_sound_test(void)
+{
+    struct c300x_display_alerts alerts;
+    model = C300X_DEVICE_MODEL_C100X;
+    c300x_display_alerts_init(&alerts);
+    int peer = listen_gui(&alerts);
+    writes = 0;
+    post_sound(&alerts, 7, 30);
+    assert(status == 400 && strstr(response, "display_alert_sound_unsupported") && writes == 0);
+    assert(alerts.gui_fd >= 0);
+    post_sound(&alerts, 7, 0);
+    assert(status == 200 && writes == 1);
+    close(peer);
+    c300x_display_alerts_close(&alerts);
+    model = C300X_DEVICE_MODEL_C300X;
+    writes = 0;
 }
 
 static void protected_receipts_test(void)
@@ -91,6 +118,7 @@ static void protected_receipts_test(void)
 
 int main(void)
 {
+    c100x_sound_test();
     protected_receipts_test();
     now = 1000;
     writes = 0;

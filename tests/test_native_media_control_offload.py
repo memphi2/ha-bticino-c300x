@@ -14,6 +14,7 @@ from http.client import HTTPConnection
 from pathlib import Path
 
 import pytest
+from native_build import default_host_build
 from test_native_openwebnet_offload import PRESS, RELEASE, UNLOCK, Bus
 
 from native_agent.test.smoke import (
@@ -94,12 +95,10 @@ def test_call_status_has_peer_readiness(lab: Lab, ready: bool, path: str) -> Non
 
 @pytest.fixture(scope="module")
 def binary(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    directory = tmp_path_factory.mktemp("media-control-build")
-    subprocess.run(["make", "-C", str(NATIVE), f"BUILD_DIR={directory}", "-j2", "all"],
-                   check=True, capture_output=True, text=True)
-    objects = [str(path) for path in sorted((directory / "host").glob("*.o"))
+    build = default_host_build(tmp_path_factory)
+    objects = [str(path) for path in sorted((build / "host").glob("*.o"))
                if path.name != "media_bridge.o"]
-    target = directory / "agent-with-held-media"
+    target = tmp_path_factory.mktemp("media-control-build") / "agent-with-held-media"
     subprocess.run(["cc", "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
                     "-D_DEFAULT_SOURCE", "-D_POSIX_C_SOURCE=200809L",
                     str(NATIVE / "test/media_bridge_hold_stub.c"), *objects,

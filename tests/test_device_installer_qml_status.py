@@ -33,8 +33,8 @@ class FakeClient:
             if self.responses[action] is None:
                 raise installer.C300XDeviceInstallError("device_install_failed")
             return self.responses[action]
-        if installer._QT5_DISPLAY_MARKER in command:
-            return "yes\n" if self.qt5 else "no\n"
+        if "libQt5Core" in command:
+            return "qt5\nc300x\n" if self.qt5 else "qt4\nc300x\n"
         if command == f"readlink {installer.REMOTE_INIT_LINK}":
             return installer.REMOTE_INIT_SCRIPT
         return ""
@@ -47,6 +47,10 @@ class FakeClient:
 def client(monkeypatch: pytest.MonkeyPatch) -> FakeClient:
     client = FakeClient()
     monkeypatch.setattr(installer, "_connect_device_client", lambda _r: client)
+    # This fixture exercises the display steps after admission, which has its
+    # own tests; the kind is the one the fake station answers.
+    monkeypatch.setattr(installer, "_admit_station_sync",
+                        lambda *_a: "qt5_rcc" if client.qt5 else "qt4_ondisk")
     monkeypatch.setattr(installer, "_read_remote_config_sync", lambda *_a: {})
     monkeypatch.setattr(installer, "_write_remote_file_sync", lambda *_a, **_k: False)
     monkeypatch.setattr(installer, "_install_startup_script_sync", lambda *_a: [])

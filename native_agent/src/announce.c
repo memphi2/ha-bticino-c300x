@@ -1,6 +1,7 @@
 #include "announce.h"
 #include "announce_device.h"
 #include "announce_file.h"
+#include "device_detect.h"
 #include "time_util.h"
 
 #include <signal.h>
@@ -37,7 +38,9 @@ void c300x_announce_take_over(struct c300x_announce *announce)
     int unplayed = access(c300x_announce_file(), F_OK) == 0;
 
     announce->serving = 1;
-    if (c300x_announce_end_leftover(&announce->gain) || unplayed) {
+    /* This backend never owned C100X playback or its worker descendants. */
+    if (c300x_device_model() == C300X_DEVICE_MODEL_C300X
+        && (c300x_announce_end_leftover(&announce->gain) || unplayed)) {
         /* As after a door frame: what the old agent knew about the device is gone. */
         announce->ring_until_ms = c300x_monotonic_ms() + announce->ring_hold_ms;
         announce->door_hold = 1;
@@ -84,6 +87,13 @@ static void start_clean(struct c300x_announce *announce)
     long long ring_left = announce->ring_until_ms - c300x_monotonic_ms();
     int delay = announce->clean_delay;
 
+    /* Recovery bypasses the HTTP capability check. C100X has different
+     * mixer controls and no compatible speaker backend yet. */
+    if (c300x_device_model() != C300X_DEVICE_MODEL_C300X) {
+        announce->clean_delay = -1;
+        announce->gain = -1;
+        return;
+    }
     if (ring_left > 0 && ring_left / 1000 + 1 > delay) {
         delay = (int)(ring_left / 1000 + 1);
     }
@@ -101,6 +111,10 @@ static void start_clean(struct c300x_announce *announce)
 int c300x_announce_play(struct c300x_announce *announce, int volume_percent,
     int *duration_ms, const char **error)
 {
+    *error = "unsupported";
+    if (c300x_device_model() != C300X_DEVICE_MODEL_C300X) {
+        return 0;
+    }
     if ((*error = refusal(announce)) != NULL) {
         return 0;
     }

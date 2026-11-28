@@ -119,6 +119,8 @@ def _dashboard_language(hass: HomeAssistant | None) -> str:
         return "fr"
     if language.startswith("it"):
         return "it"
+    if language.startswith("es"):
+        return "es"
     return "en"
 
 

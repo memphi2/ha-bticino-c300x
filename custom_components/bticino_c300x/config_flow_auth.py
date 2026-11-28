@@ -9,6 +9,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import C300XAgentApi, build_agent_base_url
 from .api_errors import C300XAgentApiAuthError, C300XAgentApiError
+from .config_flow_c100x import C100XOptInSteps
 from .config_flow_entry_update import (
     async_ensure_entry_reload,
     async_update_reconfigured_entry,
@@ -20,6 +21,8 @@ from .config_flow_identity import (
     stable_unique_id_from_setup_data,
 )
 from .config_flow_input import _agent_auth_input, _agent_auth_schema, _key_or_saved
+from .config_flow_reinstall import ReinstallSteps
+from .config_flow_station_entry import StationEntrySteps
 from .config_schemas import reconfigure_connection_schema
 from .const import (
     CONF_AGENT_HOST,
@@ -27,6 +30,7 @@ from .const import (
     CONF_AGENT_TOKEN,
     CONF_CALLBACK_BASE_URL,
     CONF_MAINTENANCE_TOKEN,
+    CONF_REINSTALL_AGENT,
     DEFAULT_AGENT_PORT,
 )
 from .discovery import discovery_matches_entry
@@ -93,7 +97,7 @@ async def async_validate_entry_connection(
     return setup, errors
 
 
-class AuthFlowSteps:
+class AuthFlowSteps(C100XOptInSteps, ReinstallSteps, StationEntrySteps):
     """Share setup validation and reauth without expanding the main wizard."""
 
     _setup_unique_id: str | None
@@ -155,7 +159,10 @@ class AuthFlowSteps:
     def _show_agent_auth(self: Any, errors: dict[str, str]) -> ConfigFlowResult:
         return cast(ConfigFlowResult, self.async_show_form(
             step_id="agent_auth",
-            data_schema=_agent_auth_schema(self._setup_agent_needs_token),
+            # An agent that asks for a key can be reinstalled when the key is lost.
+            data_schema=_agent_auth_schema(
+                self._setup_agent_needs_token, reinstall=self._setup_agent_needs_token,
+            ),
             errors=errors,
         ))
 
@@ -165,6 +172,12 @@ class AuthFlowSteps:
         if not self._setup_connection:
             return cast(ConfigFlowResult, await self.async_step_user())
         errors: dict[str, str] = {}
+        if user_input is not None and self._setup_agent_needs_token and (
+            user_input.get(CONF_REINSTALL_AGENT) is True
+        ):
+            # The keys are lost: the SSH installer writes the agent with new ones.
+            self._factory_login_tried = False
+            return cast(ConfigFlowResult, await self.async_step_bootstrap_install())
         if user_input is not None:
             auth_data, errors = _agent_auth_input(
                 user_input, require_agent_token=self._setup_agent_needs_token,
@@ -174,6 +187,9 @@ class AuthFlowSteps:
                 candidate = {**self._setup_connection, **auth_data}
                 setup, errors = await async_validate_connection(self.hass, candidate)
                 self._note_setup_rejection(errors, candidate)
+                if not errors and self._c100x_opt_in_missing(setup):
+                    # A Classe 100X is experimental: set up only when asked for.
+                    return cast(ConfigFlowResult, await self._async_ask_c100x_opt_in("agent_auth", user_input))
                 if not errors:
                     errors = self._setup_identity_error(setup)
                 if errors and self._setup_pending_features is not None and not self._setup_bootstrapped:
@@ -181,10 +197,16 @@ class AuthFlowSteps:
                     self._setup_connection = candidate
                 if not errors:
                     self._setup_connection = candidate
+                    # The model decides the C100X display defaults.
+                    self._setup_agent_info.clear()
+                    self._setup_agent_info.update(setup)
                     unique_id = stable_unique_id_from_setup_data(setup)
                     if unique_id is not None:
                         self._setup_unique_id = unique_id
                         self._async_abort_duplicate_setup_flows(unique_id)
+                    # An older entry of this station gets the keys; no second entry.
+                    if done := await self._async_hand_keys_to_station_entry():
+                        return cast(ConfigFlowResult, done)
                     if self._setup_pending_features is not None:
                         return cast(ConfigFlowResult, await self._async_create_setup_entry(self._setup_pending_features))
                     return cast(ConfigFlowResult, await self.async_step_user_features())
@@ -215,6 +237,9 @@ class AuthFlowSteps:
     ) -> ConfigFlowResult:
         entry = self._get_reauth_entry()
         errors: dict[str, str] = {}
+        if user_input is not None and user_input.get(CONF_REINSTALL_AGENT) is True:
+            self._reinstall_login_tried = False
+            return cast(ConfigFlowResult, await self.async_step_reauth_reinstall())
         if user_input is not None:
             connection = current_connection_options(entry)
             keys = {key: _key_or_saved(user_input, connection, key) for key in _KEYS}
@@ -243,5 +268,5 @@ class AuthFlowSteps:
                 async_ensure_entry_reload(self.hass, entry, changed=changed, had_listeners=had_listeners, force=True)
                 return cast(ConfigFlowResult, result)
         return cast(ConfigFlowResult, self.async_show_form(
-            step_id="reauth_confirm", data_schema=_agent_auth_schema(False), errors=errors,
+            step_id="reauth_confirm", data_schema=_agent_auth_schema(False, reinstall=True), errors=errors,
         ))

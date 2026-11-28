@@ -35,7 +35,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
-LANGUAGES = ("de", "en", "fr", "it")
+LANGUAGES = ("de", "en", "es", "fr", "it")
 
 
 def make_fixtures(include_consumers: bool = False) -> list[dict]:

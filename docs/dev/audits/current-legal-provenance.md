@@ -1,7 +1,7 @@
 # Current Legal and Provenance Audit Snapshot
 
-Source review: 2026-11-25. Scope: integration and native agent `2.10.0`, the
-stable release that brings the display pages to firmware 3.0.6.
+Source review: 2026-11-27. Scope: integration and native agent `3.0.0`, the
+joint package for the Classe 300X and the Classe 100X.
 The station settings panel and ring-call controls use the existing Qt runtime
 on the device. The package includes the project's QML, JavaScript, patch script
 and native agent, not the vendor settings page or the vendor GUI executable.
@@ -111,6 +111,14 @@ free fonts Ubuntu Light and DejaVu Sans. No vendor page, firmware artwork or
 firmware file is part of the pictures or the repository. Values are
 examples; the two camera pictures are AI-generated views supplied by the
 maintainer.
+
+The seven `c100x-display-*-en` pictures are renders of the integration's own
+Classe 100X pages (`device_qml/c100x/` and the pages generated from the shared
+ones) in Qt 5 on a PC, with example data. The background is a gradient drawn
+for the pictures, the key and EXIT symbols are drawings of our own, the fonts
+are DejaVu Sans and Noto Sans of the PC. A file-access trace of the renders
+shows no firmware file: the only pictures opened are the adapter's own three
+SVG files and the three stand-ins.
 
 ## Not Verified Here
 

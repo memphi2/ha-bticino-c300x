@@ -39,6 +39,9 @@ def _fake_tool(path: Path, name: str) -> None:
         "and 'C300XEnergyDistribution.qml' in sys.argv[-1]:\n"
         "    if os.environ.get('FAIL_CLEANUP') == '1': sys.exit(1)\n"
         "    os.unlink(os.environ['REMOTE_OBSOLETE_SOURCE'])\n"
+        "if name == 'sshpass' and 'test -d /home/bticino' in sys.argv[-1]:\n"
+        "    print(os.environ.get('STATION_ANSWER', 'station'))\n"
+        "    sys.exit(int(os.environ.get('STATION_EXIT', '0')))\n"
         "if name == 'sshpass' and os.environ.get('FAIL_STARTUP') == '1' "
         "and sys.argv[-1].startswith('sh -s -- '):\n"
         "    sys.exit(1)\n"
@@ -51,6 +54,7 @@ def _run_install(
     remote_dir: str = "/synthetic/agent", apply_qml: bool = False,
     qml_result: str = "", qml_exit: int = 0, upload_agent: bool = True,
     fail_manifest: bool = False, fail_cleanup: bool = False, qml_status: list | None = None,
+    station: tuple[str, int] = ("station", 0),
 ):
     tree = tmp_path / "checkout"
     scripts = tree / "scripts"
@@ -90,6 +94,8 @@ def _run_install(
             "C300X_USER": "synthetic",
             "C300X_PASSWORD": "synthetic",
             "C300X_AGENT_DIR": remote_dir,
+            "STATION_ANSWER": station[0],
+            "STATION_EXIT": str(station[1]),
         },
         capture_output=True, text=True, check=False, timeout=10,
     )
@@ -130,8 +136,11 @@ def test_complete_bundle_is_uploaded_before_publishing_manifest(tmp_path, monkey
         "device_agent/" + arg.split("/device_agent/", 1)[1]
         for call in uploads for arg in call[1:] if "/device_agent/" in arg
     }
-    # The old-updater tombstone is staging-only, never an SSH-installed source.
-    assert sources == (expected - {LEGACY_BOOTSTRAP_QML}) | {"device_agent/bundle.json"}
+    # This fixture omits the C100X policy and exercises the old C300X shell
+    # contract. The real C100X checkout blocks it before any upload; it cannot
+    # deliver the new adapter. The old-updater tombstone is staging-only too.
+    excluded = {LEGACY_BOOTSTRAP_QML, "device_agent/qml/c100x_bundle.sh"}
+    assert sources == (expected - excluded) | {"device_agent/bundle.json"}
     assert LEGACY_BOOTSTRAP_QML not in sources
     startup = next(i for i, call in enumerate(calls) if call[-1].startswith("sh -s -- "))
     manifest = next(i for i, call in enumerate(calls) if any(arg.endswith("/device_agent/bundle.json") for arg in call))
@@ -371,3 +380,22 @@ def test_a_display_restart_that_ends_failed_still_fails_the_install(tmp_path):
     assert result.returncode != 0
     assert "QML patch verification failed" in result.stderr
     assert (tmp_path / "remote-bundle.json").read_text() == "old manifest\n"
+
+
+# As the Home Assistant installer: a host without the vendor's /home/bticino is
+# no BTicino station and gets nothing, whatever its SSH login allows.
+@pytest.mark.parametrize("answer", [("other", 0), ("", 0), ("", 255), ("station", 255)])
+def test_a_host_that_is_no_station_gets_nothing(tmp_path, answer):
+    result, calls = _run_install(tmp_path, station=answer)
+    assert result.returncode != 0
+    assert "not a BTicino station" in result.stderr
+    remote = [call for call in calls if call[0] == "sshpass"]
+    assert len(remote) == 1 and "test -d /home/bticino" in remote[0][-1]
+    assert "Installed" not in result.stdout
+
+
+def test_a_station_is_checked_before_any_remote_write(tmp_path):
+    result, calls = _run_install(tmp_path)
+    assert result.returncode == 0, result.stderr
+    remote = [call for call in calls if call[0] == "sshpass"]
+    assert "test -d /home/bticino" in remote[0][-1]

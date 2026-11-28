@@ -83,7 +83,7 @@ class _FakeApi:
         self.home_call_start_calls: list[int | None] = []
         self.home_call_stop_calls = 0
         self.home_call_status_calls = 0
-        self.doorstation_audio_gain_calls: list[float] = []
+        self.doorstation_audio_level_calls: list[tuple[int, int]] = []
         self.reload_gui_calls = 0
 
     async def async_doorbell_video_status(self) -> dict[str, Any]:
@@ -107,12 +107,13 @@ class _FakeApi:
         self.activate_calls.append(audio)
         return {"ok": True, "audio": audio}
 
-    async def async_set_doorstation_audio_gain_db(
+    async def async_set_doorstation_audio_level(
         self,
-        gain_db: float,
+        door_level_db: int,
+        fine_gain_db: int,
     ) -> dict[str, Any]:
-        self.doorstation_audio_gain_calls.append(gain_db)
-        return {"ok": True, "doorstation_audio_gain_db": gain_db}
+        self.doorstation_audio_level_calls.append((door_level_db, fine_gain_db))
+        return {"ok": True}
 
     async def async_stop_doorbell_video(self) -> dict[str, Any]:
         self.stop_calls += 1
@@ -579,7 +580,6 @@ def test_doorbell_camera_exposes_only_user_facing_media_attributes() -> None:
         "picture_controls_supported": False,
         "picture_controls_scope": None,
             "talkback_supported": True,
-            "doorstation_audio_gain_db": 0.0,
             "media_user": {
                 "account": "homeassistant",
                 "label": "Home Assistant Test",
@@ -587,14 +587,14 @@ def test_doorbell_camera_exposes_only_user_facing_media_attributes() -> None:
     }
 
 
-def test_doorbell_camera_gain_attribute_comes_from_config_option() -> None:
+def test_doorbell_camera_has_no_card_gain_attribute() -> None:
     entry = _FakeEntry()
-    entry.options["doorstation_audio_gain_db"] = 6.0
+    entry.options["door_audio_level_db"] = 12
     camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
 
-    # sourced from HA's own config-flow option, not the agent bridge status
-    camera._bridge_status = {"doorstation_audio_gain_db": -12.0}
-    assert camera.extra_state_attributes["doorstation_audio_gain_db"] == 6.0
+    # The agent applies the level; the card plays the stream as it comes.
+    attributes = camera.extra_state_attributes
+    assert not any("audio_gain" in key or "audio_level" in key for key in attributes)
 
 
 def test_doorbell_camera_refresh_applies_bridge_audio_metadata() -> None:

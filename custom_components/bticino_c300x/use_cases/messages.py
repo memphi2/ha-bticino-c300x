@@ -16,6 +16,7 @@ from .common import (
     async_ensure_gui_function_patch,
     async_play_media,
     async_refresh_after_message_mutation,
+    ensure_stored_media_supported,
     latest_item_id_for_entry,
     raise_agent_command_failed,
 )
@@ -33,6 +34,7 @@ class MessagesUseCase:
     async def play_latest_video_message(self, media_player_entity_id: str) -> None:
         """Play the latest video message on a media player."""
 
+        ensure_stored_media_supported(self._entry, "video")
         message_id = await self._latest_video_message_id()
         await async_play_media(
             self._hass,
@@ -47,6 +49,7 @@ class MessagesUseCase:
     async def delete_latest_video_message(self) -> None:
         """Delete the newest stored video message."""
 
+        ensure_stored_media_supported(self._entry, "video")
         await async_ensure_gui_function_patch(self._entry)
         message_id = await self._latest_video_message_id(refresh_before_lookup=True)
         await raise_agent_command_failed(

@@ -4,12 +4,42 @@ set -u
 AGENT_DIR="${C300X_AGENT_DIR:-/home/bticino/cfg/extra/c300x-native-agent}"
 BACKUP_ROOT="${C300X_BACKUP_ROOT:-/home/bticino/cfg/extra/c300x-device-file-backups}"
 QML_PATCH="${C300X_QML_PATCH_SCRIPT:-$AGENT_DIR/qml_patch.sh}"
+# device-profile-begin
+# The station this script runs on: model and display mechanism. The same
+# block stands in qml_patch.sh and remove_agent.sh and matches the agent's
+# device_detect.c; nothing else in the scripts reads these files. The station
+# names its model itself; where that name is missing or disagrees with the
+# display program, the program decides model and display, and the Display
+# patch is not written on a station whose two sources disagree.
+DEVICE_INFO_XML="${C300X_QML_DEVICE_INFO_XML:-/home/bticino/sp/dbfiles_ws.xml}"
+QT5_MARKER="${C300X_QML_QT5_MARKER:-/usr/lib/libQt5Core.so.5}"
+C100X_MARKER="${C300X_QML_C100X_MARKER:-/home/bticino/bin/gui/BtClass100}"
+DEVICE_MODEL="$(sed -n 's:.*<webserver_type>[[:space:]]*\(C[13]00X\)[[:space:]]*</webserver_type>.*:\1:p' \
+    "$DEVICE_INFO_XML" 2>/dev/null | sed -n 1p)" || DEVICE_MODEL=""
+DEVICE_PROGRAM_MODEL=C300X
+[ ! -e "$C100X_MARKER" ] || DEVICE_PROGRAM_MODEL=C100X
+DEVICE_MODEL_CHECK=ok
+if [ -z "$DEVICE_MODEL" ]; then
+    DEVICE_MODEL_CHECK=unread
+elif [ "$DEVICE_MODEL" != "$DEVICE_PROGRAM_MODEL" ]; then
+    DEVICE_MODEL_CHECK=mismatch
+fi
+DEVICE_MODEL="$DEVICE_PROGRAM_MODEL"
+DEVICE_DISPLAY=qt4_ondisk
+if [ "$DEVICE_MODEL" = "C100X" ]; then
+    DEVICE_DISPLAY=qt5_ondisk
+elif [ -e "$QT5_MARKER" ]; then
+    DEVICE_DISPLAY=qt5_rcc
+fi
+# device-profile-end
 INIT_SCRIPT="${C300X_INIT_SCRIPT:-/etc/init.d/c300x-native-agent}"
 INIT_LINK="${C300X_INIT_LINK:-/etc/rc5.d/S40c300x-native-agent}"
 IPTABLES="${C300X_IPTABLES:-/etc/network/if-pre-up.d/iptables}"
 IPTABLES6="${C300X_IPTABLES6:-/etc/network/if-pre-up.d/iptables6}"
 SSH_INIT="${C300X_SSH_INIT:-/etc/init.d/dropbear}"
 REBOOT="${C300X_REBOOT:-/sbin/reboot}"
+LEGACY_BRIDGE="${C300X_LEGACY_MQTT_BRIDGE:-/etc/tcpdump2mqtt/TcpDump2Mqtt}"
+LEGACY_BRIDGE_MODE="$BACKUP_ROOT/legacy-mqtt/bridge-mode"
 IPTABLES_BACKUP="$BACKUP_ROOT/original/etc/network/if-pre-up.d/iptables"
 IPTABLES6_BACKUP="$BACKUP_ROOT/original/etc/network/if-pre-up.d/iptables6"
 
@@ -106,7 +136,44 @@ remount_root_ro() {
     ROOT_WRITABLE=0
 }
 
+regular_unlinked_path() {
+    [ -f "$1" ] && [ ! -L "$1" ] && [ "$(stat -c %h "$1")" = 1 ] || return 1
+    check_path=$1
+    case "$check_path" in /*) ;; *) return 1 ;; esac
+    case "$check_path" in *'/../'*|*'/./'*|*/..|*/.|*'//'*) return 1 ;; esac
+    while [ "$check_path" != / ]; do
+        [ ! -L "$check_path" ] || return 1
+        check_path=${check_path%/*}
+        [ -n "$check_path" ] || check_path=/
+    done
+}
+
+c100x_stock_file() {
+    regular_unlinked_path "$1" && [ "$(sha256sum "$1" | awk '{print $1}')" = "$2" ]
+}
+
+c100x_stock_display() {
+    c100x_stock_file "$c100x_gui/main.qml" ff1740e9742951f5cda2225d605eae06141f43ee26d900ca21d7fdf14960e6fb \
+        && c100x_stock_file "$c100x_gui/MainPage.qml" ba3edae9b9e670dad86894f93747f510f07c2389f498697e5d20dd95b4cb8e80 \
+        && c100x_stock_file "$c100x_gui/EventManager.qml" 3ca4b5e8c27c8c8b283d533106091072e25632bb090d414ee4c1d93f3a06b181
+}
+
+restore_c100x_qml() {
+    c100x_gui=${C100X_GUI_DIR:-/home/bticino/bin/gui/skins/default}
+    c100x_payload=$AGENT_DIR/qml/c100x_bundle.sh
+    # Old packages had no adapter payload. Exact stock needs no recovery code.
+    c100x_stock_display && return 0
+    if ! regular_unlinked_path "$c100x_payload" || [ ! -x "$c100x_payload" ] \
+        || ! C100X_GUI_DIR="$c100x_gui" C100X_GUI_BIN="$C100X_MARKER" \
+            C100X_BACKUP_DIR="$BACKUP_ROOT/c100x-display" "$c100x_payload" restore \
+            >/dev/null 2>&1 || ! c100x_stock_display; then
+        printf 'Failed to restore C100X display; keeping agent files and backups in place\n' >&2
+        exit 1
+    fi
+}
+
 restore_qml() {
+    if [ "$DEVICE_DISPLAY" = "qt5_ondisk" ]; then restore_c100x_qml; return; fi
     if [ ! -x "$QML_PATCH" ]; then
         printf 'Cannot verify GUI restoration without executable patch script; keeping agent files and backups in place\n' >&2
         exit 1
@@ -374,6 +441,7 @@ restore_media_patches() {
 # Without a valid stock backup the library stays as it is (wider tap
 # tolerance); any other failure keeps the backup for another removal.
 restore_display_library() {
+    [ "$DEVICE_DISPLAY" = "qt5_ondisk" ] && return 0
     touch_result="$("$AGENT_DIR/c300x-agent-native" --display-touch restore 2>/dev/null || true)"
     case "$touch_result" in
         *'"ok":true'*) return 0 ;;
@@ -382,6 +450,33 @@ restore_display_library() {
             return 0 ;;
     esac
     return 1
+}
+
+# Legacy MQTT off took the execute bits of fquinto's bridge, and his watchdog
+# can start it only with them. Like the agent's "on": the recorded mode when
+# it belongs to the file, else its read bits as execute bits; only a regular
+# file, never through a link, and nothing to do without the record.
+restore_legacy_bridge() {
+    [ -f "$LEGACY_BRIDGE_MODE" ] && [ -f "$LEGACY_BRIDGE" ] && [ ! -L "$LEGACY_BRIDGE" ] || return 0
+    bridge_mode="$(stat -c %a "$LEGACY_BRIDGE")" || return 1
+    case "$bridge_mode" in ''|*[!0-7]*) return 1 ;; esac
+    bridge_mode=$((0$bridge_mode))
+    [ $((bridge_mode & 0111)) = 0 ] || return 0
+    bridge_record=""
+    read -r bridge_record < "$LEGACY_BRIDGE_MODE" || [ -n "$bridge_record" ] || bridge_record=""
+    case "$bridge_record" in
+        [0-7][0-7][0-7]|[0-7][0-7][0-7][0-7]) bridge_record=$((0$bridge_record)) ;;
+        *) bridge_record=0 ;;
+    esac
+    if [ $((bridge_record & 0111)) = 0 ] || [ $((bridge_record & ~0111)) != "$bridge_mode" ]; then
+        bridge_record=$((bridge_mode | ((bridge_mode & 0444) >> 2)))
+    fi
+    remount_root_rw || return 1
+    bridge_rc=0
+    [ -f "$LEGACY_BRIDGE" ] && [ ! -L "$LEGACY_BRIDGE" ] \
+        && chmod "$(printf '%04o' "$bridge_record")" "$LEGACY_BRIDGE" || bridge_rc=1
+    remount_root_ro || bridge_rc=1
+    return "$bridge_rc"
 }
 
 schedule_reboot() {
@@ -407,6 +502,10 @@ if ! restore_display_library; then
     exit 1
 fi
 restore_media_patches
+if ! restore_legacy_bridge; then
+    printf 'Failed to give the legacy MQTT bridge its execute bits back; keeping agent files and backups in place\n' >&2
+    exit 1
+fi
 if ! agent_tree_manifest > "$REMOVE_WORK/agent-before-delete"; then
     printf 'Cannot record agent recovery identity; keeping startup, agent files and backups in place\n' >&2
     exit 1

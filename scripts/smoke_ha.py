@@ -94,7 +94,7 @@ def main() -> int:
 
     entry_id = find_config_entry_id(client)
     if not entry_id:
-        failures.append("BTicino C300X config entry is missing")
+        failures.append("BTicino C300X/C100X config entry is missing")
     else:
         failures.extend(check_runtime(client, entry_id))
 
@@ -106,7 +106,7 @@ def main() -> int:
 
     sys.stdout.write(
         "HA smoke passed: supported Home Assistant/Python runtime, "
-        "BTicino C300X entities/services OK\n"
+        "BTicino C300X/C100X entities/services OK\n"
     )
     return 0
 

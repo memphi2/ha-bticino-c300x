@@ -17,7 +17,7 @@ TRANSLATIONS = INTEGRATION / "translations"
 def test_localized_translation_files_match_english_keys() -> None:
     english = _load_json(TRANSLATIONS / "en.json")
 
-    for language in ("de", "it", "fr"):
+    for language in ("de", "it", "fr", "es"):
         localized = _load_json(TRANSLATIONS / f"{language}.json")
         assert _leaf_paths(localized) == _leaf_paths(english)
 
@@ -28,6 +28,7 @@ ACTIVATIONS_HINT = {
     "de": ("Weitere Türschlösser und Lichter", "legst du hier an"),
     "fr": ("Les serrures et lumières supplémentaires", "s'ajoutent ici"),
     "it": ("Serrature e luci aggiuntive", "si aggiungono qui"),
+    "es": ("más cerraduras y luces", "Aquí se añaden"),
 }
 
 
@@ -79,6 +80,7 @@ SPEAKER_PREEMPTED = {
     "de": "Von einem Ruf oder der Kameraansicht unterbrochen",
     "fr": "Interrompu par un appel ou l'affichage caméra",
     "it": "Interrotto da una chiamata o dalla vista telecamera",
+    "es": "Interrumpido por una llamada o una vista de cámara",
 }
 
 
@@ -152,7 +154,7 @@ def test_every_visitor_image_failure_is_shown_in_words_in_every_language() -> No
             assert last_failure["name"] != english["state_attributes"]["last_failure"]["name"]
             for code, text in last_failure["state"].items():
                 assert text != english["state_attributes"]["last_failure"]["state"][code], (path.name, code)
-    guide = (ROOT / "docs" / "user-guide.md").read_text(encoding="utf-8")
+    guide = (ROOT / "docs" / "reference.md").read_text(encoding="utf-8")
     for code, text in english["state_attributes"]["last_failure"]["state"].items():
         assert f"| `{code}` | {text} |" in guide, code
 
@@ -167,8 +169,9 @@ def test_native_camera_audio_explains_prerequisites_on_all_feature_forms() -> No
             form = data[area]["step"][step]
             assert form["data"]["native_two_way_audio"]
             hint = form["data_description"]["native_two_way_audio"]
-            for prerequisite in ("2026.11", "Labs", "WebRTC", "HTTPS", "C300X"):
+            for prerequisite in ("2026.11", "Labs", "WebRTC", "HTTPS"):
                 assert prerequisite in hint
+            assert "{model}" in hint
 
 
 def test_display_patch_help_says_that_the_alarmo_settings_are_kept() -> None:
@@ -182,7 +185,7 @@ def test_display_patch_help_says_that_the_alarmo_settings_are_kept() -> None:
             data["config"]["step"]["reconfigure_dashboard"]["data_description"]["device_ui_enabled"],
             data["options"]["step"]["dashboard"]["data_description"]["device_ui_enabled"],
         ]
-        actions_word = {"de": "Aktionen", "fr": "actions", "it": "azioni"}.get(
+        actions_word = {"de": "Aktionen", "fr": "actions", "it": "azioni", "es": "acciones"}.get(
             path.stem, "action"
         )
         for text in texts:
@@ -197,6 +200,7 @@ STAY_OPEN_WORDING = {
     "de": ("Seite im Bildschirm-Standby offen lassen", "Standby", "Alarm-Seite"),
     "fr": ("Garder la page ouverte pendant la veille de l'écran", "veille", "Alarme"),
     "it": ("Tenere aperta la pagina durante lo standby dello schermo", "standby", "Allarme"),
+    "es": ("Mantener la página abierta con la pantalla en reposo", "reposo", "Alarma"),
 }
 
 
@@ -303,17 +307,16 @@ def test_event_labels_translate_the_attribute_not_the_timestamp_state() -> None:
 
 
 def test_localized_translation_placeholders_match_base_strings() -> None:
+    """Every language uses the placeholders of strings.json, the model included:
+    a text reads the same in every language, not more specific in some."""
+
     base_placeholders = _translation_placeholders(
         _load_json(INTEGRATION / "strings.json")
     )
 
-    for path in (
-        TRANSLATIONS / "en.json",
-        TRANSLATIONS / "de.json",
-        TRANSLATIONS / "it.json",
-        TRANSLATIONS / "fr.json",
-    ):
-        assert _translation_placeholders(_load_json(path)) == base_placeholders
+    for language in ("en", "de", "it", "fr", "es"):
+        localized = _translation_placeholders(_load_json(TRANSLATIONS / f"{language}.json"))
+        assert localized == base_placeholders, language
 
 
 def test_fixable_agent_update_repair_uses_ha_issue_fix_flow_schema() -> None:
@@ -340,6 +343,8 @@ def test_fixable_agent_update_repair_uses_ha_issue_fix_flow_schema() -> None:
         assert set(_path_value(ssh_install, "data")) == {
             "bootstrap_ssh_username",
             "bootstrap_ssh_password",
+            "bootstrap_ssh_key",
+            "bootstrap_ssh_key_passphrase",
         }
         assert _path_value(fix_flow, "error")["ssh_install_failed"]
         assert _path_value(fix_flow, "abort")["entry_not_loaded"]
@@ -454,7 +459,7 @@ def test_fixable_media_setup_repair_uses_ha_issue_fix_flow_schema() -> None:
             "media_setup_repair_required",
         )
         assert "description" not in issue
-        assert "firewall, rtsp" in issue["title"].format(failed_checks="firewall, rtsp")
+        assert "firewall, rtsp" in issue["title"].format(failed_checks="firewall, rtsp", model="C300X")
         fix_flow = _path_value(
             data,
             "issues",
@@ -560,7 +565,7 @@ def test_options_menu_names_and_explains_every_area() -> None:
     menus = {
         "init": {
             "features", "visitor_snapshot", "camera_quality", "device_activations", "speech", "connection",
-            "display", "done",
+            "display", "dashboard_alarm", "done",
         },
         "display": {
             "dashboard", "dashboard_page_list", "dashboard_entity_display", "dashboard_alarm", "init",
@@ -758,6 +763,7 @@ def test_camera_quality_help_is_brief_and_preserves_reboot_and_runtime_details()
         "de": ("Gerät automatisch neu", "etwa eine Minute"),
         "fr": ("redémarre automatiquement l'appareil", "environ une minute"),
         "it": ("riavvia automaticamente il dispositivo", "circa un minuto"),
+        "es": ("reinicia automáticamente el dispositivo", "un minuto"),
     }
     for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
         step = _load_json(path)["options"]["step"]["camera_quality"]
@@ -776,6 +782,7 @@ def test_camera_quality_size_help_explains_agent_dependent_optional_size() -> No
         "de": ("Firmware", "installiertem Geräte-Agent", "Optionales", "Proportionen", "wenn angeboten"),
         "fr": ("firmware", "agent installé", "option", "proportions", "si proposée"),
         "it": ("firmware", "agente installato", "opzione", "proporzioni", "se disponibile"),
+        "es": ("firmware", "agente del dispositivo instalado", "opcional", "proporciones", "cuando se ofrece"),
     }
     for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
         step = _load_json(path)["options"]["step"]["camera_quality"]
@@ -898,9 +905,9 @@ def _flow_reported_errors() -> set[str]:
     # errors["base"] = err.reason reports the reason the device installer raised.
     assert any(flow.reason for flow in flows)
     integration = "\n".join(path.read_text(encoding="utf-8") for path in INTEGRATION.glob("*.py"))
-    constants = dict(re.findall(r'^([A-Z][A-Z0-9_]*) = "([a-z_]+)"$', integration, re.MULTILINE))
+    constants = dict(re.findall(r'^([A-Z][A-Z0-9_]*) = "([a-z0-9_]+)"$', integration, re.MULTILINE))
     installer = (INTEGRATION / "device_installer.py").read_text(encoding="utf-8")
-    for key, constant in re.findall(r'C300XDeviceInstallError\((?:"([a-z_]+)"|([A-Z][A-Z0-9_]*))\)', installer):
+    for key, constant in re.findall(r'C300XDeviceInstallError\((?:"([a-z0-9_]+)"|([A-Z][A-Z0-9_]*))\)', installer):
         reported.add(key or constants[constant])
     return reported
 
@@ -946,9 +953,9 @@ def test_the_busy_station_message_is_plain_in_every_language() -> None:
         path.stem: _load_json(path)["exceptions"]["station_busy"]["message"]
         for path in TRANSLATIONS.glob("*.json")
     }
-    assert set(messages) == {"de", "en", "fr", "it"}
+    assert set(messages) == {"de", "en", "es", "fr", "it"}
     assert messages["en"] == "The station is busy with a call. Try again after it ends."
-    assert len(set(messages.values())) == 4
+    assert len(set(messages.values())) == 5
     for language, message in messages.items():
         # No agent, error code or HTTP wording reaches the user.
         assert not re.search(r"agent|409|station_busy|HTTP", message, re.IGNORECASE), language

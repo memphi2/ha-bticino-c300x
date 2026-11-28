@@ -10,6 +10,12 @@ from homeassistant.helpers import issue_registry as ir
 
 from .action import ActionValidationError, validate_action_map
 from .agent_update import agent_update_repair_placeholders
+from .c100x_display_activation import (
+    BOOT_CHECK_ISSUE as C100X_DISPLAY_BOOT_CHECK_ISSUE,
+)
+from .c100x_display_activation import (
+    ROLLED_BACK_ISSUE as C100X_DISPLAY_ROLLED_BACK_ISSUE,
+)
 from .callback_target import callback_target_is_supported
 from .capabilities import capability_is_supported, maintenance_action_is_advertised
 from .const import (
@@ -37,6 +43,7 @@ from .media_setup import (
     media_setup_has_only_device_user_failures,
     summarize_self_test_failures,
 )
+from .model_names import MODEL, entry_model
 
 er: Any
 try:
@@ -78,6 +85,8 @@ ALL_REPAIR_ISSUES = frozenset(
         DEVICE_USER_REQUIRED_ISSUE,
         MEDIA_SETUP_REPAIR_REQUIRED_ISSUE,
         MEDIA_WATCHDOG_TIMEOUT_ISSUE,
+        C100X_DISPLAY_ROLLED_BACK_ISSUE,
+        C100X_DISPLAY_BOOT_CHECK_ISSUE,
     }
 )
 
@@ -676,6 +685,8 @@ def _create_issue(
 ) -> None:
     translation_placeholders = {
         "entry_title": str(getattr(entry, "title", "") or entry.entry_id),
+        # Titles, texts and fix flows name the entry's model.
+        MODEL: entry_model(entry),
     }
     if placeholders:
         translation_placeholders.update(placeholders)

@@ -155,8 +155,9 @@ static void framing_test(void)
     assert(c300x_rtsp_send_interleaved(writer, pair[0], 254, packet, sizeof(packet)) == 517);
     assert(recv(pair[1], received, sizeof(received), MSG_WAITALL) == 517);
     const unsigned char header[] = {'$', 254, 2, 1};
-    assert(memcmp(received, header, sizeof(header)) == 0);
-    assert(memcmp(received + sizeof(header), packet, sizeof(packet)) == 0);
+    const size_t header_len = sizeof(header);
+    assert(memcmp(received, header, header_len) == 0);
+    assert(memcmp(&received[header_len], packet, sizeof(packet)) == 0);
     /* The helper borrows both resources; a subsequent write must still work. */
     assert(c300x_rtsp_send_interleaved(writer, pair[0], 2, packet, 1) == 5);
     assert(recv(pair[1], received, 5, MSG_WAITALL) == 5);
@@ -306,7 +307,8 @@ static void real_partial_recovery(void)
     assert(pthread_join(thread, NULL) == 0);
     assert(memcmp(got, (unsigned char[]){'$', 2, 0xbb, 0x80}, 4) == 0);
     for (size_t i = 0; i < sizeof(payload); i++) assert(got[4 + i] == (unsigned char)(i * 7));
-    assert(memcmp(got + 4 + sizeof(payload), response, sizeof(response) - 1) == 0);
+    const size_t response_at = 4 + sizeof(payload);
+    assert(memcmp(&got[response_at], response, sizeof(response) - 1) == 0);
     c300x_rtsp_writer_release(writer);
     close(pair[0]); close(pair[1]);
 }

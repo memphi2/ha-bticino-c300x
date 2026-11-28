@@ -192,6 +192,8 @@ SIGNAL_SETTING_STATE = f"{DOMAIN}_setting_state"
 SIGNAL_QML_PATCH_CHANGED = f"{DOMAIN}_qml_patch_changed"
 SIGNAL_AGENT_DIAGNOSTICS_CHANGED = f"{DOMAIN}_agent_diagnostics_changed"
 SIGNAL_AGENT_INFO_CHANGED = f"{DOMAIN}_agent_info_changed"
+# A codec answer of the agent for a switch the codec select did not make itself.
+SIGNAL_AUDIO_CODEC_STATUS = f"{DOMAIN}_audio_codec_status"
 SIGNAL_FORWARDING_CHANGED = f"{DOMAIN}_forwarding_changed"
 SIGNAL_AUTH_CONFIG_CHANGED = f"{DOMAIN}_auth_config_changed"
 SIGNAL_MQTT_CHANGED = f"{DOMAIN}_mqtt_changed"

@@ -142,7 +142,7 @@ class FakeEntityRegistry:
         if (
             domain == "camera"
             and platform == "bticino_c300x"
-            and unique_id == "c300x-0123456789ab_unit_20_camera"
+            and unique_id == "c300x-0123456789ab_doorbell_camera"
         ):
             return "camera.bticino_c300x_doorbell_camera"
         return None

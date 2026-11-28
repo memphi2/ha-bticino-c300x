@@ -129,7 +129,7 @@ def _handed_over(tmp_path: Path, unique_id: str, data: dict[str, Any], version: 
         assert holder.id in (station.id, unit.id)
         assert len(dr.async_entries_for_config_entry(devices, entry.entry_id)) == 2
         assert (entities.async_get(camera).unique_id, entities.async_get(camera).device_id) == (
-            f"{STATION}_unit_20_camera", unit.id)
+            f"{STATION}_doorbell_camera", unit.id)
         issue = ir.async_get(hass).async_get_issue(
             DOMAIN, repair_issue_id(OUTDOOR_UNITS_BREAKING_CHANGE_ISSUE, entry.entry_id))
         # Only an entry from before 3.1 has something to redo.
@@ -147,4 +147,4 @@ def test_an_older_entry_handed_the_keys_moves_to_the_station_and_its_units(tmp_p
 
 def test_a_3_1_entry_reinstalled_keeps_its_station_and_unit_devices(tmp_path: Path) -> None:
     # The keys were lost; the entry and its unit devices stay, nothing to redo.
-    _handed_over(tmp_path, UNIQUE_ID, {CONF_STATION_ID: STATION}, identity_migration.ENTRY_VERSION, "unit_20_camera")
+    _handed_over(tmp_path, UNIQUE_ID, {CONF_STATION_ID: STATION}, identity_migration.ENTRY_VERSION, "doorbell_camera")

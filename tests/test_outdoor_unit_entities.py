@@ -146,7 +146,10 @@ def test_identity_is_the_station_not_the_entry() -> None:
     assert media_camera_unique_id(legacy) is None
     legacy.data = {CONF_STATION_ID: "c300x-0123456789ab", CONF_OUTDOOR_UNITS: ONE}
     assert station_id_known(legacy)
-    assert media_camera_unique_id(legacy) == "c300x-0123456789ab_unit_20_camera"
+    # The station's camera, whichever unit is the default.
+    assert media_camera_unique_id(legacy) == "c300x-0123456789ab_doorbell_camera"
+    legacy.data = {CONF_STATION_ID: "c300x-0123456789ab", CONF_OUTDOOR_UNITS: {**THREE, "default_unit": "21"}}
+    assert media_camera_unique_id(legacy) == "c300x-0123456789ab_doorbell_camera"
 
 
 def test_one_unit_rings_on_the_station_at_once_and_on_the_unit_when_it_is_named() -> None:

@@ -66,8 +66,9 @@ def test_a_2x_entry_moves_to_the_station_and_its_default_unit(tmp_path: Path) ->
         unit = devices.async_get_device_by_identifier((DOMAIN, f"{OLD}:unit:20"), entry.entry_id)
         assert unit is not None and unit.via_device_id == station.id
         assert station.id == devices.async_get_device_by_identifier((DOMAIN, OLD), entry.entry_id).id
+        # The media camera stays the station's camera, on the default unit's device.
         assert (entities.async_get(camera).unique_id, entities.async_get(camera).device_id) == (
-            f"{OLD}_unit_20_camera", unit.id)
+            f"{OLD}_doorbell_camera", unit.id)
         assert entities.async_get(door).unique_id == f"{OLD}_unit_20_door"
         assert (entities.async_get(mute).unique_id, entities.async_get(mute).device_id) == (
             f"{OLD}_ringer_mute", station.id)
@@ -94,7 +95,7 @@ def test_a_new_station_id_takes_the_unit_devices_and_entities_along(tmp_path: Pa
             )
             for unit_id in ("20", "21")
         }
-        camera = _register(entities, entry, units["20"], "camera", f"{OLD}_unit_20_camera")
+        camera = _register(entities, entry, units["20"], "camera", f"{OLD}_doorbell_camera")
         side = _register(entities, entry, units["21"], "button", f"{OLD}_unit_21_door")
         mute = _register(entities, entry, station, "switch", f"{OLD}_ringer_mute")
         assert identity_migration.identity_migration_needed(entry, NEW)
@@ -104,7 +105,7 @@ def test_a_new_station_id_takes_the_unit_devices_and_entities_along(tmp_path: Pa
             for unit_id, device in units.items():
                 assert devices.async_get(device.id).identifiers == {(DOMAIN, f"{NEW}:unit:{unit_id}")}
             assert devices.async_get(station.id).identifiers == {(DOMAIN, NEW)}
-            assert entities.async_get(camera).unique_id == f"{NEW}_unit_20_camera"
+            assert entities.async_get(camera).unique_id == f"{NEW}_doorbell_camera"
             assert entities.async_get(camera).device_id == units["20"].id
             assert entities.async_get(side).unique_id == f"{NEW}_unit_21_door"
             assert entities.async_get(mute).unique_id == f"{NEW}_ringer_mute"
@@ -191,7 +192,7 @@ def test_only_an_entry_from_before_3_1_gets_the_breaking_change_repair(tmp_path:
 
             await C300XRuntimeManager.async_sync_calls(manager)  # type: ignore[arg-type]
 
-            assert er.async_get(hass).async_get(camera).unique_id == f"c300x-00000000000{version}_unit_20_camera"
+            assert er.async_get(hass).async_get(camera).unique_id == f"c300x-00000000000{version}_doorbell_camera"
             issue = issues.async_get_issue(DOMAIN, repair_issue_id(OUTDOOR_UNITS_BREAKING_CHANGE_ISSUE, entry.entry_id))
             assert (issue is not None) is repaired, version
         await hass.async_stop(force=True)
@@ -313,3 +314,35 @@ def test_a_station_event_finds_its_device_without_the_deprecated_lookup(
     with caplog.at_level(logging.WARNING):
         asyncio.run(run())
     assert not [record for record in caplog.records if "async_get_device`" in record.getMessage()]
+
+
+def test_the_media_camera_stays_the_same_entity_when_the_default_unit_changes(tmp_path: Path) -> None:
+    # The station's default unit changes while HA runs: the snapshot and
+    # service checks, the card Repair and the ring event keep finding the
+    # media camera, not the still camera of the new default unit.
+    from custom_components.bticino_c300x.const import CONF_OUTDOOR_UNITS
+    from custom_components.bticino_c300x.video import resolve_doorbell_camera_entity_id
+
+    async def run() -> None:
+        hass = await _hass(tmp_path)
+        entry = _entry(hass, {"host": "door"}, 1)
+        devices, entities = dr.async_get(hass), er.async_get(hass)
+        station = devices.async_get_or_create(config_entry_id=entry.entry_id, identifiers={(DOMAIN, entry.entry_id)})
+        media = _register(entities, entry, station, "camera", f"{entry.entry_id}_doorbell_camera")
+        identity_migration.async_migrate_identity(hass, entry, OLD, UNITS.units[0])
+        side = devices.async_get_or_create(
+            config_entry_id=entry.entry_id, identifiers={(DOMAIN, f"{OLD}:unit:21")}, via_device_id=station.id,
+        )
+        still = _register(entities, entry, side, "camera", f"{OLD}_unit_21_camera")
+        hass.config_entries.async_update_entry(entry, data={**entry.data, CONF_OUTDOOR_UNITS: {
+            "default_unit": "20", "units": [{"id": "20", "where": "20", "default": True}, {"id": "21", "where": "21"}],
+        }})
+        assert resolve_doorbell_camera_entity_id(hass, entry) == media
+
+        hass.config_entries.async_update_entry(entry, data={**entry.data, CONF_OUTDOOR_UNITS: {
+            "default_unit": "21", "units": [{"id": "20", "where": "20"}, {"id": "21", "where": "21", "default": True}],
+        }})
+        assert resolve_doorbell_camera_entity_id(hass, entry) == media != still
+        await hass.async_stop(force=True)
+
+    asyncio.run(run())

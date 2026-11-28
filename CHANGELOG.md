@@ -84,7 +84,8 @@ Outdoor units and calls:
   unlock** button, a **Call** sensor (`idle`, `ringing`, `answered`,
   `viewing`, with `call_id`), a **Last visitor** image and a camera: the
   **Doorbell camera** on the default unit, a **Camera** with still pictures
-  on the others. The station names its units from its own configuration; a
+  on the others. When the station's default unit changes, the Doorbell
+  camera moves to the new one and keeps its entity ID. The station names its units from its own configuration; a
   unit that is not configured appears with its first ring. The device of a
   unit the station no longer reports can be deleted.
 - **Station ring:** a new event on the station that fires at once with every

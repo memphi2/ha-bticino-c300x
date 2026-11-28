@@ -75,7 +75,7 @@ def test_read_only_caller_cannot_control_device(tmp_path, monkeypatch, service):
 
 def test_call_control_needs_control_of_the_media_camera(tmp_path, monkeypatch):
     async def run():
-        hass, entry = setup_hass(tmp_path, monkeypatch, allowed={"camera.c300x-0123456789ab_unit_20_camera"})
+        hass, entry = setup_hass(tmp_path, monkeypatch, allowed={"camera.c300x-0123456789ab_doorbell_camera"})
         context = Context(user_id="controller")
         await hass.services.async_call(
             DOMAIN, "answer_call", {"call_id": "0badc0de-3"}, blocking=True, context=context
@@ -156,7 +156,7 @@ def test_unknown_user_cannot_fall_back_to_trusted_automation(tmp_path, monkeypat
 @pytest.mark.parametrize("disabled", [True, False])
 def test_missing_or_disabled_control_entity_denies_service(tmp_path, monkeypatch, disabled):
     async def run():
-        hass, entry = setup_hass(tmp_path, monkeypatch, allowed={"camera.c300x-0123456789ab_unit_20_camera"})
+        hass, entry = setup_hass(tmp_path, monkeypatch, allowed={"camera.c300x-0123456789ab_doorbell_camera"})
         registry = service_authorization.er.async_get(hass)
         registry.async_get = lambda _id: SimpleNamespace(disabled_by="user") if disabled else None
         with pytest.raises(Unauthorized):

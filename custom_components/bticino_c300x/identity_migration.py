@@ -19,6 +19,7 @@ from .agent_contracts import OutdoorUnit
 from .const import CONF_STATION_ID, DOMAIN
 from .entry_types import BticinoC300XConfigEntry
 from .identity import (
+    MEDIA_CAMERA_KEY,
     station_device_identifier,
     station_unique_id,
     unit_device_identifier,
@@ -32,10 +33,11 @@ _UNIT_MARK = ":unit:"
 ENTRY_VERSION = 2
 # 2.x key -> key on the default outdoor unit.
 UNIT_KEYS = {
-    "doorbell_camera": "camera",
     "doorbell_event": "doorbell",
     "door_unlock": "door",
 }
+# 2.x keys that stay station entities on the default outdoor unit's device.
+UNIT_DEVICE_KEYS = frozenset({MEDIA_CAMERA_KEY})
 # Entities 3.1.0 no longer has.
 REMOVED_KEYS = frozenset({"doorbell_state", "agent_event"})
 
@@ -97,6 +99,17 @@ def async_migrate_identity(
         _move_unit_devices(devices, entry, old, new)
     unit_device: Any = None
 
+    def default_unit_device() -> Any:
+        nonlocal unit_device
+        if unit_device is None:
+            from .unit_entity import async_register_unit_device
+
+            async_register_unit_device(hass, entry, default_unit)
+            unit_device = devices.async_get_device_by_identifier(
+                unit_device_identifier(entry, default_unit.id), entry.entry_id,
+            )
+        return unit_device
+
     for entity in list(er.async_entries_for_config_entry(entities, entry.entry_id)):
         unique_id = str(entity.unique_id)
         if not unique_id.startswith(f"{old}_"):
@@ -113,24 +126,24 @@ def async_migrate_identity(
             result["removed"].append(entity.entity_id)
             continue
         if key in UNIT_KEYS:
-            if unit_device is None:
-                from .unit_entity import async_register_unit_device
-
-                async_register_unit_device(hass, entry, default_unit)
-                unit_device = devices.async_get_device_by_identifier(
-                    unit_device_identifier(entry, default_unit.id), entry.entry_id,
-                )
             target = unit_unique_id(entry, default_unit.id, UNIT_KEYS[key])
             if entities.async_get_entity_id(entity.domain, entity.platform, target) is not None:
                 continue
             entities.async_update_entity(
-                entity.entity_id, new_unique_id=target, device_id=unit_device.id,
+                entity.entity_id, new_unique_id=target, device_id=default_unit_device().id,
             )
             result["moved"].append(entity.entity_id)
             continue
+        changes: dict[str, Any] = {}
+        if key in UNIT_DEVICE_KEYS and entity.device_id in (None, getattr(station, "id", None)):
+            # Still on the station's device: a 2.x entity.
+            changes["device_id"] = default_unit_device().id
+            result["moved"].append(entity.entity_id)
         target = station_unique_id(entry, key)
         if old != new and entities.async_get_entity_id(entity.domain, entity.platform, target) is None:
-            entities.async_update_entity(entity.entity_id, new_unique_id=target)
+            changes["new_unique_id"] = target
+        if changes:
+            entities.async_update_entity(entity.entity_id, **changes)
     _LOGGER.info(
         "C300X entry %s now uses station id %s; moved %s, removed %s",
         entry.entry_id, new, result["moved"], result["removed"],

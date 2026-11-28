@@ -1743,6 +1743,9 @@
     "alarm_command_rejected": {
       "message": "The alarm command was rejected. Check the alarm state and its integration for details."
     },
+    "call_unit_pending": {
+      "message": "The station has not named the ringing outdoor unit yet. Nothing was sent to the station; try again in a moment."
+    },
     "call_not_current": {
       "message": "That call is over or is not the current call. Nothing was sent to the station."
     },

@@ -2290,6 +2290,21 @@ def test_common_agent_command_failures_are_translated() -> None:
     asyncio.run(_run())
 
 
+def test_a_ringing_unit_not_named_in_time_is_a_translated_error() -> None:
+    from custom_components.bticino_c300x.api_errors import C300XCallUnitPendingError
+
+    async def _pending() -> None:
+        raise C300XCallUnitPendingError("HTTP 409", 1000)
+
+    async def _run() -> None:
+        with pytest.raises(HomeAssistantError) as raised:
+            await common_use_cases.raise_agent_command_failed(_pending(), entry=_FakeEntry(_FakeRuntimeData()))
+        assert not isinstance(raised.value, SERVICE_VALIDATION_ERROR)
+        assert _translation_key(raised.value) == "call_unit_pending"
+
+    asyncio.run(_run())
+
+
 def test_common_gui_patch_refresh_is_required_when_inactive(monkeypatch) -> None:  # noqa: ANN001
     async def _run() -> None:
         entry = _FakeEntry(_FakeRuntimeData(qml_patch_status={"patched": False}))

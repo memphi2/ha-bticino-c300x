@@ -401,6 +401,11 @@ call's unit, else the default unit.
 - `answer_call`, `hangup_call`: optional `call_id`; without it the target's
   current call. With a unit target the call must be that unit's, also with
   `call_id`. `409 call_not_current` becomes a translated error.
+- An unlock or a video request for the current call's unit (a station target,
+  the display's door tile) that the agent answers `409 call_unit_pending` is
+  asked again every 0.15 s until the agent names the unit, at most
+  `retry_after_ms` + 0.3 s; it is never sent to another unit. After that it
+  becomes a translated error.
 - `activate_doorbell_video` with a unit target; `capture_doorbell_call` and
   `evaluate_ring_analysis` act on the call's unit (`lock_id` is gone; the
   unlock opens the target unit, with a station target the calling unit).

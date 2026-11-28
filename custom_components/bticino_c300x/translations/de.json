@@ -1743,6 +1743,9 @@
     "alarm_command_rejected": {
       "message": "Der Alarmbefehl wurde abgelehnt. Prüfe den Alarmzustand und die zugehörige Integration für weitere Informationen."
     },
+    "call_unit_pending": {
+      "message": "Die Station hat die klingelnde Außenstelle noch nicht genannt. An die Station wurde nichts gesendet; versuche es gleich noch einmal."
+    },
     "call_not_current": {
       "message": "Dieser Anruf ist vorbei oder nicht der aktuelle Anruf. An die Station wurde nichts gesendet."
     },

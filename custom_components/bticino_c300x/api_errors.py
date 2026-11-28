@@ -74,6 +74,18 @@ class C300XCallNotCurrentError(C300XAgentApiConnectionError):
         self.current_call_id = current_call_id
 
 
+class C300XCallUnitPendingError(C300XAgentApiConnectionError):
+    """The agent answered `409 call_unit_pending`: the ringing unit is not known yet.
+
+    Its caller frame comes about 300 ms after the ring; at the latest after
+    ``retry_after_ms`` the default unit stands in. Nothing reached the station.
+    """
+
+    def __init__(self, message: str, retry_after_ms: int) -> None:
+        super().__init__(message, http_status=409, agent_state="call_unit_pending")
+        self.retry_after_ms = retry_after_ms
+
+
 class C300XUnknownUnitError(C300XAgentApiConnectionError):
     """The agent answered `404 unknown_unit`: the station has no such outdoor unit."""
 

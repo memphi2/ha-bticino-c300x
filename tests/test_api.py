@@ -9,6 +9,7 @@ from typing import Any
 import pytest
 from aiohttp import ClientError
 
+from custom_components.bticino_c300x import _api_media
 from custom_components.bticino_c300x.agent_contracts import (
     AgentDiagnosticsStatus,
     AuthConfigStatus,
@@ -55,6 +56,7 @@ from custom_components.bticino_c300x.api import (
 )
 from custom_components.bticino_c300x.api_errors import (
     C300XCallNotCurrentError,
+    C300XCallUnitPendingError,
     C300XUnitVideoUnsupportedError,
     C300XUnknownUnitError,
 )
@@ -2505,6 +2507,43 @@ def test_a_stale_call_id_raises_call_not_current_with_the_current_call() -> None
         asyncio.run(api.async_hangup_doorbell_call("0badc0de-3"))
     assert raised.value.current_call_id == "0badc0de-4"
     assert raised.value.http_status == 409
+
+
+_UNIT_PENDING = (409, '{"ok": false, "error": "call_unit_pending", "call_id": "0badc0de-6", "retry_after_ms": 700}')
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "success"),
+    [
+        ("async_unlock_outdoor_unit", "/api/v1/outdoor-units/current/actions/unlock", '{"ok": true, "unit": "21"}'),
+        ("async_activate_doorbell_video", "/api/v1/video/doorbell/actions/activate", '{"ok": true, "audio": true}'),
+    ],
+)
+def test_the_current_unit_is_asked_again_until_the_ring_names_it(
+    monkeypatch: pytest.MonkeyPatch, method: str, path: str, success: str,
+) -> None:
+    # Right after a ring the agent does not know the calling unit yet; the
+    # request is repeated, never turned into the default unit's.
+    monkeypatch.setattr(_api_media, "_UNIT_PENDING_POLL_SECONDS", 0)
+    session = _QueuedSession([_UNIT_PENDING, _UNIT_PENDING, (200, success)])
+    api = C300XAgentApi(session, "http://agent.local:8080", "agent-token")  # type: ignore[arg-type]
+
+    assert asyncio.run(getattr(api, method)())["ok"] is True
+    assert [request["args"] for request in session.requests] == [("POST", "http://agent.local:8080" + path)] * 3
+
+
+def test_a_ring_whose_unit_stays_unknown_raises_call_unit_pending(monkeypatch: pytest.MonkeyPatch) -> None:
+    clock = iter([0.0, 0.5, 0.99, 1.0])
+    monkeypatch.setattr(_api_media, "_UNIT_PENDING_POLL_SECONDS", 0)
+    monkeypatch.setattr(_api_media, "time", type("Clock", (), {"monotonic": staticmethod(lambda: next(clock))}))
+    session = _QueuedSession([_UNIT_PENDING] * 4)
+    api = C300XAgentApi(session, "http://agent.local:8080", "agent-token")  # type: ignore[arg-type]
+
+    with pytest.raises(C300XCallUnitPendingError) as raised:
+        asyncio.run(api.async_unlock_outdoor_unit())
+    assert raised.value.retry_after_ms == 700
+    # Asked until 0.3 s after the agent's own deadline (0.7 s), then given up.
+    assert len(session.requests) == 4
 
 
 @pytest.mark.parametrize(

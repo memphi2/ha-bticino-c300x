@@ -1743,6 +1743,9 @@
     "alarm_command_rejected": {
       "message": "La commande de l'alarme a été refusée. Vérifiez son état et son intégration pour plus de détails."
     },
+    "call_unit_pending": {
+      "message": "La station n'a pas encore indiqué la platine de rue qui sonne. Rien n'a été envoyé à la station ; réessayez dans un instant."
+    },
     "call_not_current": {
       "message": "Cet appel est terminé ou n'est pas l'appel en cours. Rien n'a été envoyé à la station."
     },

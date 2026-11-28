@@ -1743,6 +1743,9 @@
     "alarm_command_rejected": {
       "message": "Il comando dell'allarme è stato rifiutato. Verifica lo stato e la relativa integrazione per ulteriori informazioni."
     },
+    "call_unit_pending": {
+      "message": "La stazione non ha ancora indicato il posto esterno che sta suonando. Alla stazione non è stato inviato nulla; riprova tra un attimo."
+    },
     "call_not_current": {
       "message": "Questa chiamata è terminata o non è la chiamata attuale. Alla stazione non è stato inviato nulla."
     },

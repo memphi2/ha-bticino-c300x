@@ -218,7 +218,8 @@ def test_the_first_start_writes_pcmu_without_a_restart_then_restarts_the_station
     api = _Api()
     entry = _entry(info, api=api)
     _hass_, sent = _switch(monkeypatch, entry)
-    assert api.calls == ["calls", "video", ("apply", False), "reboot"]
+    # Idle before the write, and idle again right before the restart.
+    assert api.calls == ["calls", "video", ("apply", False), "calls", "video", "reboot"]
     assert CONF_INSTALL_PCMU_PENDING not in entry.data
     # The codec select reads the staged codec and shows it live after the restart.
     assert sent == [(SIGNAL_AUDIO_CODEC_STATUS, "entry-1", {
@@ -234,7 +235,7 @@ def test_the_first_start_writes_pcmu_without_a_restart_then_restarts_the_station
 def test_the_first_start_waits_until_no_call_or_stream_runs(monkeypatch):
     api = _Api(busy=["ringing", "conversation", "stream"])
     _switch(monkeypatch, _entry(api=api))
-    assert api.calls == ["calls", "video"] * 4 + [("apply", False), "reboot"]
+    assert api.calls == ["calls", "video"] * 4 + [("apply", False), "calls", "video", "reboot"]
 
 
 def test_a_station_state_without_its_end_holds_the_restart_only_for_a_while(monkeypatch):
@@ -247,7 +248,7 @@ def test_a_station_state_without_its_end_holds_the_restart_only_for_a_while(monk
 
     api.async_calls = calls  # type: ignore[method-assign]
     _switch(monkeypatch, _entry(api=api))
-    assert api.calls == ["calls", "video", ("apply", False), "reboot"]
+    assert api.calls == ["calls", "video", ("apply", False), "calls", "video", "reboot"]
 
 
 def test_a_failed_write_leaves_speex_restarts_nothing_and_says_why(monkeypatch, caplog):
@@ -275,7 +276,73 @@ def test_a_busy_agent_is_waited_for_before_the_write(monkeypatch):
     api.async_apply_audio_codec = apply  # type: ignore[method-assign]
     monkeypatch.setattr("custom_components.bticino_c300x.agent_update.asyncio.sleep", AsyncMock())
     _switch(monkeypatch, _entry(api=api))
-    assert api.calls == ["calls", "video", ("busy", False), ("apply", False), "reboot"]
+    assert api.calls == ["calls", "video", ("busy", False), ("apply", False), "calls", "video", "reboot"]
+
+
+_BUSY = "device agent returned HTTP 409: maintenance_busy"
+
+
+def _sleeps(monkeypatch: pytest.MonkeyPatch, api: _Api) -> None:
+    """The waits of the switch, in the order of the requests; the agent's busy retries pass at once."""
+
+    async def sleep(seconds: float) -> None:
+        api.calls.append(("sleep", seconds))
+
+    monkeypatch.setattr(install_pcmu, "asyncio", SimpleNamespace(sleep=sleep))
+    monkeypatch.setattr("custom_components.bticino_c300x.agent_update.asyncio.sleep", AsyncMock())
+
+
+def _switch_every_30_s(monkeypatch: pytest.MonkeyPatch, entry: Any) -> None:
+    monkeypatch.setattr(install_pcmu, "async_dispatcher_send", lambda *_args: None)
+    asyncio.run(install_pcmu.async_switch_install_pcmu(_hass(), entry, poll_seconds=30))
+
+
+def test_a_ring_while_the_write_waits_for_the_agent_holds_the_restart_until_the_station_is_idle(monkeypatch):
+    """The station is idle on two looks 30 s apart before it restarts, the second right before."""
+
+    api = _Api()
+    rejected = [C300XAgentApiConnectionError(_BUSY)]
+    write = api.async_apply_audio_codec
+
+    async def apply(*, reboot: bool = True) -> dict[str, Any]:
+        if rejected:
+            api.calls.append(("busy", reboot))
+            # A visitor rings while the agent finishes another job.
+            api.busy = ["ringing", "ringing"]
+            raise rejected.pop()
+        return await write(reboot=reboot)
+
+    api.async_apply_audio_codec = apply  # type: ignore[method-assign]
+    _sleeps(monkeypatch, api)
+    _switch_every_30_s(monkeypatch, _entry(api=api))
+    assert api.calls == [
+        "calls", "video", ("busy", False), ("apply", False),
+        ("sleep", 30), "calls", "video",
+        "calls", "video", ("sleep", 30), "calls", "video",
+        ("sleep", 30), "calls", "video", "reboot",
+    ]
+
+
+def test_a_ring_while_the_restart_waits_for_the_agent_sends_it_back_to_waiting(monkeypatch):
+    api = _Api()
+    rejected = [C300XAgentApiConnectionError(_BUSY)]
+    reboot = api.async_reboot
+
+    async def restart() -> dict[str, Any]:
+        if rejected:
+            api.calls.append("busy")
+            api.busy = ["ringing"]
+            raise rejected.pop()
+        return await reboot()
+
+    api.async_reboot = restart  # type: ignore[method-assign]
+    _sleeps(monkeypatch, api)
+    _switch_every_30_s(monkeypatch, _entry(api=api))
+    assert api.calls == [
+        "calls", "video", ("apply", False), ("sleep", 30), "calls", "video", "busy",
+        "calls", "video", "calls", "video", ("sleep", 30), "calls", "video", "reboot",
+    ]
+    assert api.calls.count("reboot") == 1
 
 
 def test_a_failed_restart_is_not_asked_for_again(monkeypatch, caplog):
@@ -283,7 +350,7 @@ def test_a_failed_restart_is_not_asked_for_again(monkeypatch, caplog):
     entry = _entry(api=api)
     with caplog.at_level(logging.WARNING, logger=install_pcmu.__name__):
         _switch(monkeypatch, entry)
-    assert api.calls == ["calls", "video", ("apply", False), "reboot"]
+    assert api.calls == ["calls", "video", ("apply", False), "calls", "video", "reboot"]
     assert CONF_INSTALL_PCMU_PENDING not in entry.data
     assert "did not restart" in caplog.text
     api.calls.clear()
@@ -386,5 +453,5 @@ def test_the_switch_runs_last_at_the_first_start(monkeypatch):
     monkeypatch.setattr(install_pcmu, "async_dispatcher_send", lambda *_args: None)
     target.close()
     asyncio.run(install_pcmu.async_switch_install_pcmu(hass, entry, poll_seconds=0))
-    assert entry.runtime_data.api.calls[-2:] == [("apply", False), "reboot"]
+    assert entry.runtime_data.api.calls[-4:] == [("apply", False), "calls", "video", "reboot"]
 

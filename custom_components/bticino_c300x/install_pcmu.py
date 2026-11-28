@@ -12,9 +12,12 @@ for it, at its end:
   setting reached the station, waits until no call or stream runs, writes
   the switch without a restart and asks the agent for its one restart. The
   agent restarts at once, so the wait is Home Assistant's: the station's own
-  call state, the agent's calls and its media bridge must all be idle. The
-  routing program that the media-user setup replaced starts with that
-  restart as well.
+  call state, the agent's calls and its media bridge must all be idle, on
+  two looks in a row 30 s apart, the second right before each request for
+  the restart. A ring in between, or a video message the station still
+  saves after its recording state, sends it back to waiting. The routing
+  program that the media-user setup replaced starts with that restart as
+  well.
 - A write that fails leaves the station on Speex and restarts nothing. The
   mark goes before the restart is asked for, so no later start restarts the
   station a second time.
@@ -121,11 +124,7 @@ async def async_switch_install_pcmu(
             _async_clear_mark(hass, entry)
             return
         api = entry.runtime_data.api
-        # The station is asked again while a call or stream runs.
-        while True:
-            if await _async_station_idle(api):
-                break
-            await asyncio.sleep(poll_seconds)
+        await _async_until_idle(api, poll_seconds)
         try:
             status = await async_retry_update_maintenance_busy(
                 lambda: api.async_apply_audio_codec(reboot=False)
@@ -152,7 +151,7 @@ async def async_switch_install_pcmu(
             _LOGGER.info("C300X runs PCMU already; it does not restart")
             return
         try:
-            await async_retry_update_maintenance_busy(api.async_reboot)
+            await _async_restart_when_idle(api, poll_seconds)
         except C300XAgentApiError as err:
             _LOGGER.warning(
                 "C300X did not restart: PCMU is set and runs after the next restart of the station: %s",
@@ -160,6 +159,45 @@ async def async_switch_install_pcmu(
             )
             return
         _LOGGER.info("C300X restarts once to switch its sound to PCMU")
+
+
+class _StationBusy(Exception):
+    """A call or stream started again right before the restart was asked for."""
+
+
+async def _async_until_idle(api: Any, poll_seconds: float) -> None:
+    """Return once no call or stream runs; the station is asked again every poll."""
+
+    while True:
+        if await _async_station_idle(api):
+            return
+        await asyncio.sleep(poll_seconds)
+
+
+async def _async_restart_when_idle(api: Any, poll_seconds: float) -> None:
+    """Ask for the restart once the station was idle on two looks in a row, one poll apart.
+
+    The caller made the first look. The second comes right before each
+    request, also when the agent was busy with another job and the request
+    is tried again: a call or stream that started meanwhile sends the
+    restart back to waiting.
+    """
+
+    from .agent_update import async_retry_update_maintenance_busy
+
+    async def restart() -> Any:
+        if not await _async_station_idle(api):
+            raise _StationBusy
+        return await api.async_reboot()
+
+    while True:
+        await asyncio.sleep(poll_seconds)
+        try:
+            await async_retry_update_maintenance_busy(restart)
+        except _StationBusy:
+            await _async_until_idle(api, poll_seconds)
+        else:
+            return
 
 
 def _not_switched(entry: Any) -> str | None:

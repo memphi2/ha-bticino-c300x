@@ -439,6 +439,51 @@ def test_audio_codec_select_resolves_on_reconnect_without_observed_gap() -> None
     assert entity.extra_state_attributes["pending_option"] is None
 
 
+def test_audio_codec_select_shows_a_switch_written_without_it_live_after_the_restart(monkeypatch) -> None:
+    """The new installation writes PCMU itself; after the station restart the select shows it live."""
+
+    from custom_components.bticino_c300x import select as select_module
+    from custom_components.bticino_c300x.const import (
+        SIGNAL_AUDIO_CODEC_STATUS,
+        SIGNAL_CONNECTION_STATE_CHANGED,
+    )
+
+    handlers: dict[str, list[Any]] = {}
+
+    def connect(_hass: Any, signal: str, target: Any) -> Any:
+        handlers.setdefault(signal, []).append(target)
+        return lambda: None
+
+    def send(signal: str, *args: Any) -> None:
+        for target in handlers.get(signal, []):
+            target(*args)
+
+    monkeypatch.setattr(select_module, "async_dispatcher_connect", connect)
+    entry = _audio_codec_entry()
+    api = entry.runtime_data.api
+    entity = C300XAudioCodecSelect(entry)  # type: ignore[arg-type]
+    scheduled: list[Any] = []
+    entity.hass = SimpleNamespace(async_create_task=scheduled.append)
+    asyncio.run(entity.async_update())
+    asyncio.run(entity.async_added_to_hass())
+
+    status = asyncio.run(api.async_apply_audio_codec(reboot=False))
+    send(SIGNAL_AUDIO_CODEC_STATUS, "other-entry", {**status, "running_state": "pcmu"})
+    assert entity.extra_state_attributes["pending_option"] is None
+    send(SIGNAL_AUDIO_CODEC_STATUS, "entry-1", status)
+    assert entity.current_option == "speex"
+    assert entity.extra_state_attributes["pending_option"] == "pcmu"
+
+    # The station restarted into PCMU and the agent registers again.
+    api.audio_codec_running_state = "pcmu"
+    send(SIGNAL_CONNECTION_STATE_CHANGED, "entry-1")
+    assert len(scheduled) == 1
+    asyncio.run(scheduled[0])
+    assert entity.current_option == "pcmu"
+    assert entity.extra_state_attributes["pending_option"] is None
+    assert entry.runtime_data.event_state.audio_codec == "pcmu"
+
+
 def test_audio_codec_select_subscribes_to_connection_signal() -> None:
     entity = C300XAudioCodecSelect(_audio_codec_entry())  # type: ignore[arg-type]
     removers: list[Any] = []

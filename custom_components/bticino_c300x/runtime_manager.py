@@ -47,6 +47,7 @@ from .const import (
     CONF_FRONTEND_CARD_SETUP_DISMISSED,
     CONF_FRONTEND_CARD_SETUP_REPAIR_VERSION,
     CONF_HOMEASSISTANT_MEDIA_USER_BOOTSTRAPPED,
+    CONF_INSTALL_PCMU_PENDING,
     CONF_MAINTENANCE_TOKEN,
     CONF_OUTDOOR_UNITS,
     CONF_SHARED_SECRET,
@@ -94,6 +95,7 @@ from .entry_locks import clear_entry_locks
 from .entry_types import BticinoC300XConfigEntry
 from .error_text import compact_error_text
 from .identity import station_id_known
+from .install_pcmu import async_start_install_pcmu
 from .runtime_auth import async_request_reauth
 
 if TYPE_CHECKING:
@@ -348,6 +350,8 @@ class C300XRuntimeManager:
         if display_setting_pending(self.entry):
             await async_settle_display_setting(self.hass, self.entry)
         async_follow_c100x_display_if_open(self.hass, self.entry)
+        # Last: its one station restart also starts what the steps above replaced.
+        async_start_install_pcmu(self.hass, self.entry)
 
     async def _async_refresh_display_registration(
         self, api: C300XAgentApi, *, startup: bool = False,
@@ -609,6 +613,7 @@ def _entry_update_listener(
         data.pop(CONF_AGENT_UPDATE_QML_PENDING, None)
         data.pop(CONF_DISPLAY_FOLLOWUP_PENDING, None)
         data.pop(CONF_DISPLAY_SETTING_PENDING, None)
+        data.pop(CONF_INSTALL_PCMU_PENDING, None)
         # A loaded entry reads the model from its agent; the kept one changes nothing.
         data.pop(STATION_MODEL, None)
         data.pop(CONF_HOMEASSISTANT_MEDIA_USER_BOOTSTRAPPED, None)

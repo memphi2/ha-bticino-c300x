@@ -192,7 +192,8 @@ stream.
 ### Audio Codec
 
 Set the **Audio codec** select to **PCMU** for clearer sound. The station
-restarts once. Firmware `3.0.6` uses PCMU from the factory.
+restarts once. A new installation on `1.7.x` and `2.0.2` sets PCMU itself,
+and firmware `3.0.6` uses PCMU from the factory.
 
 ### Door Level and Fine Adjustment
 

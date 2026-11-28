@@ -22,6 +22,7 @@ from .const import (
     DOMAIN,
     EVENT_AGENT_EVENT_RECEIVED,
     SIGNAL_AGENT_INFO_CHANGED,
+    SIGNAL_AUDIO_CODEC_STATUS,
     SIGNAL_CONNECTION_STATE_CHANGED,
     SIGNAL_FORWARDING_CHANGED,
     SIGNAL_SETTING_STATE,
@@ -366,6 +367,22 @@ class C300XAudioCodecSelect(C300XEntity, SelectEntity):
                 self._handle_reboot_reconnect,
             )
         )
+        self.async_on_remove(
+            async_dispatcher_connect(self.hass, SIGNAL_AUDIO_CODEC_STATUS, self._handle_codec_status)
+        )
+
+    @callback
+    def _handle_codec_status(self, entry_id: str, status: Any) -> None:
+        """A switch written without this select, as the agent answered it.
+
+        A staged codec shows as pending here, so the reconnect after the
+        station restart reads it again and shows it live.
+        """
+
+        if self._removed or entry_id != self._entry.entry_id or not isinstance(status, Mapping):
+            return
+        self._apply_status(status)
+        self.async_write_ha_state()
 
     def _apply_status(self, status: Mapping[str, Any]) -> None:
         # New agents report both the running codec and the configured on-disk

@@ -18,6 +18,8 @@ CONF_DISPLAY_SETTING_PENDING = "display_setting_pending"
 # Display steps the agent update or install owes on the Qt 5 display: True
 # with the full Display patch, False with the core hook only.
 CONF_DISPLAY_FOLLOWUP_PENDING = "display_followup_pending"
+# A new installation on firmware 1.7.x/2.0.2 switches to PCMU at its first start.
+CONF_INSTALL_PCMU_PENDING = "install_pcmu_pending"
 CONF_REINSTALL_AGENT = "reinstall_agent"
 CONF_ALARM_ENTITY_ID = "alarm_entity_id"
 CONF_ALARM_PAGE_ENTITY_ID = "alarm_page_entity_id"
@@ -192,6 +194,8 @@ SIGNAL_SETTING_STATE = f"{DOMAIN}_setting_state"
 SIGNAL_QML_PATCH_CHANGED = f"{DOMAIN}_qml_patch_changed"
 SIGNAL_AGENT_DIAGNOSTICS_CHANGED = f"{DOMAIN}_agent_diagnostics_changed"
 SIGNAL_AGENT_INFO_CHANGED = f"{DOMAIN}_agent_info_changed"
+# A codec answer of the agent for a switch the codec select did not make itself.
+SIGNAL_AUDIO_CODEC_STATUS = f"{DOMAIN}_audio_codec_status"
 SIGNAL_FORWARDING_CHANGED = f"{DOMAIN}_forwarding_changed"
 SIGNAL_AUTH_CONFIG_CHANGED = f"{DOMAIN}_auth_config_changed"
 SIGNAL_MQTT_CHANGED = f"{DOMAIN}_mqtt_changed"

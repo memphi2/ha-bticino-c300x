@@ -35,6 +35,7 @@ from .const import (
 )
 from .discovery import discovery_matches_entry
 from .identity import valid_station_id
+from .install_pcmu import InstallPcmuSteps
 from .runtime_auth import REAUTH_MAINTENANCE
 
 _KEYS = (CONF_AGENT_TOKEN, CONF_MAINTENANCE_TOKEN)
@@ -98,7 +99,7 @@ async def async_validate_entry_connection(
     return setup, errors
 
 
-class AuthFlowSteps(C100XOptInSteps, ReinstallSteps, StationEntrySteps):
+class AuthFlowSteps(C100XOptInSteps, ReinstallSteps, StationEntrySteps, InstallPcmuSteps):
     """Share setup validation and reauth without expanding the main wizard."""
 
     _setup_unique_id: str | None
@@ -182,7 +183,9 @@ class AuthFlowSteps(C100XOptInSteps, ReinstallSteps, StationEntrySteps):
             user_input.get(CONF_REINSTALL_AGENT) is True
         ):
             # The keys are lost: the SSH installer writes the agent with new ones.
+            # The station keeps its codec, as at every reinstall.
             self._factory_login_tried = False
+            self._setup_reinstall = True
             return cast(ConfigFlowResult, await self.async_step_bootstrap_install())
         if user_input is not None:
             auth_data, errors = _agent_auth_input(

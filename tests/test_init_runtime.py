@@ -153,6 +153,8 @@ def test_async_setup_registers_frontend_services_and_websocket(
         "frontend_card_setup_repair_version",
         # Removed once a new entry applied its Display setting.
         "display_setting_pending",
+        # The PCMU switch a new installation owes its first start.
+        "install_pcmu_pending",
         # The model the agent named last; a loaded entry reads its agent.
         "station_model",
     ],

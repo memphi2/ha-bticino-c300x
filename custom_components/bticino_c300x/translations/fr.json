@@ -805,6 +805,9 @@
       "c100x_confirmation_required": "Cochez la case pour configurer le Classe 100X, ou fermez cette fenêtre pour laisser la platine inchangée.",
       "not_a_bticino_station": "L'appareil à cette adresse n'est pas une platine BTicino. Rien n'y a été écrit. Vérifiez l'adresse.",
       "c3x2_not_supported": "Cette platine est une Classe 300X2. Elle est reconnue, mais pas encore prise en charge. Rien n'y a été installé ni écrit."
+    },
+    "create_entry": {
+      "pcmu_restart": "Dès qu'aucun appel ni flux n'est en cours, le {model} redémarre une fois pour passer son audio en PCMU. Jusqu'à son retour, ses entités sont indisponibles ; elles se reconnectent ensuite d'elles-mêmes."
     }
   },
   "options": {

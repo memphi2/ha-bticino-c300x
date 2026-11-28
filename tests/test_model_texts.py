@@ -170,6 +170,8 @@ ADDED_SINCE_2_10_0 = frozenset({
     "entity/sensor/station_call_state/state/setup",
     "entity/sensor/station_call_state/state/viewing",
     "entity/sensor/station_call_state/state/waiting",
+    # A new installation on firmware 1.7.x/2.0.2 restarts once for PCMU (3.1.0).
+    "config/create_entry/pcmu_restart",
 })
 # Texts of 2.10.0 that read differently now: the SSH package message names the
 # package and the way out, the service name lost the model (neutral names), the

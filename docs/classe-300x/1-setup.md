@@ -82,8 +82,8 @@ below leave the model out.
 **An agent is already installed:** setup asks for its **Access key** and
 **Maintenance key**. If you do not have them, tick **I do not have the keys:
 reinstall the agent**. Home Assistant then installs the agent again over SSH
-with new keys. Display pages and settings on the station stay, and the
-station does not restart.
+with new keys. Display pages, settings and the audio codec on the station
+stay, and the station does not restart.
 
 ## Choose Options
 
@@ -104,6 +104,14 @@ Setup now walks through the settings. Later you find them under
 | **Alarm (Alarmo)** | Leave empty. |
 
 <img src="../images/readme/ha-options-video-audio-en.webp" alt="Video and audio settings with video on, access set up on the station, door level and the recommended connection paths" width="320">
+
+**Firmware `1.7.x` and `2.0.2`:** when setup installed the agent, its last
+dialog says that the station restarts once. As soon as no call or stream is
+running, the station restarts to switch its sound to PCMU
+([audio codec](2-use.md#audio-codec)). Until it is back, its entities are
+unavailable; then they connect again by themselves. If the switch fails, the
+station stays on Speex and does not restart; the Home Assistant log says
+why.
 
 ## Apply the Core Media Hook
 

@@ -73,8 +73,9 @@ def maintenance_options(request):
 
 
 def script(lab, name, body):
+    # Written aside and renamed: a test that sees the pid file reads the whole pid.
     path = lab.root / (name + "-test.sh")
-    path.write_text('#!/bin/sh\nprintf "%s" "$$" > ' + name + "-pid\n" + body)
+    path.write_text(f'#!/bin/sh\nprintf "%s" "$$" > {name}-pid.tmp && mv {name}-pid.tmp {name}-pid\n' + body)
     path.chmod(0o700)
 
 

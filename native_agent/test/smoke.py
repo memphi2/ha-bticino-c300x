@@ -4,10 +4,13 @@
 from __future__ import annotations
 
 import base64
+import collections
 import contextlib
+import fcntl
 import http.server
 import json
 import os
+import random
 import shutil
 import socket
 import socketserver
@@ -2212,28 +2215,97 @@ def managed_tcp_server(server: socketserver.BaseServer):
         thread.join(timeout=3)
 
 
+# Ports for native agent listeners and mocks. A port found by binding port 0
+# and closing the socket is free only for that moment: under xdist another
+# worker's client connection or bind(0) can take it before the agent binds,
+# and the agent exits with ui_bind_failed. The kernel hands out ports only
+# from the ephemeral range, so test ports come from just below it, and a lock
+# file per port keeps two test processes from picking the same one. A process
+# holds its last TEST_PORTS_HELD locks, long after the agent that used the
+# port has stopped; the locks end with the process.
+TEST_PORTS_SPAN = 8192
+TEST_PORTS_HELD = 64
+_held_test_ports: collections.deque[tuple[int, int]] = collections.deque()
+_test_port_cursor: dict[str, int] = {}
+
+
+def listener_port_range() -> range:
+    """Return the ports outside the kernel's ephemeral range that tests use."""
+    try:
+        bounds = Path("/proc/sys/net/ipv4/ip_local_port_range").read_text(encoding="ascii").split()
+        low, high = int(bounds[0]), int(bounds[1])
+    except (OSError, ValueError, IndexError):
+        low, high = 32768, 60999
+    if low - 1024 >= 1024:
+        return range(max(1024, low - TEST_PORTS_SPAN), low)
+    if 65535 - high >= 1024:
+        return range(high + 1, min(65536, high + 1 + TEST_PORTS_SPAN))
+    raise RuntimeError(f"no test ports outside the ephemeral range {low}-{high}")
+
+
+def _test_port_lock_dir() -> Path:
+    path = Path(tempfile.gettempdir()) / f"c300x-test-ports-{os.getuid()}"
+    path.mkdir(mode=0o700, exist_ok=True)
+    return path
+
+
+def _port_is_unbound(port: int, kind: int) -> bool:
+    with socket.socket(socket.AF_INET, kind) as probe:
+        try:
+            probe.bind(("0.0.0.0", port))
+        except OSError:
+            return False
+    return True
+
+
+def reserve_test_ports(count: int, kind: int = socket.SOCK_STREAM, candidates: range | None = None) -> tuple[int, ...]:
+    """Reserve distinct ports no other test process holds and nothing has bound."""
+    if count < 1:
+        raise ValueError("At least one port is required")
+    candidates = listener_port_range() if candidates is None else candidates
+    lock_dir = _test_port_lock_dir()
+    key = f"{candidates.start}-{candidates.stop}"
+    cursor = _test_port_cursor.get(key)
+    if cursor is None:
+        cursor = random.randrange(len(candidates))
+    ports: list[int] = []
+    for _ in range(len(candidates)):
+        port = candidates[cursor]
+        cursor = (cursor + 1) % len(candidates)
+        fd = os.open(lock_dir / f"{port}.lock", os.O_RDWR | os.O_CREAT | os.O_CLOEXEC, 0o600)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            os.close(fd)
+            continue
+        except BaseException:
+            os.close(fd)
+            raise
+        if not _port_is_unbound(port, kind):
+            os.close(fd)
+            continue
+        _held_test_ports.append((port, fd))
+        while len(_held_test_ports) > TEST_PORTS_HELD:
+            os.close(_held_test_ports.popleft()[1])
+        ports.append(port)
+        if len(ports) == count:
+            _test_port_cursor[key] = cursor
+            return tuple(ports)
+    _test_port_cursor[key] = cursor
+    raise RuntimeError(f"no {count} free test ports in {candidates.start}-{candidates.stop - 1}")
+
+
 def free_tcp_port() -> int:
     return free_tcp_ports(1)[0]
 
 
 def free_tcp_ports(count: int) -> tuple[int, ...]:
-    """Select distinct unused ports after binding mocks, not a lasting reservation."""
-    if count < 1:
-        raise ValueError("At least one port is required")
-    with contextlib.ExitStack() as cleanup:
-        sockets = [
-            cleanup.enter_context(socket.socket(socket.AF_INET, socket.SOCK_STREAM))
-            for _ in range(count)
-        ]
-        for sock in sockets:
-            sock.bind(("127.0.0.1", 0))
-        return tuple(int(sock.getsockname()[1]) for sock in sockets)
+    """Reserve distinct TCP ports for agent listeners and mocks."""
+    return reserve_test_ports(count, socket.SOCK_STREAM)
 
 
 def free_udp_port() -> int:
-    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-        sock.bind(("127.0.0.1", 0))
-        return int(sock.getsockname()[1])
+    return reserve_test_ports(1, socket.SOCK_DGRAM)[0]
 
 
 # Waiting for a freshly spawned agent to bind its HTTP port. This is process

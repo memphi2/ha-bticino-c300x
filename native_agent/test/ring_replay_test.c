@@ -1317,10 +1317,14 @@ int main(int argc, char **argv) {
     pthread_t station;
     assert(pthread_create(&station, NULL, station_accept, NULL) == 0);
 
-    int probe = socket(AF_INET, SOCK_STREAM, 0);
+    /* A closed probe frees its port for any process on the host until the
+     * agent's RTSP listener binds it. Kept bound but not listening, with
+     * SO_REUSEADDR like that listener, the port stays out of every other
+     * bind and connect and the listener can still take it. */
+    int probe = socket(AF_INET, SOCK_STREAM, 0), reuse = 1;
+    assert(setsockopt(probe, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) == 0);
     assert(__real_bind(probe, (struct sockaddr *)&loopback, sizeof(loopback)) == 0);
     rtsp_port = bound_port(probe);
-    close(probe);
     config.video_rtsp_port = rtsp_port;
 
     udp_fd = socket(AF_INET, SOCK_DGRAM, 0);

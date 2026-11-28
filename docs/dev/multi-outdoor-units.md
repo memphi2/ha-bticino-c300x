@@ -267,7 +267,8 @@ handler runs a second time for the same request). Answer marks the call
 ### `POST /api/v1/outdoor-units/{unit_id}/actions/unlock`
 
 Body optional: `{"call_id": "8f3a1c2e-7"}`. `{unit_id}` may be `current`: the
-unit of the current call, else the default unit. Sends `*8*19*<lock_where>##`,
+unit of the current call, else the default unit; while the ring call's unit
+is not known yet, none (`409 call_unit_pending`). Sends `*8*19*<lock_where>##`,
 waits the configured release delay, sends `*8*20*<lock_where>##`.
 
 ```json
@@ -281,7 +282,8 @@ locks that are not outdoor units.
 ### Video
 
 `POST /api/v1/video/doorbell/actions/activate` takes an optional `unit`. Without
-it the unit is the current call's, else the default unit. A ring call always
+it the unit is the current call's, else the default unit (`409
+call_unit_pending` while the ring call's unit is not known). A ring call always
 shows the calling unit; the station switches the picture itself.
 
 On demand, the request's `unit` selects the INVITE's `a=DEVADDR`: the default
@@ -300,6 +302,7 @@ selection stays for later streams until the next activation.
 | --- | --- | --- |
 | `409` | `call_not_current` | The `call_id` is unknown (also from an earlier boot), ended, or not the current call; for unlock: not that unit's call or ended more than 60 s ago. The body carries `current_call_id` (or `null`). Nothing is sent to the station. |
 | `404` | `unknown_unit` | No unit with that id. |
+| `409` | `call_unit_pending` | `current` (also a video request without `unit`) while the ring call's unit is not known yet: from the ring until its caller frame or the default fallback (1 s). The body carries the ring's `call_id` and `retry_after_ms` (1-1000), the time left until the fallback. Nothing is sent to the station. A video request that the ring's own video answers is not refused. |
 | `409` | `unit_video_unsupported` | On-demand video of a unit whose address the station does not view (not `2…`, or 96 and above before `#`). |
 | `400` | `invalid_call_id` | Empty or longer than 32 characters. |
 

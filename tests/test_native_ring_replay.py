@@ -25,7 +25,7 @@ CASES = {
     "lifecycle_unanswered": 0, "lifecycle_ha_answer_ha_hangup": 0,
     "lifecycle_station_answer_station_hangup": 0, "lifecycle_ha_answer_station_hangup": 0,
     "lifecycle_ondemand_view": 1, "ondemand_units": 4, "refused_answer_then_station": 0,
-    "call_id_lengths": 0, "boot_id_at_start": 0,
+    "call_id_lengths": 0, "pending_unit_video": 1, "boot_id_at_start": 0,
     "display_answer_without_preview": 0, "app_answer_end_frame_first": 0,
     "display_answer_end_lost_call": 0, "answer_before_caller": 0,
     "abandoned_answer_then_station": 0, "view_is_current": 1,

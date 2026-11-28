@@ -518,6 +518,45 @@ def test_an_unlock_of_the_current_unit_keeps_its_unit_while_it_waits(lab: Lab, t
     assert lab.bus.frames == ["*8*19*21##", "*8*20*21##"]
 
 
+UDP_EVENTS = {"events": {"udp": {"enabled": True, "group": "239.255.76.67", "port": free_tcp_ports(1)[0]}}}
+
+
+@pytest.mark.parametrize("lab", [UDP_EVENTS], indirect=True)
+def test_an_unlock_of_the_current_unit_waits_for_the_caller_frame(lab: Lab, tmp_path: Path) -> None:
+    # Until the caller frame (~300 ms after the ring) names the unit,
+    # "current" is no unit: the door of the default unit stays shut.
+    from native_agent.test.smoke import send_udp_event
+
+    udp_port = json.loads((tmp_path / "config.json").read_text())["events"]["udp"]["port"]
+    send_udp_event(udp_port, "*8*1#1#4#21*11##")
+    send_udp_event(udp_port, "*#8**35*1*0*0##")
+    time.sleep(0.1)
+    call = api_get(lab.api_port, "/api/v1/calls")["current_call_id"]
+    pending = finish(lab.start("/api/v1/outdoor-units/current/actions/unlock", post=True), 409)
+    assert (pending["error"], pending["call_id"]) == ("call_unit_pending", call)
+    assert 0 < pending["retry_after_ms"] <= 1000
+    assert lab.bus.frames == []
+
+    send_udp_event(udp_port, "*8*9#1#4*21##")
+    time.sleep(0.3)
+    body = finish(lab.start("/api/v1/outdoor-units/current/actions/unlock", post=True))
+    assert body["unit"] == "21"
+    assert lab.bus.frames == ["*8*19*21##", "*8*20*21##"]
+
+
+@pytest.mark.parametrize("lab", [UDP_EVENTS], indirect=True)
+def test_an_unlock_of_the_current_unit_takes_the_default_once_no_caller_frame_came(
+    lab: Lab, tmp_path: Path,
+) -> None:
+    from native_agent.test.smoke import send_udp_event
+
+    udp_port = json.loads((tmp_path / "config.json").read_text())["events"]["udp"]["port"]
+    send_udp_event(udp_port, "*8*1#1#4#21*11##")
+    time.sleep(1.2)
+    assert finish(lab.start("/api/v1/outdoor-units/current/actions/unlock", post=True))["unit"] == "20"
+    assert lab.bus.frames == [PRESS, RELEASE]
+
+
 def test_the_station_is_asked_for_its_call_state_once(lab: Lab) -> None:
     # The station sends its call state only on a change: without one since
     # the agent started, the first calls request asks it, once.

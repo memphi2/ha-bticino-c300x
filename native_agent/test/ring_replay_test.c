@@ -560,6 +560,9 @@ static void ha_answer(void) {
     assert(atomic_load(&ondemand_invites) == 0);
 }
 
+static void wait_invites(int count);
+static void expect_log(const char *expected);
+
 /* An API request to the call routes; returns the HTTP status. */
 static int calls_api(const char *method, const char *path, const char *body, char *out, size_t out_len) {
     int fds[2];
@@ -1004,6 +1007,32 @@ static void refused_answer_then_station(void) {
     assert(strstr(data, id) && strstr(data, "\"answered_by\":\"station\""));
 }
 
+/* A bus ring without the agent's ring leg: until the caller frame names
+ * its unit, video of the current call has none (409 call_unit_pending, no
+ * view of the default unit); then the view is the caller's. */
+static void pending_unit_video(void) {
+    char data[4096];
+    atomic_store(&station_busy, 0);
+    bus("*8*1#1#4#21*11##");
+    wait_event("doorbell.pressed", 1, NULL, 0);
+    assert(calls_api("POST", "/api/v1/video/doorbell/actions/activate", "{}", data, sizeof(data)) == 409);
+    assert(strstr(data, "\"error\":\"call_unit_pending\"") && strstr(data, "\"retry_after_ms\":"));
+    assert(calls_api("POST", "/api/v1/video/doorbell/actions/activate", "{\"unit\":\"current\"}", data,
+                     sizeof(data)) == 409);
+    assert(calls_api("POST", "/api/v1/video/doorbell/actions/activate", "{\"unit\":\"20\"}", data,
+                     sizeof(data)) == 200);
+    bus("*8*9#1#4*21##");
+    wait_event("call.caller_identified", 1, NULL, 0);
+    assert(calls_api("POST", "/api/v1/video/doorbell/actions/activate", "{}", data, sizeof(data)) == 200);
+    int fd = rtsp_open();
+    assert(rtsp_play(fd, "/doorbell") == 200);
+    wait_invites(1);
+    expect_log("I21");
+    c300x_video_stop(runtime->video);
+    wait_byes(1);
+    close(fd);
+}
+
 /* Call ids up to 32 characters are well formed: an unknown one is not
  * current (409); only an empty or longer one is a bad request (400). */
 static void call_id_lengths(void) {
@@ -1376,6 +1405,7 @@ int main(int argc, char **argv) {
     else if (strcmp(argv[1], "abandoned_answer_then_station") == 0) abandoned_answer_then_station();
     else if (strcmp(argv[1], "view_is_current") == 0) view_is_current();
     else if (strcmp(argv[1], "call_id_lengths") == 0) call_id_lengths();
+    else if (strcmp(argv[1], "pending_unit_video") == 0) pending_unit_video();
     else if (strcmp(argv[1], "boot_id_at_start") == 0) boot_id_at_start();
     else if (strcmp(argv[1], "station_busy_bus_end") == 0) station_busy_case(true);
     else if (strcmp(argv[1], "station_busy_timeout") == 0) station_busy_case(false);

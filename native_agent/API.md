@@ -1405,9 +1405,16 @@ Capabilities report `api_version: "2"`, `capabilities.outdoor_units` and
 - `POST /api/v1/outdoor-units/{unit_id}/actions/unlock`, `{unit_id}` may be
   `current`; optional body `{"call_id": "..."}`, which must be a call of that
   unit, live or ended less than 60 s ago (else `409 call_not_current`).
-  `404 unknown_unit` for an unknown unit.
+  `404 unknown_unit` for an unknown unit. While the ring call's unit is not
+  known yet (from the ring until its caller frame, at most 1 s, then the
+  default unit stands in), `current` is no unit: `409 call_unit_pending` with
+  the ring's `call_id` and `retry_after_ms` (the time left until the default
+  unit stands in, 1-1000); nothing reaches the station, and the request can
+  be repeated then or after `call.caller_identified`.
 - `POST /api/v1/video/doorbell/actions/activate` takes an optional `unit`
-  (without it: the current call's unit, else the default unit). During a ring
+  (without it: the current call's unit, else the default unit; while the ring
+  call's unit is not known yet, `409 call_unit_pending` as for the unlock,
+  unless the ring's own video answers). During a ring
   the ring's video is shown whatever unit is asked (`ring_active: true`). On
   demand, the INVITE's `a=DEVADDR` names the unit: `video.sip.devaddr` for the
   default unit, as before, the unit's full address (`where`, verbatim, e.g.

@@ -1409,7 +1409,10 @@ Capabilities report `api_version: "2"`, `capabilities.outdoor_units` and
   `reason: "station_idle"`.
 - `POST /api/v1/calls/{call_id}/actions/answer`, `.../hangup`: answer or hang
   up the current call: the live ring call, else the live on-demand view, which
-  a hang-up stops (an answer of a view gets `409 call_not_ringing`). A call id
+  a hang-up stops (an answer of a view gets `409 call_not_ringing`). A view
+  that the display or the app holds, not the agent, only they can end: its
+  hang-up gets `409 station_busy`, nothing reaches the station and the view
+  call goes on. A call id
   that is unknown, ended or not current gets `409 call_not_current` with
   `current_call_id`; nothing reaches the station. Success bodies are those of
   the 2.x unscoped routes, which are gone.

@@ -1093,6 +1093,26 @@ static void display_view_end_keeps_ring(void) {
     assert_current(id);
 }
 
+/* The display views unit 20: the agent cannot end that view. HA's hang-up
+ * is refused (409 station_busy), nothing reaches the station, the view
+ * call goes on. HA's own view still ends with its hang-up (view_is_current). */
+static void display_view_hangup(void) {
+    char data[4096], id[32], path[96];
+    struct c300x_video_status current;
+    bus("*8*1#5#4#20*11##");
+    wait_event("call.view_started", 1, data, sizeof(data));
+    call_id_of(data, id);
+    snprintf(path, sizeof(path), "/api/v1/calls/%s/actions/hangup", id);
+    assert(calls_api("POST", path, "", data, sizeof(data)) == 409);
+    assert(strstr(data, "{\"ok\":false,\"error\":\"station_busy\"}"));
+    usleep(300000);
+    assert(count_events("call.ended") == 0 && count_events("doorbell.media.closed") == 0);
+    assert_current(id);
+    status(&current);
+    assert(current.external_media_active);
+    assert(atomic_load(&station_byes) == 0);
+}
+
 static void agent_answer_is_ha(void) {
     char data[4096], id[32];
     int preview;
@@ -1552,6 +1572,7 @@ int main(int argc, char **argv) {
     else if (strcmp(argv[1], "pending_unit_video") == 0) pending_unit_video();
     else if (strcmp(argv[1], "view_during_bus_ring") == 0) view_during_bus_ring();
     else if (strcmp(argv[1], "agent_answer_is_ha") == 0) agent_answer_is_ha();
+    else if (strcmp(argv[1], "display_view_hangup") == 0) display_view_hangup();
     else if (strcmp(argv[1], "view_close_keeps_ring") == 0) view_close_keeps_ring();
     else if (strcmp(argv[1], "display_view_end_keeps_ring") == 0) display_view_end_keeps_ring();
     else if (strcmp(argv[1], "boot_id_at_start") == 0) boot_id_at_start();

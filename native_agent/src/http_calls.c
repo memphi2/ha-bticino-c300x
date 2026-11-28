@@ -338,6 +338,15 @@ static int stop_view(int client_fd, const struct c300x_call_routes *routes)
     return 1;
 }
 
+/* The display or the app holds the view, not the agent: only they end it. */
+static int view_held_by_station(const struct c300x_call_hub *hub)
+{
+    struct c300x_call_media media;
+
+    media_state(hub, &media);
+    return media.external && !media.agent;
+}
+
 static void call_action(int client_fd, const struct c300x_call_routes *routes, const struct request *request,
                         const char *call_id, int answer)
 {
@@ -353,6 +362,10 @@ static void call_action(int client_fd, const struct c300x_call_routes *routes, c
     }
     if (call != NULL && call->view && answer) {
         c300x_http_send_json(client_fd, 409, "Conflict", "{\"ok\":false,\"error\":\"call_not_ringing\"}\n");
+        return;
+    }
+    if (!owns && call != NULL && call->view && view_held_by_station(hub)) {
+        c300x_http_send_json(client_fd, 409, "Conflict", "{\"ok\":false,\"error\":\"station_busy\"}\n");
         return;
     }
     hub->stopping = !answer;

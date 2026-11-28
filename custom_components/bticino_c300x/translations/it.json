@@ -38,7 +38,7 @@
       },
       "c100x_experimental": {
         "title": "Classe 100X: supporto sperimentale",
-        "description": "Questa postazione è un Classe 100X. Il suo supporto è sperimentale: è realizzato per il firmware 1.5.8 e finora verificato solo senza dispositivo, non ancora confermato su un Classe 100X, e non tutte le funzioni del Classe 300X sono disponibili. Prima della tua conferma non viene modificato nulla sulla postazione; chiudi questa finestra per lasciarla com'è.",
+        "description": "Questa stazione è un Classe 100X. Il suo supporto è sperimentale: è realizzato per il firmware 1.5.8 e finora verificato solo senza dispositivo, non ancora confermato su un Classe 100X, e non tutte le funzioni del Classe 300X sono disponibili. Prima della tua conferma non viene modificato nulla sulla stazione; chiudi questa finestra per lasciarla com'è.",
         "data": {
           "c100x_experimental": "Configura il supporto sperimentale del Classe 100X"
         }
@@ -160,7 +160,7 @@
           "device_ui_enabled": "Attivo finché le pagine Home Assistant sono attive sul display del C100X; arrivano con Attiva pagine del display. Disattivo: ripristina il display originale con un riavvio del C100X ed elimina le impostazioni di meteo, pagine, riquadri e azioni. Le impostazioni Alarmo vengono mantenute.",
           "actions_json": "Azioni che il display e le sue notifiche possono eseguire, in JSON: una voce per azione con domain e service, facoltativamente target e data. Lascia vuoto se non ne usi.",
           "dashboard_prevent_return": "Attivo: le pagine Home Assistant e Alarmo restano aperte quando lo schermo va in standby. Disattivo: il display torna alla pagina iniziale.",
-          "dashboard_navigation": "Non usato sul {model}: le pagine si susseguono come i menu propri del posto interno. Su e Giù cambiano pagina, Invio la apre e l'ultima voce è EXIT. L'ordine segue le posizioni delle pagine."
+          "dashboard_navigation": "Non usato sul {model}: le pagine si susseguono come i menu propri della stazione. Su e Giù cambiano pagina, Invio la apre e l'ultima voce è EXIT. L'ordine segue le posizioni delle pagine."
         }
       },
       "user_dashboard_entity_display": {
@@ -289,7 +289,7 @@
           "device_ui_enabled": "Attivo finché le pagine Home Assistant sono attive sul display del C100X; arrivano con Attiva pagine del display. Disattivo: ripristina il display originale con un riavvio del C100X ed elimina le impostazioni di meteo, pagine, riquadri e azioni. Le impostazioni Alarmo vengono mantenute.",
           "actions_json": "Azioni che il display e le sue notifiche possono eseguire, in JSON: una voce per azione con domain e service, facoltativamente target e data. Lascia vuoto se non ne usi.",
           "dashboard_prevent_return": "Attivo: le pagine Home Assistant e Alarmo restano aperte quando lo schermo va in standby. Disattivo: il display torna alla pagina iniziale.",
-          "dashboard_navigation": "Non usato sul {model}: le pagine si susseguono come i menu propri del posto interno. Su e Giù cambiano pagina, Invio la apre e l'ultima voce è EXIT. L'ordine segue le posizioni delle pagine."
+          "dashboard_navigation": "Non usato sul {model}: le pagine si susseguono come i menu propri della stazione. Su e Giù cambiano pagina, Invio la apre e l'ultima voce è EXIT. L'ordine segue le posizioni delle pagine."
         }
       },
       "reconfigure_dashboard_entity_display": {
@@ -749,7 +749,7 @@
       }
     },
     "abort": {
-      "model_mismatch": "Questo annuncio proviene da un modello di postazione diverso dalla voce configurata con la stessa identità. Non è stato modificato nulla.",
+      "model_mismatch": "Questo annuncio proviene da un modello di stazione diverso dalla voce configurata con la stessa identità. Non è stato modificato nulla.",
       "already_configured": "BTicino C300X/C100X è già configurato.",
       "reconfigure_successful": "BTicino {model} è stato riconfigurato. Aggiorna la configurazione locale del device agent o del display bridge se hai ruotato le credenziali.",
       "cannot_connect": "Impossibile raggiungere il device agent. Controlla l'indirizzo e che l'agent sia in esecuzione.",
@@ -801,10 +801,10 @@
       "ssh_password_login_disabled": "Il {model} non accetta l'accesso con password, solo chiavi SSH. Incolla la chiave privata configurata dallo strumento di root, oppure crea l'immagine con l'accesso tramite password.",
       "installer_firewall_hook_unsupported": "Impossibile verificare lo script firewall in sicurezza. Installazione interrotta prima di modificare il dispositivo. Controllare tipo e permessi del file senza creare uno script sostitutivo.",
       "firewall_hook_changed": "Lo script di avvio del firewall del {model} (/etc/network/if-pre-up.d/iptables) è stato modificato da altro dopo che l'agent ha aggiunto le sue porte; l'originale salvato non corrisponde più. Lo script è rimasto invariato. Ripristinalo, o rimuovi da esso il blocco dell'agent, poi riprova.",
-      "device_model_incompatible": "Questo pacchetto non supporta questa postazione, oppure non è stato possibile confermare il modello della postazione. Nessun file del dispositivo è stato sostituito.",
-      "c100x_confirmation_required": "Spunta la casella per configurare il Classe 100X, oppure chiudi questa finestra per lasciare la postazione invariata.",
-      "not_a_bticino_station": "Il dispositivo a questo indirizzo non è una postazione BTicino. Non è stato scritto nulla. Controlla l'indirizzo.",
-      "c3x2_not_supported": "Questa postazione è una Classe 300X2. Viene riconosciuta, ma non è ancora supportata. Non è stato installato né scritto nulla."
+      "device_model_incompatible": "Questo pacchetto non supporta questa stazione, oppure non è stato possibile confermare il modello della stazione. Nessun file del dispositivo è stato sostituito.",
+      "c100x_confirmation_required": "Spunta la casella per configurare il Classe 100X, oppure chiudi questa finestra per lasciare la stazione invariata.",
+      "not_a_bticino_station": "Il dispositivo a questo indirizzo non è una stazione BTicino. Non è stato scritto nulla. Controlla l'indirizzo.",
+      "c3x2_not_supported": "Questa stazione è una Classe 300X2. Viene riconosciuta, ma non è ancora supportata. Non è stato installato né scritto nulla."
     },
     "create_entry": {
       "pcmu_restart": "Quando non ci sono chiamate né stream in corso, il {model} si riavvia una volta per passare l'audio a PCMU. Finché non torna, le sue entità non sono disponibili; poi si riconnettono da sole."
@@ -965,7 +965,7 @@
           "device_ui_enabled": "Attivo finché le pagine Home Assistant sono attive sul display del C100X; arrivano con Attiva pagine del display. Disattivo: ripristina il display originale con un riavvio del C100X ed elimina le impostazioni di meteo, pagine, riquadri e azioni. Le impostazioni Alarmo vengono mantenute.",
           "actions_json": "Azioni che il display e le sue notifiche possono eseguire, in JSON: una voce per azione con domain e service, facoltativamente target e data. Lascia vuoto se non ne usi.",
           "dashboard_prevent_return": "Attivo: le pagine Home Assistant e Alarmo restano aperte quando lo schermo va in standby. Disattivo: il display torna alla pagina iniziale.",
-          "dashboard_navigation": "Non usato sul {model}: le pagine si susseguono come i menu propri del posto interno. Su e Giù cambiano pagina, Invio la apre e l'ultima voce è EXIT. L'ordine segue le posizioni delle pagine."
+          "dashboard_navigation": "Non usato sul {model}: le pagine si susseguono come i menu propri della stazione. Su e Giù cambiano pagina, Invio la apre e l'ultima voce è EXIT. L'ordine segue le posizioni delle pagine."
         }
       },
       "dashboard_entity_display": {
@@ -1398,7 +1398,7 @@
         }
       },
       "ring": {
-        "name": "Suono del posto interno",
+        "name": "Suono della stazione",
         "state_attributes": {
           "event_type": {
             "state": {
@@ -1723,7 +1723,7 @@
       "message": "La scrittura di un memo testuale non è supportata dal device agent {model} installato."
     },
     "text_memo_write_not_supported_c100x": {
-      "message": "Il {model} non ha memo testuali: il posto interno non può mostrarli."
+      "message": "Il {model} non ha memo testuali: la stazione non può mostrarli."
     },
     "unknown_action": {
       "message": "L'ID azione {action_id} non è configurato."
@@ -1764,8 +1764,8 @@
   },
   "issues": {
     "c100x_display_boot_check_failed": {
-      "title": "Controllo del display C100X non riuscito all'avvio della postazione",
-      "description": "{entry_title}: all'avvio della postazione l'agente del dispositivo non ha potuto controllare l'attivazione del display in sospeso (il pacchetto del display mancava o il controllo non è riuscito, per esempio dopo un aggiornamento del firmware). L'agente è stato avviato comunque. L'attivazione del display resta disattivata e le copie delle pagine originali vengono conservate. Premi Ripristina display originale per tornarci; se non riesce, aggiorna prima l'agente del dispositivo con la sua riparazione. Se succede di nuovo, segnalalo con la diagnostica dell'agente."
+      "title": "Controllo del display C100X non riuscito all'avvio della stazione",
+      "description": "{entry_title}: all'avvio della stazione l'agente del dispositivo non ha potuto controllare l'attivazione del display in sospeso (il pacchetto del display mancava o il controllo non è riuscito, per esempio dopo un aggiornamento del firmware). L'agente è stato avviato comunque. L'attivazione del display resta disattivata e le copie delle pagine originali vengono conservate. Premi Ripristina display originale per tornarci; se non riesce, aggiorna prima l'agente del dispositivo con la sua riparazione. Se succede di nuovo, segnalalo con la diagnostica dell'agente."
     },
     "c100x_display_rolled_back": {
       "title": "Le pagine del display C100X sono state annullate",
@@ -1808,8 +1808,8 @@
           "ssh_unreachable": "Il {model} non risponde via SSH (porta 22). SSH è disattivato o bloccato sulla stazione; controlla l'indirizzo e che lo strumento di root abbia attivato SSH.",
           "ssh_password_login_disabled": "Il {model} non accetta l'accesso con password, solo chiavi SSH. Incolla la chiave privata configurata dallo strumento di root, oppure crea l'immagine con l'accesso tramite password.",
           "firewall_hook_changed": "Lo script di avvio del firewall del {model} (/etc/network/if-pre-up.d/iptables) è stato modificato da altro dopo che l'agent ha aggiunto le sue porte; l'originale salvato non corrisponde più. Lo script è rimasto invariato. Ripristinalo, o rimuovi da esso il blocco dell'agent, poi riprova.",
-          "not_a_bticino_station": "Il dispositivo a questo indirizzo non è una postazione BTicino. Non è stato scritto nulla. Controlla l'indirizzo.",
-          "c3x2_not_supported": "Questa postazione è una Classe 300X2. Viene riconosciuta, ma non è ancora supportata. Non è stato installato né scritto nulla.",
+          "not_a_bticino_station": "Il dispositivo a questo indirizzo non è una stazione BTicino. Non è stato scritto nulla. Controlla l'indirizzo.",
+          "c3x2_not_supported": "Questa stazione è una Classe 300X2. Viene riconosciuta, ma non è ancora supportata. Non è stato installato né scritto nulla.",
           "wrong_device": "Questo indirizzo ora porta a un'altra stazione. Su di essa non è stato modificato nulla."
         },
         "abort": {
@@ -1978,7 +1978,7 @@
     },
     "outdoor_units_breaking_change": {
       "title": "Entità del campanello spostate sui posti esterni",
-      "description": "{entry_title} mostra ora ogni posto esterno come dispositivo a sé sotto la stazione. Telecamera del campanello, evento del campanello e pulsante della porta sono passati al dispositivo del posto esterno predefinito; ID delle entità e cronologia restano. Esegui questi passi:\n\n- Importante: l'evento bticino_c300x_agent_event_received non ha più event_key, quindi le automazioni che filtrano su di esso (ad esempio event_key: doorbell_pressed) non scattano più. Sostituisci event_key con event_type (event_type: doorbell_pressed).\n- bticino_c300x_agent_event_received: il campo address di primo livello è ora data.address; event, event_type_key, event_name, event_value, event_label ed event_label_* non esistono più.\n- Automazioni da blueprint: seleziona di nuovo il posto esterno (il suo evento campanello). I blueprint \"BTicino Calendar display reminder\" e \"BTicino strict phrase decision\" ora richiedono il dispositivo della stazione o della porta.\n- answer_doorbell_call e hangup_doorbell_call ora si chiamano answer_call e hangup_call. Ogni servizio prende un obiettivo (la stazione o un posto esterno) al posto di entry_id. evaluate_ring_analysis non prende più lock_id: apre la porta del posto esterno che ha suonato.\n- I servizi unlock_door, stair_light, stop_doorbell_video, reboot, reload_gui, run_device_activation e delete_latest_* non esistono più: premi invece i pulsanti corrispondenti (button.press). Per una luce scale a un indirizzo proprio, aggiungi un'attivazione di tipo Luce scale e premi il suo pulsante.\n- Notifiche: il campo mode non esiste più; imposta invece in data gli interruttori display, tts e led.\n- Il sensore dello stato del campanello non esiste più: usa il sensore chiamata del posto esterno. L'entità \"Evento dispositivo\" non esiste più: usa l'evento Porta del posto esterno, l'evento Luce scale della stazione o l'evento bticino_c300x_agent_event_received, il cui event_type è ora una chiave fissa (ad esempio ringer_muted). L'evento bticino_c300x_action_received non esiste più: reagisci all'entità comandata o agli eventi Porta e Luce scale.\n- Pulsanti Apri porta: l'attributo lock_id è sostituito da lock_address (l'indirizzo bus della serratura) e lock_name.\n- L'evento campanello di un posto esterno scatta quando la stazione ha indicato il posto esterno chiamante, fino a 1 s dopo il suono; per la reazione più rapida usa l'evento Suono del posto interno. I suoi attributi event_key, event e video_available non esistono più, né i campi dell'evento della stazione che riportava (come entry_id, event_at ed event_label_*); ha call_id, unit e last_ring_at.\n- Le attivazioni di tipo Luce non esistono più: l'aggiornamento le ha rimosse. Gli attuatori e la luce scale della stazione arrivano ora dalla stazione stessa.\n- Indirizzo luce scale Automatico: la luce scale viene ora accesa all'indirizzo proprio della stazione invece che a 10.\n- Le attivazioni di tipo Serratura all'indirizzo della serratura di un posto esterno, lette dalla stazione o configurate da te, sono ora il pulsante Apri porta di quel posto esterno, che prende il nome dell'attivazione. I loro vecchi pulsanti di attivazione non esistono più e si possono eliminare.\n- Indirizzo luce scale Manuale: l'attivazione Luce scale che ne risulta non ha più un pulsante proprio; il pulsante Luce scale fa lo stesso. Il suo vecchio pulsante si può eliminare.\n\nIgnora questo messaggio quando hai finito."
+      "description": "{entry_title} mostra ora ogni posto esterno come dispositivo a sé sotto la stazione. Telecamera del campanello, evento del campanello e pulsante della porta sono passati al dispositivo del posto esterno predefinito; ID delle entità e cronologia restano. Esegui questi passi:\n\n- Importante: l'evento bticino_c300x_agent_event_received non ha più event_key, quindi le automazioni che filtrano su di esso (ad esempio event_key: doorbell_pressed) non scattano più. Sostituisci event_key con event_type (event_type: doorbell_pressed).\n- bticino_c300x_agent_event_received: il campo address di primo livello è ora data.address; event, event_type_key, event_name, event_value, event_label ed event_label_* non esistono più.\n- Automazioni da blueprint: seleziona di nuovo il posto esterno (il suo evento campanello). I blueprint \"BTicino Calendar display reminder\" e \"BTicino strict phrase decision\" ora richiedono il dispositivo della stazione o della porta.\n- answer_doorbell_call e hangup_doorbell_call ora si chiamano answer_call e hangup_call. Ogni servizio prende un obiettivo (la stazione o un posto esterno) al posto di entry_id. evaluate_ring_analysis non prende più lock_id: apre la porta del posto esterno che ha suonato.\n- I servizi unlock_door, stair_light, stop_doorbell_video, reboot, reload_gui, run_device_activation e delete_latest_* non esistono più: premi invece i pulsanti corrispondenti (button.press). Per una luce scale a un indirizzo proprio, aggiungi un'attivazione di tipo Luce scale e premi il suo pulsante.\n- Notifiche: il campo mode non esiste più; imposta invece in data gli interruttori display, tts e led.\n- Il sensore dello stato del campanello non esiste più: usa il sensore chiamata del posto esterno. L'entità \"Evento dispositivo\" non esiste più: usa l'evento Porta del posto esterno, l'evento Luce scale della stazione o l'evento bticino_c300x_agent_event_received, il cui event_type è ora una chiave fissa (ad esempio ringer_muted). L'evento bticino_c300x_action_received non esiste più: reagisci all'entità comandata o agli eventi Porta e Luce scale.\n- Pulsanti Apri porta: l'attributo lock_id è sostituito da lock_address (l'indirizzo bus della serratura) e lock_name.\n- L'evento campanello di un posto esterno scatta quando la stazione ha indicato il posto esterno chiamante, fino a 1 s dopo il suono; per la reazione più rapida usa l'evento Suono della stazione. I suoi attributi event_key, event e video_available non esistono più, né i campi dell'evento della stazione che riportava (come entry_id, event_at ed event_label_*); ha call_id, unit e last_ring_at.\n- Le attivazioni di tipo Luce non esistono più: l'aggiornamento le ha rimosse. Gli attuatori e la luce scale della stazione arrivano ora dalla stazione stessa.\n- Indirizzo luce scale Automatico: la luce scale viene ora accesa all'indirizzo proprio della stazione invece che a 10.\n- Le attivazioni di tipo Serratura all'indirizzo della serratura di un posto esterno, lette dalla stazione o configurate da te, sono ora il pulsante Apri porta di quel posto esterno, che prende il nome dell'attivazione. I loro vecchi pulsanti di attivazione non esistono più e si possono eliminare.\n- Indirizzo luce scale Manuale: l'attivazione Luce scale che ne risulta non ha più un pulsante proprio; il pulsante Luce scale fa lo stesso. Il suo vecchio pulsante si può eliminare.\n\nIgnora questo messaggio quando hai finito."
     }
   },
   "selector": {

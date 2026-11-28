@@ -44,6 +44,21 @@ def test_the_activations_form_says_that_further_locks_and_actuators_are_added_th
             assert all(part in first for part in hint), (path.name, step)
 
 
+# Each language has one word for the station ("station", "stazione"); the
+# outdoor unit keeps its own ("poste extérieur", "posto esterno").
+OTHER_WORDS_FOR_THE_STATION = {
+    "fr": ("platine", "poste intérieur"),
+    "it": ("postazione", "posto interno"),
+}
+
+
+def test_each_language_has_one_word_for_the_station() -> None:
+    for language, words in OTHER_WORDS_FOR_THE_STATION.items():
+        text = (TRANSLATIONS / f"{language}.json").read_text(encoding="utf-8").lower()
+        for word in words:
+            assert not re.search(rf"\b{word}\b", text), (language, word)
+
+
 def test_snapshot_size_help_distinguishes_native_framebuffer_from_high_stream() -> None:
     """The display sets the limit and proportions, even for the 960x576 stream."""
 

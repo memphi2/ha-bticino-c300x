@@ -217,6 +217,8 @@ CHANGED_SINCE_2_10_0 = frozenset({
     "config/step/reconfigure_device_activations/data_description/device_activation_mode",
     "config/step/user_device_activations/data_description/device_activation_mode",
     "options/step/device_activations/data_description/device_activation_mode",
+    # French names the outdoor unit "poste extérieur" and the station "station" (3.1.0).
+    "services/camera_picture/description",
 })
 # Texts of 2.10.0 that are gone: 3.1.0 removed the agent event entity, the
 # doorbell state sensor, the station's door button (each unit has its own) and
@@ -275,11 +277,11 @@ REMOVED_SINCE_2_10_0 = frozenset({
 # ones, per file:
 #   json.dumps({"a/b/c": text}, sort_keys=True, ensure_ascii=False)
 DIGESTS_2_10_0 = {
-    "base": "9bccfff6f48563de5a785644c2ebc17bce2dbe8ab98b54dd3f5574ce80f4534a",
-    "en": "9bccfff6f48563de5a785644c2ebc17bce2dbe8ab98b54dd3f5574ce80f4534a",
-    "de": "8215fa8ddccdb3d208a1e663b598e02e4e883cb7796272a97687b2a0698fdec0",
-    "it": "f3b46cfda0b3639afaf8d12823f9f830a0550c5b6929ce57fd19926f0a051a22",
-    "fr": "88a38f379623e679009128685d8af0f4a2720d452fef46f1d6868e2e2d4dbc7b",
+    "base": "cfa537be9b9241f6af8a7d8c78dca54b0a550467534bd25a1af1e8fd21289bf2",
+    "en": "cfa537be9b9241f6af8a7d8c78dca54b0a550467534bd25a1af1e8fd21289bf2",
+    "de": "079f0dbc5d62cd28fd7e4c01857c001f943c44608208222b517b2c54b464f7b1",
+    "it": "0745e4526e1bf6aba29941ecc6af094ad942684fa9f22f2ad65d3eca2b7eaba5",
+    "fr": "386e48ba46037028f4f484781f61cadaf204c959141ecace1325e0124a95607c",
 }
 
 

@@ -198,7 +198,11 @@ class C300XUnitCamera(C300XUnitEntity, Camera):
             else:
                 from .snapshot_capture import framebuffer_jpeg
 
-                return await self.hass.async_add_executor_job(framebuffer_jpeg, content, _content_type, None)
+                try:
+                    return await self.hass.async_add_executor_job(framebuffer_jpeg, content, _content_type, None)
+                except ValueError as err:
+                    # Not a framebuffer the agent should send: the last visitor stands in.
+                    _LOGGER.debug("C300X live picture of unit %s is unreadable: %s", self.unit_id, err)
         return await async_last_visitor_image(self.hass, self._entry, self.unit_id)
 
 

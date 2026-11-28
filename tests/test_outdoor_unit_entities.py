@@ -14,9 +14,15 @@ pytestmark = pytest.mark.usefixtures("entity_ha_boundary")
 
 from homeassistant.components.event import EventEntity
 
-from custom_components.bticino_c300x import call_sync, identity_migration, unit_entity
+from custom_components.bticino_c300x import (
+    call_sync,
+    identity_migration,
+    unit_entity,
+    unit_platforms,
+)
 from custom_components.bticino_c300x._api_calls import normalize_outdoor_units
 from custom_components.bticino_c300x._api_normalize import normalize_activations
+from custom_components.bticino_c300x.api_errors import C300XAgentApiError
 from custom_components.bticino_c300x.button import C300XDeviceActivationButton
 from custom_components.bticino_c300x.button import async_setup_entry as button_setup
 from custom_components.bticino_c300x.call_registry import C300XCallRegistry
@@ -42,6 +48,7 @@ from custom_components.bticino_c300x.identity import (
 )
 from custom_components.bticino_c300x.unit_platforms import (
     C300XUnitCallSensor,
+    C300XUnitCamera,
     C300XUnitDoorButton,
 )
 
@@ -357,6 +364,28 @@ def test_door_button_opens_its_own_unit() -> None:
     assert fired == []
     assert button.unique_id == "c300x-0123456789ab_unit_22_1_door"
     assert button.device_info["identifiers"] == {("bticino_c300x", "c300x-0123456789ab:unit:22_1")}
+
+
+def test_a_unit_camera_shows_the_last_visitor_when_the_live_picture_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def last_visitor(_hass: Any, _entry: Any, unit_id: str) -> bytes:
+        return f"last visitor {unit_id}".encode()
+
+    async def job(function: Any, *args: Any) -> Any:
+        return function(*args)
+
+    monkeypatch.setattr(unit_platforms, "async_last_visitor_image", last_visitor)
+    entry = _entry(THREE)
+    entry.runtime_data.calls.apply_event("doorbell_pressed", {"call_id": "0badc0de-1", "unit": "21"})
+    camera = C300XUnitCamera(entry, entry.runtime_data.calls.units["21"])  # type: ignore[arg-type]
+    camera.hass = SimpleNamespace(async_add_executor_job=job)
+    for reply in ((b"no bitmap", "image/bmp"), (b"\xff\xd8", "image/jpeg"), C300XAgentApiError("busy")):
+        async def snapshot(_width: int, _height: int, reply: Any = reply) -> tuple[bytes, str]:
+            if isinstance(reply, Exception):
+                raise reply
+            return reply
+
+        entry.runtime_data.api = SimpleNamespace(async_doorbell_snapshot=snapshot)
+        assert asyncio.run(camera.async_camera_image()) == b"last visitor 21", reply
 
 
 def test_every_door_button_names_its_lock_the_same_way() -> None:

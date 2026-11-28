@@ -98,6 +98,9 @@ class Call:
     attribution: str
     answered_by: str | None
     end_reason: str | None
+    # Home Assistant's hang-up can end it: the agent holds a leg of the call.
+    # Only ``GET /api/v1/calls`` says so; a call mirrored from events does not know.
+    can_hangup: bool = False
 
 
 @dataclass(frozen=True, slots=True)

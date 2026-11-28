@@ -29,6 +29,8 @@ from .api_errors import (
     C300XAgentApiConnectionError,
     C300XCallNotCurrentError,
     C300XCallUnitPendingError,
+    C300XRingCallNotActiveError,
+    C300XStationBusyError,
 )
 
 # Base64 of one piece and its JSON frame stay below the agent's request size.
@@ -171,7 +173,9 @@ class _ApiMediaMixin(_C300XApiCore):
         """Hang up a call; without ``call_id`` the current call (of ``unit``).
 
         The current call is an on-demand view when no ring is live; its
-        hang-up stops the view.
+        hang-up stops the view. A call the agent holds no leg of (answered on
+        the station, a view of the display, a ring without the agent's leg)
+        is refused: C300XStationBusyError or C300XRingCallNotActiveError.
         """
 
         return await self._call_action(call_id, "hangup", unit)
@@ -183,7 +187,10 @@ class _ApiMediaMixin(_C300XApiCore):
 
         That is ``call_id`` or the current call, and only when it is the
         current call, of ``unit`` when given; else C300XCallNotCurrentError.
-        While the ringing unit is not known yet, asked again until it is.
+        A hang-up of a call the agent holds no leg of raises what the agent
+        would answer: C300XRingCallNotActiveError while it rings, else
+        C300XStationBusyError. While the ringing unit is not known yet,
+        asked again until it is.
         """
 
         return await _when_unit_known(lambda: self._action_call_id(call_id, action, unit))
@@ -218,6 +225,11 @@ class _ApiMediaMixin(_C300XApiCore):
             raise C300XCallNotCurrentError("the call is not current or not this unit's", current)
         if call_id is None and action == "answer" and call is not None and call.kind == "view":
             raise C300XCallNotCurrentError("the current call is a view", current)
+        if action == "hangup" and call is not None and not call.can_hangup:
+            # The station, the display or the app holds it: the agent refuses it too.
+            if call.state == "ringing":
+                raise C300XRingCallNotActiveError("the agent has no ring leg of the ringing call")
+            raise C300XStationBusyError("the station holds the call")
         return wanted
 
     async def async_unlock_outdoor_unit(

@@ -111,6 +111,7 @@ def normalize_call(item: Any) -> Call | None:
         # ha, station or answering_machine (the station's answering machine took it).
         answered_by=_text(item.get("answered_by"), 24) or None,
         end_reason=_text(item.get("end_reason") or item.get("reason"), 24) or None,
+        can_hangup=item.get("can_hangup") is True,
     )
 
 

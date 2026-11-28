@@ -231,7 +231,7 @@ def test_native_agent_ring_mode_is_separate_from_on_demand_streaming() -> None:
         "static void stop_media_session(bool close_client, bool explicit_stop) {"
     )
     stop_body = media_bridge[
-        stop_pos : media_bridge.index("void c300x_media_session_stop", stop_pos)
+        stop_pos : media_bridge.index("static bool stop_ring_session", stop_pos)
     ]
     rtsp_body = media_bridge[
         media_bridge.index("static void handle_rtsp_client") :
@@ -764,7 +764,7 @@ def test_native_agent_ring_lifecycle_status_and_stop_paths_are_explicit() -> Non
     http = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
 
     session_stop_body = media_bridge[
-        media_bridge.index("void c300x_media_session_stop") :
+        media_bridge.index("static bool stop_ring_session") :
         media_bridge.index("bool c300x_media_session_keepalive")
     ]
     stop_ring_call_body = media_bridge[
@@ -773,7 +773,7 @@ def test_native_agent_ring_lifecycle_status_and_stop_paths_are_explicit() -> Non
     ]
     stop_media_body = media_bridge[
         media_bridge.index("static void stop_media_session(bool close_client, bool explicit_stop)") :
-        media_bridge.index("void c300x_media_session_stop")
+        media_bridge.index("static bool stop_ring_session")
     ]
     ring_cleanup_body = media_bridge[
         media_bridge.index("static void ring_call_cleanup(") :
@@ -978,7 +978,7 @@ def test_native_agent_explicit_ondemand_stop_parks_persistent_rtsp_source() -> N
     ]
     stop_body = media_bridge[
         media_bridge.index("static void stop_media_session(bool close_client, bool explicit_stop)") :
-        media_bridge.index("void c300x_media_session_stop")
+        media_bridge.index("static bool stop_ring_session")
     ]
     unpark_body = media_bridge[
         media_bridge.index("static bool unpark_played_rtsp_clients_locked") :
@@ -1107,8 +1107,10 @@ def test_native_agent_exposes_explicit_doorbell_call_api_without_new_sip_path() 
     assert "request_ring_answer_if_active(&g_bridge)" in answer_bridge_body
     assert "send_ring_response" not in answer_bridge_body
     assert "build_ring_sdp" not in answer_bridge_body
-    assert "c300x_media_session_stop(video);" in hangup_bridge_body
-    assert "stop_ring_call_if_active" not in hangup_bridge_body
+    # A ring call's hang-up ends its ring leg only, never the on-demand view.
+    assert "(void)stop_ring_session(video);" in hangup_bridge_body
+    assert "c300x_media_session_stop" not in hangup_bridge_body
+    assert "stop_media_session" not in hangup_bridge_body
     assert "c300x_media_ring_call_answer(video)" in answer_video_body
     assert "c300x_media_ring_call_hangup(video);" in hangup_video_body
     assert "C300X_VIDEO_CONTROL_ANSWER" in answer_http_body
@@ -1231,7 +1233,7 @@ def test_native_agent_doorbell_stop_does_not_match_home_call_resources() -> None
         encoding="utf-8"
     )
     stop_body = media_bridge[
-        media_bridge.index("void c300x_media_session_stop") :
+        media_bridge.index("static bool stop_ring_session") :
         media_bridge.index("bool c300x_media_session_keepalive")
     ]
 

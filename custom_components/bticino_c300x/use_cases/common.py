@@ -15,6 +15,7 @@ from ..api_errors import (
     C300XAgentApiAuthError,
     C300XCallNotCurrentError,
     C300XCallUnitPendingError,
+    C300XRingCallNotActiveError,
     C300XStationBusyError,
     C300XUnitVideoUnsupportedError,
     C300XUnknownUnitError,
@@ -73,6 +74,9 @@ async def raise_agent_command_failed[T](awaitable: Awaitable[T], *, entry: Any) 
         raise home_assistant_error("agent_command_failed", entry=entry) from failure
     except C300XStationBusyError as err:
         raise home_assistant_error("station_busy") from err
+    except C300XRingCallNotActiveError as err:
+        # Only the station rings: Home Assistant has no leg to answer or hang up.
+        raise home_assistant_error("ring_call_not_active") from err
     except C300XCallUnitPendingError as err:
         # The station did not name the ringing unit in time: nothing was sent.
         raise home_assistant_error("call_unit_pending") from err

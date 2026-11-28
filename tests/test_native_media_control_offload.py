@@ -195,7 +195,11 @@ def test_an_activation_answers_with_its_own_result(lab: Lab) -> None:
         assert time.monotonic() < deadline
         time.sleep(0.02)
     call_id = calls["current_call_id"]
+    # The agent's ring leg is up: only then is the ring call's hang-up taken.
+    # Once it runs, the ring's media is gone and the activation is a view.
+    (lab.root / "ring").touch()
     hangup = lab.held_stop(f"/api/v1/calls/{call_id}/actions/hangup")
+    (lab.root / "ring").unlink()
     activate = lab.post(ACTIVATE, {"audio": False})
     lab.health_ms()
 

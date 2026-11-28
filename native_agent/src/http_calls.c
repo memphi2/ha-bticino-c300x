@@ -338,15 +338,6 @@ static int stop_view(int client_fd, const struct c300x_call_routes *routes)
     return 1;
 }
 
-/* The display or the app holds the view, not the agent: only they end it. */
-static int view_held_by_station(const struct c300x_call_hub *hub)
-{
-    struct c300x_call_media media;
-
-    media_state(hub, &media);
-    return media.external && !media.agent;
-}
-
 static void call_action(int client_fd, const struct c300x_call_routes *routes, const struct request *request,
                         const char *call_id, int answer)
 {
@@ -354,6 +345,9 @@ static void call_action(int client_fd, const struct c300x_call_routes *routes, c
     /* Checked before the operation starts, not when its result is answered. */
     int owns = routes->control != NULL && routes->control->worker.owner_fd == client_fd;
     const struct c300x_call *call = c300x_calls_find(&hub->calls, call_id);
+    struct c300x_call_media media;
+    const char *refused;
+    char body[64];
     int done;
 
     if (!owns && !c300x_calls_is_current(&hub->calls, call_id)) {
@@ -364,9 +358,15 @@ static void call_action(int client_fd, const struct c300x_call_routes *routes, c
         c300x_http_send_json(client_fd, 409, "Conflict", "{\"ok\":false,\"error\":\"call_not_ringing\"}\n");
         return;
     }
-    if (!owns && call != NULL && call->view && view_held_by_station(hub)) {
-        c300x_http_send_json(client_fd, 409, "Conflict", "{\"ok\":false,\"error\":\"station_busy\"}\n");
-        return;
+    if (!owns && !answer && call != NULL) {
+        /* A call the agent holds no leg of goes on: nothing reaches the station. */
+        media_state(hub, &media);
+        refused = c300x_calls_hangup_refusal(call, &media);
+        if (refused != NULL) {
+            snprintf(body, sizeof(body), "{\"ok\":false,\"error\":\"%s\"}\n", refused);
+            c300x_http_send_json(client_fd, 409, "Conflict", body);
+            return;
+        }
     }
     hub->stopping = !answer;
     if (call != NULL && call->view) {
@@ -603,6 +603,7 @@ int c300x_http_calls_route(int client_fd, const struct c300x_call_routes *routes
     struct c300x_call_hub *hub = routes->hub;
     char segment[REQUEST_CALL_ID_LEN];
     char body[4096];
+    struct c300x_call_media media;
     int get = strcmp(request->method, "GET") == 0;
     int post = strcmp(request->method, "POST") == 0;
 
@@ -623,7 +624,8 @@ int c300x_http_calls_route(int client_fd, const struct c300x_call_routes *routes
         if (!hub->units.loaded) load_units(hub);
         if (!ask_station_state(routes)) return 1;
         tick(hub);
-        if (!c300x_calls_json(&hub->calls, c300x_monotonic_ms(), body, sizeof(body))) {
+        media_state(hub, &media);
+        if (!c300x_calls_json(&hub->calls, &media, c300x_monotonic_ms(), body, sizeof(body))) {
             c300x_copy_string(body, sizeof(body), "{\"ok\":false,\"error\":\"response_too_large\"}\n");
         }
         c300x_http_send_json(client_fd, 200, "OK", body);

@@ -112,10 +112,17 @@ int c300x_calls_is_current(const struct c300x_calls *calls, const char *call_id)
 /* Unlock with a call id: that unit's call, live or ended within the keep time. */
 int c300x_calls_unlock_allowed(const struct c300x_calls *calls, const char *call_id,
                                const char *unit, long long now);
+/* NULL when Home Assistant's hang-up can end this call, else the error that
+ * refuses it: the agent holds no leg of the call. station_busy: the station
+ * or its answering machine answered it, or the display or the app holds the
+ * view; ring_call_not_active: it rings without the agent's ring leg. */
+const char *c300x_calls_hangup_refusal(const struct c300x_call *call, const struct c300x_call_media *media);
 void c300x_calls_answered(struct c300x_calls *calls, const struct c300x_call_sink *sink,
                           const char *call_id, const char *by, long long now);
 void c300x_calls_end(struct c300x_calls *calls, const struct c300x_call_sink *sink,
                      const char *call_id, const char *reason, long long now);
-int c300x_calls_json(const struct c300x_calls *calls, long long now, char *out, size_t out_len);
+/* media: what the agent's media state says now, for each call's can_hangup. */
+int c300x_calls_json(const struct c300x_calls *calls, const struct c300x_call_media *media, long long now,
+                     char *out, size_t out_len);
 
 #endif

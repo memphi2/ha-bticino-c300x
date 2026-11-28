@@ -491,6 +491,20 @@ int c300x_calls_unlock_allowed(const struct c300x_calls *calls, const char *call
         && (live(call) || now - call->updated_ms < C300X_CALL_ENDED_KEEP_MS);
 }
 
+const char *c300x_calls_hangup_refusal(const struct c300x_call *call, const struct c300x_call_media *media)
+{
+    if (!live(call)) {
+        return "call_not_current";
+    }
+    if (call->view) {
+        return media->external && !media->agent ? "station_busy" : NULL;
+    }
+    if (call->state == C300X_CALL_ANSWERED) {
+        return strcmp(call->answered_by, "ha") == 0 ? NULL : "station_busy";
+    }
+    return media->ring_leg ? NULL : "ring_call_not_active";
+}
+
 void c300x_calls_answered(struct c300x_calls *calls, const struct c300x_call_sink *sink,
                           const char *call_id, const char *by, long long now)
 {
@@ -537,7 +551,8 @@ static const char *state_name(enum c300x_call_state state)
     return names[state];
 }
 
-int c300x_calls_json(const struct c300x_calls *calls, long long now, char *out, size_t out_len)
+int c300x_calls_json(const struct c300x_calls *calls, const struct c300x_call_media *media, long long now,
+                     char *out, size_t out_len)
 {
     const struct c300x_call *current = c300x_calls_current(calls);
     const struct c300x_call *listed[C300X_MAX_CALLS];
@@ -581,13 +596,14 @@ int c300x_calls_json(const struct c300x_calls *calls, long long now, char *out, 
         const struct c300x_call *call = listed[index];
         if (!c300x_appendf(out, out_len, &used,
                 "%s{\"call_id\":\"%s\",\"kind\":\"%s\",\"state\":\"%s\",\"unit\":%s,\"attribution\":\"%s\","
-                "\"answered_by\":%s%s%s,\"end_reason\":%s%s%s,\"age_ms\":%lld}",
+                "\"answered_by\":%s%s%s,\"end_reason\":%s%s%s,\"age_ms\":%lld,\"can_hangup\":%s}",
                 index > 0 ? "," : "", call->id, call->view ? "view" : "ring", state_name(call->state),
                 unit_json(call, unit, sizeof(unit)), call->attribution,
                 call->answered_by ? "\"" : "null", call->answered_by ? call->answered_by : "",
                 call->answered_by ? "\"" : "",
                 call->end_reason ? "\"" : "null", call->end_reason ? call->end_reason : "",
-                call->end_reason ? "\"" : "", now - call->started_ms)) {
+                call->end_reason ? "\"" : "", now - call->started_ms,
+                c300x_calls_hangup_refusal(call, media) == NULL ? "true" : "false")) {
             return 0;
         }
     }

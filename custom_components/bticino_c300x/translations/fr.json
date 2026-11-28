@@ -1755,6 +1755,9 @@
     "call_not_current": {
       "message": "Cet appel est terminé ou n'est pas l'appel en cours. Rien n'a été envoyé à la station."
     },
+    "ring_call_not_active": {
+      "message": "Home Assistant n'est pas relié à cet appel qui sonne : il ne peut ni le prendre ni raccrocher, et la station continue de sonner. Rien n'a été envoyé à la station."
+    },
     "unknown_unit": {
       "message": "La station n'a pas ce poste extérieur."
     },

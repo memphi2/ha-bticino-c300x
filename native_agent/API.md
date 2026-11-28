@@ -238,7 +238,7 @@ for example `config_error`, `api_token_missing`, `api_bind_failed`,
 | `GET` | `/api/v1/calls/doorbell/status` | API | None. |
 | `GET` | `/api/v1/calls` | API | Asks the station for its call state (`*#8**35##`) once, while none was seen since the agent started. |
 | `POST` | `/api/v1/calls/{call_id}/actions/answer` | API | Answers the current ring call locally. |
-| `POST` | `/api/v1/calls/{call_id}/actions/hangup` | API | Hangs up the current ring call or stops the current view. |
+| `POST` | `/api/v1/calls/{call_id}/actions/hangup` | API | Hangs up the current ring call or stops the current view; none when the agent holds no leg of the call. |
 | `GET` | `/api/v1/outdoor-units` | API | None (reads the station's archive on every request). |
 | `POST` | `/api/v1/outdoor-units/{unit_id}/actions/unlock` | API | Sends the lock command of that outdoor unit. |
 | `POST` | `/api/v1/calls/doorbell/actions/capture` | API | Marks native capture action accepted. |
@@ -1388,7 +1388,9 @@ Capabilities report `api_version: "2"`, `capabilities.outdoor_units` and
   out_of_memory` when the agent cannot allocate the answer.
 - `GET /api/v1/calls`: `boot_id` (drawn at agent start), `current_call_id`,
   `caller_frames_ignored`, `station_state` and live calls plus calls ended in
-  the last 60 s. `station_state` is the station's own call state from its
+  the last 60 s. Each call carries `can_hangup`: `true` while a hang-up of it
+  would be taken (see below), `false` for an ended call and for one the agent
+  holds no leg of. `station_state` is the station's own call state from its
   frame `*#8**35*<code>*0*0##` (`{"code", "state", "age_ms"}`), `null` until
   one was seen; while none was seen the first request asks the station
   (`*#8**35##`) once. A request that finds every OpenWebNet waiting place
@@ -1412,10 +1414,16 @@ Capabilities report `api_version: "2"`, `capabilities.outdoor_units` and
   `reason: "station_idle"`.
 - `POST /api/v1/calls/{call_id}/actions/answer`, `.../hangup`: answer or hang
   up the current call: the live ring call, else the live on-demand view, which
-  a hang-up stops (an answer of a view gets `409 call_not_ringing`). A view
-  that the display or the app holds, not the agent, only they can end: its
-  hang-up gets `409 station_busy`, nothing reaches the station and the view
-  call goes on. A call id
+  a hang-up stops (an answer of a view gets `409 call_not_ringing`). A
+  hang-up ends only a call the agent holds a leg of: its ring leg (ringing,
+  or answered by Home Assistant) or its own on-demand view. A ring call that
+  the display, the app or the answering machine answered and a view that the
+  display or the app holds get `409 station_busy`; a ringing call without the
+  agent's ring leg (only the bus rang, for example with smartphone
+  forwarding) gets `409 ring_call_not_active`, as its answer does. Nothing
+  reaches the station then, the call goes on and stays current, and a
+  running on-demand view goes on: a ring call's hang-up never stops a view.
+  A call id
   that is unknown, ended or not current gets `409 call_not_current` with
   `current_call_id`; nothing reaches the station. Success bodies are those of
   the 3.0 unscoped routes, which are gone.

@@ -1755,6 +1755,9 @@
     "call_not_current": {
       "message": "Dieser Anruf ist vorbei oder nicht der aktuelle Anruf. An die Station wurde nichts gesendet."
     },
+    "ring_call_not_active": {
+      "message": "Home Assistant ist mit diesem klingelnden Anruf nicht verbunden und kann ihn daher weder annehmen noch auflegen; die Station klingelt weiter. An die Station wurde nichts gesendet."
+    },
     "unknown_unit": {
       "message": "Die Station hat keine solche Außenstelle."
     },

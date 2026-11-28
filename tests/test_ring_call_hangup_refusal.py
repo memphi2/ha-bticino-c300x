@@ -6,7 +6,7 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from test_api import _CALLS, _PENDING_RING, _QueuedSession
 from test_camera import (
     C300XDoorbellCamera,
@@ -79,6 +79,65 @@ def test_a_refused_hangup_closes_nothing_and_sends_nothing(
             assert "closed" not in _types(card.messages)
             assert card.provider.closed == []
             assert not card.entry.runtime_data.resources.media_stop_counts
+        finally:
+            card.entry.runtime_data.api = card.media
+            await card.camera.async_will_remove_from_hass()
+
+    asyncio.run(run())
+
+
+def _held_call(state: str, answered_by: str | None) -> str:
+    """Unit 21's call as the agent lists it while it holds no leg of it."""
+
+    answered = f'"{answered_by}"' if answered_by else "null"
+    return (
+        '{"ok": true, "boot_id": "0badc0de", "current_call_id": "0badc0de-2", "calls": ['
+        f'{{"call_id": "0badc0de-2", "kind": "ring", "state": "{state}", "unit": "21",'
+        f' "attribution": "caller_frame", "answered_by": {answered}, "end_reason": null,'
+        ' "can_hangup": false}]}'
+    )
+
+
+@pytest.mark.parametrize(("call_id", "unit"), [(None, None), (None, "21"), ("0badc0de-2", None)])
+@pytest.mark.parametrize(("calls", "key"), [
+    # Only the bus rang (smartphone forwarding): the agent has no ring leg.
+    (_held_call("ringing", None), "ring_call_not_active"),
+    # The display, the app or the answering machine answered: the station holds it.
+    (_held_call("answered", "station"), "station_busy"),
+    (_held_call("answered", "answering_machine"), "station_busy"),
+])
+def test_the_hangup_of_a_call_the_agent_holds_no_leg_of_closes_nothing_and_sends_nothing(
+    monkeypatch: pytest.MonkeyPatch, call_id: str | None, unit: str | None, calls: str, key: str,
+) -> None:
+    async def run() -> None:
+        card = await _card_in_unit_21s_call(monkeypatch, [(200, calls)])
+        try:
+            with pytest.raises(HomeAssistantError) as raised:
+                await RingCallUseCase(card.entry).hangup(call_id, unit)
+            assert raised.value.translation_key == key
+            assert [request["args"][0] for request in card.session.requests] == ["GET"]
+            assert "card" in card.camera._webrtc_sessions.active
+            assert "closed" not in _types(card.messages)
+            assert card.provider.closed == []
+            assert not card.entry.runtime_data.resources.media_stop_counts
+        finally:
+            card.entry.runtime_data.api = card.media
+            await card.camera.async_will_remove_from_hass()
+
+    asyncio.run(run())
+
+
+def test_the_agents_ring_call_not_active_answer_is_its_translated_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The agent's own refusal, here of an answer: only the station rings.
+    async def run() -> None:
+        card = await _card_in_unit_21s_call(monkeypatch, [
+            (200, _CALLS), (409, '{"ok": false, "error": "ring_call_not_active", "ring_call_active": false}'),
+        ])
+        card.entry.runtime_data.api.async_doorbell_video_status = AsyncMock(return_value={})  # type: ignore[method-assign]
+        try:
+            with pytest.raises(HomeAssistantError) as raised:
+                await RingCallUseCase(card.entry).answer(None, "21")
+            assert raised.value.translation_key == "ring_call_not_active"
         finally:
             card.entry.runtime_data.api = card.media
             await card.camera.async_will_remove_from_hass()

@@ -43,8 +43,12 @@ static const char *find_tag(const char *from, const char *name)
     size_t name_len = strlen(name);
 
     for (const char *p = strchr(from, '<'); p != NULL; p = strchr(p + 1, '<')) {
+        /* The name first: only then is there a character after it. */
+        if (strncmp(p + 1, name, name_len) != 0) {
+            continue;
+        }
         char next = p[1 + name_len];
-        if (strncmp(p + 1, name, name_len) == 0 && (isspace((unsigned char)next) || next == '/' || next == '>')) {
+        if (isspace((unsigned char)next) || next == '/' || next == '>') {
             return p;
         }
     }

@@ -588,6 +588,26 @@ static void archive_objects_by_cid(void)
     assert(units.count == 3 && strcmp(units.items[2].source, "default") == 0);
 }
 
+/* An archive that ends inside a tag name: nothing is read past its end
+ * (the ASan build has each text in a buffer of its own length). */
+static void archive_cut_in_a_tag(void)
+{
+    static const char *const cuts[] = {
+        "<", "<o", "<ob", "<obj", "<archive><obj cid=\"10050\" dev=\"2\" where=\"0\"><i",
+    };
+    struct c300x_station_archive station;
+
+    for (size_t index = 0; index < sizeof(cuts) / sizeof(cuts[0]); index++) {
+        size_t length = strlen(cuts[index]) + 1;
+        char *text = malloc(length);
+        assert(text != NULL);
+        memcpy(text, cuts[index], length);
+        c300x_station_archive_parse(&station, text, NULL);
+        assert(station.unit_count == 0 && station.lock_count == 0);
+        free(text);
+    }
+}
+
 /* conf.xml's default unit 20 and the archive's 20#2 (behind an apartment
  * interface) are one door: one unit with the archive's name and where and
  * the default unit's id, the same with and without the archive. */
@@ -891,6 +911,7 @@ int main(int argc, char **argv)
         {"plain_address_is_the_qualified_unit", plain_address_is_the_qualified_unit},
         {"seen_units_survive_restart", seen_units_survive_restart},
         {"archive_objects_by_cid", archive_objects_by_cid},
+        {"archive_cut_in_a_tag", archive_cut_in_a_tag},
         {"default_unit_keeps_its_id", default_unit_keeps_its_id},
     };
     for (size_t index = 0; index < sizeof(cases) / sizeof(cases[0]); index++) {

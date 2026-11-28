@@ -20,7 +20,7 @@ from custom_components.bticino_c300x.call_registry import (
     units_from_stored,
     units_to_stored,
 )
-from custom_components.bticino_c300x.const import CONF_OUTDOOR_UNITS
+from custom_components.bticino_c300x.const import CONF_OUTDOOR_UNITS, CONF_STATION_ID
 
 UNITS = {
     "default_unit": "20_2",
@@ -273,6 +273,31 @@ def test_a_ring_with_no_other_live_call_asks_nothing(monkeypatch: pytest.MonkeyP
     assert entry.runtime_data.calls.current_call_id == "bbbbbbbb-1"
 
 
+def test_a_door_event_names_the_unit_whose_lock_opened(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The agent takes the door event's unit from the lock address. The call
+    # it carries may name another unit here (a ring still waiting for the
+    # caller frame, or one attributed to the default unit).
+    monkeypatch.setattr(call_sync, "async_dispatcher_send", lambda *args: None)
+    hass = SimpleNamespace(async_create_background_task=lambda work, _name: work.close())
+    entry = _entry(SimpleNamespace())
+    entry.runtime_data.calls.set_units(normalize_outdoor_units(UNITS))
+    call_sync.async_apply_call_event(hass, entry, "doorbell_pressed", {"call_id": "bbbbbbbb-1", "unit": "20_2"})  # type: ignore[arg-type]
+
+    def fields(event: str, data: dict[str, Any]) -> tuple[Any, Any]:
+        result = call_sync.async_apply_call_event(hass, entry, event, data)  # type: ignore[arg-type]
+        return result["call_id"], result["unit"]
+
+    for event in ("door_unlock_started", "door_unlock_ended"):
+        assert fields(event, {"address": "21", "unit": "21", "call_id": "bbbbbbbb-1"}) == ("bbbbbbbb-1", "21")
+        # No unit from the agent (a lock it does not know): the call's unit.
+        assert fields(event, {"address": "99", "call_id": "bbbbbbbb-1"}) == ("bbbbbbbb-1", "20_2")
+        assert fields(event, {"address": "21", "unit": "../x", "call_id": "bbbbbbbb-1"}) == ("bbbbbbbb-1", "20_2")
+    assert fields("door_opened", {"unit": "21", "call_id": "bbbbbbbb-1"}) == ("bbbbbbbb-1", "21")
+    # Call events keep the call's unit.
+    assert fields("call_answered", {"call_id": "bbbbbbbb-1", "unit": "21", "answered_by": "station"}) == (
+        "bbbbbbbb-1", "20_2")
+
+
 def test_an_agent_restart_reads_the_calls_again(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(call_sync, "async_dispatcher_send", lambda *args: None)
     names: list[str] = []
@@ -285,6 +310,40 @@ def test_an_agent_restart_reads_the_calls_again(monkeypatch: pytest.MonkeyPatch)
     entry = _entry(SimpleNamespace())
     call_sync.async_apply_call_event(hass, entry, "agent_restarted", {})  # type: ignore[arg-type]
     assert any("calls" in name for name in names), names
+
+
+@pytest.mark.parametrize(("default", "during_setup", "reloads"), [
+    ("21", False, True),
+    # The same default, a read at setup, or no default: no reload.
+    ("20_2", False, False),
+    ("21", True, False),
+    (None, False, False),
+])
+def test_a_new_default_unit_reloads_the_entry(
+    monkeypatch: pytest.MonkeyPatch, default: str | None, during_setup: bool, reloads: bool,
+) -> None:
+    # The media camera moves to the new default unit's device and the old
+    # default unit gets its own camera: both are built at setup.
+    monkeypatch.setattr(call_sync, "async_dispatcher_send", lambda *args: None)
+    units = {**UNITS, "default_unit": default, "units": [
+        {**unit, "default": unit["id"] == default} for unit in UNITS["units"]]}
+
+    class Api:
+        async def async_outdoor_units(self) -> Any:
+            return normalize_outdoor_units(units)
+
+    scheduled: list[str] = []
+    entries = _Entries()
+    entries.async_schedule_reload = scheduled.append  # type: ignore[attr-defined]
+    hass = SimpleNamespace(config_entries=entries)
+    entry = _entry(Api())
+    entry.data[CONF_STATION_ID] = "c300x-0123456789ab"
+    entry.version = 2
+    entry.runtime_data.agent_info = {"device_id": "c300x-0123456789ab"}
+    entry.runtime_data.calls.set_units(normalize_outdoor_units(UNITS))
+
+    assert asyncio.run(call_sync.async_refresh_units(hass, entry, during_setup=during_setup))  # type: ignore[arg-type]
+    assert scheduled == (["entry-1"] if reloads else [])
 
 
 @pytest.mark.parametrize("during_setup", [False, True])

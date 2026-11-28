@@ -312,7 +312,7 @@ def test_camera_setup_entry_adds_entity_only_when_capability_is_supported(monkey
         media, other = entries[True]
         assert isinstance(media, C300XDoorbellCamera)
         assert not isinstance(other, C300XDoorbellCamera)
-        assert media.unique_id == "c300x-0123456789ab_unit_20_camera"
+        assert media.unique_id == "c300x-0123456789ab_doorbell_camera"
 
         # Before the station named its units there is no media camera.
         empty = _FakeEntry(data={CONF_STATION_ID: "c300x-0123456789ab"})

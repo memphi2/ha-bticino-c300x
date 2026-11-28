@@ -146,7 +146,10 @@ def test_identity_is_the_station_not_the_entry() -> None:
     assert media_camera_unique_id(legacy) is None
     legacy.data = {CONF_STATION_ID: "c300x-0123456789ab", CONF_OUTDOOR_UNITS: ONE}
     assert station_id_known(legacy)
-    assert media_camera_unique_id(legacy) == "c300x-0123456789ab_unit_20_camera"
+    # The station's camera, whichever unit is the default.
+    assert media_camera_unique_id(legacy) == "c300x-0123456789ab_doorbell_camera"
+    legacy.data = {CONF_STATION_ID: "c300x-0123456789ab", CONF_OUTDOOR_UNITS: {**THREE, "default_unit": "21"}}
+    assert media_camera_unique_id(legacy) == "c300x-0123456789ab_doorbell_camera"
 
 
 def test_one_unit_rings_on_the_station_at_once_and_on_the_unit_when_it_is_named() -> None:
@@ -415,11 +418,11 @@ def test_a_station_event_belongs_to_its_unit_device_else_to_the_station(monkeypa
         ("bticino_c300x", "c300x-0123456789ab"): "device-station",
     }
 
-    def get_device(*, identifiers: set[tuple[str, str]]) -> Any:
-        (identifier,) = identifiers
+    def get_device(identifier: tuple[str, str], config_entry_id: str) -> Any:
+        assert config_entry_id == "entry-1"
         return SimpleNamespace(id=devices[identifier]) if identifier in devices else None
 
-    monkeypatch.setattr(unit_entity.dr, "async_get", lambda _hass: SimpleNamespace(async_get_device=get_device))
+    monkeypatch.setattr(unit_entity.dr, "async_get", lambda _hass: SimpleNamespace(async_get_device_by_identifier=get_device))
     entry = _entry(THREE)
     assert unit_entity.event_device_id(None, entry, "21") == "device-21"  # type: ignore[arg-type]
     # A unit that rang for the first time has no device yet.

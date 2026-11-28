@@ -23,11 +23,15 @@ _ENTRY_DATA = {
 }
 
 
-def test_doorbell_camera_unique_id_is_the_default_units_camera() -> None:
+def test_doorbell_camera_unique_id_is_the_stations_media_camera() -> None:
     entry = SimpleNamespace(entry_id="abc123", data=_ENTRY_DATA)
 
-    assert doorbell_camera_unique_id(entry) == "c300x-0123456789ab_unit_20_camera"
-    # Before the station named its units there is no media camera.
+    assert doorbell_camera_unique_id(entry) == "c300x-0123456789ab_doorbell_camera"
+    # The same camera when the station's default unit changes.
+    entry.data = {**_ENTRY_DATA, "outdoor_units": {"default_unit": "21", "units": [
+        {"id": "20", "where": "20"}, {"id": "21", "where": "21", "default": True}]}}
+    assert doorbell_camera_unique_id(entry) == "c300x-0123456789ab_doorbell_camera"
+    # Before the entry has its station id there is no media camera.
     assert doorbell_camera_unique_id(SimpleNamespace(entry_id="abc123", data={})) is None
 
 
@@ -43,7 +47,7 @@ def test_resolve_doorbell_camera_entity_id_uses_entity_registry(monkeypatch) -> 
     monkeypatch.setattr(video_module.er, "async_get", lambda _hass: _Registry())
 
     assert resolve_doorbell_camera_entity_id("hass", entry) == "camera.front_door"
-    assert calls == [("camera", "bticino_c300x", "c300x-0123456789ab_unit_20_camera")]
+    assert calls == [("camera", "bticino_c300x", "c300x-0123456789ab_doorbell_camera")]
     assert resolve_doorbell_camera_entity_id("hass", SimpleNamespace(entry_id="abc123", data={})) is None
     assert len(calls) == 1
 

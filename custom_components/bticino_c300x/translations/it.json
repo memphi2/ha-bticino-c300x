@@ -1695,6 +1695,9 @@
     "entry_id_required": {
       "message": "Esistono più stazioni BTicino C300X/C100X: seleziona come obiettivo una stazione o un posto esterno."
     },
+    "target_ambiguous": {
+      "message": "Seleziona un solo obiettivo: una stazione BTicino C300X/C100X o uno dei suoi posti esterni (dispositivo o entità)."
+    },
     "target_unsupported": {
       "message": "Seleziona come obiettivo una stazione o un posto esterno BTicino C300X/C100X (dispositivo o entità); aree, piani, etichette e \"all\" non sono supportati."
     },

@@ -463,6 +463,8 @@ def _targets(monkeypatch: pytest.MonkeyPatch, entities: dict[str, Any] | None = 
 def test_services_target_a_station_or_outdoor_unit_device_or_entity(monkeypatch) -> None:  # noqa: ANN001
     entities = {
         "camera.two": types.SimpleNamespace(platform=DOMAIN, device_id="station-two"),
+        "switch.one_mute": types.SimpleNamespace(platform=DOMAIN, device_id="station-one"),
+        "button.one_21_door": types.SimpleNamespace(platform=DOMAIN, device_id="unit-one-21"),
         "light.kitchen": types.SimpleNamespace(platform="hue", device_id="foreign"),
     }
     _targets(monkeypatch, entities)
@@ -487,7 +489,11 @@ def test_services_target_a_station_or_outdoor_unit_device_or_entity(monkeypatch)
 
         for data, key in (
             ({}, "entry_id_required"),
-            ({"device_id": ["station-one", "station-two"]}, "entry_id_required"),
+            # Several targets: the call names one station or one unit.
+            ({"device_id": ["station-one", "station-two"]}, "target_ambiguous"),
+            ({"device_id": ["station-one", "unit-one-21"]}, "target_ambiguous"),
+            ({"entity_id": ["switch.one_mute", "button.one_21_door"]}, "target_ambiguous"),
+            ({"device_id": "station-one", "entity_id": "button.one_21_door"}, "target_ambiguous"),
             ({"device_id": "missing"}, "unknown_entry"),
             ({"device_id": "foreign"}, "unknown_entry"),
             ({"entity_id": "light.kitchen"}, "unknown_entry"),
@@ -513,7 +519,9 @@ def test_services_target_a_station_or_outdoor_unit_device_or_entity(monkeypatch)
         await stop(types.SimpleNamespace(data={"device_id": "station-two"}))
         await stop(types.SimpleNamespace(data={"entity_id": ["camera.two"]}))
         await stop(types.SimpleNamespace(data={"device_id": ["unit-one-21"]}))
-        assert ran == ["two", "two", "one"]
+        # The same device named twice is one target.
+        await stop(types.SimpleNamespace(data={"device_id": "station-one", "entity_id": "switch.one_mute"}))
+        assert ran == ["two", "two", "one", "one"]
 
     asyncio.run(_run())
 

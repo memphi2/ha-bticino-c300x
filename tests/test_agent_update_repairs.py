@@ -1245,7 +1245,7 @@ def test_frontend_card_repair_initializes_missing_lovelace_config(monkeypatch) -
             unique_id: str,
         ) -> str | None:
             assert platform == "bticino_c300x"
-            if domain == "camera" and unique_id == "c300x-0123456789ab_unit_20_camera":
+            if domain == "camera" and unique_id == "c300x-0123456789ab_doorbell_camera":
                 return "camera.bticino_c300x_doorbell_camera"
             return None
 
@@ -1307,7 +1307,7 @@ def test_frontend_card_repair_rejects_invalid_lovelace_configs(monkeypatch) -> N
             unique_id: str,
         ) -> str | None:
             assert platform == "bticino_c300x"
-            if domain == "camera" and unique_id == "c300x-0123456789ab_unit_20_camera":
+            if domain == "camera" and unique_id == "c300x-0123456789ab_doorbell_camera":
                 return "camera.bticino_c300x_doorbell_camera"
             return None
 
@@ -2067,7 +2067,7 @@ def test_frontend_card_repair_adds_storage_lovelace_view(monkeypatch) -> None:
             unique_id: str,
         ) -> str | None:
             assert platform == "bticino_c300x"
-            if domain == "camera" and unique_id == "c300x-0123456789ab_unit_20_camera":
+            if domain == "camera" and unique_id == "c300x-0123456789ab_doorbell_camera":
                 return "camera.bticino_c300x_doorbell_camera"
             if domain == "sensor" and unique_id == "entry-1_doorbell_state":
                 return "sensor.bticino_c300x_tuerklingel_status"
@@ -2148,7 +2148,7 @@ def test_frontend_card_repair_replaces_legacy_split_cards(monkeypatch) -> None:
             unique_id: str,
         ) -> str | None:
             assert platform == "bticino_c300x"
-            if domain == "camera" and unique_id == "c300x-0123456789ab_unit_20_camera":
+            if domain == "camera" and unique_id == "c300x-0123456789ab_doorbell_camera":
                 return "camera.bticino_c300x_doorbell_camera"
             return None
 
@@ -2242,7 +2242,7 @@ def test_frontend_card_repair_cleans_all_lovelace_views(monkeypatch) -> None:
             unique_id: str,
         ) -> str | None:
             assert platform == "bticino_c300x"
-            if domain == "camera" and unique_id == "c300x-0123456789ab_unit_20_camera":
+            if domain == "camera" and unique_id == "c300x-0123456789ab_doorbell_camera":
                 return "camera.bticino_c300x_doorbell_camera"
             return None
 
@@ -2354,7 +2354,7 @@ def test_frontend_card_repair_adds_cards_to_selected_dashboard_and_view(
             unique_id: str,
         ) -> str | None:
             assert platform == "bticino_c300x"
-            if domain == "camera" and unique_id == "c300x-0123456789ab_unit_20_camera":
+            if domain == "camera" and unique_id == "c300x-0123456789ab_doorbell_camera":
                 return "camera.bticino_c300x_doorbell_camera"
             if domain == "sensor" and unique_id == "entry-1_doorbell_state":
                 return "sensor.bticino_c300x_tuerklingel_status"

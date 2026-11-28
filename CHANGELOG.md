@@ -15,7 +15,9 @@ files.
 Breaking changes:
 
 - **Run the agent update Repair.** The native agent changed. Until the
-  Repair has run, the integration shows no entities; with it the devices and
+  Repair has run, the integration shows no entities and
+  `bticino_c300x_agent_event_received` carries no `device_id`; rings and other
+  station events still reach automations. With the Repair the devices and
   entities move to the outdoor units.
 - **Outdoor units are devices.** The doorbell camera, the doorbell ring event
   and the door button move to the device of the default outdoor unit. Their
@@ -82,7 +84,8 @@ Outdoor units and calls:
   unlock** button, a **Call** sensor (`idle`, `ringing`, `answered`,
   `viewing`, with `call_id`), a **Last visitor** image and a camera: the
   **Doorbell camera** on the default unit, a **Camera** with still pictures
-  on the others. The station names its units from its own configuration; a
+  on the others. When the station's default unit changes, the Doorbell
+  camera moves to the new one and keeps its entity ID. The station names its units from its own configuration; a
   unit that is not configured appears with its first ring. The device of a
   unit the station no longer reports can be deleted.
 - **Station ring:** a new event on the station that fires at once with every

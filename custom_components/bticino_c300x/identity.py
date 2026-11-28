@@ -83,11 +83,16 @@ def default_unit_id(entry: Any) -> str | None:
     return value if isinstance(value, str) and value else None
 
 
-def media_camera_unique_id(entry: Any) -> str | None:
-    """The camera with ring, answer and on-demand video: the default unit's.
+# The media camera's key: one camera of the station, whichever unit is the default.
+MEDIA_CAMERA_KEY = "doorbell_camera"
 
-    None before the station named its units: there is no such camera yet.
+
+def media_camera_unique_id(entry: Any) -> str | None:
+    """The camera with ring, answer and on-demand video.
+
+    It sits on the default unit's device, but its id is the station's: it
+    stays the same entity when the station's default unit changes. None
+    while the entry waits for its station id.
     """
 
-    unit = default_unit_id(entry)
-    return unit_unique_id(entry, unit, "camera") if unit else None
+    return station_unique_id(entry, MEDIA_CAMERA_KEY) if station_id_known(entry) else None

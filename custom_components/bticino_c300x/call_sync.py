@@ -33,6 +33,9 @@ CALL_EVENT_TYPES = frozenset({
 })
 _UNIT_BINDING_EVENTS = frozenset({"doorbell_pressed", "call_caller_identified", "call_view_started"})
 DOOR_EVENT_STATES = {"door_opened": "open", "door_closed": "closed"}
+# The agent names the unit from the frame's address: the lock that opened,
+# the door contact that changed. That unit wins over the call's.
+_ADDRESSED_UNIT_EVENTS = frozenset({"door_unlock_started", "door_unlock_ended", *DOOR_EVENT_STATES})
 
 
 def entry_call_registry(entry: BticinoC300XConfigEntry) -> C300XCallRegistry | None:
@@ -55,6 +58,8 @@ async def async_refresh_units(
 
     Outside setup, units that make the identity migration possible (the read
     at setup failed) reload the entry: the migration runs before the platforms.
+    So does a new default unit: the media camera moves to its device, and the
+    old default unit gets its own camera.
     """
 
     runtime = getattr(entry, "runtime_data", None)
@@ -69,11 +74,15 @@ async def async_refresh_units(
     if getattr(entry, "runtime_data", None) is not runtime:
         return False
     doors = registry.door_states()
+    default = registry.default_unit
     changed = registry.set_units(payload)
     if registry.door_states() != doors:
         async_dispatcher_send(hass, SIGNAL_DOORS_CHANGED, entry.entry_id)
     if not during_setup and _identity_migration_pending(entry, runtime, registry):
         _LOGGER.info("C300X entry %s reloads to take the station's identity", entry.entry_id)
+        hass.config_entries.async_schedule_reload(entry.entry_id)
+    elif not during_setup and registry.default_unit not in (None, default) and default is not None:
+        _LOGGER.info("C300X entry %s reloads: the default outdoor unit is now %s", entry.entry_id, registry.default_unit)
         hass.config_entries.async_schedule_reload(entry.entry_id)
     if not changed:
         return True
@@ -166,7 +175,9 @@ def async_apply_call_event(
     call_id = call.call_id if call is not None else data.get("call_id")
     known = registry.call(call_id) if isinstance(call_id, str) else None
     # A door frame names its unit also outside a call.
-    unit = known.unit if known is not None else data.get("unit")
+    unit = valid_unit_id(data.get("unit")) if event_type in _ADDRESSED_UNIT_EVENTS else None
+    if unit is None:
+        unit = known.unit if known is not None else data.get("unit")
     fields: dict[str, Any] = {
         "call_id": call_id if isinstance(call_id, str) else None,
         "unit": unit if isinstance(unit, str) else None,

@@ -51,6 +51,7 @@ from custom_components.bticino_c300x import (  # noqa: E402
 from custom_components.bticino_c300x import (  # noqa: E402
     call_sync,
     media_watchdog,
+    unit_entity,
 )
 from custom_components.bticino_c300x import (  # noqa: E402
     webhook as webhook_module,
@@ -64,6 +65,7 @@ from custom_components.bticino_c300x.call_registry import (  # noqa: E402
 from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_EVENT_WEBHOOK_TOKEN,
     CONF_SHARED_SECRET,
+    CONF_STATION_ID,
     EVENT_AGENT_EVENT_RECEIVED,
     HEADER_EVENT_TOKEN,
     HEADER_SHARED_SECRET,
@@ -1053,6 +1055,59 @@ def test_station_call_state_and_door_contact_events_reach_the_bus(monkeypatch: p
         "door_opened", "20", "device-unit-20")
     send("door.closed", {"unit": "20", "where": "20", "raw": "*8*65*20##"})
     assert (fired[-1][1]["event_type"], fired[-1][1]["unit"]) == ("door_closed", "20")
+
+
+def test_events_reach_the_bus_while_the_entry_waits_for_its_station_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An entry from before 3.1.0 gets its station id from the agent update
+    Repair; its events are registered before that. A ring still fires the bus
+    event, without a device, and names the device once the id is known."""
+
+    monkeypatch.setattr(webhook_module, "event_device_id", unit_entity.event_device_id)
+    devices = {
+        ("bticino_c300x", "c300x-0123456789ab:unit:20"): "device-unit-20",
+        ("bticino_c300x", "c300x-0123456789ab"): "device-station",
+    }
+
+    def by_identifier(identifier: tuple[str, str], config_entry_id: str) -> object:
+        assert config_entry_id == "entry-1"
+        return SimpleNamespace(id=devices[identifier]) if identifier in devices else None
+
+    registry_stub = SimpleNamespace(async_get_device_by_identifier=by_identifier)
+    monkeypatch.setattr(unit_entity.dr, "async_get", lambda _hass: registry_stub)
+    monkeypatch.setattr(call_sync, "async_dispatcher_send", lambda *args: None)
+    monkeypatch.setattr(webhook_module, "resolve_doorbell_camera_entity_id", lambda _hass, _entry: None)
+    hass = _FakeHass()
+    hass.async_create_background_task = lambda coro, name: coro.close()  # type: ignore[attr-defined]
+    fired: list[tuple[str, dict]] = []
+    hass.bus.async_fire = lambda event_type, data: fired.append((event_type, data))  # type: ignore[method-assign]
+    event_state = C300XEventState()
+    entry = SimpleNamespace(
+        entry_id="entry-1", title="C300X", data={CONF_EVENT_WEBHOOK_TOKEN: "event-token"}, options={},
+        runtime_data=SimpleNamespace(event_state=event_state, calls=C300XCallRegistry()),
+    )
+
+    def send(event: str, data: dict) -> dict:
+        response = asyncio.run(
+            _async_handle_agent_event(
+                hass,  # type: ignore[arg-type]
+                entry,  # type: ignore[arg-type]
+                event_state,
+                _FakeRequest("event-token", {"type": event, "data": data}),  # type: ignore[arg-type]
+            )
+        )
+        assert response.status == 200, event
+        name, fired_data = fired[-1]
+        assert name == EVENT_AGENT_EVENT_RECEIVED
+        return fired_data
+
+    ring = send("doorbell.pressed", {"call_id": "0badc0de-1", "unit": "20", "attribution": "caller_frame"})
+    assert (ring["event_type"], ring["unit"], ring["device_id"]) == ("doorbell_pressed", "20", None)
+    assert send("ringer.muted", {})["device_id"] is None
+    assert send("door_unlock.started", {"address": "20", "unit": "20"})["device_id"] is None
+    assert len(fired) == 3
+    entry.data = {**entry.data, CONF_STATION_ID: "c300x-0123456789ab"}
+    assert send("door_unlock.started", {"address": "20", "unit": "20"})["device_id"] == "device-unit-20"
+    assert send("ringer.muted", {})["device_id"] == "device-station"
 
 
 def test_external_doorbell_view_does_not_advertise_ha_video_available() -> None:

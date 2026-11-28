@@ -1695,6 +1695,9 @@
     "entry_id_required": {
       "message": "More than one BTicino C300X/C100X station exists: select one station or outdoor unit as the target."
     },
+    "target_ambiguous": {
+      "message": "Select one target only: one BTicino C300X/C100X station or one of its outdoor units (device or entity)."
+    },
     "target_unsupported": {
       "message": "Select a BTicino C300X/C100X station or outdoor unit (device or entity) as the target; areas, floors, labels and \"all\" are not supported."
     },

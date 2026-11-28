@@ -49,7 +49,10 @@ caller frame, but its lock and video use the plain `20`
     `via_device` the station, model `Outdoor unit`.
 - Entity unique ids: station `"<station_id>_<key>"`, unit
   `"<station_id>_unit_<unit_id>_<key>"`. One helper builds them; no module
-  formats its own.
+  formats its own. The media camera is a station entity
+  (`"<station_id>_doorbell_camera"`) on the default unit's device: when the
+  station's default unit changes it stays the same entity, and the entry
+  reloads so that it moves to the new default unit's device.
 - Deleting and re-adding the config entry gives the same identifiers, so Home
   Assistant restores the devices' names, areas and the entities' ids.
 
@@ -337,7 +340,7 @@ Every outdoor unit, also the only one:
 | Entity | Key | Notes |
 | --- | --- | --- |
 | `event` | `doorbell` | device class `doorbell`, event type `ring`; attributes `call_id`, `unit`, `unit_name`, `attribution`, `camera_entity_id` (the media camera). |
-| `camera` | `camera` | The default unit's camera is the media camera (ring, answer, on-demand); like every unit camera it appears with its unit. Another unit's camera shows a still of the live picture while it has the current call (the station switches the picture to the caller), else its last visitor image. |
+| `camera` | `camera` | The default unit's camera is the media camera (ring, answer, on-demand; key `doorbell_camera` of the station); like every unit camera it appears with its unit. Another unit's camera shows a still of the live picture while it has the current call (the station switches the picture to the caller), else its last visitor image. |
 | `button` | `door` | Unlocks this unit (`outdoor-units/{unit_id}/actions/unlock`); attributes `lock_address` (the unit's `lock_where`) and `lock_name` (the name the agent reports for that address, else the unit's name), the same for every unit. |
 | `event` | `door_event` | Event type `opened` on this unit's `door_unlock.started` (the agent names the unit of the lock address); attribute `call_id` while the unit has a call. |
 | `sensor` | `call` | `idle`, `ringing`, `answered`, `viewing`; attribute `call_id`. |
@@ -365,7 +368,9 @@ The bus event `bticino_c300x_agent_event_received` keeps every event,
 rings included: the card, the ring preview, captures and the event entities
 listen to it. Its `event_type` is the stable key; `unit` and `call_id` are
 `null` while not known (a door frame names its unit also outside a call),
-`device_id` is the unit's device, else the station's. Automations should
+`device_id` is the unit's device, else the station's, and `null` while the
+entry waits for its station id (an entry from before 3.1.0 until the agent
+update Repair): the event is fired all the same. Automations should
 trigger on the event entities. There is no event for an action Home
 Assistant ran (`run_action`, a display tile): automations react to the entity
 that was switched; a door and the stair light fire the Door and Stair light
@@ -430,7 +435,7 @@ with an outdated agent the agent update Repair is open and reloads it.
 | --- | --- |
 | device `(bticino_c300x, <entry_id>)` | `(bticino_c300x, <station_id>)`, same HA device |
 | `<entry_id>_<key>` | `<station_id>_<key>` |
-| `<entry_id>_doorbell_camera` | `<station_id>_unit_<default>_camera`, on the default unit's device |
+| `<entry_id>_doorbell_camera` | `<station_id>_doorbell_camera`, on the default unit's device |
 | `<entry_id>_doorbell_event` | `<station_id>_unit_<default>_doorbell`, on the default unit's device |
 | `<entry_id>_door_unlock` | `<station_id>_unit_<default>_door`, on the default unit's device |
 | `<entry_id>_doorbell_state`, `<entry_id>_agent_event` | removed from the registry |

@@ -1,5 +1,5 @@
-import "./c300x-doorbell-call-card.js?v=2eb167610eeb8831";
-import { c300xDocumentationUrlOfPage } from "./c300x-entity-resolver.js?v=2eb167610eeb8831";
+import "./c300x-doorbell-call-card.js?v=e221abe282e5404a";
+import { c300xDocumentationUrlOfPage } from "./c300x-entity-resolver.js?v=e221abe282e5404a";
 
 const C300X_CARD_TAG = "c300x-doorbell-call-card";
 const C300X_CARD_TYPE = `custom:${C300X_CARD_TAG}`;

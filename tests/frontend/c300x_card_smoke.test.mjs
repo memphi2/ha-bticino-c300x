@@ -493,11 +493,11 @@ test("doorbell card custom element renders with fake Home Assistant state", asyn
   // The help link of the picker and the editor follows the model set up.
   const c100x = {
     entities: { "camera.door": { platform: "bticino_c300x", device_id: "door" } },
-    devices: { door: { model: "Classe 100X" } },
+    devices: { station: { model: "Classe 100X" }, door: { model: "Outdoor unit", via_device_id: "station" } },
   };
   globalThis.document.querySelector = (selector) => (selector === "home-assistant" ? { hass: c100x } : null);
   assert.match(globalThis.window.customCards[0].documentationURL, /\/docs\/classe-100x\/2-use\.md#what-works$/);
-  c100x.devices.door.model = "Classe 300X";
+  c100x.devices.station.model = "Classe 300X";
   assert.match(globalThis.window.customCards[0].documentationURL, /\/docs\/classe-300x\/2-use\.md#doorbell-card$/);
 });
 
@@ -2314,7 +2314,11 @@ test("the default card names keep the C300X words and name a C100X by its own mo
         const card = new Card();
         card.setConfig({ type: "custom:c300x-doorbell-call-card", entity: "camera.bticino_c300x_doorbell_camera", mode });
         const hass = { ...fakeHass(), language };
-        hass.devices = { "device-1": { config_entry_id: "entry-1", ...(model ? { model } : {}) } };
+        // The camera is on the default outdoor unit's device, below the station.
+        hass.devices = {
+          station: { config_entry_id: "entry-1", ...(model ? { model } : {}) },
+          "device-1": { config_entry_id: "entry-1", model: "Outdoor unit", via_device_id: "station" },
+        };
         card.hass = hass;
         seen.push(card._defaultName());
       }

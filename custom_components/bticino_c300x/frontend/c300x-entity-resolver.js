@@ -88,9 +88,9 @@ export function c300xRelatedEntity(hass, config, domain, translationKey, configK
 }
 
 // The device page names a C100X "Classe 100X"; every other device keeps the C300X texts.
+// An outdoor unit's entity takes its station's model.
 export function c300xDeviceModel(hass, entityId) {
-  const deviceId = hass?.entities?.[entityId]?.device_id;
-  return hass?.devices?.[deviceId]?.model === "Classe 100X" ? "C100X" : "C300X";
+  return hass?.devices?.[c300xStationDeviceId(hass, entityId)]?.model === "Classe 100X" ? "C100X" : "C300X";
 }
 
 // One card serves both models. Home Assistant reads its documentation link in

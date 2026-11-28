@@ -9,6 +9,7 @@ import {
   C300X_MEDIA_READINESS_KEY,
   C300X_PLATFORM,
   c300xDeviceActionEntity,
+  c300xDeviceModel,
   c300xDocumentationUrl,
   c300xDocumentationUrlOfPage,
   c300xEntryId,
@@ -385,6 +386,17 @@ test("outdoor unit devices count as their station for the documentation link", (
   state.devices.unit = { model: "Outdoor unit", via_device_id: "device-0" };
   state.entities["lock.door_unit"] = { platform: C300X_PLATFORM, device_id: "unit" };
   assert.equal(c300xDocumentationUrl(state), C100X_DOCUMENTATION_URL);
+});
+
+test("an outdoor unit's entity has its station's model", () => {
+  const state = stations("Classe 100X");
+  state.devices.unit = { model: "Outdoor unit", via_device_id: "device-0" };
+  state.entities["camera.unit"] = { platform: C300X_PLATFORM, device_id: "unit" };
+  assert.equal(c300xDeviceModel(state, "camera.unit"), "C100X");
+  assert.equal(c300xDeviceModel(state, "camera.door_0"), "C100X");
+  state.devices["device-0"].model = "Classe 300X";
+  assert.equal(c300xDeviceModel(state, "camera.unit"), "C300X");
+  assert.equal(c300xDeviceModel(state, "camera.unknown"), "C300X");
 });
 
 test("the card registration reads the stations of the Home Assistant page", (t) => {

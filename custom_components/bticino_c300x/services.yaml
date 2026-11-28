@@ -330,7 +330,7 @@ evaluate_ring_analysis:
         text:
     unlock_on_match:
       name: Unlock on match
-      description: Open the door only when the phrase matches. A unit target opens that outdoor unit, otherwise the unit of the current call. Defaults to false.
+      description: Open the door only when the phrase matches, and only the door of the outdoor unit that rang in the recording; a target of another outdoor unit is refused. Defaults to false.
       required: false
       default: false
       selector:

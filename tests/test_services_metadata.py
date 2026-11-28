@@ -48,6 +48,11 @@ def test_services_yaml_exposes_doorbell_video_activation() -> None:
     assert "evaluate_ring_analysis" in sections
     assert "\n    unlock_on_match:\n" in sections["evaluate_ring_analysis"]
     assert "\n    lock_id:\n" not in sections["evaluate_ring_analysis"]
+    # It opens the unit the recording names; a target of another unit is refused.
+    unlock = sections["evaluate_ring_analysis"].split("\n    unlock_on_match:\n", 1)[1]
+    assert "the outdoor unit that rang in the recording" in unlock
+    assert "a target of another outdoor unit is refused" in unlock
+    assert "otherwise the unit of the current call" not in unlock
     assert "/config/c300x/analysis/decision.json" in sections["evaluate_ring_analysis"]
 
 

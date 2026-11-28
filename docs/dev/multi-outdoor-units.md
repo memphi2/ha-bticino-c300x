@@ -305,8 +305,9 @@ shows the calling unit; the station switches the picture itself.
 On demand, the request's `unit` selects the INVITE's `a=DEVADDR`: the default
 unit keeps `video.sip.devaddr`; any other unit sends its full `where`
 verbatim (`21`, `20#2`), which bt_answering_machine turns into
-`*8*4#1<own>*<DEVADDR>##` when it starts with `2` and its number before `#`
-is below 96 (else `409 unit_video_unsupported`). A running view of another
+`*8*4#1<own>*<DEVADDR>##` when it starts with `2` and the unit address
+after that `2`, up to `#`, is below 96 (`210` is unit 10; else
+`409 unit_video_unsupported`). A running view of another
 unit is stopped first (BYE, on-demand GOP cache dropped), then the parked
 RTSP clients get the new unit's INVITE; the view frame
 `*8*1#5#4#<where>*<own>##` attributes the view call to that unit. The
@@ -320,7 +321,7 @@ selection stays for later streams until the next activation.
 | `404` | `unknown_unit` | No unit with that id. |
 | `409` | `station_busy` | Hang-up of a view that the display or the app holds, not the agent: the agent cannot end it. Nothing is sent to the station; the view call goes on. |
 | `409` | `call_unit_pending` | `current` (also a video request without `unit`) while the ring call's unit is not known yet: from the ring until its caller frame or the default fallback (1 s). The body carries the ring's `call_id` and `retry_after_ms` (1-1000), the time left until the fallback. Nothing is sent to the station. A video request that the ring's own video answers is not refused. |
-| `409` | `unit_video_unsupported` | On-demand video of a unit whose address the station does not view (not `2…`, or 96 and above before `#`), also while a view runs, which goes on; only the ring's own video is shown whatever unit is asked. |
+| `409` | `unit_video_unsupported` | On-demand video of a unit whose address the station does not view (not `2…`, no unit address after the `2`, or one of 96 and above), also while a view runs, which goes on; only the ring's own video is shown whatever unit is asked. |
 | `400` | `invalid_call_id` | Empty or longer than 32 characters. |
 
 ### Events

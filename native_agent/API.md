@@ -1435,8 +1435,9 @@ Capabilities report `api_version: "2"`, `capabilities.outdoor_units` and
   demand, the INVITE's `a=DEVADDR` names the unit: `video.sip.devaddr` for the
   default unit, as before, the unit's full address (`where`, verbatim, e.g.
   `21` or `20#2`) for any other. The station's bt_answering_machine sends a
-  view for a DEVADDR that starts with `2` and whose number before `#` is below
-  96 (`*8*4#1<own>*<DEVADDR>##`); another unit gets
+  view for a DEVADDR that starts with `2` and whose unit address after that
+  `2`, up to `#`, is below 96 (`21`, `210`, `295#1`; not `2` or `296`)
+  (`*8*4#1<own>*<DEVADDR>##`); another unit gets
   `409 unit_video_unsupported`, also while a view runs, which then goes on
   (only the ring's own video shows whatever unit is asked). A running view of another unit ends first
   (BYE, its cached frames dropped, `doorbell.media.closed`, the view call

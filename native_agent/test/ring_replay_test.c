@@ -1348,8 +1348,12 @@ static void ondemand_units(void) {
     char data[4096];
     atomic_store(&station_busy, 0);
     assert(c300x_media_devaddr_valid("21") && c300x_media_devaddr_valid("20#2") && c300x_media_devaddr_valid("29#15"));
-    assert(!c300x_media_devaddr_valid("295") && !c300x_media_devaddr_valid("11") && !c300x_media_devaddr_valid("31#2"));
+    assert(!c300x_media_devaddr_valid("11") && !c300x_media_devaddr_valid("31#2"));
     assert(!c300x_media_devaddr_valid("") && !c300x_media_devaddr_valid(NULL) && !c300x_media_devaddr_valid("2a"));
+    /* The station's rule: the unit's address after the leading 2 is below
+     * 96 (210: unit 10, 295: unit 95); a 2 alone names no unit. */
+    assert(c300x_media_devaddr_valid("210") && c300x_media_devaddr_valid("295") && c300x_media_devaddr_valid("295#1"));
+    assert(!c300x_media_devaddr_valid("296") && !c300x_media_devaddr_valid("2") && !c300x_media_devaddr_valid("2#1"));
 
     /* The default unit, as before: the configured DEVADDR. */
     assert(c300x_video_activate(runtime->video, 1, NULL));

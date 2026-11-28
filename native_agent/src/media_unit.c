@@ -17,10 +17,12 @@ int c300x_media_devaddr_valid(const char *devaddr)
     long number;
 
     if (devaddr == NULL || !c300x_unit_where_valid(devaddr) || devaddr[0] != '2'
-        || strlen(devaddr) >= C300X_MEDIA_DEVADDR_LEN) {
+        || devaddr[1] < '0' || devaddr[1] > '9' || strlen(devaddr) >= C300X_MEDIA_DEVADDR_LEN) {
         return 0;
     }
-    number = strtol(devaddr, &end, 10);
+    /* bt_answering_machine's rule: the unit's address after the leading 2
+     * (the device type) is below 96. */
+    number = strtol(devaddr + 1, &end, 10);
     return (*end == '\0' || *end == '#') && number < 96;
 }
 

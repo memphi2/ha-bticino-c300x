@@ -251,7 +251,8 @@ def test_an_offline_entry_names_the_model_its_agent_named_last(stored, model) ->
     from custom_components.bticino_c300x.entity import _device_info
 
     entry = _entry(available=False)
-    entry.data = {STATION_MODEL: stored} if stored else {}
+    if stored:
+        entry.data[STATION_MODEL] = stored
     entry.runtime_data.agent_info = {"model": None, "display_kind": None, "offline_error": "down"}
     assert _device_info(entry)["model"] == model
     del entry.runtime_data

@@ -14,12 +14,19 @@ from typing import Any
 
 C300X = "C300X"
 C100X = "C100X"
+# Classe 300X2 (firmware 1.2.x): recognised, not supported yet. It runs
+# aarch64 only, with no loader for the armhf agent, and has a Flutter display
+# instead of Qt. The installer writes nothing to it.
+C3X2 = "C3X2"
+C3X2_NOT_SUPPORTED = "c3x2_not_supported"
 # C300X 1.7.x/2.0.x: Qt 4, the display files are patched on disk.
 QT4_ONDISK = "qt4_ondisk"
 # C300X 3.0.x: Qt 5, the pages reach the display as a resource overlay.
 QT5_RCC = "qt5_rcc"
 # C100X: its own pages through hooks, activated by a reboot.
 QT5_ONDISK = "qt5_ondisk"
+# A station without a display we know: the Classe 300X2.
+NO_DISPLAY = "none"
 CAMERA_HIGH_RES = "high_res"
 CAMERA_FIXED = "fixed"
 # A Classe 100X is experimental and set up only after the user asked for it:
@@ -36,6 +43,9 @@ _MODEL_FILE = "/home/bticino/sp/dbfiles_ws.xml"
 # The vendor's folder, on every station of every firmware. A host without it
 # is no BTicino station and gets nothing from the installer.
 _STATION_HOME = "/home/bticino"
+# The kernel's machine name of a 64-bit ARM station. Every Classe 300X and
+# 100X runs a 32-bit ARM kernel (armv7l); the agent is an armhf program.
+_AARCH64 = "aarch64"
 NOT_A_BTICINO_STATION = "not_a_bticino_station"
 
 
@@ -55,6 +65,12 @@ class DeviceProfile:
         return self.model == C100X
 
     @property
+    def supported(self) -> bool:
+        """False on a station the integration does not serve yet: the Classe 300X2."""
+
+        return self.model != C3X2
+
+    @property
     def display_is_qt5_overlay(self) -> bool:
         """The Qt 5 display of C300X firmware 3.0.x, not the C100X."""
 
@@ -67,7 +83,7 @@ class DeviceProfile:
         A station whose own model name and display program disagree gets neither.
         """
 
-        return self.display != QT5_ONDISK and self.model_confirmed
+        return self.supported and self.display != QT5_ONDISK and self.model_confirmed
 
     @property
     def camera_fixed(self) -> bool:
@@ -127,14 +143,22 @@ def station_profile(run: Callable[[str], str], quote: Callable[[str], str]) -> D
     missing or disagrees with the display program, the program decides model
     and display and the profile is not confirmed. An unreadable answer counts
     as the C300X with the Qt 4 display.
+
+    A Classe 300X2 is told by either of two signs, each enough alone: its
+    kernel is aarch64, or it names itself C3X2. A Classe 300X or 100X shows
+    neither, so an unreadable answer never makes one a Classe 300X2.
     """
 
     words = run(
         f"test -e {quote(_QT5_DISPLAY_MARKER)} && echo qt5 || echo qt4; "
         f"test -e {quote(_C100X_DISPLAY_MARKER)} && echo c100x || echo c300x; "
-        "sed -n 's:.*<webserver_type>[[:space:]]*\\(C[13]00X\\)[[:space:]]*</webserver_type>.*:"
-        f"named-\\1:p' {quote(_MODEL_FILE)} 2>/dev/null | sed -n 1p"
+        "sed -n -e 's:.*<webserver_type>[[:space:]]*\\(C[13]00X\\)[[:space:]]*</webserver_type>.*:"
+        "named-\\1:p' -e 's:.*<webserver_type>[[:space:]]*\\(C3X2\\)[[:space:]]*</webserver_type>.*:"
+        f"named-\\1:p' {quote(_MODEL_FILE)} 2>/dev/null | sed -n 1p; "
+        "echo machine-$(uname -m 2>/dev/null)"
     ).split()
+    if f"machine-{_AARCH64}" in words or f"named-{C3X2}" in words:
+        return DeviceProfile(C3X2, NO_DISPLAY, CAMERA_FIXED)
     program = "c100x" in words
     named = next((word[6:] for word in words if word in ("named-C300X", "named-C100X")), None)
     return _profile(program, "qt5" in words, confirmed=named is None or (named == C100X) is program)

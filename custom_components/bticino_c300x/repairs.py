@@ -75,7 +75,7 @@ from .device_installer import (
     async_ensure_installer_dependencies,
     async_install_device_agent,
 )
-from .device_profile import NOT_A_BTICINO_STATION
+from .device_profile import C3X2_NOT_SUPPORTED, NOT_A_BTICINO_STATION
 from .device_ssh_login import (
     INVALID_SSH_KEY,
     SSH_PASSWORD_LOGIN_DISABLED,
@@ -503,7 +503,7 @@ def _ssh_install_error(err: BaseException) -> str:
     reason = err.reason if isinstance(err, C300XDeviceInstallError) else ""
     shown = (
         LOGIN_REFUSED, DISPLAY_WRITE_TIMEOUT, NOT_A_BTICINO_STATION, INVALID_SSH_KEY, SSH_USER_NOT_ROOT,
-        SSH_UNREACHABLE, SSH_PASSWORD_LOGIN_DISABLED, FIREWALL_HOOK_CHANGED,
+        SSH_UNREACHABLE, SSH_PASSWORD_LOGIN_DISABLED, FIREWALL_HOOK_CHANGED, C3X2_NOT_SUPPORTED,
     )
     return reason if reason in shown else "ssh_install_failed"
 

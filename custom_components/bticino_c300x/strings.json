@@ -802,7 +802,8 @@
       "firewall_hook_changed": "The firewall start script of the {model} (/etc/network/if-pre-up.d/iptables) was changed by something else after the agent added its ports, so the saved original no longer matches it. The script was left as it is. Restore it, or remove the agent's block from it, then retry.",
       "device_model_incompatible": "This package does not support this station, or the station's model could not be confirmed. No device files were replaced.",
       "c100x_confirmation_required": "Tick the box to set up the Classe 100X, or close this dialog to leave the station unchanged.",
-      "not_a_bticino_station": "The device at this address is not a BTicino station. Nothing was written to it. Check the address."
+      "not_a_bticino_station": "The device at this address is not a BTicino station. Nothing was written to it. Check the address.",
+      "c3x2_not_supported": "This station is a Classe 300X2. It is recognised, but not supported yet. Nothing was installed or written to it."
     }
   },
   "options": {
@@ -1797,7 +1798,8 @@
           "ssh_unreachable": "The {model} does not answer on SSH (port 22). SSH on the station is off or blocked; check the address and that the root tool turned SSH on.",
           "ssh_password_login_disabled": "The {model} accepts no password login, only SSH keys. Paste the private key the root tool set up, or build the image with a password login.",
           "firewall_hook_changed": "The firewall start script of the {model} (/etc/network/if-pre-up.d/iptables) was changed by something else after the agent added its ports, so the saved original no longer matches it. The script was left as it is. Restore it, or remove the agent's block from it, then retry.",
-          "not_a_bticino_station": "The device at this address is not a BTicino station. Nothing was written to it. Check the address."
+          "not_a_bticino_station": "The device at this address is not a BTicino station. Nothing was written to it. Check the address.",
+          "c3x2_not_supported": "This station is a Classe 300X2. It is recognised, but not supported yet. Nothing was installed or written to it."
         },
         "abort": {
           "entry_not_loaded": "The BTicino C300X entry is not loaded."

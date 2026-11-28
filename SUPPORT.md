@@ -9,6 +9,8 @@
   confirmation first. Features per model:
   [Models and Features](docs/feature-reference.md#models-and-features);
   C100X notes: [Classe 100X](docs/c100x-experimental.md).
+- **Classe 300X2 (C3X2):** not supported yet. Setup recognises it and
+  installs nothing on it.
 
 ## Supported Release Line
 

@@ -802,7 +802,8 @@
       "firewall_hook_changed": "Das Firewall-Startscript des {model} (/etc/network/if-pre-up.d/iptables) wurde nach dem Eintrag der Agent-Ports von etwas anderem geändert; das gesicherte Original passt nicht mehr dazu. Das Script blieb unverändert. Stelle es wieder her oder entferne den Block des Agents daraus und versuche es erneut.",
       "device_model_incompatible": "Dieses Paket unterstützt diese Station nicht, oder das Modell der Station konnte nicht bestätigt werden. Es wurden keine Gerätedateien ersetzt.",
       "c100x_confirmation_required": "Setze den Haken, um die Classe 100X einzurichten, oder schließe diesen Dialog, um die Station unverändert zu lassen.",
-      "not_a_bticino_station": "Das Gerät unter dieser Adresse ist keine BTicino-Station. Es wurde nichts darauf geschrieben. Prüfe die Adresse."
+      "not_a_bticino_station": "Das Gerät unter dieser Adresse ist keine BTicino-Station. Es wurde nichts darauf geschrieben. Prüfe die Adresse.",
+      "c3x2_not_supported": "Diese Station ist eine Classe 300X2. Sie wird erkannt, aber noch nicht unterstützt. Es wurde nichts darauf installiert oder geschrieben."
     }
   },
   "options": {
@@ -1797,7 +1798,8 @@
           "ssh_unreachable": "Der {model} antwortet nicht per SSH (Port 22). SSH ist auf der Station aus oder blockiert; prüfe die Adresse und ob das Root-Tool SSH eingeschaltet hat.",
           "ssh_password_login_disabled": "Der {model} nimmt keine Passwort-Anmeldung an, nur SSH-Schlüssel. Füge den privaten Schlüssel ein, den das Root-Tool eingerichtet hat, oder baue das Image mit Passwort-Anmeldung.",
           "firewall_hook_changed": "Das Firewall-Startscript des {model} (/etc/network/if-pre-up.d/iptables) wurde nach dem Eintrag der Agent-Ports von etwas anderem geändert; das gesicherte Original passt nicht mehr dazu. Das Script blieb unverändert. Stelle es wieder her oder entferne den Block des Agents daraus und versuche es erneut.",
-          "not_a_bticino_station": "Das Gerät unter dieser Adresse ist keine BTicino-Station. Es wurde nichts darauf geschrieben. Prüfe die Adresse."
+          "not_a_bticino_station": "Das Gerät unter dieser Adresse ist keine BTicino-Station. Es wurde nichts darauf geschrieben. Prüfe die Adresse.",
+          "c3x2_not_supported": "Diese Station ist eine Classe 300X2. Sie wird erkannt, aber noch nicht unterstützt. Es wurde nichts darauf installiert oder geschrieben."
         },
         "abort": {
           "entry_not_loaded": "Der BTicino-C300X-Eintrag ist nicht geladen."

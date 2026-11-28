@@ -59,6 +59,7 @@ short table.
 | Classe 300X / C300X (`344642`, `344643`) | `1.7.x`, `2.0.2` | Supported; every release is tested on `1.7.19`. |
 | Classe 300X / C300X | `3.0.6` | Supported, with the low-resolution camera stream ([what differs](docs/quickstart.md#firmware-306)). |
 | Classe 100X / C100X | `1.5.8` | **Experimental**, in test in [issue #51](https://github.com/memphi2/ha-bticino-c300x/issues/51); setup asks for an explicit confirmation. |
+| Classe 300X2 / C3X2 | `1.2.x` | **Not supported yet.** Setup recognises it and installs nothing on it. |
 
 | Feature | C300X | C100X 1.5.8 |
 | --- | --- | --- |

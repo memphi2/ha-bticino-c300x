@@ -1241,6 +1241,23 @@ static void agent_answer_is_ha(void) {
     close(preview);
 }
 
+/* The agent's own event of its ring leg's answer is Home Assistant's
+ * answer by itself, also when the leg's answer state is gone by the time
+ * the event is read: here no ring leg reports one. */
+static void own_ring_answer_is_ha(void) {
+    char data[4096], id[32];
+    struct c300x_video_status current;
+    bus("*8*1#1#4#21*11##");
+    bus("*8*9#1#4*21##");
+    wait_event("call.caller_identified", 1, data, sizeof(data));
+    call_id_of(data, id);
+    status(&current);
+    assert(!current.ring_answered && !current.ring_answer_requested);
+    dispatch_video_event(runtime, "doorbell.view_requested", C300X_VIDEO_EVENT_RING, 0);
+    wait_event("call.answered", 1, data, sizeof(data));
+    assert(strstr(data, id) && strstr(data, "\"answered_by\":\"ha\""));
+}
+
 /* A bus ring without the agent's ring leg: until the caller frame names
  * its unit, video of the current call has none (409 call_unit_pending, no
  * view of the default unit); then the view is the caller's. */
@@ -1691,6 +1708,7 @@ int main(int argc, char **argv) {
     else if (strcmp(argv[1], "pending_unit_video") == 0) pending_unit_video();
     else if (strcmp(argv[1], "view_during_bus_ring") == 0) view_during_bus_ring();
     else if (strcmp(argv[1], "agent_answer_is_ha") == 0) agent_answer_is_ha();
+    else if (strcmp(argv[1], "own_ring_answer_is_ha") == 0) own_ring_answer_is_ha();
     else if (strcmp(argv[1], "display_view_hangup") == 0) display_view_hangup();
     else if (strcmp(argv[1], "display_answered_hangup") == 0) display_answered_hangup();
     else if (strcmp(argv[1], "bus_ring_hangup_during_view") == 0) bus_ring_hangup_during_view();

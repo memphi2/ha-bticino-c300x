@@ -852,9 +852,13 @@ def test_native_agent_ring_lifecycle_status_and_stop_paths_are_explicit() -> Non
     assert "c300x_media_session_guard_clear(&g_bridge.ondemand_guard)" in media_bridge
     assert "guard->explicit_stop = false;" in guard_source
     assert "c300x_video_consume_media_closed_event(video)" in session_stop_body
+    # The ring leg's close and the on-demand view's name their media.
     assert session_stop_body.count(
-        'c300x_video_dispatch_event(video, "doorbell.media.closed", "{}", 0);'
-    ) == 2
+        'c300x_video_dispatch_event(video, "doorbell.media.closed", C300X_VIDEO_EVENT_RING, 0);'
+    ) == 1
+    assert session_stop_body.count(
+        'c300x_video_dispatch_event(video, "doorbell.media.closed", C300X_VIDEO_EVENT_VIEW, 0);'
+    ) == 1
     assert "active = (g_bridge.ring_call_active || g_bridge.ring_media_active) && !g_bridge.ring_call_stop;" in media_bridge
     # An unanswered ring drains (force-closing on overstay) its leftover
     # auto-preview RTSP client BEFORE signalling media closed, so HA's
@@ -862,7 +866,7 @@ def test_native_agent_ring_lifecycle_status_and_stop_paths_are_explicit() -> Non
     # transient RTSP_BUSY (the "card stuck on busy after an unanswered ring").
     assert "was_unanswered = was_active && !bridge->ring_answered;" in ring_cleanup_body
     assert ring_cleanup_body.index("shutdown_rtsp_clients_after_drain(bridge)") < ring_cleanup_body.index(
-        'c300x_video_dispatch_event(bridge->video, "doorbell.media.closed", "{}", 0)'
+        'c300x_video_dispatch_event(bridge->video, "doorbell.media.closed", C300X_VIDEO_EVENT_RING, 0)'
     )
     assert "bool c300x_media_session_stop_in_progress" in media_bridge
     assert "ring_sleep_seconds(bridge, RING_RETRY_SECONDS)" in media_bridge

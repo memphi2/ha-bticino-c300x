@@ -92,10 +92,13 @@ void c300x_calls_station(struct c300x_calls *calls, const struct c300x_call_sink
 /* The ring was answered (doorbell.view_requested of the ring). */
 void c300x_calls_answer_seen(struct c300x_calls *calls, const struct c300x_call_sink *sink,
                              const struct c300x_call_media *media, long long now);
-/* doorbell.media.closed as it goes out. external: its payload still reports
- * the station's media; from_bus: a bus end frame, not the agent's own leg. */
+/* doorbell.media.closed as it goes out, of a view's media (view) or of the
+ * ring's: it belongs to those calls only. external: its payload still
+ * reports the station's media; from_bus: a bus end frame, not the agent's
+ * own media. */
 void c300x_calls_media_closed(struct c300x_calls *calls, const struct c300x_call_sink *sink,
-                              const struct c300x_call_media *media, int external, int from_bus, long long now);
+                              const struct c300x_call_media *media, int view, int external, int from_bus,
+                              long long now);
 void c300x_calls_tick(struct c300x_calls *calls, const struct c300x_call_sink *sink,
                       const struct c300x_call_media *media, long long now);
 /* -1 while no call needs a timer. */

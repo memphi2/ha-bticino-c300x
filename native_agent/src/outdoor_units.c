@@ -214,7 +214,15 @@ int c300x_outdoor_units_note_caller(struct c300x_outdoor_units *units, const cha
     return index;
 }
 
-/* One line per seen unit: its id and its where. */
+/* A unit whose line is kept: a seen one, or the default unit without an
+ * archive entry once it learned a caller's qualifier. */
+static int kept(const struct c300x_outdoor_unit *unit)
+{
+    return strcmp(unit->source, "seen") == 0
+        || (strcmp(unit->source, "default") == 0 && strcmp(unit->where, unit->action_where) != 0);
+}
+
+/* One line per kept unit: its id and its where. */
 int c300x_outdoor_units_save_seen(const struct c300x_outdoor_units *units, const char *path)
 {
     char temp[C300X_UNIT_PATH_LEN + 8];
@@ -230,7 +238,7 @@ int c300x_outdoor_units_save_seen(const struct c300x_outdoor_units *units, const
     }
     ok = 1;
     for (int index = 0; index < units->count; index++) {
-        if (strcmp(units->items[index].source, "seen") == 0
+        if (kept(&units->items[index])
             && fprintf(file, "%s %s\n", units->items[index].id, units->items[index].where) < 0) {
             ok = 0;
         }
@@ -263,10 +271,18 @@ void c300x_outdoor_units_load_seen(struct c300x_outdoor_units *units, const char
         }
         c300x_unit_action_where(where, plain, sizeof(plain));
         c300x_unit_id_from_where(where, own, sizeof(own));
+        int found = c300x_outdoor_units_find_id(units, id);
+        struct c300x_outdoor_unit *unit = found >= 0 ? &units->items[found] : NULL;
+        /* The default unit without an archive entry takes its learned
+         * qualifier back; an archive unit keeps its own where. */
+        if (unit != NULL && strcmp(id, plain) == 0 && strcmp(unit->source, "default") == 0
+            && strcmp(unit->where, plain) == 0) {
+            c300x_copy_string(unit->where, sizeof(unit->where), where);
+        }
         /* Its id is its where's, or its plain address once it learned a
          * qualifier. A unit the station's files name now is not added again. */
         int known = (strcmp(id, own) != 0 && strcmp(id, plain) != 0)
-            || c300x_outdoor_units_find_id(units, id) >= 0
+            || unit != NULL
             || (strcmp(where, plain) == 0 && find_action(units, plain, 0) >= 0);
         for (int index = 0; !known && index < units->count; index++) {
             known = strcmp(units->items[index].where, where) == 0;

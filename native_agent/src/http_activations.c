@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "activations.h"
+#include "http_calls.h"
 #include "http_util.h"
 #include "json_util.h"
 #include "openwebnet_call.h"
@@ -90,7 +91,8 @@ static void activations_get(int client_fd, const struct c300x_activation_routes 
     }
     /* The station's files are read again: an installer may have changed them. */
     c300x_activation_discover(routes->config, routes->discovery);
-    if (!c300x_activations_json(routes->config, routes->discovery, routes->units, body, C300X_ACTIVATIONS_JSON_SIZE)) {
+    const struct c300x_outdoor_units *units = routes->calls != NULL ? c300x_call_hub_load_units(routes->calls) : NULL;
+    if (!c300x_activations_json(routes->config, routes->discovery, units, body, C300X_ACTIVATIONS_JSON_SIZE)) {
         c300x_http_send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"response_too_large\"}\n");
     } else {
         c300x_http_send_json(client_fd, 200, "OK", body);

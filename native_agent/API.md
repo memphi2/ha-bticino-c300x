@@ -757,7 +757,9 @@ knows. The station's files are read again on every request.
   OpenWebNet `where` in `address`; `auto` items without an address or command
   are not executable), `address`, `executable` and `unit`: the id of the
   outdoor unit (`GET /api/v1/outdoor-units`) whose door lock a `lock` item is,
-  `null` for any other item or a lock no unit has.
+  `null` for any other item or a lock no unit has. The request reads the
+  outdoor units again too, so `unit` is right from the first request after
+  the agent starts.
 
 The station's items, from `archive.xml` and `conf.xml`, as its display reads
 them (an `<ist>` attribute it lacks is its `<obj>`'s; the address is `dev` +
@@ -1373,7 +1375,9 @@ Capabilities report `api_version: "2"`, `capabilities.outdoor_units` and
 
 - `GET /api/v1/outdoor-units`: the units (`id`, `where`, `action_where`,
   `lock_where`, `name`, `source`, `default`, `door`), `default_unit` and
-  `archive`. `door` is `null` for a unit without a door contact, else
+  `archive`. The `seen` units and the full `where` that a unit without an
+  archive entry took from a caller frame are kept in `outdoor-units-seen`
+  next to the agent's configuration, so they survive an agent restart. `door` is `null` for a unit without a door contact, else
   `{"state": "open"|"closed"|null, "age_ms": N|null}`: the state and the
   time since its last change, `null` while no frame came since the agent
   started. A unit has a door contact once a door frame of it was seen
@@ -1395,14 +1399,23 @@ Capabilities report `api_version: "2"`, `capabilities.outdoor_units` and
   and the call still waits), `6` `conversation`, `7` `answering_machine`
   (it took the call), `8` `greeting`, `9` `recording`; any other code has
   `state: null`. A ringing call is answered when the station reports `6`
-  (`answered_by` `ha` while Home Assistant answered the ring leg, else
-  `station`) or `7` (`answering_machine`). A call the station holds stays
-  live while its state is not `idle`; once it is `idle`, a call that was live
+  or the answer frame `*8*2#1#…` comes (`answered_by` `ha` while Home
+  Assistant answered the ring leg, else `station`), when it reports `7`
+  (`answering_machine`) and when the agent answers its ring leg for Home
+  Assistant (`ha`). An on-demand view during a ring answers nothing. A
+  media close ends only its own call: the close of the agent's ring leg or
+  the bus end frame `*8*3#1#…` the ring call, the close of the agent's
+  on-demand view, the bus end frame `*8*3#5#…` or `*7*0*##` a view call; a
+  view that ends during a ring leaves the ring call ringing. A call
+  the station holds stays live while its state is not `idle`; once it is `idle`, a call that was live
   then and that nothing else ended within 1.5 s ends with
   `reason: "station_idle"`.
 - `POST /api/v1/calls/{call_id}/actions/answer`, `.../hangup`: answer or hang
   up the current call: the live ring call, else the live on-demand view, which
-  a hang-up stops (an answer of a view gets `409 call_not_ringing`). A call id
+  a hang-up stops (an answer of a view gets `409 call_not_ringing`). A view
+  that the display or the app holds, not the agent, only they can end: its
+  hang-up gets `409 station_busy`, nothing reaches the station and the view
+  call goes on. A call id
   that is unknown, ended or not current gets `409 call_not_current` with
   `current_call_id`; nothing reaches the station. Success bodies are those of
   the 3.0 unscoped routes, which are gone.
@@ -1423,8 +1436,9 @@ Capabilities report `api_version: "2"`, `capabilities.outdoor_units` and
   demand, the INVITE's `a=DEVADDR` names the unit: `video.sip.devaddr` for the
   default unit, as before, the unit's full address (`where`, verbatim, e.g.
   `21` or `20#2`) for any other. The station's bt_answering_machine sends a
-  view for a DEVADDR that starts with `2` and whose number before `#` is below
-  96 (`*8*4#1<own>*<DEVADDR>##`); another unit gets
+  view for a DEVADDR that starts with `2` and whose unit address after that
+  `2`, up to `#`, is below 96 (`21`, `210`, `295#1`; not `2` or `296`)
+  (`*8*4#1<own>*<DEVADDR>##`); another unit gets
   `409 unit_video_unsupported`, also while a view runs, which then goes on
   (only the ring's own video shows whatever unit is asked). A running view of another unit ends first
   (BYE, its cached frames dropped, `doorbell.media.closed`, the view call

@@ -110,9 +110,15 @@ static void station(const char *text, long long now)
 }
 static void tick(long long now) { c300x_calls_tick(&calls, &sink, &media, now); }
 static void answer_seen(long long now) { c300x_calls_answer_seen(&calls, &sink, &media, now); }
+/* The ring's media closed: the agent's ring leg, or the bus end frame *8*3#1#. */
 static void closed(int external, int from_bus, long long now)
 {
-    c300x_calls_media_closed(&calls, &sink, &media, external, from_bus, now);
+    c300x_calls_media_closed(&calls, &sink, &media, 0, external, from_bus, now);
+}
+/* A view's media closed: the agent's on-demand view, or the bus end frame *8*3#5#. */
+static void view_closed(int external, int from_bus, long long now)
+{
+    c300x_calls_media_closed(&calls, &sink, &media, 1, external, from_bus, now);
 }
 
 /* c300x-full-ring-20260704-145356: three ring copies, three caller copies. */
@@ -414,9 +420,9 @@ static void view_and_media_closed(void)
     media.agent = 1;
     tick(C300X_CALL_PROBE_MS);
     assert(count("call.ended") == 0);
-    closed(1, 1, 1500);
+    view_closed(1, 1, 1500);
     assert(count("call.ended") == 0);
-    closed(0, 0, 1660);
+    view_closed(0, 0, 1660);
     expect(nth("call.ended", 1), "\"kind\":\"view\",\"reason\":\"media_closed\"");
     /* A ring during a view is the current call; a view of another unit
      * ends the one before; a view whose media is gone ends at its check. */
@@ -429,6 +435,42 @@ static void view_and_media_closed(void)
     tick(3000 + C300X_CALL_PROBE_MS);
     expect(nth("call.ended", 3), "\"call_id\":\"8f3a1c2e-4\",\"unit\":\"21\",\"kind\":\"view\",\"reason\":\"media_closed\"");
     assert(c300x_calls_is_current(&calls, "8f3a1c2e-3"));
+}
+
+/* A close ends only the call whose media closed. HA's view during a bus
+ * ring (no ring leg) and the display's view of another unit during a ring:
+ * their ends end the view, the ring call rings on until its own end. */
+static void close_ends_its_own_call(void)
+{
+    reset(ARCHIVE_THREE);
+    frame("*8*1#5#4#20*11##", 0);
+    media.agent = 1;
+    ring(1000);
+    frame("*8*9#1#4*21##", 1300);
+    media.agent = 0;
+    view_closed(0, 0, 2000);
+    expect(nth("call.ended", 1), "\"call_id\":\"8f3a1c2e-1\",\"unit\":\"20\",\"kind\":\"view\"");
+    tick(2000 + C300X_CALL_SETTLE_MS);
+    assert(count("call.ended") == 1 && count("call.answered") == 0);
+    assert(c300x_calls_is_current(&calls, "8f3a1c2e-2"));
+    closed(0, 1, 5000);
+    tick(5000 + C300X_CALL_SETTLE_MS);
+    expect(nth("call.ended", 2), "\"call_id\":\"8f3a1c2e-2\",\"unit\":\"21\",\"kind\":\"ring\",\"reason\":\"media_closed\"");
+
+    reset(ARCHIVE_THREE);
+    frame("*8*1#5#4#20*11##", 0);
+    media.external = 1;
+    ring(1000);
+    frame("*8*9#1#4*21##", 1300);
+    view_closed(1, 1, 2000);
+    view_closed(0, 1, 2100);
+    expect(nth("call.ended", 1), "\"unit\":\"20\",\"kind\":\"view\",\"reason\":\"media_closed\"");
+    tick(2100 + C300X_CALL_SETTLE_MS);
+    assert(count("call.ended") == 1 && count("call.answered") == 0);
+    assert(c300x_calls_is_current(&calls, "8f3a1c2e-2"));
+    /* The ring's own close while the display still holds the media: the display answered. */
+    closed(1, 1, 4000);
+    expect(nth("call.answered", 1), "\"unit\":\"21\",\"answered_by\":\"station\"");
 }
 
 static void timeouts_and_json(void)
@@ -507,6 +549,41 @@ static void seen_units_survive_restart(void)
     assert(units.count == 3);
 }
 
+/* The qualifier the default unit learned from a caller frame (20#2, no
+ * archive) is kept with the seen units: after an agent restart the unit
+ * reports the same where, and an archive unit later takes its own. */
+static void default_qualifier_survives_restart(void)
+{
+    char path[] = "/var/tmp/c300x-seen-default-XXXXXX";
+    int changed;
+    int fd = mkstemp(path);
+    assert(fd >= 0);
+    close(fd);
+    reset(NULL);
+    assert(c300x_outdoor_units_note_caller(&units, "20#2", &changed) == 0 && changed);
+    assert(c300x_outdoor_units_note_caller(&units, "23", &changed) == 1 && changed);
+    assert(c300x_outdoor_units_save_seen(&units, path));
+    reset(NULL);
+    assert(strcmp(units.items[0].where, "20") == 0);
+    c300x_outdoor_units_load_seen(&units, path);
+    assert(units.count == 2 && units.default_index == 0);
+    assert(strcmp(units.items[0].id, "20") == 0 && strcmp(units.items[0].where, "20#2") == 0);
+    assert(strcmp(units.items[0].source, "default") == 0);
+    assert(strcmp(units.items[1].id, "23") == 0 && strcmp(units.items[1].source, "seen") == 0);
+    c300x_outdoor_units_load_seen(&units, path);
+    build(NULL, CONF);
+    assert(units.count == 2 && strcmp(units.items[0].where, "20#2") == 0);
+    assert(c300x_outdoor_units_note_caller(&units, "20", &changed) == 0 && !changed);
+    FILE *file = fopen(path, "w");
+    assert(file != NULL && fputs("20 20#3\n", file) >= 0 && fclose(file) == 0);
+    reset(ARCHIVE_THREE);
+    c300x_outdoor_units_load_seen(&units, path);
+    int gate = c300x_outdoor_units_find_id(&units, "20");
+    assert(gate == units.default_index && strcmp(units.items[gate].source, "archive") == 0);
+    assert(strcmp(units.items[gate].where, "20#2") == 0 && units.count == 3);
+    unlink(path);
+}
+
 /* archive.xml names outdoor units only in its outdoor-unit object (cid
  * 10050): the <ist> without cid. Locks (cid 10060), actuators (3008), the
  * stair light (2009), cameras and intercoms are none; an <ist> attribute it
@@ -544,6 +621,26 @@ static void archive_objects_by_cid(void)
     assert(strcmp(station.units[0].where, "27") == 0 && strcmp(station.units[0].name, "Panel") == 0);
     assert(strcmp(station.units[1].where, "23") == 0 && strcmp(station.units[1].name, "No dev") == 0);
     assert(units.count == 3 && strcmp(units.items[2].source, "default") == 0);
+}
+
+/* An archive that ends inside a tag name: nothing is read past its end
+ * (the ASan build has each text in a buffer of its own length). */
+static void archive_cut_in_a_tag(void)
+{
+    static const char *const cuts[] = {
+        "<", "<o", "<ob", "<obj", "<archive><obj cid=\"10050\" dev=\"2\" where=\"0\"><i",
+    };
+    struct c300x_station_archive station;
+
+    for (size_t index = 0; index < sizeof(cuts) / sizeof(cuts[0]); index++) {
+        size_t length = strlen(cuts[index]) + 1;
+        char *text = malloc(length);
+        assert(text != NULL);
+        memcpy(text, cuts[index], length);
+        c300x_station_archive_parse(&station, text, NULL);
+        assert(station.unit_count == 0 && station.lock_count == 0);
+        free(text);
+    }
 }
 
 /* conf.xml's default unit 20 and the archive's 20#2 (behind an apartment
@@ -844,10 +941,13 @@ int main(int argc, char **argv)
         {"rings_of_one_session", rings_of_one_session},
         {"hangup_reason", hangup_reason},
         {"view_and_media_closed", view_and_media_closed},
+        {"close_ends_its_own_call", close_ends_its_own_call},
         {"timeouts_and_json", timeouts_and_json},
         {"plain_address_is_the_qualified_unit", plain_address_is_the_qualified_unit},
         {"seen_units_survive_restart", seen_units_survive_restart},
+        {"default_qualifier_survives_restart", default_qualifier_survives_restart},
         {"archive_objects_by_cid", archive_objects_by_cid},
+        {"archive_cut_in_a_tag", archive_cut_in_a_tag},
         {"default_unit_keeps_its_id", default_unit_keeps_its_id},
     };
     for (size_t index = 0; index < sizeof(cases) / sizeof(cases[0]); index++) {

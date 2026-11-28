@@ -107,6 +107,11 @@ void c300x_video_dispatch_event(
     const char *data_json,
     int ttl_seconds
 );
+/* The data of the agent's own doorbell.view_requested and
+ * doorbell.media.closed: the media they are of, its ring leg or its
+ * on-demand view. The call hub reads it and sends {} on. */
+#define C300X_VIDEO_EVENT_RING "{\"media\":\"ring\"}"
+#define C300X_VIDEO_EVENT_VIEW "{\"media\":\"view\"}"
 void c300x_video_bridge_client_connected(struct c300x_video *video);
 void c300x_video_bridge_client_disconnected(struct c300x_video *video);
 void c300x_video_bridge_media_starting(struct c300x_video *video);

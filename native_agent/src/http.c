@@ -4123,7 +4123,7 @@ static int dispatch_event_internal(
     int written;
     int delivered = 1;
     int call_result;
-    int from_bus = data_json != NULL && strstr(data_json, "\"raw\"") != NULL;
+    const char *event_data = data_json; /* as it came: it names the media that closed */
 
     if (
         runtime->video != NULL
@@ -4145,8 +4145,8 @@ static int dispatch_event_internal(
         sizeof(merged_json)
     );
     if (strcmp(event_type, "doorbell.media.closed") == 0) {
-        c300x_call_hub_media_closed(&runtime->calls,
-                                    strstr(merged_json, "\"external_media_active\":true") != NULL, from_bus);
+        c300x_call_hub_media_closed(&runtime->calls, event_data,
+                                    strstr(merged_json, "\"external_media_active\":true") != NULL);
     }
     utc_now(occurred_at, sizeof(occurred_at));
     c300x_json_string(event_type, event_type_json, sizeof(event_type_json));
@@ -5033,7 +5033,7 @@ static void emit_activation_event(void *context, const char *type, const char *d
 static struct c300x_activation_routes activation_routes(const struct c300x_config *config,
                                                         struct agent_runtime *runtime)
 {
-    struct c300x_activation_routes routes = {config, &runtime->activation_discovery, &runtime->calls.units,
+    struct c300x_activation_routes routes = {config, &runtime->activation_discovery, &runtime->calls,
                                              &runtime->local_action_events, emit_activation_event, runtime};
     return routes;
 }

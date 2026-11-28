@@ -12,7 +12,7 @@ BRIDGE_SOURCES = [
     "device_file", "media_audio", "audio_level", "audio_gain", "audio_chip", "media_sip", "media_sip_io",
     "media_sip_dialog", "media_base64",
     "media_session_guard", "media_rtsp_auth", "media_rtsp_io", "media_rtsp_reader", "talkback_g711",
-    "device_detect", "device_file_sync", "file_io", "root_mount", "media_gop_cache",
+    "device_detect", "device_file_sync", "file_io", "root_mount", "media_gop_cache", "media_unit", "station_archive",
 ]
 CACHE_CASES = [
     "late_join", "cap", "age", "stale", "restart", "resume", "loss", "slow", "slow_burst", "two_sources", "malformed",

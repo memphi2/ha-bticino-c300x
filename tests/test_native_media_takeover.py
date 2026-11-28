@@ -16,7 +16,8 @@ SOURCES = [
     "device_file", "media_audio", "audio_level", "audio_gain", "audio_chip", "media_sip", "media_sip_io",
     "media_sip_dialog", "media_base64",
     "media_session_guard", "media_rtsp_auth", "media_rtsp_io", "media_rtsp_reader", "talkback_g711",
-    "device_detect", "device_file_sync", "file_io", "root_mount", "media_gop_cache", "device_media",
+    "device_detect", "device_file_sync", "file_io", "root_mount", "media_gop_cache", "device_media", "media_unit",
+    "station_archive",
 ]
 SCENARIOS = {"stream-after-first-add": 0, "first-add-cleared": 1, "first-add-refused": 2, "no-stream": 3}
 

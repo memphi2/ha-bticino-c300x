@@ -112,63 +112,45 @@ def test_setup_docs_link_policy_and_removal_guides(document):
     assert "## Remove the Integration" in (DOCS / REMOVAL_LINK.split("#")[0]).read_text()
 
 
-# The repository of each project, by its owner, on the setup page of its
-# model: scripts/check_repo.py keeps the full name of fquinto's project out of code.
-SSH_PROJECTS = {
-    "classe-300x/1-setup.md": {
-        "fquinto": "(C300X `1.7.x`)",
-        "davemajor/c300x-root": "(C300X `2.0.2` and `3.0.6`)",
-        "davemajor/bticino-c300x-usb-root": "(C300X `3.0.6` over USB, with SSH key login)",
-    },
-    "classe-100x/1-setup.md": {
-        "daniel-sc/bticino-c100x-firmware-tools": "(C100X `1.5.8`)",
-    },
-}
+# Rooting tools of other projects; the user pages name none of them.
+ROOTING_PROJECTS = (
+    "fquinto",
+    "davemajor/c300x-root",
+    "davemajor/bticino-c300x-usb-root",
+    "daniel-sc/bticino-c100x-firmware-tools",
+    "jorgeavlobo",
+)
 SSH_SECTION = "Enable SSH on the Station"
 
 
 @pytest.mark.parametrize("document", SETUP_PAGES)
-def test_setup_pages_name_the_ssh_projects_and_a_clean_firmware(document):
+def test_setup_pages_say_ssh_root_is_needed_and_name_no_rooting_tool(document):
     rooting = flat(section(document, SSH_SECTION))
-    for phrase in ("The integration cannot root a stock station.",
-                   "This project provides no firmware images", "no rooting instructions",
+    for phrase in ("The integration needs root access to the station over SSH.",
+                   "It cannot root a stock station itself",
+                   "this project provides no firmware images, no tools and no rooting instructions",
                    "at your own risk and without warranty", "Flashing can brick the station",
                    "Enable nothing but SSH: no camera, MQTT or other extras."):
         assert phrase in rooting, phrase
-    # Exactly the projects of this model, each a repository front page with
-    # its station and firmware.
-    projects = SSH_PROJECTS[document]
-    links = re.findall(r"\]\((https?://[^)]+)\)", rooting)
-    assert len(links) == len(projects)
-    for link, (project, scope) in zip(links, projects.items(), strict=True):
-        assert re.fullmatch(r"https://github\.com/[\w.-]+/[\w.-]+", link), link
-        assert link.startswith(f"https://github.com/{project}"), link
-        assert f"]({link}) {scope}" in rooting, scope
-    # No project of the other model, and jorgeavlobo's tool is not recommended.
-    page = (DOCS / document).read_text(encoding="utf-8")
-    others = [project for name, listed in SSH_PROJECTS.items() if name != document for project in listed]
-    assert not any(f"github.com/{project}" in page for project in others)
-    assert "jorgeavlobo" not in page
+    assert re.findall(r"\]\((https?://[^)]+)\)", rooting) == []
 
 
-def test_no_separate_rooting_page_and_no_link_to_one():
+def test_no_separate_rooting_page_and_no_link_to_a_rooting_tool():
     assert not (DOCS / "root-access.md").exists()
     texts = [path for path in ROOT.rglob("*.md")
              if not {".git", ".venv", "node_modules"} & set(path.relative_to(ROOT).parts)]
     assert [path for path in texts if "root-access.md" in path.read_text(encoding="utf-8")] == []
-    # Only the setup pages name the projects; the README sends the reader there.
+    # The README sends the reader to the setup pages' SSH section.
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     anchor = SSH_SECTION.lower().replace(" ", "-")
     for page in SETUP_PAGES:
         assert f"](docs/{page}#{anchor})" in readme, page
-    projects = [project for listed in SSH_PROJECTS.values() for project in listed]
     user_pages = [ROOT / "README.md", *DOCS.glob("*.md"), *DOCS.glob("classe-*/*.md")]
-    setup_pages = {DOCS / page for page in SETUP_PAGES}
     for document in user_pages:
-        if document in setup_pages:
-            continue
         text = document.read_text(encoding="utf-8")
-        assert not any(f"github.com/{project}" in text for project in projects), document.name
+        assert not any(f"github.com/{project}" in text for project in ROOTING_PROJECTS), document.name
+        if document.parent.name.startswith("classe-") and document.name == "1-setup.md":
+            assert not any(project.split("/")[0] in text for project in ROOTING_PROJECTS), document.name
 
 
 def test_removal_docs_distinguish_entry_package_device_and_retained_data():

@@ -27,10 +27,9 @@ Assistant test instance. What works and what does not:
 
 ## Enable SSH on the Station
 
-The integration cannot root a stock station. This project provides no firmware
-images and no rooting instructions. Use this tool:
-
-- [daniel-sc/bticino-c100x-firmware-tools](https://github.com/daniel-sc/bticino-c100x-firmware-tools) (C100X `1.5.8`)
+The integration needs root access to the station over SSH. It cannot root a
+stock station itself, and this project provides no firmware images, no tools and
+no rooting instructions.
 
 Enable nothing but SSH: no camera, MQTT or other extras. Flashing can brick
 the station; you do it at your own risk and without warranty.

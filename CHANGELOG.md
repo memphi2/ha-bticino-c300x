@@ -2,128 +2,152 @@
 
 ## v3.1.0 - Unreleased
 
-Several outdoor units on one station (issue #53). This release changes
-devices, entities and services; a Repair lists what to redo after the update.
+3.1.0 shows every outdoor unit of a station as its own device (issue #53) and
+reads the station's own activations, call state and door contacts.
+Everything below is new against 3.0.0. The release changes devices,
+entities, services and events; after the update a Repair, **Doorbell
+entities moved to outdoor unit devices**, lists what to redo. The station
+messages it reads were taken from captures of a Classe 300X with firmware
+1.7.19 with one and with three outdoor units; firmware 2.0.2 and 3.0.6, the
+door contact and the Classe 100X are checked offline against their original
+files.
 
-- **Every outdoor unit is its own device** below the station, also when there
-  is only one. It has a **Doorbell ring event**, a **Door** event, a **Door
-  unlock** button, a **Call** sensor (`idle`, `ringing`, `answered`,
-  `viewing`), a **Last visitor** image and a camera. The station takes the names of its units from its own
-  configuration; a unit that is not configured appears with its first ring.
-- The existing doorbell camera, doorbell ring event and door button move to
-  the device of the default outdoor unit. Their entity IDs and history stay;
-  their displayed names now start with the unit's name instead of the
-  station's. The **Door unlock** button's attribute `lock_id` (`default`) is
-  replaced by `lock_address`, the bus address of the unit's lock (for example
-  `20`); `lock_name` is that lock's name, else the unit's name. Every unit's
-  button has both.
-- A unit's **Doorbell ring event** fires once the station has named the
-  calling unit (about 0.3 s after the ring, at most 1 s), also when the
-  station has only one unit. A unit that rings for the first time gets its
-  ring event with that ring. The new **Station ring** event on the station
-  fires at once with every ring, without the unit; use it for the fastest
-  notification. Both carry the same `call_id`, also when the visitor presses
-  again during the call; both fire again then. The ring event no longer has the
-  `video_available` attribute; its `last_ring_at` and `call_id` now survive a
-  restart.
-- New **Door** event on every outdoor unit (`opened`) and **Stair light**
-  event on the station (`activated`). They fire with the station's own bus
-  message, whatever opened the door or switched on the light: the button, the
-  station, the BTicino app. A door opened during a call carries its `call_id`.
-- The event `bticino_c300x_action_received` is removed. Automations react to
-  the entity that was switched, or to the **Door** and **Stair light**
-  events, which fire however the door was opened or the light switched on.
-- The card follows the current call: it shows the calling unit's name, and its
-  door button opens the unit that rang.
-- **Blueprints** start from the **Doorbell ring event** of the outdoor unit you
-  select (or the **Station ring** for the fastest reaction) and answer, hang
-  up and record that unit's call. Automations made from the ring blueprints
-  need the outdoor unit selected again; the calendar reminder and the strict
-  phrase decision take the station device instead of an entry ID. The phone
-  alerts stop ringing on a **Door** event of the station. Copies of
-  the blueprints that you edited are not replaced; import them again.
-- **Services take a target** (the station or an outdoor unit, as a device or
-  entity) instead of `entry_id`. `answer_doorbell_call` and
-  `hangup_doorbell_call` are now `answer_call` and `hangup_call`, with an
-  optional `call_id`: a call that is over or no longer current is refused and
-  nothing is sent to the station. `evaluate_ring_analysis` opens the door of
-  the unit that rang; a target of another unit is refused and nothing opens.
-  Its `lock_id` is gone.
-- **Removed services**, use the buttons with `button.press`: `unlock_door`,
-  `stair_light`, `stop_doorbell_video`, `reboot`, `reload_gui`,
-  `run_device_activation`, `delete_latest_video_message`,
-  `delete_latest_text_memo`, `delete_latest_voice_memo`. A stair light that
-  was triggered with its own address through `stair_light` has no button:
-  configure it as a device activation and use its button.
+Breaking changes:
+
+- **Run the agent update Repair.** The native agent changed. Until the
+  Repair has run, the integration shows no entities; with it the devices and
+  entities move to the outdoor units.
+- **Outdoor units are devices.** The doorbell camera, the doorbell ring event
+  and the door button move to the device of the default outdoor unit. Their
+  entity IDs and history stay; their displayed names now start with the
+  unit's name instead of the station's.
+- **Door unlock button:** the attribute `lock_id` (`default`) is replaced by
+  `lock_address`, the bus address of the unit's lock (for example `20`);
+  `lock_name` is that lock's name, else the unit's name.
+- **Doorbell ring event:** it now fires when the station has named the
+  calling unit, about 0.3 s after the ring and at most 1 s. For the fastest
+  reaction use the new **Station ring** event. The attribute
+  `video_available` is gone.
 - **Removed entities:** the **Doorbell state** sensor (use the outdoor unit's
   **Call** sensor) and the diagnostic **Device event** entity (use the event
-  entities, or the `bticino_c300x_agent_event_received` event for the other
-  station events).
-- Station events now reach Home Assistant whatever entities are enabled.
+  entities or `bticino_c300x_agent_event_received`).
+- **Services take a target** (one station or one outdoor unit, as a device or
+  entity) instead of `entry_id`. `answer_doorbell_call` and
+  `hangup_doorbell_call` are now `answer_call` and `hangup_call`.
+  `evaluate_ring_analysis` no longer takes `lock_id`: it opens the door of
+  the unit that rang.
+- **Removed services;** press the buttons with `button.press` instead:
+  `unlock_door` (the unit's **Door unlock**), `stair_light` (**Stair
+  light**), `run_device_activation` (the activation's button),
+  `stop_doorbell_video` (**Stop doorbell video**), `reboot` (**Reboot**),
+  `reload_gui` (**Reload device display**), `delete_latest_video_message`,
+  `delete_latest_text_memo` and `delete_latest_voice_memo` (the **Delete
+  latest ...** buttons). For a stair light at an address of its own, add an
+  activation of type **Stair light** and press its button.
+- **Notifications:** the `mode` field is gone; a call that still sends it is
+  refused. Use the switches: `display` -> `display: true`, `speech` ->
+  `tts: true`, `both` -> `display: true` and `tts: true`, `led` ->
+  `led: true`.
+- **`bticino_c300x_action_received` is removed.** It fired for `run_action`,
+  a door opened from Home Assistant and a display tile command. React to the
+  entity that was switched, or to the new **Door** and **Stair light**
+  events.
 - **`bticino_c300x_agent_event_received`** carries `event_type` (a fixed key
   such as `door_unlock_started`, no longer a translated text), `entry_id`,
   `device_id`, `unit`, `call_id`, `event_at` and `data`. The fields `event`,
   `event_key`, `event_type_key`, `event_name`, `event_value`, `event_label`,
-  `event_label_<language>`, `unit_id`, `unit_name` and the top-level `address`
-  (now in `data`) are gone. The logbook shows each station event on its
-  device in your language.
-- **Notifications:** the `mode` field is gone; a call that still sends it is
-  refused. Use the switches instead: `display` -> `display: true`, `speech` ->
-  `tts: true`, `both` -> `display: true` and `tts: true`, `led` -> `led: true`.
-  Without switches a notification is shown as before.
+  `event_label_<language>` and the top-level `address` (now in `data`) are
+  gone.
+- **Blueprints:** automations made from the ring blueprints need the
+  **Doorbell** input (the outdoor unit's ring event, or the **Station ring**)
+  selected again. The calendar reminder takes the **Door station** device
+  and the strict phrase decision the **Door** device (station or outdoor
+  unit) instead of an entry ID; `lock_id` is gone. Copies of the blueprints
+  that you edited are not replaced; import them again.
+- **Activations: "Light" is now "Actuator".** An actuator is the station's
+  generic actuator ("Generic" on its display, for example a gate opener),
+  pressed and released like a door lock. Light activations become Actuator
+  activations with the update; ID, name, address and button stay. A Light
+  activation sent the stair light command: if you used one to switch a
+  light, set its type to **Stair light**.
+- **Stair light address:** **Automatic** now switches the stair light at the
+  station's own address, as its display does (before: the fixed address
+  `10`). The **Manual (P and N)** address is used as before.
+- The activation buttons' attribute `source` is `config` or `station`.
+
+Outdoor units and calls:
+
+- **Every outdoor unit is its own device** below the station, also when there
+  is only one. It has a **Doorbell ring event**, a **Door** event, a **Door
+  unlock** button, a **Call** sensor (`idle`, `ringing`, `answered`,
+  `viewing`, with `call_id`), a **Last visitor** image and a camera: the
+  **Doorbell camera** on the default unit, a **Camera** with still pictures
+  on the others. The station names its units from its own configuration; a
+  unit that is not configured appears with its first ring. The device of a
+  unit the station no longer reports can be deleted.
+- **Station ring:** a new event on the station that fires at once with every
+  ring. The unit's ring event and the station ring carry the same `call_id`,
+  also when the visitor presses again during the call; both fire again then.
+- **Calls have an ID.** `answer_call` and `hangup_call` take an optional
+  `call_id`: a call that is over, no longer current or of another unit than
+  the target is refused and nothing is sent to the station. A unit target
+  answers or hangs up only that unit's call.
+- **The card follows the call:** it shows the calling unit's name, and its
+  door button opens the unit that rang.
+- **Live view of every outdoor unit:** `activate_doorbell_video` with an
+  outdoor unit as target shows that unit in the **Doorbell camera**; without
+  one it shows the unit of the current call, else the default unit.
+- **Door** event on every outdoor unit (`opened`) and **Stair light** event on
+  the station (`activated`). They fire with the station's own bus message,
+  whatever opened the door or switched on the light: the button, the
+  station, the BTicino app. A door opened during a call carries its
+  `call_id`.
+- **Door contact:** an outdoor unit wired with a door contact gets a **Door
+  contact** sensor, on while its door is open. It appears with the unit's
+  first door message. After an agent restart it is unknown until the door
+  opens or closes again.
+- **Station call state:** a new sensor on the station shows what the station
+  itself does with a call: `idle`, `setup`, `ringing`, `viewing`, `waiting`,
+  `conversation`, `answering_machine`, `greeting` or `recording`.
+- **New station events** on `bticino_c300x_agent_event_received`:
+  `call_caller_identified`, `call_answered` (`answered_by` `ha`, `station`
+  or `answering_machine`), `call_view_started`, `call_ended` (with its
+  `reason`), `station_call_state`, `outdoor_units_changed`, and
+  `door_opened` and `door_closed` from a door contact. Every station event
+  reaches Home Assistant whatever entities are enabled, and the logbook
+  shows it on its device in your language.
+- The ring events keep `last_ring_at` across a restart. Right after the
+  update it can be empty until the next ring.
+
+Activations:
+
+- **Activations from the station.** The door locks of the outdoor units, the
+  actuators and the stair light that the station is set up with get
+  activation buttons, read from the station's own configuration like its
+  display does. The settings list them under **From the station**, next to
+  the **Manual** ones; a manual activation of the same type and address
+  replaces the station's. Their buttons have the new attribute `unit`, the
+  outdoor unit whose door a station lock opens.
+- The stair light is released 100 ms after it is switched on, as the
+  station's display does.
+
+Sound and picture:
+
 - **Live video starts sooner** when you open the camera: the agent hands the
   picture on as soon as the station sends it instead of waiting a fixed time
   first.
 - **Live audio and video reach Home Assistant more evenly.** The agent sends
   each packet at once instead of holding small ones back, at times for more
   than a tenth of a second.
-- **Activations: "Light" is now "Actuator".** It is the station's generic
-  actuator ("Generic" on its display, for example a gate opener), which is
-  pressed and released like a door lock. A Light activation sent the stair
-  light command instead and did nothing at the actuator. Your Light
-  activations become Actuator activations with the update; ID, name, address
-  and button stay.
-- **Activations from the station.** The door locks of the outdoor units, the
-  actuators and the stair light that the station is set up with now get
-  activation buttons, read from the station's own configuration like its
-  display does. The settings list them under **From the station**, next to
-  the **Manual** ones. Before, the agent searched files on the station that
-  hold no such items and found nothing. The activation buttons' attribute
-  `source` is now `config` or `station` (no longer `device`); new is `unit`,
-  the outdoor unit whose door a station lock opens.
-- **The stair light works at the station's own address.** In the Automatic
-  mode the stair light button switches the light at the address the station
-  is set up with (for example `11`), as its display does, and releases it
-  100 ms later. Before, Home Assistant sent the fixed address `10`, which
-  switched nothing on a station at another address. An address set in the Manual mode (P and N) is
-  used as before.
-- **New station events** on `bticino_c300x_agent_event_received`:
-  `station_call_state` whenever the station's own call state changes (for
-  example `ringing`, `conversation`, `answering_machine`, `idle`), and
-  `door_opened` and `door_closed` from the door contact of an outdoor unit,
-  on that unit's device.
-- **Door contact.** An outdoor unit wired with a door contact gets a **Door
-  contact** sensor, on while its door is open. It appears with the unit's
-  first door message. The station reports a change of the door only: after a
-  restart of the agent the state is unknown until the door opens or closes
-  again.
-- **Station call state.** A new sensor on the station shows what the station
-  itself is doing with a call: `idle`, `setup`, `ringing`, `viewing`,
-  `waiting`, `conversation`, `answering_machine`, `greeting` or `recording`.
-- **On-demand video of every outdoor unit.** `activate_doorbell_video` with
-  an outdoor unit as target shows that unit in the doorbell camera; without
-  a unit target it shows the unit of the current call, else the default unit.
-  Before, only the default unit had on-demand video.
-- **Calls follow the station.** A call ends when the station goes idle, also
-  when its end message was lost (`call_ended` reason `station_idle`), and a
-  call that the answering machine takes is answered with `answered_by`
-  `answering_machine`.
+
+Setup:
+
 - **Classe 300X2 recognised.** Setup, the agent reinstall and the SSH Repair
-  now tell a Classe 300X2 apart and install nothing on it: it is not
-  supported yet. Before, it was taken for a Classe 300X.
-- The native agent changed; an agent update is required. Until the agent
-  update Repair has run, the integration shows no entities: the devices and
-  entities move to the outdoor units with that update.
+  tell a Classe 300X2 apart and install nothing on it: it is not supported
+  yet. Before, it was taken for a Classe 300X.
+
+Going back to 3.0.x needs the Home Assistant backup from before the update:
+3.0.x cannot load the updated entry.
 
 ## v3.0.0 - 2026-11-28
 

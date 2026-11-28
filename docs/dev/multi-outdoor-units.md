@@ -267,7 +267,7 @@ answered one.
 
 ### `POST /api/v1/calls/{call_id}/actions/answer`, `.../hangup`
 
-Same work and success bodies as the 2.x unscoped routes, which are removed.
+Same work and success bodies as the 3.0 unscoped routes, which are removed.
 The `call_id` is checked before the media operation starts (not again when the
 handler runs a second time for the same request). Answer marks the call
 `answered` (`answered_by: "ha"`); hang-up ends it.
@@ -316,7 +316,7 @@ selection stays for later streams until the next activation.
 
 ### Events
 
-All carry the 2.x envelope (`event_id`, `type`, `occurred_at`, `data`).
+All carry the 3.0 envelope (`event_id`, `type`, `occurred_at`, `data`).
 
 | `type` | `data` |
 | --- | --- |

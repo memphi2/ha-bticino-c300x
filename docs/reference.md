@@ -286,13 +286,13 @@ reaction. Both carry the same `call_id`.
 ```yaml
 triggers:
   - trigger: state
-    entity_id: event.front_gate_doorbell
+    entity_id: event.front_gate_doorbell_ring_event
     not_from: unavailable
     not_to: [unavailable, unknown]
 actions:
   - action: bticino_c300x.answer_call
     target:
-      entity_id: event.front_gate_doorbell
+      entity_id: event.front_gate_doorbell_ring_event
     data:
       call_id: "{{ trigger.to_state.attributes.call_id }}"
 ```

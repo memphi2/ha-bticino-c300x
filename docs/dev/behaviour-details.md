@@ -908,7 +908,7 @@ you select and act on that unit's call. They find the forwarding select and
 the Media Readiness sensor on the station the unit belongs to. For the fastest
 reaction, without the unit's name, select the station's **Station ring**
 event instead: it fires at once with every ring, the unit's event as soon as
-the station names the caller (about 0.3 s, at most 1 s; at once with a single
+the station names the caller (about 0.3 s, at most 1 s, also with one
 unit). Phone alerts and captures run only while readiness is `ready` or
 `warning`.
 

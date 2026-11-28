@@ -273,6 +273,31 @@ def test_a_ring_with_no_other_live_call_asks_nothing(monkeypatch: pytest.MonkeyP
     assert entry.runtime_data.calls.current_call_id == "bbbbbbbb-1"
 
 
+def test_a_door_event_names_the_unit_whose_lock_opened(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The agent takes the door event's unit from the lock address. The call
+    # it carries may name another unit here (a ring still waiting for the
+    # caller frame, or one attributed to the default unit).
+    monkeypatch.setattr(call_sync, "async_dispatcher_send", lambda *args: None)
+    hass = SimpleNamespace(async_create_background_task=lambda work, _name: work.close())
+    entry = _entry(SimpleNamespace())
+    entry.runtime_data.calls.set_units(normalize_outdoor_units(UNITS))
+    call_sync.async_apply_call_event(hass, entry, "doorbell_pressed", {"call_id": "bbbbbbbb-1", "unit": "20_2"})  # type: ignore[arg-type]
+
+    def fields(event: str, data: dict[str, Any]) -> tuple[Any, Any]:
+        result = call_sync.async_apply_call_event(hass, entry, event, data)  # type: ignore[arg-type]
+        return result["call_id"], result["unit"]
+
+    for event in ("door_unlock_started", "door_unlock_ended"):
+        assert fields(event, {"address": "21", "unit": "21", "call_id": "bbbbbbbb-1"}) == ("bbbbbbbb-1", "21")
+        # No unit from the agent (a lock it does not know): the call's unit.
+        assert fields(event, {"address": "99", "call_id": "bbbbbbbb-1"}) == ("bbbbbbbb-1", "20_2")
+        assert fields(event, {"address": "21", "unit": "../x", "call_id": "bbbbbbbb-1"}) == ("bbbbbbbb-1", "20_2")
+    assert fields("door_opened", {"unit": "21", "call_id": "bbbbbbbb-1"}) == ("bbbbbbbb-1", "21")
+    # Call events keep the call's unit.
+    assert fields("call_answered", {"call_id": "bbbbbbbb-1", "unit": "21", "answered_by": "station"}) == (
+        "bbbbbbbb-1", "20_2")
+
+
 def test_an_agent_restart_reads_the_calls_again(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(call_sync, "async_dispatcher_send", lambda *args: None)
     names: list[str] = []

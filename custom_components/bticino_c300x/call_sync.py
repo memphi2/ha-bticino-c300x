@@ -33,6 +33,9 @@ CALL_EVENT_TYPES = frozenset({
 })
 _UNIT_BINDING_EVENTS = frozenset({"doorbell_pressed", "call_caller_identified", "call_view_started"})
 DOOR_EVENT_STATES = {"door_opened": "open", "door_closed": "closed"}
+# The agent names the unit from the frame's address: the lock that opened,
+# the door contact that changed. That unit wins over the call's.
+_ADDRESSED_UNIT_EVENTS = frozenset({"door_unlock_started", "door_unlock_ended", *DOOR_EVENT_STATES})
 
 
 def entry_call_registry(entry: BticinoC300XConfigEntry) -> C300XCallRegistry | None:
@@ -166,7 +169,9 @@ def async_apply_call_event(
     call_id = call.call_id if call is not None else data.get("call_id")
     known = registry.call(call_id) if isinstance(call_id, str) else None
     # A door frame names its unit also outside a call.
-    unit = known.unit if known is not None else data.get("unit")
+    unit = valid_unit_id(data.get("unit")) if event_type in _ADDRESSED_UNIT_EVENTS else None
+    if unit is None:
+        unit = known.unit if known is not None else data.get("unit")
     fields: dict[str, Any] = {
         "call_id": call_id if isinstance(call_id, str) else None,
         "unit": unit if isinstance(unit, str) else None,

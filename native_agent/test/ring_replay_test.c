@@ -1132,6 +1132,31 @@ static void display_view_end_keeps_ring(void) {
     assert_current(id);
 }
 
+/* The display views unit 20, unit 21 rings (bus only), the view ends,
+ * then the ring ends unanswered with its bus end frame. The agent has no
+ * media of that ring, so the frame is no media close and ends nothing; the
+ * station's idle ends the ring call. */
+static void unanswered_bus_ring_end_frame(void) {
+    char data[4096], id[32];
+    bus("*8*1#5#4#20*11##");
+    wait_event("call.view_started", 1, NULL, 0);
+    bus("*8*1#1#4#21*11##");
+    bus("*8*9#1#4*21##");
+    wait_event("call.caller_identified", 1, data, sizeof(data));
+    call_id_of(data, id);
+    bus("*8*3#5#4*411##");
+    wait_event("call.ended", 1, data, sizeof(data));
+    assert(strstr(data, "\"kind\":\"view\""));
+    bus("*8*3#1#4*411##");
+    usleep(2000000);
+    assert(count_events("doorbell.media.closed") == 1 && count_events("call.ended") == 1);
+    assert_current(id);
+    bus("*#8**35*0*0*0##");
+    wait_event("call.ended", 2, data, sizeof(data));
+    assert(strstr(data, id) && strstr(data, "\"reason\":\"station_idle\""));
+    assert_current("");
+}
+
 /* The display views unit 20: the agent cannot end that view. HA's hang-up
  * is refused (409 station_busy), nothing reaches the station, the view
  * call goes on. HA's own view still ends with its hang-up (view_is_current). */
@@ -1715,6 +1740,7 @@ int main(int argc, char **argv) {
     else if (strcmp(argv[1], "view_state6_during_bus_ring") == 0) view_state6_during_bus_ring();
     else if (strcmp(argv[1], "view_close_keeps_ring") == 0) view_close_keeps_ring();
     else if (strcmp(argv[1], "display_view_end_keeps_ring") == 0) display_view_end_keeps_ring();
+    else if (strcmp(argv[1], "unanswered_bus_ring_end_frame") == 0) unanswered_bus_ring_end_frame();
     else if (strcmp(argv[1], "boot_id_at_start") == 0) boot_id_at_start();
     else if (strcmp(argv[1], "station_busy_bus_end") == 0) station_busy_case(true);
     else if (strcmp(argv[1], "station_busy_timeout") == 0) station_busy_case(false);

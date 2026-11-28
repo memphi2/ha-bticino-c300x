@@ -1411,7 +1411,13 @@ Capabilities report `api_version: "2"`, `capabilities.outdoor_units` and
   media close ends only its own call: the close of the agent's ring leg or
   the bus end frame `*8*3#1#…` the ring call, the close of the agent's
   on-demand view, the bus end frame `*8*3#5#…` or `*7*0*##` a view call; a
-  view that ends during a ring leaves the ring call ringing. A call
+  view that ends during a ring leaves the ring call ringing. A bus end frame
+  is a media close only while the agent has media of that call: its ring leg
+  or view, or the display's or the app's after their answer or view. The end
+  frame of a ring that nobody answered and that the agent has no ring leg of
+  (only the bus rang) ends nothing: that call ends on the station's idle
+  (1.5 s after `*#8**35*0`) or after 90 s without a change
+  (`reason: "timeout"`). A call
   the station holds stays live while its state is not `idle`; once it is `idle`, a call that was live
   then and that nothing else ended within 1.5 s ends with
   `reason: "station_idle"`.

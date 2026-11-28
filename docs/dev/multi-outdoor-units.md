@@ -204,7 +204,12 @@ not a call.
 A media close belongs to the ring or to a view, never to both: the ring's
 is the close of the agent's ring leg or the bus end frame `*8*3#1#…`, a
 view's the close of the agent's on-demand view, the bus end frame
-`*8*3#5#…` or the video off `*7*0*##` that follows either end frame.
+`*8*3#5#…` or the video off `*7*0*##` that follows either end frame. A bus
+end frame is a media close only while the agent has media of that call: its
+ring leg or view, or the display's or the app's after their answer or view.
+The end frame of a ring that nobody answered and that the agent has no ring
+leg of (only the bus rang) ends nothing: that call ends on the station's
+idle (1.5 s after `*#8**35*0`) or after 90 s without a change.
 
 | Source | Ends |
 | --- | --- |

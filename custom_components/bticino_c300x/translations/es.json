@@ -2,7 +2,7 @@
   "config": {
     "step": {
       "user": {
-        "title": "BTicino C300X",
+        "title": "BTicino C300X/C100X",
         "description": "Introduce primero la dirección del {model}. Si no se puede acceder al agente nativo del dispositivo, Home Assistant puede guiarte en una instalación única del agente antes de pedir las claves y las opciones de funciones.",
         "data": {
           "name": "Nombre",
@@ -750,7 +750,7 @@
     },
     "abort": {
       "model_mismatch": "Este anuncio procede de un modelo de videoportero distinto al de la entrada configurada con la misma identidad. No se ha cambiado nada.",
-      "already_configured": "BTicino C300X ya está configurado.",
+      "already_configured": "BTicino C300X/C100X ya está configurado.",
       "reconfigure_successful": "BTicino {model} se ha reconfigurado. Actualiza la configuración local del agente del dispositivo o del puente de pantalla si has renovado las credenciales.",
       "cannot_connect": "No se ha podido acceder al agente del dispositivo. Comprueba la dirección y que el agente esté en ejecución.",
       "unique_id_mismatch": "Este dispositivo es distinto del que está configurado. Reconfigura la entrada que le corresponde o añade el dispositivo como una entrada nueva.",
@@ -1668,7 +1668,7 @@
       "message": "La captura a petición requiere que no haya multimedia en uso. Cierra otras transmisiones de cámara o llamadas e inténtalo de nuevo."
     },
     "entry_id_required": {
-      "message": "El ID de la entrada es obligatorio cuando existe más de una entrada BTicino C300X."
+      "message": "El ID de la entrada es obligatorio cuando existe más de una entrada BTicino C300X/C100X."
     },
     "invalid_action_id": {
       "message": "El ID de la acción no es válido."
@@ -1695,10 +1695,10 @@
       "message": "El ID de acción {action_id} no está configurado."
     },
     "unknown_entry": {
-      "message": "La entrada BTicino C300X seleccionada no existe."
+      "message": "La entrada BTicino C300X/C100X seleccionada no existe."
     },
     "entry_not_loaded": {
-      "message": "La entrada BTicino C300X no está cargada. Actívala o espera a que se haya iniciado."
+      "message": "La entrada BTicino C300X/C100X no está cargada. Actívala o espera a que se haya iniciado."
     },
     "voice_memo_not_available": {
       "message": "No hay ninguna nota de voz del {model} disponible."
@@ -1766,7 +1766,7 @@
           "wrong_device": "Esta dirección lleva ahora a otra estación. No se ha cambiado nada en ella."
         },
         "abort": {
-          "entry_not_loaded": "La entrada BTicino C300X no está cargada."
+          "entry_not_loaded": "La entrada BTicino C300X/C100X no está cargada."
         }
       }
     },
@@ -1800,7 +1800,7 @@
           "core_patch_verify_failed": "La acción del hook multimedia básico se ha ejecutado, pero el agente no ha confirmado el estado parcheado."
         },
         "abort": {
-          "entry_not_loaded": "La entrada BTicino C300X no está cargada.",
+          "entry_not_loaded": "La entrada BTicino C300X/C100X no está cargada.",
           "core_patch_unsupported": "El agente del dispositivo instalado en el {model} no admite aplicar el hook multimedia básico.",
           "display_unsupported": "El agente del dispositivo no conoce la pantalla de este videoportero; funciona sin las páginas de pantalla y no hay ningún hook multimedia básico que aplicar."
         }
@@ -1820,7 +1820,7 @@
           "core_patch_verify_failed": "Los pasos de pantalla se han ejecutado, pero el agente no ha confirmado el hook multimedia básico."
         },
         "abort": {
-          "entry_not_loaded": "La entrada BTicino C300X no está cargada.",
+          "entry_not_loaded": "La entrada BTicino C300X/C100X no está cargada.",
           "core_patch_unsupported": "El agente del dispositivo instalado en el C300X no admite los pasos de pantalla.",
           "display_unsupported": "El agente del dispositivo no conoce la pantalla de este videoportero; funciona sin las páginas de pantalla y no hay pasos de pantalla que ejecutar."
         }
@@ -1844,7 +1844,7 @@
           "device_not_registered": "El {model} aún no se ha añadido en la app BTicino Door Entry. Flexisip, en el dispositivo, obtiene su usuario SIP, su dominio y sus certificados únicamente de ese registro. Añade el dispositivo una vez en la app y vuelve a intentarlo. Después, el desvío puede quedarse en Smartphone."
         },
         "abort": {
-          "entry_not_loaded": "La entrada BTicino C300X no está cargada."
+          "entry_not_loaded": "La entrada BTicino C300X/C100X no está cargada."
         }
       }
     },
@@ -1861,7 +1861,7 @@
           "media_setup_repair_failed": "La reparación de la configuración multimedia ha fallado. Comprueba el acceso de mantenimiento y vuelve a intentarlo."
         },
         "abort": {
-          "entry_not_loaded": "La entrada BTicino C300X no está cargada."
+          "entry_not_loaded": "La entrada BTicino C300X/C100X no está cargada."
         }
       }
     },
@@ -1905,7 +1905,7 @@
           "lovelace_unavailable": "Lovelace aún no está disponible."
         },
         "abort": {
-          "entry_not_loaded": "La entrada BTicino C300X no está cargada."
+          "entry_not_loaded": "La entrada BTicino C300X/C100X no está cargada."
         }
       }
     },
@@ -1925,7 +1925,7 @@
           "invalid_callback_base_url": "Introduce una URL base HTTP o HTTPS de Home Assistant accesible."
         },
         "abort": {
-          "entry_not_loaded": "La entrada BTicino C300X no está cargada."
+          "entry_not_loaded": "La entrada BTicino C300X/C100X no está cargada."
         }
       }
     }

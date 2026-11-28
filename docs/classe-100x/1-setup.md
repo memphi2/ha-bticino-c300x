@@ -44,18 +44,18 @@ The Classe 100X needs `3.0.0` or newer.
 **Home Assistant 2026.11 or newer:**
 
 1. Open the button above, or go to **Settings > Marketplace**.
-2. Find **BTicino C300X** and install it.
+2. Find **BTicino C300X/C100X** and install it.
 3. Restart Home Assistant if it asks you to.
 
 **Home Assistant 2026.10:**
 
-1. Open **HACS** and search for **BTicino C300X**.
+1. Open **HACS** and search for **BTicino C300X/C100X**.
 2. Download it and restart Home Assistant.
 
 ## Add the Station
 
 1. Go to **Settings > Devices & services > Add integration** and choose
-   **BTicino C300X**.
+   **BTicino C300X/C100X**.
 2. Enter **Address of the C300X/C100X** (the station's IP address; give it a
    fixed address in your router) and **Port** `8091`. Leave **Address of Home
    Assistant for the C300X/C100X (optional)** empty.

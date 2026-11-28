@@ -174,7 +174,7 @@ use a negative fine adjustment.
 
 The **Save images** switch (on by default) saves one image on every ring and
 every stream, even with no dashboard open. Find them in the card (arrows on
-the picture) and under **Media > BTicino C300X Media**.
+the picture) and under **Media > BTicino C300X/C100X Media**.
 
 **Configure > Visitor Snapshot**:
 

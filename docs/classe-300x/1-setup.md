@@ -34,19 +34,19 @@ the station; you do it at your own risk and without warranty.
 **Home Assistant 2026.11 or newer:**
 
 1. Open the button above, or go to **Settings > Marketplace**.
-2. Find **BTicino C300X** and install it.
+2. Find **BTicino C300X/C100X** and install it.
 3. Restart Home Assistant if it asks you to.
 
 **Home Assistant 2026.10:**
 
-1. Open **HACS** and search for **BTicino C300X**. If nothing is found,
+1. Open **HACS** and search for **BTicino C300X/C100X**. If nothing is found,
    refresh the HACS catalog.
 2. Download it and restart Home Assistant.
 
 ## Add the Station
 
 1. Go to **Settings > Devices & services > Add integration** and choose
-   **BTicino C300X**.
+   **BTicino C300X/C100X**.
 2. Fill in the form:
 
 | Field | What to enter |

@@ -121,7 +121,7 @@ Run the steps in order, after the backup. Stop at the first failure.
 
 | # | Do | Expected |
 |---|---|---|
-| 1 | Add **BTicino C300X** with the C100X host and tick **experimental support** when asked | Setup completes without a workaround; model C100X, firmware 1.5.8 |
+| 1 | Add **BTicino C300X/C100X** with the C100X host and tick **experimental support** when asked | Setup completes without a workaround; model C100X, firmware 1.5.8 |
 | 2 | Press **Stair light** once | The light comes on |
 | 3 | Press **Door unlock** once, with an authorized person at the door | The door releases |
 | 4 | Start the live stream on the card | Picture and sound; the stream ends cleanly |

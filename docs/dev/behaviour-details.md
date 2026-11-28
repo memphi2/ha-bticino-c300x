@@ -380,7 +380,7 @@ times, 10 minutes apart. A station that fails the proof is ignored, and the log
 warns that it "did not prove the saved identity".
 
 Enter the new address yourself with **Reconfigure** (**Settings > Devices &
-services > BTicino C300X**, entry menu) when:
+services > BTicino C300X/C100X**, entry menu) when:
 
 - the entry uses a host name or an IPv6 address (only IPv4 entries move, and
   only to an IPv4 announcement);
@@ -593,7 +593,7 @@ A saved size such as 688x480 stays as it is; select 800x480 for the display
 proportions in future images. Existing images are never resized.
 
 Images are kept per device in `c300x/snapshots/<device-directory>/` under the HA
-media root (not `www`) and appear in **Media > BTicino C300X Media**, at most
+media root (not `www`) and appear in **Media > BTicino C300X/C100X Media**, at most
 **1,000 images or 128 MiB per device**, oldest removed first. The latest image
 is the preview of the camera entity and the card: a saved image, not live
 video, and absent until the first capture.

@@ -99,7 +99,7 @@ does not uninstall the device agent and does not reset the station.
 2. Stop streams and recordings, and turn off automations that use the station.
    If you also want to [remove the device agent](#remove-the-device-agent), do
    that now, while its button still exists.
-3. Go to **Settings > Devices & services**, open **BTicino C300X**, choose the
+3. Go to **Settings > Devices & services**, open **BTicino C300X/C100X**, choose the
    three-dot menu of the entry, then **Delete**
    ([official steps](https://www.home-assistant.io/common-tasks/general/#removing-an-integration-instance)).
    With several stations, check the entry name.
@@ -109,7 +109,7 @@ does not uninstall the device agent and does not reset the station.
    - **Marketplace (HA 2026.11+):** **Settings > Marketplace**, open BTicino
      C300X, three-dot menu, **Uninstall**
      ([official steps](https://www.home-assistant.io/integrations/marketplace/#uninstalling-a-repository)).
-   - **HACS:** open BTicino C300X, three-dot menu, **Remove**, then restart
+   - **HACS:** open BTicino C300X/C100X, three-dot menu, **Remove**, then restart
      Home Assistant
      ([official steps](https://www.hacs.xyz/docs/use/repositories/dashboard/#removing-a-repository)).
    - **Manual installation:** stop Home Assistant and delete only

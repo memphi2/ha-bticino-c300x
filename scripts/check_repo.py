@@ -526,7 +526,7 @@ def check_release_metadata() -> list[str]:
         "SUPPORT.md": active_release_line,
         "PRIVACY.md": "Local Data Flow",
         "LICENSE": "Apache License",
-        "NOTICE": "BTicino C300X Home Assistant Integration",
+        "NOTICE": "BTicino C300X/C100X Home Assistant Integration",
     }
     for relative_path, expected in required_mentions.items():
         path = ROOT / relative_path
@@ -825,7 +825,7 @@ def check_hacs_metadata() -> list[str]:
     hacs_path = ROOT / "hacs.json"
     hacs = json.loads(hacs_path.read_text(encoding="utf-8"))
     expected_hacs = {
-        "name": "BTicino C300X",
+        "name": "BTicino C300X/C100X",
         "homeassistant": MIN_HOME_ASSISTANT_VERSION,
         "zip_release": True,
         "filename": "ha-bticino-c300x.zip",

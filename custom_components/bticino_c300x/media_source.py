@@ -64,7 +64,7 @@ async def async_get_media_source(hass: HomeAssistant) -> C300XStoredMediaSource:
 class C300XStoredMediaSource(MediaSource):
     """Provide stored C300X media as playable HA media."""
 
-    name: str = "BTicino C300X Media"
+    name: str = "BTicino C300X/C100X Media"
 
     def __init__(self, hass: HomeAssistant) -> None:
         super().__init__(DOMAIN)

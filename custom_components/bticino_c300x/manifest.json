@@ -1,6 +1,6 @@
 {
   "domain": "bticino_c300x",
-  "name": "BTicino C300X",
+  "name": "BTicino C300X/C100X",
   "after_dependencies": [
     "energy",
     "http",

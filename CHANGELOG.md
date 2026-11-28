@@ -84,6 +84,8 @@ Setup and installation over SSH:
 
 Names and languages:
 
+- **New name: BTicino C300X/C100X.** HACS and Home Assistant show the
+  integration under this name; entries, entities and services keep theirs.
 - **Names without the model.** The card picker lists the card as **BTicino
   Doorbell Call Card** (before: C300X Doorbell Call Card). The blueprints are
   called **BTicino ...** instead of **C300X ...**, their device input is called

@@ -12,7 +12,7 @@ blueprint:
           domain: input_button
     entry_id:
       name: Entry ID
-      description: Optional BTicino C300X config entry ID. Required for unlock only when more than one entry exists.
+      description: Optional BTicino C300X/C100X config entry ID. Required for unlock only when more than one entry exists.
       default: ""
       selector:
         text:

@@ -2,7 +2,7 @@
   "config": {
     "step": {
       "user": {
-        "title": "BTicino C300X",
+        "title": "BTicino C300X/C100X",
         "description": "Inserisci prima l'indirizzo del {model}. Se il device agent nativo non è raggiungibile, Home Assistant può guidare un'installazione una tantum prima di chiedere le chiavi e le funzioni.",
         "data": {
           "name": "Nome",
@@ -750,7 +750,7 @@
     },
     "abort": {
       "model_mismatch": "Questo annuncio proviene da un modello di postazione diverso dalla voce configurata con la stessa identità. Non è stato modificato nulla.",
-      "already_configured": "BTicino C300X è già configurato.",
+      "already_configured": "BTicino C300X/C100X è già configurato.",
       "reconfigure_successful": "BTicino {model} è stato riconfigurato. Aggiorna la configurazione locale del device agent o del display bridge se hai ruotato le credenziali.",
       "cannot_connect": "Impossibile raggiungere il device agent. Controlla l'indirizzo e che l'agent sia in esecuzione.",
       "unique_id_mismatch": "Questo è un dispositivo diverso da quello configurato. Riconfigura la voce corrispondente oppure aggiungi il dispositivo come nuova voce.",
@@ -1668,7 +1668,7 @@
       "message": "La registrazione a richiesta richiede risorse multimediali libere. Chiudi gli altri flussi video o chiamate e riprova."
     },
     "entry_id_required": {
-      "message": "L'ID della voce è richiesto quando esistono più voci BTicino C300X."
+      "message": "L'ID della voce è richiesto quando esistono più voci BTicino C300X/C100X."
     },
     "invalid_action_id": {
       "message": "ID azione non valido."
@@ -1695,10 +1695,10 @@
       "message": "L'ID azione {action_id} non è configurato."
     },
     "unknown_entry": {
-      "message": "La voce BTicino C300X selezionata non esiste."
+      "message": "La voce BTicino C300X/C100X selezionata non esiste."
     },
     "entry_not_loaded": {
-      "message": "La voce BTicino C300X non è caricata. Attivala o attendi che sia avviata."
+      "message": "La voce BTicino C300X/C100X non è caricata. Attivala o attendi che sia avviata."
     },
     "voice_memo_not_available": {
       "message": "Non e disponibile alcun memo vocale {model}."
@@ -1766,7 +1766,7 @@
           "wrong_device": "Questo indirizzo ora porta a un'altra stazione. Su di essa non è stato modificato nulla."
         },
         "abort": {
-          "entry_not_loaded": "La voce BTicino C300X non è caricata."
+          "entry_not_loaded": "La voce BTicino C300X/C100X non è caricata."
         }
       }
     },
@@ -1800,7 +1800,7 @@
           "core_patch_verify_failed": "L'azione hook media core è stata eseguita, ma l'agent non ha confermato lo stato patchato."
         },
         "abort": {
-          "entry_not_loaded": "La voce BTicino C300X non è caricata.",
+          "entry_not_loaded": "La voce BTicino C300X/C100X non è caricata.",
           "core_patch_unsupported": "Il device agent {model} installato non supporta l'applicazione dell'hook media core.",
           "display_unsupported": "Il device agent non conosce il display di questo dispositivo; funziona senza le pagine del display e non c'è alcun hook media core da applicare."
         }
@@ -1820,7 +1820,7 @@
           "core_patch_verify_failed": "I passaggi del display sono stati eseguiti, ma il device agent non ha confermato l'hook media core."
         },
         "abort": {
-          "entry_not_loaded": "La voce BTicino C300X non è caricata.",
+          "entry_not_loaded": "La voce BTicino C300X/C100X non è caricata.",
           "core_patch_unsupported": "Il device agent C300X installato non supporta i passaggi del display.",
           "display_unsupported": "Il device agent non conosce il display di questo dispositivo; funziona senza le pagine del display e non ci sono passaggi del display da eseguire."
         }
@@ -1844,7 +1844,7 @@
           "device_not_registered": "Il {model} non è ancora stato aggiunto nell'app BTicino Door Entry. Flexisip sul dispositivo riceve utente SIP, dominio e certificati solo da questa registrazione. Aggiungi il dispositivo una volta nell'app, poi riprova. In seguito l'inoltro può restare su Smartphone."
         },
         "abort": {
-          "entry_not_loaded": "La voce BTicino C300X non e caricata."
+          "entry_not_loaded": "La voce BTicino C300X/C100X non e caricata."
         }
       }
     },
@@ -1861,7 +1861,7 @@
           "media_setup_repair_failed": "Riparazione configurazione media non riuscita. Controlla l'accesso manutenzione e riprova."
         },
         "abort": {
-          "entry_not_loaded": "La voce BTicino C300X non e caricata."
+          "entry_not_loaded": "La voce BTicino C300X/C100X non e caricata."
         }
       }
     },
@@ -1905,7 +1905,7 @@
           "lovelace_unavailable": "Lovelace non e ancora disponibile."
         },
         "abort": {
-          "entry_not_loaded": "La voce BTicino C300X non e caricata."
+          "entry_not_loaded": "La voce BTicino C300X/C100X non e caricata."
         }
       }
     },
@@ -1925,7 +1925,7 @@
           "invalid_callback_base_url": "Inserire un URL di base HTTP o HTTPS di Home Assistant raggiungibile."
         },
         "abort": {
-          "entry_not_loaded": "La voce BTicino C300X non e caricata."
+          "entry_not_loaded": "La voce BTicino C300X/C100X non e caricata."
         }
       }
     }

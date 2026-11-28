@@ -137,6 +137,19 @@ ADDED_SINCE_2_10_0 = frozenset({
 # points to the documentation section where the step now is, and the callback
 # URL error reads as in English in every language (no model).
 CHANGED_SINCE_2_10_0 = frozenset({
+    # The integration is called BTicino C300X/C100X since 3.0.0.
+    "config/abort/already_configured",
+    "config/step/user/title",
+    "exceptions/entry_id_required/message",
+    "exceptions/entry_not_loaded/message",
+    "exceptions/unknown_entry/message",
+    "issues/device_agent_update_required/fix_flow/abort/entry_not_loaded",
+    "issues/device_core_qml_hook_required/fix_flow/abort/entry_not_loaded",
+    "issues/device_display_followup_pending/fix_flow/abort/entry_not_loaded",
+    "issues/device_user_required/fix_flow/abort/entry_not_loaded",
+    "issues/frontend_card_setup_hint/fix_flow/abort/entry_not_loaded",
+    "issues/media_setup_repair_required/fix_flow/abort/entry_not_loaded",
+    "issues/unsupported_callback_url/fix_flow/abort/entry_not_loaded",
     "config/error/installer_dependency_missing",
     "config/error/invalid_callback_base_url",
     "config/step/bootstrap_install/description",
@@ -168,11 +181,11 @@ REMOVED_SINCE_2_10_0 = frozenset({
     "options/step/features/data_description/ring_capture_audio_gain_db",
 })
 DIGESTS_2_10_0 = {
-    "base": "0de2ba4b4ba4f8ce874a6386c4cda074a2720de4795486a006c5694421fd389e",
-    "en": "0de2ba4b4ba4f8ce874a6386c4cda074a2720de4795486a006c5694421fd389e",
-    "de": "1f5ebe1456b22af92779a10407af737ab0e40685afe834b3fffee2607c983c14",
-    "it": "d219d458706df49ec306d5c1241e5be58a6f4f553579904e6c62913955603ffd",
-    "fr": "6a0916cfa64b94660dd98727bec94d89449ad7a93fadbec77c6ccfd5cc2879b6",
+    "base": "94861808dfa3432da402090e8bdf06a6c91eab9b123f74ad9a5067db00f2c299",
+    "en": "94861808dfa3432da402090e8bdf06a6c91eab9b123f74ad9a5067db00f2c299",
+    "de": "7b3d6531d7af4feeb5c3ac3ed98ca789c751e780ced36fd72f82953ad0ec30fd",
+    "it": "3a62b8b51b5a13248a2f175fce9a4d8867d32605136b794d34cfaa051b49ce77",
+    "fr": "cd31cf269e7582db9e062b5eb4fceea344a41b3c45b3d75b740b7ff52bd49e91",
 }
 
 
@@ -370,7 +383,7 @@ def test_a_c100x_has_no_memo_capability_left():
     )
     assert text("de", "exceptions", "agent_command_failed", "message", model="C100X").count("C100X") == 1
     # The integration's own name stays.
-    assert text("en", "exceptions", "entry_not_loaded", "message", model="C100X").startswith("The BTicino C300X entry")
+    assert text("en", "exceptions", "entry_not_loaded", "message", model="C100X").startswith("The BTicino C300X/C100X entry")
 
 
 def test_the_c100x_reads_its_own_display_mechanism(monkeypatch):
@@ -476,7 +489,7 @@ def test_global_texts_name_no_model():
     for lang in LANGUAGES:
         for service, value in _load(lang)["services"].items():
             for field in _leaves(value).values():
-                assert "C300X" not in field.replace("BTicino C300X", "") and "C100X" not in field, (lang, service)
+                assert "C300X" not in field.replace("BTicino C300X/C100X", "") and "C100X" not in field, (lang, service)
     assert _load("en")["services"]["capture_doorbell_call"]["name"] == "Capture doorbell video"
     assert _load("de")["services"]["capture_doorbell_call"]["name"] == "Türvideo aufnehmen"
 

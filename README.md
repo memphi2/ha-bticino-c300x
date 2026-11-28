@@ -9,7 +9,7 @@
 Connects a BTicino Classe 300X or Classe 100X video door station to Home
 Assistant over your local network. A small agent on the station talks to Home
 Assistant; nothing goes through a cloud. The integration is called
-**BTicino C300X** for both models.
+**BTicino C300X/C100X** for both models.
 
 Stable: **3.0.0**, one package for the Classe 300X and the Classe 100X
 (Classe 100X experimental).

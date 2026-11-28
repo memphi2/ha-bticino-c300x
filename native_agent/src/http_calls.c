@@ -194,14 +194,20 @@ static int ring_fields(const struct c300x_call *call, const char *data, char *ou
     return append_fields(data, fields, out, out_len);
 }
 
-int c300x_call_hub_event(struct c300x_call_hub *hub, const char *type, const char *data,
-                         char *out, size_t out_len)
+/* 'r' or 'v' for the agent's own event of its ring leg or its view, else 0. */
+static int own_media(const char *data)
+{
+    return strcmp(data, C300X_VIDEO_EVENT_RING) == 0 ? 'r' : strcmp(data, C300X_VIDEO_EVENT_VIEW) == 0 ? 'v' : 0;
+}
+
+static int hub_event(struct c300x_call_hub *hub, const char *type, const char *data, int own,
+                     char *out, size_t out_len)
 {
     long long now = c300x_monotonic_ms();
     char text[C300X_UNIT_WHERE_LEN * 2];
     struct c300x_call_media media;
 
-    if (hub == NULL || type == NULL || data == NULL) {
+    if (hub == NULL || type == NULL) {
         return 1;
     }
     if (!hub->units.loaded) {
@@ -222,17 +228,33 @@ int c300x_call_hub_event(struct c300x_call_hub *hub, const char *type, const cha
     }
     if (strcmp(type, "doorbell.view_requested") == 0) {
         /* The ring answered: on the display or the app (*8*2#1#) or by the
-         * agent's own answer (no frame). A view frame (*8*1#5#) opened its
-         * view already. */
+         * agent's answer of its ring leg, which it gives Home Assistant
+         * only. Its on-demand view answers no ring; a view frame (*8*1#5#)
+         * opened its view already. */
         c300x_json_string_field(data, "raw", text, sizeof(text));
-        if (text[0] == '\0' || strncmp(text, "*8*2#1#", 7) == 0) {
+        if (own == 'r' || strncmp(text, "*8*2#1#", 7) == 0) {
             media_state(hub, &media);
+            media.ha_answered |= own == 'r';
             c300x_calls_answer_seen(&hub->calls, &hub->sink, &media, now);
         }
         const struct c300x_call *call = c300x_calls_current(&hub->calls);
         return call != NULL && call->unit[0] != '\0' ? decorate(data, call->unit, call->id, out, out_len) : 1;
     }
     return 1;
+}
+
+int c300x_call_hub_event(struct c300x_call_hub *hub, const char *type, const char *data,
+                         char *out, size_t out_len)
+{
+    int own = data != NULL ? own_media(data) : 0;
+    int result = data != NULL ? hub_event(hub, type, own ? "{}" : data, own, out, out_len) : 1;
+
+    /* The media of the agent's own event stays in the agent. */
+    if (result == 1 && own) {
+        c300x_copy_string(out, out_len, "{}");
+        return 2;
+    }
+    return result;
 }
 
 void c300x_call_hub_media_closed(struct c300x_call_hub *hub, int station_holds_media, int from_bus)

@@ -2216,7 +2216,7 @@ static void ring_media_loop(
             pthread_mutex_unlock(&bridge->mutex);
             c300x_audio_level_session_boundary();
             c300x_video_bridge_ring_media_started(bridge->video, 1);
-            c300x_video_dispatch_event(bridge->video, "doorbell.view_requested", "{}", 0);
+            c300x_video_dispatch_event(bridge->video, "doorbell.view_requested", C300X_VIDEO_EVENT_RING, 0);
             answered = true;
             last_inbound_activity = c300x_monotonic_ms();
         }
@@ -5061,7 +5061,7 @@ static bool start_media_session(media_bridge_t *bridge) {
 
     c300x_audio_level_session_boundary();
     c300x_video_bridge_media_started(bridge->video, true);
-    c300x_video_dispatch_event(bridge->video, "doorbell.view_requested", "{}", 0);
+    c300x_video_dispatch_event(bridge->video, "doorbell.view_requested", C300X_VIDEO_EVENT_VIEW, 0);
     pthread_mutex_unlock(&media_lifecycle_mutex);
     return true;
 failed:

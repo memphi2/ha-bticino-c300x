@@ -1021,6 +1021,44 @@ static void refused_answer_then_station(void) {
     assert(strstr(data, id) && strstr(data, "\"answered_by\":\"station\""));
 }
 
+/* Smartphone forwarding on or blocked: only the bus rings, the agent has no
+ * ring leg. HA's live view during the ring answers nothing: the station
+ * still rings. The agent's answer of its own ring leg is HA's. */
+static void view_during_bus_ring(void) {
+    char data[4096], id[32];
+    atomic_store(&station_busy, 0);
+    bus("*8*1#1#4#21*11##");
+    bus("*8*9#1#4*20##");
+    wait_event("call.caller_identified", 1, data, sizeof(data));
+    call_id_of(data, id);
+    assert(calls_api("POST", "/api/v1/video/doorbell/actions/activate", "{}", data, sizeof(data)) == 200);
+    int fd = rtsp_open();
+    assert(rtsp_play(fd, "/doorbell") == 200);
+    wait_event("doorbell.view_requested", 1, data, sizeof(data));
+    assert(strstr(data, "\"media\"") == NULL);
+    usleep(300000);
+    assert(count_events("call.answered") == 0);
+    assert(calls_api("GET", "/api/v1/calls", "", data, sizeof(data)) == 200);
+    assert(strstr(data, "\"kind\":\"ring\",\"state\":\"ringing\""));
+    assert_current(id);
+    c300x_video_stop(runtime->video);
+    wait_byes(1);
+    close(fd);
+}
+
+static void agent_answer_is_ha(void) {
+    char data[4096], id[32];
+    int preview;
+    ring_with_caller(id, &preview);
+    assert(c300x_video_doorbell_call_answer(runtime->video));
+    wait_ring_code(200, 1);
+    wait_event("call.answered", 1, data, sizeof(data));
+    assert(strstr(data, id) && strstr(data, "\"answered_by\":\"ha\""));
+    wait_event("doorbell.view_requested", 1, data, sizeof(data));
+    assert(strstr(data, "\"media\"") == NULL && strstr(data, id));
+    close(preview);
+}
+
 /* A bus ring without the agent's ring leg: until the caller frame names
  * its unit, video of the current call has none (409 call_unit_pending, no
  * view of the default unit); then the view is the caller's. */
@@ -1465,6 +1503,8 @@ int main(int argc, char **argv) {
     else if (strcmp(argv[1], "view_is_current") == 0) view_is_current();
     else if (strcmp(argv[1], "call_id_lengths") == 0) call_id_lengths();
     else if (strcmp(argv[1], "pending_unit_video") == 0) pending_unit_video();
+    else if (strcmp(argv[1], "view_during_bus_ring") == 0) view_during_bus_ring();
+    else if (strcmp(argv[1], "agent_answer_is_ha") == 0) agent_answer_is_ha();
     else if (strcmp(argv[1], "boot_id_at_start") == 0) boot_id_at_start();
     else if (strcmp(argv[1], "station_busy_bus_end") == 0) station_busy_case(true);
     else if (strcmp(argv[1], "station_busy_timeout") == 0) station_busy_case(false);

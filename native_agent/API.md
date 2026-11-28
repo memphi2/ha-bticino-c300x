@@ -1394,9 +1394,11 @@ Capabilities report `api_version: "2"`, `capabilities.outdoor_units` and
   and the call still waits), `6` `conversation`, `7` `answering_machine`
   (it took the call), `8` `greeting`, `9` `recording`; any other code has
   `state: null`. A ringing call is answered when the station reports `6`
-  (`answered_by` `ha` while Home Assistant answered the ring leg, else
-  `station`) or `7` (`answering_machine`). A call the station holds stays
-  live while its state is not `idle`; once it is `idle`, a call that was live
+  or the answer frame `*8*2#1#…` comes (`answered_by` `ha` while Home
+  Assistant answered the ring leg, else `station`), when it reports `7`
+  (`answering_machine`) and when the agent answers its ring leg for Home
+  Assistant (`ha`). An on-demand view during a ring answers nothing. A call
+  the station holds stays live while its state is not `idle`; once it is `idle`, a call that was live
   then and that nothing else ended within 1.5 s ends with
   `reason: "station_idle"`.
 - `POST /api/v1/calls/{call_id}/actions/answer`, `.../hangup`: answer or hang

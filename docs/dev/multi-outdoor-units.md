@@ -187,7 +187,7 @@ not a call.
 | Event | Call |
 | --- | --- |
 | `doorbell.pressed` | Opens the ring call, or belongs to the live one (see Ring timing). |
-| `doorbell.view_requested` of the ring (`*8*2#1#…`, or the agent's own answer) | The ring call is `answered`: `answered_by: "ha"` while the agent's ring leg is answered by Home Assistant, else `"station"` (display or app). In which order the display's frames and the ring leg's close come does not matter. |
+| `doorbell.view_requested` of the ring (`*8*2#1#…`, or the agent's answer of its ring leg) | The ring call is `answered`: `answered_by: "ha"` for the agent's answer, which it gives Home Assistant only, else `"station"` (display or app). In which order the display's frames and the ring leg's close come does not matter. The `doorbell.view_requested` of the agent's on-demand view answers nothing. |
 | `doorbell.media.closed` whose payload still reports the station's own media | A ringing call is `answered` by the station. |
 | Station state `6` (conversation) | The ringing call is `answered`: `"ha"` while Home Assistant answered the ring leg, else `"station"`. |
 | Station state `7` (answering machine) | The ringing call is `answered` (`"answering_machine"`). |

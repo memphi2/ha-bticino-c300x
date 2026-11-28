@@ -28,6 +28,7 @@
 #include <errno.h>
 #include <limits.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <dlfcn.h>
 #include <pthread.h>
 #include <stdbool.h>
@@ -6102,6 +6103,15 @@ static void *rtsp_client_thread(void *arg) {
     return NULL;
 }
 
+/* Each interleaved packet is its own small write. Nagle would hold it until
+ * the client acknowledged the previous one, by up to its delayed-ACK time. */
+static void set_rtsp_nodelay(int fd) {
+    int one = 1;
+    if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one)) != 0) {
+        fprintf(stderr, "warning: rtsp: TCP_NODELAY not set, media may lag: %s\n", strerror(errno));
+    }
+}
+
 static void start_rtsp_client(media_bridge_t *bridge, int fd, const struct sockaddr_storage *peer) {
     int index = reserve_rtsp_client(bridge, fd);
     if (index < 0) {
@@ -6109,6 +6119,7 @@ static void start_rtsp_client(media_bridge_t *bridge, int fd, const struct socka
         close(fd);
         return;
     }
+    set_rtsp_nodelay(fd);
     rtsp_client_thread_arg_t *client = calloc(1, sizeof(*client));
     if (client == NULL) {
         release_rtsp_client(bridge, fd, index);

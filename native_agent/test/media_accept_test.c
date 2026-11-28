@@ -1,6 +1,7 @@
 /* The real RTSP listener: accept errors and the connection limit. */
 #include <assert.h>
 #include <errno.h>
+#include <netinet/tcp.h>
 #include <stdatomic.h>
 #include <sys/socket.h>
 static int test_accept(int, struct sockaddr *, socklen_t *);
@@ -136,6 +137,28 @@ static void accept_error_test(struct c300x_config *config, struct c300x_video *v
     pthread_mutex_unlock(&g_bridge.mutex);
 }
 
+/* Interleaved media goes out as each packet arrives: no connection waits for
+ * the client's ACK before sending a small packet. */
+static void nodelay_test(struct c300x_config *config, struct c300x_video *video) {
+    assert(c300x_media_bridge_start(config, video));
+    int fd = connect_client(listener_port());
+    assert(fd >= 0 && options_answered(fd));
+    int checked = 0;
+    pthread_mutex_lock(&g_bridge.mutex);
+    for (int i = 0; i < RTSP_CONNECTION_LIMIT; i++) {
+        if (g_bridge.rtsp_connection_fds[i] == 0) continue;
+        int value = 0;
+        socklen_t size = sizeof(value);
+        assert(getsockopt(g_bridge.rtsp_connection_fds[i] - 1, IPPROTO_TCP, TCP_NODELAY, &value, &size) == 0);
+        assert(value != 0);
+        checked++;
+    }
+    pthread_mutex_unlock(&g_bridge.mutex);
+    assert(checked == 1);
+    close(fd);
+    c300x_media_bridge_stop(video);
+}
+
 int main(int argc, char **argv) {
     assert(argc == 2);
     struct c300x_config config;
@@ -150,6 +173,8 @@ int main(int argc, char **argv) {
         accept_error_test(&config, video);
     } else if (strcmp(argv[1], "unauth_eviction") == 0) {
         unauth_eviction_test(&config, video);
+    } else if (strcmp(argv[1], "nodelay") == 0) {
+        nodelay_test(&config, video);
     } else {
         return 2;
     }

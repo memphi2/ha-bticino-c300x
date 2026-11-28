@@ -74,6 +74,9 @@ devices, entities and services; a Repair lists what to redo after the update.
 - **Live video starts sooner** when you open the camera: the agent hands the
   picture on as soon as the station sends it instead of waiting a fixed time
   first.
+- **Live audio and video reach Home Assistant more evenly.** The agent sends
+  each packet at once instead of holding small ones back, at times for more
+  than a tenth of a second.
 - **Activations: "Light" is now "Actuator".** It is the station's generic
   actuator ("Generic" on its display, for example a gate opener), which is
   pressed and released like a door lock. A Light activation sent the stair

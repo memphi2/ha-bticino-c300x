@@ -19,7 +19,7 @@ def media_binaries(request, tmp_path_factory):
         "media_audio", "audio_level", "audio_gain", "audio_chip", "media_sip", "media_sip_io", "media_sip_dialog",
         "media_base64", "media_session_guard",
         "media_rtsp_auth", "media_rtsp_io", "media_rtsp_reader", "talkback_g711", "device_detect", "device_file_sync", "file_io",
-        "root_mount", "media_gop_cache",
+        "root_mount", "media_gop_cache", "media_unit", "station_archive",
     ]
     for name, dependencies in (
         ("media_lifecycle", sources),
@@ -76,7 +76,7 @@ def test_rtsp_write_deadlines(media_binaries, case):
     assert result.returncode == 0, result.stderr
 
 
-@pytest.mark.parametrize("case", ["accept_error", "unauth_eviction"])
+@pytest.mark.parametrize("case", ["accept_error", "unauth_eviction", "nodelay"])
 def test_rtsp_listener(media_binaries, case):
     result = subprocess.run([str(media_binaries / "media_accept"), case],
                             capture_output=True, text=True, timeout=30)

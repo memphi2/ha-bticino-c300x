@@ -2337,8 +2337,11 @@ def _blocking_commands(tmp_path: Path, name: str, failing_mv: bool = False) -> d
             f'exec "{shutil.which("mv")}" "$@"\n'
         )
         (commands / "mv").chmod(0o700)
+    (tmp_path / "temp").mkdir(exist_ok=True)
     return {
         "PATH": _without_host_display_tools(tmp_path, str(commands) + os.pathsep + os.environ["PATH"]),
+        # A script killed here cannot remove its staged files: they stay in the test's folder.
+        "TMPDIR": str(tmp_path / "temp"),
         "C300X_QML_RELOAD_GUI": "1",
         "C300X_QML_GUI_RELOAD_DELAY_SECONDS": "0",
         "C300X_QML_GUI_WRAPPER": str(tmp_path / "missing-wrapper"),
@@ -2465,6 +2468,27 @@ def test_a_write_rolls_a_leftover_transaction_back_before_it_writes(tmp_path: Pa
     restored = _run_qml_patch_raw(tmp_path, gui, backup, "restore-all")
     assert restored.returncode == 0, restored.stderr
     assert _gui_files(gui) == _before
+
+
+def test_a_write_removes_the_staged_files_a_killed_write_left(tmp_path: Path) -> None:
+    """A killed script cannot remove its staged copy; /tmp is in RAM on the station."""
+
+    gui, backup, _before = _killed_apply(tmp_path)
+    temp = tmp_path / "temp"
+    assert list(temp.glob("c300x-qml-patch.*"))
+    # A PID another program got since the killed write ended: its files go.
+    (temp / f"c300x-qml-patch.{os.getpid()}").mkdir()
+    owner = subprocess.Popen(["sh", "-c", "sleep 30; :", "qml_patch.sh"])
+    try:
+        # The staged files of a script that still runs are its own.
+        running = temp / f"c300x-qml-patch.{owner.pid}"
+        running.mkdir()
+        result = _run_qml_patch_raw(tmp_path, gui, backup, "apply", env_overrides={"TMPDIR": str(temp)})
+        assert result.returncode == 0, result.stderr
+        assert [path.name for path in temp.glob("c300x-qml-patch.*")] == [running.name]
+    finally:
+        owner.kill()
+        owner.wait()
 
 
 def test_a_leftover_cut_off_before_its_file_list_leaves_the_gui_alone(tmp_path: Path) -> None:

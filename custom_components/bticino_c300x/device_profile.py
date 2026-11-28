@@ -47,6 +47,9 @@ _STATION_HOME = "/home/bticino"
 # 100X runs a 32-bit ARM kernel (armv7l); the agent is an armhf program.
 _AARCH64 = "aarch64"
 NOT_A_BTICINO_STATION = "not_a_bticino_station"
+# The entry keeps the model the agent last named: an entry whose agent does
+# not answer stays the station it is.
+STATION_MODEL = "station_model"
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,13 +124,42 @@ def setup_profile(setup: Any, display_status: Any = None) -> DeviceProfile:
     return _profile(False, overlay is not None)
 
 
+def reported_model(setup: Any) -> str | None:
+    """The model an agent's answer names, None when it names neither model nor display."""
+
+    info = setup if isinstance(setup, Mapping) else {}
+    if info.get("model") not in (C300X, C100X) and info.get("display_kind") not in (
+        QT4_ONDISK, QT5_RCC, QT5_ONDISK,
+    ):
+        return None
+    return setup_profile(info).model
+
+
+def station_model_data(setup: Any) -> dict[str, str]:
+    """The entry data a new entry keeps of the model its setup found."""
+
+    model = reported_model(setup)
+    return {STATION_MODEL: model} if model is not None else {}
+
+
+def remember_station_model(hass: Any, entry: Any, setup: Any) -> None:
+    """Keep the model the agent named, for starts at which it does not answer."""
+
+    model = reported_model(setup)
+    if model is not None and entry.data.get(STATION_MODEL) != model:
+        hass.config_entries.async_update_entry(entry, data={**entry.data, STATION_MODEL: model})
+
+
 def entry_profile(entry: Any) -> DeviceProfile:
-    """Profile of a loaded config entry."""
+    """Profile of a config entry: the live agent answer, else the model it last named."""
 
     runtime = getattr(entry, "runtime_data", None)
-    return setup_profile(
-        getattr(runtime, "agent_info", None), getattr(runtime, "qml_patch_status", None)
-    )
+    info = getattr(runtime, "agent_info", None)
+    data = getattr(entry, "data", None)
+    stored = data.get(STATION_MODEL) if isinstance(data, Mapping) else None
+    if reported_model(info) is None and stored in (C300X, C100X):
+        info = {**(info if isinstance(info, Mapping) else {}), "model": stored}
+    return setup_profile(info, getattr(runtime, "qml_patch_status", None))
 
 
 def is_bticino_station(run: Callable[[str], str], quote: Callable[[str], str]) -> bool:

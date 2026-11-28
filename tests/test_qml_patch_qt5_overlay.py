@@ -96,6 +96,8 @@ class Device:
         self.rcc.parent.mkdir(parents=True)
         self.boot_id = tmp_path / "boot_id"
         self.boot_id.write_text("boot-1\n")
+        self.temp = tmp_path / "temp"
+        self.temp.mkdir()
 
     def run(self, action: str, **env: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run([str(SCRIPT), action], capture_output=True, text=True,
@@ -122,6 +124,8 @@ class Device:
             "C300X_QML_BOOT_ID": str(self.boot_id),
             # The restart run directory of this test, never the host's /tmp one.
             "C300X_QML_GUI_RUN_DIR": str(self.root / "gui-restart"),
+            # Staged files of a script a test kills stay in the test's folder.
+            "TMPDIR": str(self.temp),
             **env,
         }
 
@@ -528,7 +532,7 @@ def test_turning_the_pages_off_after_the_rename_writes_the_resource_file_back(de
 
 
 def test_the_way_out_of_a_restart_loop_ends_with_the_display_as_shipped(device: Device, tmp_path: Path) -> None:
-    """docs/display.md, "If the station keeps restarting": rename the file, then restore-all."""
+    """docs/classe-300x/4-troubleshooting.md, "The Station Keeps Restarting": rename the file, then restore-all."""
 
     kept = _rename_resource_file(device, tmp_path)
     status = device.ok("restore-all")

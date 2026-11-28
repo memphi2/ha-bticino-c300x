@@ -32,7 +32,7 @@ Home Assistant may store:
   outcomes and links to existing images and clips, kept as long as the image
   retention; an expired entry does not delete its MP4. Removing the integration
   entry removes this metadata, not media or backups. Details:
-  [Visitor Images and Media History](docs/user-guide.md#visitor-images-and-media-history).
+  [Visitor images](docs/classe-300x/2-use.md#visitor-images).
 
 Turning **Save images** off prevents new captures and hides previews, but does
 not delete existing images. Retention cleanup runs while the integration is
@@ -46,7 +46,7 @@ Diagnostics redact secrets and avoid exposing callback URLs or token values.
 When a notice lights the station's message LED (the `led` switch, or a call
 without switches), the LED receives
 only the unread state, never the notification text; see
-[Notifications](docs/user-guide.md#notifications).
+[Notifications](docs/classe-300x/2-use.md#notifications-on-the-station).
 
 The live text-memo sensor can expose the latest memo text to authorized Home
 Assistant clients. Its `latest_text` attribute is excluded from Recorder
@@ -96,7 +96,7 @@ The text of a spoken notification goes to the text-to-speech engine selected
 in Home Assistant: a cloud engine sends it to its provider, a local engine
 keeps it in your network. The converted sound is sent to the device as a
 temporary file that is removed when the sound has ended. See
-[Speaker Announcements and TTS](docs/user-guide.md#speaker-announcements-and-tts).
+[Speaker Announcements and TTS](docs/classe-300x/2-use.md#speaker-and-announcements).
 
 ## What Is Not Included
 

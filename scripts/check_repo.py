@@ -143,7 +143,17 @@ REQUIRED_PATHS = [
     "docs/dev/quality-scale.md",
     "docs/dev/release-validation.md",
     "docs/legal.md",
-    "docs/user-guide.md",
+    "docs/reference.md",
+    "docs/classe-300x/1-setup.md",
+    "docs/classe-300x/2-use.md",
+    "docs/classe-300x/3-display.md",
+    "docs/classe-300x/4-troubleshooting.md",
+    "docs/classe-300x/5-update-and-removal.md",
+    "docs/classe-100x/1-setup.md",
+    "docs/classe-100x/2-use.md",
+    "docs/classe-100x/3-display.md",
+    "docs/classe-100x/4-troubleshooting.md",
+    "docs/classe-100x/5-update-and-removal.md",
     "scripts/check_quality_scale.py",
     "scripts/check_dependency_updates.py",
     "scripts/check_coverage.py",
@@ -516,7 +526,7 @@ def check_release_metadata() -> list[str]:
         "SUPPORT.md": active_release_line,
         "PRIVACY.md": "Local Data Flow",
         "LICENSE": "Apache License",
-        "NOTICE": "BTicino C300X Home Assistant Integration",
+        "NOTICE": "BTicino C300X/C100X Home Assistant Integration",
     }
     for relative_path, expected in required_mentions.items():
         path = ROOT / relative_path
@@ -815,7 +825,7 @@ def check_hacs_metadata() -> list[str]:
     hacs_path = ROOT / "hacs.json"
     hacs = json.loads(hacs_path.read_text(encoding="utf-8"))
     expected_hacs = {
-        "name": "BTicino C300X",
+        "name": "BTicino C300X/C100X",
         "homeassistant": MIN_HOME_ASSISTANT_VERSION,
         "zip_release": True,
         "filename": "ha-bticino-c300x.zip",

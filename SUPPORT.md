@@ -4,21 +4,20 @@
 
 - **Classe 300X (C300X):** the release lines below.
 - **Classe 100X (C100X), firmware 1.5.8:** experimental, in test in
-  [issue #51](https://github.com/memphi2/ha-bticino-c300x/issues/51). The same
-  package serves both models; setup of a C100X asks for an explicit
-  confirmation first. Features per model:
-  [Models and Features](docs/feature-reference.md#models-and-features);
-  C100X notes: [Classe 100X](docs/c100x-experimental.md).
+  [issue #51](https://github.com/memphi2/ha-bticino-c300x/issues/51). Setup
+  asks for a confirmation first. Features per model:
+  [Models and features](docs/reference.md#models-and-features); setup:
+  [Classe 100X](docs/classe-100x/1-setup.md).
 - **Classe 300X2 (C3X2):** not supported yet. Setup recognises it and
   installs nothing on it.
 
 ## Supported Release Line
 
-- `3.0.x`: beta 3.0.0b3, one package for the Classe 300X and the Classe 100X (Classe 100X experimental, checked offline only); includes 2.10.0
-- `2.10.x`: current stable (2.10.0); adds firmware 3.0.6 (display pages checked on a station at start, the other pages offline only)
-- `2.9.x`: previous stable; upgrade to 2.10.x for maintenance fixes
-- `2.8.x`: no longer maintained; upgrade to 2.10.x
-- `2.7.x`: no longer maintained; upgrade to 2.10.x
+- `3.0.x`: current stable (3.0.0): one package for the Classe 300X and the Classe 100X (Classe 100X experimental, checked offline only); includes 2.10.0
+- `2.10.x`: previous stable; upgrade to 3.0.x for maintenance fixes
+- `2.9.x`: no longer maintained; upgrade to 3.0.x
+- `2.8.x`: no longer maintained; upgrade to 3.0.x
+- `2.7.x`: no longer maintained; upgrade to 3.0.x
 - `2.6.0`: withdrawn because the energy page did not load on the display
 - `2.2.0`: withdrawn because its display update can cause repeated device restarts
 

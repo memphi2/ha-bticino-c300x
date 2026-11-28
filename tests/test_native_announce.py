@@ -6,6 +6,7 @@ import base64
 import io
 import json
 import os
+import secrets
 import subprocess
 import time
 import wave
@@ -18,16 +19,14 @@ import pytest
 from native_build import default_host_agent
 
 from native_agent.test.smoke import (
-    TOKEN,
+    HEALTH_READY_TIMEOUT,
     free_tcp_ports,
     free_udp_port,
     send_udp_event,
-    wait_for_health,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
 PATH = "/api/v1/announcements"
-HEADERS = {"Authorization": "Bearer " + TOKEN}
 # Stand-ins for the device's sound tools: the mixer keeps each control in a
 # file, and every call is written to one log in order.
 AMIXER = """#!/bin/sh
@@ -43,8 +42,8 @@ fi
 # Like the device's sound driver, the player's own end sets the sound state to
 # off. A player that is killed cannot do that here.
 APLAY = """#!/bin/sh
+echo $$ > "$LAB/aplay.pid.new" && mv "$LAB/aplay.pid.new" "$LAB/aplay.pid"
 echo "aplay $*" >> "$LAB/log"
-echo $$ > "$LAB/aplay.pid"
 sleep "$(cat "$LAB/play-seconds")"
 echo 0 > "$LAB/mixer/Zia_Aud_St"
 exit "$(cat "$LAB/play-exit")"
@@ -86,26 +85,78 @@ def binary(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return default_host_agent(tmp_path_factory)
 
 
+def _udp_sockets_on(port: int) -> int:
+    """How many sockets of this machine are bound to the UDP port."""
+
+    count = 0
+    for table in ("/proc/net/udp", "/proc/net/udp6"):
+        try:
+            lines = Path(table).read_text().splitlines()[1:]
+        except FileNotFoundError:
+            continue
+        count += sum(1 for line in lines if int(line.split()[1].rsplit(":", 1)[1], 16) == port)
+    return count
+
+
 @dataclass
 class Lab:
     port: int
     udp_port: int
     dir: Path
+    # The lab's own token: an agent of another test on a reused port refuses it.
+    token: str = ""
     process: subprocess.Popen[bytes] | None = None
     start: Callable[[], subprocess.Popen[bytes]] | None = None
+    new_ports: Callable[[], None] | None = None
+
+    @property
+    def headers(self) -> dict[str, str]:
+        return {"Authorization": "Bearer " + self.token}
 
     def restart(self) -> None:
-        """Start the agent again, as the device does after it ended."""
+        """Start the agent again, as the device does after it ended.
 
-        assert self.start is not None
-        self.process = self.start()
-        wait_for_health(self.port)
+        The ports were free when chosen, but another test running beside this
+        one may bind one of them before this agent does. The agent then ends
+        or shares its event port; it is started again on other ports.
+        """
+
+        assert self.start is not None and self.new_ports is not None
+        for _ in range(5):
+            log_start = (self.dir / "agent.log").stat().st_size if (self.dir / "agent.log").exists() else 0
+            self.process = self.start()
+            if self._serving(log_start):
+                return
+            self.new_ports()
+        raise AssertionError("no free ports for the agent after five tries")
+
+    def _serving(self, log_start: int) -> bool:
+        assert self.process is not None
+        deadline = time.monotonic() + HEALTH_READY_TIMEOUT
+        while True:
+            if self.process.poll() is not None:
+                log = (self.dir / "agent.log").read_bytes()[log_start:].decode(errors="replace")
+                assert "bind_failed" in log, log
+                return False
+            try:
+                code, _ = self.request()
+            except (OSError, ValueError):
+                code = 0
+            if code == 200:
+                break
+            assert time.monotonic() < deadline, f"the agent did not answer on port {self.port}"
+            time.sleep(0.05)
+        if _udp_sockets_on(self.udp_port) > 1:
+            self.process.terminate()
+            self.process.wait(timeout=30)
+            return False
+        return True
 
     def request(self, action: str = "", payload: dict | None = None) -> tuple[int, dict]:
         conn = HTTPConnection("127.0.0.1", self.port, timeout=10)
         try:
             conn.request("GET" if payload is None else "POST", PATH + action,
-                         body=None if payload is None else json.dumps(payload), headers=HEADERS)
+                         body=None if payload is None else json.dumps(payload), headers=self.headers)
             result = conn.getresponse()
             return result.status, json.loads(result.read())
         finally:
@@ -149,11 +200,23 @@ class Lab:
             time.sleep(0.02)
 
     def player_alive(self) -> bool:
+        """Whether the player runs; one killed but not yet collected has ended."""
+
+        pid = int((self.dir / "aplay.pid").read_text())
         try:
-            os.kill(int((self.dir / "aplay.pid").read_text()), 0)
-        except ProcessLookupError:
+            os.kill(pid, 0)
+            status = Path(f"/proc/{pid}/status").read_text()
+        except (ProcessLookupError, FileNotFoundError):
             return False
-        return True
+        return status.split("State:")[1].split()[0] != "Z"
+
+    def wait_player_gone(self, seconds: float = 10) -> None:
+        """A killed player ends once the kernel has run it; it plays 30 s otherwise."""
+
+        deadline = time.monotonic() + seconds
+        while self.player_alive():
+            assert time.monotonic() < deadline, "the player still runs"
+            time.sleep(0.01)
 
     def wait_free(self, seconds: float = 5) -> None:
         deadline = time.monotonic() + seconds
@@ -174,21 +237,27 @@ class Lab:
 
 @pytest.fixture
 def lab(binary: Path, tmp_path: Path, request: pytest.FixtureRequest) -> Iterator[Lab]:
-    port, ui_port, own = free_tcp_ports(3)
-    udp_port = free_udp_port()
-    config = {
-        "listen": {"host": "127.0.0.1", "apiPort": port, "uiPort": ui_port},
-        "api": {"token": TOKEN},
-        "openwebnet": {"host": "127.0.0.1", "port": own, "timeoutMs": 100},
-        "activations": {"enabled": False, "autoDiscover": False},
-        "events": {"udp": {"enabled": getattr(request, "param", True), "group": "239.255.76.67",
-                           "port": udp_port}},
-        "answeringMachine": {"messages": {"enabled": False}},
-        "memos": {"enabled": False}, "systemMetrics": {"enabled": False},
-        "video": {"enabled": False}, "displayBridge": {"enabled": False},
-        "mqtt": {"enabled": False}, "mdns": {"enabled": False},
-    }
-    (tmp_path / "config.json").write_text(json.dumps(config))
+    lab = Lab(0, 0, tmp_path, token=secrets.token_hex(16))
+
+    def new_ports() -> None:
+        lab.port, ui_port, own = free_tcp_ports(3)
+        lab.udp_port = free_udp_port()
+        config = {
+            "listen": {"host": "127.0.0.1", "apiPort": lab.port, "uiPort": ui_port},
+            "api": {"token": lab.token},
+            "openwebnet": {"host": "127.0.0.1", "port": own, "timeoutMs": 100},
+            "activations": {"enabled": False, "autoDiscover": False},
+            "events": {"udp": {"enabled": getattr(request, "param", True), "group": "239.255.76.67",
+                               "port": lab.udp_port}},
+            "answeringMachine": {"messages": {"enabled": False}},
+            "memos": {"enabled": False}, "systemMetrics": {"enabled": False},
+            "video": {"enabled": False}, "displayBridge": {"enabled": False},
+            "mqtt": {"enabled": False}, "mdns": {"enabled": False},
+        }
+        (tmp_path / "config.json").write_text(json.dumps(config))
+
+    new_ports()
+    lab.new_ports = new_ports
     (tmp_path / "mixer").mkdir()
     for name, value in (("Zia_Aud_St", "0"), ("ZL0_Mute_Rout", "on"), ("ZL0_Rout_Gain_Volume", "85"),
                         ("TPA2028D1_Volume", "0")):
@@ -213,7 +282,7 @@ def lab(binary: Path, tmp_path: Path, request: pytest.FixtureRequest) -> Iterato
             return subprocess.Popen([str(binary), "--config", str(tmp_path / "config.json")],
                                     cwd=tmp_path, stdout=log, stderr=log, env=env)
 
-        lab = Lab(port, udp_port, tmp_path, start=start)
+        lab.start = start
         try:
             lab.restart()
             yield lab
@@ -313,6 +382,10 @@ def test_a_door_call_takes_the_speaker_at_once_and_the_device_keeps_it(lab: Lab,
     started = time.monotonic()
     send_udp_event(lab.udp_port, frame)
     while lab.player_alive():
+        assert time.monotonic() - started < 1
+        time.sleep(0.01)
+    # The player counts as gone once killed; the agent reports it after collecting it.
+    while lab.call()["playing"]:
         assert time.monotonic() - started < 1
         time.sleep(0.01)
     # The device sets its own state for the call; from then on the speaker is its.
@@ -527,7 +600,7 @@ def test_stop_ends_the_sound_and_switches_the_speaker_off(lab: Lab) -> None:
     lab.call("/actions/stop", {})
 
     assert lab.result() == "stopped"
-    assert not lab.player_alive()
+    lab.wait_player_gone()
     assert lab.log()[-4:] == SWITCH_OFF_AFTER_KILL
 
 
@@ -556,7 +629,7 @@ def test_an_agent_that_ends_while_playing_switches_the_speaker_off(lab: Lab) -> 
     lab.process.terminate()
     lab.process.wait(timeout=5)
 
-    assert not lab.player_alive()
+    lab.wait_player_gone()
     lab.wait_for("mixer Zia_Aud_St=0")
     assert lab.log()[-4:] == SWITCH_OFF_AFTER_KILL
     assert not (lab.dir / "announce.wav").exists()
@@ -571,7 +644,7 @@ def test_a_restarted_agent_ends_the_sound_of_one_that_was_killed(lab: Lab) -> No
     assert lab.player_alive()
     lab.restart()
 
-    assert not lab.player_alive()
+    lab.wait_player_gone()
     # What the old agent knew is gone: the new one acts as after a door frame.
     assert lab.call("/actions/play", {"volume": 50}, status=409)["error"] == "announcement_device_busy"
     lab.wait_for("mixer Zia_Aud_St=0", seconds=RING_HOLD + 5)
@@ -765,7 +838,7 @@ def test_a_device_without_the_sound_tools_offers_nothing(lab: Lab) -> None:
     assert lab.call()["supported"] is False
     assert lab.call("/actions/play", {"volume": 50}, status=409)["error"] == "announcement_unsupported"
     conn = HTTPConnection("127.0.0.1", lab.port, timeout=10)
-    conn.request("GET", "/api/v1/capabilities", headers=HEADERS)
+    conn.request("GET", "/api/v1/capabilities", headers=lab.headers)
     assert json.loads(conn.getresponse().read())["capabilities"]["announcements"] == {"supported": False}
     conn.close()
 

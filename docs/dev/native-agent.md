@@ -135,7 +135,7 @@ Key sections:
 ## Callbacks
 
 User-side setup (HTTP or HTTPS, which addresses to avoid, the override field) is
-in [Callback URL](../advanced-maintenance.md#callback-url). The integration
+in [Callback URL](behaviour-details.md#callback-url). The integration
 overrides only the callback base URL; the webhook path and shared secret stay.
 HA derives the agent's internal `callbacks.httpsEnabled` from the override.
 
@@ -160,7 +160,7 @@ The agent serves a versioned API under `/api/v1` plus a loopback-only UI
 listener for the station's QML pages. Paths, auth rules, payloads, side effects
 and compatibility rules live only in [API.md](../../native_agent/API.md); keep
 new endpoint details there. The user-facing mapping is in the
-[Reference](../feature-reference.md).
+[Reference](../reference.md).
 
 Activation items use `addressMode: "manual"` when `address` holds the
 OpenWebNet `where` value. `addressMode: "auto"` is reserved for read-only device
@@ -228,7 +228,7 @@ the Home Assistant settings tab while keeping the stock General touch-tone
 control, installs the project-owned Alarmo, Home Assistant and energy pages, and
 installs the local QML JavaScript bridge. File list and safety rules:
 [device_qml/README.md](../../device_qml/README.md); user view:
-[Station Display Pages](../display.md).
+[Station Display Pages](../classe-300x/3-display.md).
 
 On Qt 4 devices (firmware 1.7.x and 2.0.2) the patch also raises the swipe
 threshold of the display library from 4 to 16 pixels, so a tap with a slightly
@@ -257,7 +257,7 @@ a reboot. SSH is started before and after the cleanup and
 is not removed. A failed restore step stops the script before the backups are
 deleted, with one exception: a display library without a valid stock backup
 keeps the wider tap tolerance and removal continues. User steps:
-[Remove Agent](../advanced-maintenance.md#remove-agent).
+[Remove Agent](../classe-300x/5-update-and-removal.md#remove-the-device-agent).
 
 The media step checks the routing executable first. A verified stock file is
 left as it is, and so is a file the agent never patched (no backup and no
@@ -303,7 +303,7 @@ refreshes are one-shot and shared.
 the exact verified media executables of firmware **1.7.19** and **2.0.2**. The
 **688x480** and **704x576** choices keep their stock behaviour. Firmware 3.0.x
 and its low-stream path are unchanged. User view:
-[Camera Quality and Picture Size](../user-guide.md#camera-quality-and-picture-size).
+[Camera Quality and Picture Size](../classe-300x/2-use.md#camera-quality).
 
 Geometry:
 
@@ -412,8 +412,8 @@ independent compiler/sysroot provenance. Procedure:
 
 The `c100x_1.5.8` branch adds the C100X 1.5.8 (in test, issue #51):
 detection, routing, package compatibility gates and the display activation by
-reboot. The [model matrix](../feature-reference.md#models-and-features) and
-the [C100X notes](../c100x-experimental.md) separate what is offered from what
+reboot. The [model matrix](../reference.md#models-and-features) and
+the [C100X notes](../classe-100x/1-setup.md) separate what is offered from what
 is confirmed on a device; the C300X statements below do not imply the same
 display, audio or credential support on C100X.
 
@@ -464,7 +464,7 @@ Firmware `3.0.6` fails this check and is supported with its own display path:
   `qt5_unsupported: display_wrapper_unknown`. A
   partial restore keeps the overlay for the remaining core hooks or user label.
   User view:
-  [Display Patch on Firmware 3.0.6](../display.md#display-patch-on-firmware-306).
+  [Display Patch on Firmware 3.0.6](../classe-300x/3-display.md#firmware-306).
 - Activation changes preserve the resource file, preload library, wrapper,
   original wrapper backup and quarantine marker as one rollback unit. A failed
   rollback retains its recovery copies and leaves the overlay blocked. Updates

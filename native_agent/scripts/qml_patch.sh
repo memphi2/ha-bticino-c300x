@@ -1180,9 +1180,7 @@ finish_write_action() {
     trap finish_signal HUP INT TERM
     # A publish cut short leaves its note; the rollback below takes a new one.
     gui_writing_end
-    if [ "$write_rc" != "0" ]; then
-        cleanup_staging
-    fi
+    cleanup_staging
     recovery_ok=1
     restart_previous=0
     if [ "${WRITE_TRANSACTION_READY:-0}" = "1" ] && [ "${WRITE_TRANSACTION_COMMITTED:-0}" != "1" ]; then
@@ -2691,6 +2689,21 @@ cleanup_staging() {
     fi
 }
 
+# A run the agent had to SIGKILL at its job deadline could not remove its
+# staged files, and /tmp is in RAM. A later write removes those of runs that
+# have ended; a run still going keeps its own. A PID another program got
+# since then counts as ended.
+remove_ended_staging() {
+    [ -z "${C300X_QML_STAGING_DIR:-}" ] || return 0
+    for ended_dir in "${TMPDIR:-/tmp}"/c300x-qml-patch.*; do
+        ended_pid="${ended_dir##*.}"
+        case "$ended_pid" in ""|*[!0-9]*) continue ;; esac
+        if [ "$ended_pid" != "$$" ] && ! transaction_owner_running "$ended_pid"; then
+            rm -rf "$ended_dir"
+        fi
+    done
+}
+
 generate_core_patch_stage() {
     cleanup_staging
     trap cleanup_staging EXIT
@@ -3219,6 +3232,7 @@ case "$ACTION" in
             printf 'An unfinished GUI write is still in place\n' >&2
             exit 1
         fi
+        remove_ended_staging
         trap 'exit 130' HUP INT TERM
         ;;
 esac

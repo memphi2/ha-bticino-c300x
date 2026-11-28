@@ -11,6 +11,8 @@ from .const import (
     ALARM_DOMAIN,
     CONF_BOOTSTRAP_SSH_KEY,
     CONF_BOOTSTRAP_SSH_KEY_PASSPHRASE,
+    CONF_BOOTSTRAP_SSH_PASSWORD,
+    CONF_BOOTSTRAP_SSH_USERNAME,
     DASHBOARD_ENTITY_NAME_DISPLAY_OPTIONS,
     DASHBOARD_ENTITY_SECONDARY_INFO_OPTIONS,
     DOMAIN,
@@ -120,10 +122,14 @@ def password_selector() -> Any:
     )
 
 
-def ssh_key_fields() -> dict[Any, Any]:
-    """The optional private key of an install and its passphrase; neither is stored."""
+def ssh_login_fields() -> dict[Any, Any]:
+    """The SSH login of an install: user, password, optional private key and
+    its passphrase. Every form that asks for it shows the same fields; the
+    secrets are hidden and none is stored."""
 
     return {
+        vol.Optional(CONF_BOOTSTRAP_SSH_USERNAME, default=""): str,
+        vol.Optional(CONF_BOOTSTRAP_SSH_PASSWORD, default=""): password_selector(),
         vol.Optional(CONF_BOOTSTRAP_SSH_KEY, default=""): selector.TextSelector(
             selector.TextSelectorConfig(multiline=True),
         ),

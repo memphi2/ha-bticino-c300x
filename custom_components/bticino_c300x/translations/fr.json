@@ -2,7 +2,7 @@
   "config": {
     "step": {
       "user": {
-        "title": "BTicino C300X",
+        "title": "BTicino C300X/C100X",
         "description": "Saisissez d'abord l'adresse du {model}. Si l'agent natif n'est pas joignable, Home Assistant peut guider une installation unique de l'agent avant de demander les clés et les options.",
         "data": {
           "name": "Nom",
@@ -750,11 +750,12 @@
     },
     "abort": {
       "model_mismatch": "Cette annonce provient d'un autre modèle de poste que l'entrée configurée avec la même identité. Rien n'a été modifié.",
-      "already_configured": "BTicino C300X est déjà configure.",
+      "already_configured": "BTicino C300X/C100X est déjà configure.",
       "reconfigure_successful": "BTicino {model} a été reconfigure. Mettez à jour la configuration locale de l'agent appareil ou du display bridge si vous avez renouvelé les identifiants.",
       "cannot_connect": "L'agent appareil est injoignable. Verifiez l'adresse et que l'agent fonctionne.",
       "unique_id_mismatch": "Ce n'est pas l'appareil configure. Reconfigurez l'entree correspondante ou ajoutez l'appareil comme nouvelle entree.",
       "reauth_wrong_device": "L'agent a une identité différente. L'entrée enregistrée n'a pas été modifiée.",
+      "reauth_another_station": "Cette adresse mène désormais à une autre station. Rien n'a été modifié, ni sur elle ni dans l'entrée enregistrée.",
       "reauth_successful": "Les identifiants ont été mis à jour.",
       "reinstall_entry_updated": "L'agent a été réinstallé sur une station déjà configurée sous le nom {name}. Cette entrée utilise désormais les nouvelles clés et cette adresse ; aucune deuxième entrée n'a été créée.",
       "station_entry_updated": "Cette station est déjà configurée sous le nom {name}. Cette entrée utilise désormais ces clés et cette adresse ; aucune deuxième entrée n'a été créée.",
@@ -767,7 +768,7 @@
       "device_install_verify_failed": "L'installation est terminée, mais l'agent natif ne répond pas avec la clé d'accès générée.",
       "invalid_agent_port": "Saisissez un port valide pour l'agent appareil.",
       "invalid_agent_host": "Saisissez l'hôte de l'agent appareil.",
-      "invalid_callback_base_url": "Saisir une URL de base HTTP ou HTTPS de Home Assistant accessible depuis le {model}, ou laisser vide.",
+      "invalid_callback_base_url": "Saisir une URL de base HTTP ou HTTPS de Home Assistant accessible, ou laisser vide.",
       "invalid_device_host": "Saisissez l'adresse du {model}.",
       "installer_dependency_missing": "Home Assistant n’a pas pu installer ou charger le paquet SSH facultatif (asyncssh==2.24.1). Il ne s’agit pas d’un échec de connexion SSH. Home Assistant mémorise l’échec d’installation d’un paquet jusqu’à la prochaine vérification de la configuration ou au redémarrage, même si le paquet est arrivé ensuite : vérifiez la configuration dans Outils de développement > YAML (ou redémarrez Home Assistant), puis réessayez. En cas de nouvel échec, les journaux dans Paramètres > Système indiquent la cause et la version d’asyncssh installée.",
       "invalid_ssh_password": "Saisissez le mot de passe SSH du {model}.",
@@ -1298,7 +1299,7 @@
       "invalid_action_map": "Le JSON de la liste autorisée d'actions est invalide.",
       "invalid_agent_host": "Saisissez l'hôte de l'agent appareil.",
       "invalid_agent_port": "Saisissez un port valide pour l'agent appareil.",
-      "invalid_callback_base_url": "Saisir une URL de base HTTP ou HTTPS de Home Assistant accessible depuis le {model}, ou laisser vide.",
+      "invalid_callback_base_url": "Saisir une URL de base HTTP ou HTTPS de Home Assistant accessible, ou laisser vide.",
       "invalid_alarm_entity": "Sélectionnez une entité alarm_control_panel Alarmo ou laissez vide.",
       "invalid_alarm_page_entity": "Sélectionnez une entité dashboard prise en charge pour la page alarme ou laissez vide.",
       "invalid_weather_entity": "Sélectionnez une entité météo ou laissez vide.",
@@ -1692,10 +1693,10 @@
       "message": "L’enregistrement à la demande nécessite des médias libres. Fermez les autres flux vidéo ou appels, puis réessayez."
     },
     "entry_id_required": {
-      "message": "Plusieurs stations BTicino C300X existent : sélectionnez une station ou une platine de rue comme cible."
+      "message": "Plusieurs stations BTicino C300X/C100X existent : sélectionnez une station ou une platine de rue comme cible."
     },
     "target_unsupported": {
-      "message": "Sélectionnez comme cible une station ou une platine de rue BTicino C300X (appareil ou entité) ; les pièces, étages, étiquettes et « all » ne sont pas pris en charge."
+      "message": "Sélectionnez comme cible une station ou une platine de rue BTicino C300X/C100X (appareil ou entité) ; les pièces, étages, étiquettes et « all » ne sont pas pris en charge."
     },
     "invalid_action_id": {
       "message": "L'ID d'action est invalide."
@@ -1722,10 +1723,10 @@
       "message": "L'ID d'action {action_id} n'est pas configure."
     },
     "unknown_entry": {
-      "message": "L'entrée BTicino C300X sélectionnée n'existe pas."
+      "message": "L'entrée BTicino C300X/C100X sélectionnée n'existe pas."
     },
     "entry_not_loaded": {
-      "message": "L'entrée BTicino C300X n'est pas chargée. Activez-la ou attendez qu'elle ait démarré."
+      "message": "L'entrée BTicino C300X/C100X n'est pas chargée. Activez-la ou attendez qu'elle ait démarré."
     },
     "voice_memo_not_available": {
       "message": "Aucun mémo vocal {model} n'est disponible."
@@ -1799,10 +1800,11 @@
           "ssh_password_login_disabled": "Le {model} n'accepte pas de connexion par mot de passe, seulement des clés SSH. Collez la clé privée configurée par l'outil root, ou construisez l'image avec une connexion par mot de passe.",
           "firewall_hook_changed": "Le script de démarrage du pare-feu du {model} (/etc/network/if-pre-up.d/iptables) a été modifié par autre chose après l'ajout des ports de l'agent ; l'original sauvegardé ne correspond plus. Le script n'a pas été modifié. Restaurez-le, ou retirez-en le bloc de l'agent, puis réessayez.",
           "not_a_bticino_station": "L'appareil à cette adresse n'est pas une platine BTicino. Rien n'y a été écrit. Vérifiez l'adresse.",
-          "c3x2_not_supported": "Cette platine est une Classe 300X2. Elle est reconnue, mais pas encore prise en charge. Rien n'y a été installé ni écrit."
+          "c3x2_not_supported": "Cette platine est une Classe 300X2. Elle est reconnue, mais pas encore prise en charge. Rien n'y a été installé ni écrit.",
+          "wrong_device": "Cette adresse mène désormais à une autre station. Rien n'y a été modifié."
         },
         "abort": {
-          "entry_not_loaded": "L'entrée BTicino C300X n'est pas chargée."
+          "entry_not_loaded": "L'entrée BTicino C300X/C100X n'est pas chargée."
         }
       }
     },
@@ -1836,7 +1838,7 @@
           "core_patch_verify_failed": "L'action du hook média core a été exécutée, mais l'agent n'a pas confirmé l'état patche."
         },
         "abort": {
-          "entry_not_loaded": "L'entrée BTicino C300X n'est pas chargée.",
+          "entry_not_loaded": "L'entrée BTicino C300X/C100X n'est pas chargée.",
           "core_patch_unsupported": "L'agent appareil {model} installé ne prend pas en charge l'application du hook média core.",
           "display_unsupported": "L'agent appareil ne connaît pas l'écran de cet appareil ; il fonctionne sans les pages de l'écran et il n'y a pas de hook média core à appliquer."
         }
@@ -1856,7 +1858,7 @@
           "core_patch_verify_failed": "Les étapes de l'écran ont été exécutées, mais l'agent appareil n'a pas confirmé le hook média core."
         },
         "abort": {
-          "entry_not_loaded": "L'entrée BTicino C300X n'est pas chargée.",
+          "entry_not_loaded": "L'entrée BTicino C300X/C100X n'est pas chargée.",
           "core_patch_unsupported": "L'agent appareil C300X installé ne prend pas en charge les étapes de l'écran.",
           "display_unsupported": "L'agent appareil ne connaît pas l'écran de cet appareil ; il fonctionne sans les pages de l'écran et il n'y a aucune étape de l'écran à exécuter."
         }
@@ -1864,7 +1866,7 @@
     },
     "device_qml_transaction_stuck": {
       "title": "Écriture de l'écran {model} inachevée",
-      "description": "Une écriture du correctif d'écran sur {entry_title} a été interrompue (coupure de courant, plantage ou arrêt forcé) et l'agent de l'appareil n'a pas pu la terminer seul. Les fichiers de l'écran sont restés tels quels ; rien n'est perdu : les fichiers d'avant cette écriture sont conservés sur l'appareil dans un dossier caché `.c300x-qml-transaction.*` dans /home/bticino/bin/gui/skins/default.\n\nQue faire : vérifiez l'écran du {model}. S'il fonctionne, appliquez de nouveau le correctif d'écran depuis l'intégration (désactivez-le puis réactivez-le) : tous les fichiers de l'écran sont reconstruits à partir des sauvegardes d'origine. Si l'avertissement reste, redémarrez le {model} pour que l'agent réessaie au démarrage. Un reste de l'agent 2.9.0 ou plus ancien n'est jamais restauré automatiquement : une fois l'écran fonctionnel, supprimez ce dossier par SSH (voir Maintenance avancée, Récupération, dans la documentation)."
+      "description": "Une écriture du correctif d'écran sur {entry_title} a été interrompue (coupure de courant, plantage ou arrêt forcé) et l'agent de l'appareil n'a pas pu la terminer seul. Les fichiers de l'écran sont restés tels quels ; rien n'est perdu : les fichiers d'avant cette écriture sont conservés sur l'appareil dans un dossier caché `.c300x-qml-transaction.*` dans /home/bticino/bin/gui/skins/default.\n\nQue faire : vérifiez l'écran du {model}. S'il fonctionne, appliquez de nouveau le correctif d'écran depuis l'intégration (désactivez-le puis réactivez-le) : tous les fichiers de l'écran sont reconstruits à partir des sauvegardes d'origine. Si l'avertissement reste, redémarrez le {model} pour que l'agent réessaie au démarrage. Un reste de l'agent 2.9.0 ou plus ancien n'est jamais restauré automatiquement : une fois l'écran fonctionnel, supprimez ce dossier par SSH (voir Troubleshooting, Display problems, dans la documentation)."
     },
     "device_user_required": {
       "title": "Configuration utilisateur média {model} requise",
@@ -1880,7 +1882,7 @@
           "device_not_registered": "Le {model} n'a pas encore été ajouté dans l'application BTicino Door Entry. Flexisip sur l'appareil obtient son utilisateur SIP, son domaine et ses certificats uniquement par cet enregistrement. Ajoutez l'appareil une fois dans l'application, puis réessayez. Le renvoi peut ensuite rester sur Smartphone."
         },
         "abort": {
-          "entry_not_loaded": "L'entrée BTicino C300X n'est pas chargée."
+          "entry_not_loaded": "L'entrée BTicino C300X/C100X n'est pas chargée."
         }
       }
     },
@@ -1897,7 +1899,7 @@
           "media_setup_repair_failed": "La réparation de la configuration média a échoué. Vérifiez l'accès maintenance et réessayez."
         },
         "abort": {
-          "entry_not_loaded": "L'entrée BTicino C300X n'est pas chargée."
+          "entry_not_loaded": "L'entrée BTicino C300X/C100X n'est pas chargée."
         }
       }
     },
@@ -1941,7 +1943,7 @@
           "lovelace_unavailable": "Lovelace n'est pas encore disponible."
         },
         "abort": {
-          "entry_not_loaded": "L'entrée BTicino C300X n'est pas chargée."
+          "entry_not_loaded": "L'entrée BTicino C300X/C100X n'est pas chargée."
         }
       }
     },
@@ -1958,10 +1960,10 @@
           }
         },
         "error": {
-          "invalid_callback_base_url": "Saisir une URL de base HTTP ou HTTPS de Home Assistant accessible depuis le {model}."
+          "invalid_callback_base_url": "Saisir une URL de base HTTP ou HTTPS de Home Assistant accessible."
         },
         "abort": {
-          "entry_not_loaded": "L'entrée BTicino C300X n'est pas chargée."
+          "entry_not_loaded": "L'entrée BTicino C300X/C100X n'est pas chargée."
         }
       }
     },

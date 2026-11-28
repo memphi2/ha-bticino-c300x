@@ -1,6 +1,7 @@
 /* The C100X activation state machine with a fake payload and an injected clock. */
 #include "../src/c100x_activation.h"
 #include "../src/device_detect.h"
+#include "../src/time_util.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -47,6 +48,9 @@ static void make_bundle(void)
     setenv("FAKE_DIR", directory, 1);
     write_file(bundle,
         "printf '%s\\n' \"$1\" >> \"$FAKE_LOG\"\n"
+        /* A hanging write with the cleanup trap of c100x_display.sh. */
+        "if [ \"$1\" = prepare ] && [ -e \"$FAKE_DIR/hang\" ]; then\n"
+        "  trap 'echo trapped >> \"$FAKE_DIR/trapped\"; exit 1' TERM; sleep 30 & wait $!; fi\n"
         "g=" GENERATION "\n"
         "head='{\"ok\":true,\"state\":\"installed\",\"runtime_verified\":false,\"phase\":'\n"
         "case \"$1\" in\n"
@@ -254,6 +258,55 @@ static void test_interrupted_prepare_recovers_without_reboot(void)
     c100x_activation_close(&activation);
 }
 
+/* Starts a hanging prepare; returns once the script runs. */
+static void start_hanging_prepare(struct c100x_activation *activation, struct c100x_activation_inputs *inputs)
+{
+    int prepares = log_count("prepare");
+    assert(c100x_activation_request(activation, C100X_ACTION_PREPARE) == NULL);
+    for (int round = 0; round < 2000 && log_count("prepare") == prepares; round++) {
+        (void)c100x_activation_tick(activation, inputs);
+        usleep(5000);
+    }
+    assert(log_count("prepare") == prepares + 1 && activation->job.pid > 0);
+    usleep(100000);
+}
+
+static int trapped(void)
+{
+    char path[320];
+    snprintf(path, sizeof(path), "%s/trapped", directory);
+    FILE *file = fopen(path, "r");
+    int count = 0;
+    for (int c; file != NULL && (c = fgetc(file)) != EOF;) count += c == '\n';
+    if (file != NULL) fclose(file);
+    return count;
+}
+
+/* A display job past its deadline, or at agent shutdown, gets SIGTERM: its
+ * trap undoes a half switch, removes its stage and remounts read-only. */
+static void test_a_job_cut_off_runs_its_trap(void)
+{
+    struct c100x_activation activation;
+    struct c100x_activation_inputs inputs = idle_station(10 * MINUTE);
+    char hang[320];
+    snprintf(hang, sizeof(hang), "%s/hang", directory);
+    set_state("stock", 0, 0, 0);
+    start_with(&activation, inputs.now_ms);
+    write_file(hang, "");
+    start_hanging_prepare(&activation, &inputs);
+    /* The deadline passes. */
+    activation.job.deadline_ms = c300x_monotonic_ms();
+    assert(settle(&activation, &inputs) == 0);
+    assert(trapped() == 1 && activation.error[0] != '\0');
+    /* The agent stops while a job runs. */
+    start_hanging_prepare(&activation, &inputs);
+    long long start = c300x_monotonic_ms();
+    c100x_activation_close(&activation);
+    assert(trapped() == 2 && activation.job.pid == 0);
+    assert(c300x_monotonic_ms() - start < 5000);
+    unlink(hang);
+}
+
 static void test_unknown_status_fails_closed(void)
 {
     struct c100x_activation activation;
@@ -414,6 +467,7 @@ int main(int argc, char **argv)
     else if (!strcmp(argv[1], "no-display")) test_trial_without_display_fails_after_the_wait();
     else if (!strcmp(argv[1], "interrupted")) test_interrupted_prepare_recovers_without_reboot();
     else if (!strcmp(argv[1], "unknown")) test_unknown_status_fails_closed();
+    else if (!strcmp(argv[1], "cut-off")) test_a_job_cut_off_runs_its_trap();
     else if (!strcmp(argv[1], "requests")) test_activate_and_restore_requests();
     else if (!strcmp(argv[1], "features")) test_display_functions_follow_the_confirmed_adapter();
     else if (!strcmp(argv[1], "adapter-updated")) test_updated_adapter_is_offered_without_a_restart();

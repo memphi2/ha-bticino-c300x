@@ -5,7 +5,7 @@ firmware 3.0.6 through the
 [Qt 5 resource overlay](../docs/dev/native-agent.md#supported-firmware-versions)).
 No Lovelace is embedded: the pages talk to the agent's loopback display bridge
 on `127.0.0.1`, port `listen.uiPort` (installer default 8090). What users see
-and configure is in [Station Display Pages](../docs/display.md).
+and configure is in [Station Display Pages](../docs/classe-300x/3-display.md).
 
 ## Files
 

@@ -126,6 +126,15 @@ def supports_capability(entry: BticinoC300XConfigEntry, capability: str) -> bool
     return capability_is_supported(capabilities, capability)
 
 
+def supports_capability_if_known(entry: BticinoC300XConfigEntry, capability: str) -> bool:
+    """Like supports_capability, but true while the agent has reported no capabilities."""
+
+    capabilities = getattr(getattr(entry, "runtime_data", None), "capabilities", None)
+    if not isinstance(capabilities, dict) or not capabilities:
+        return True
+    return supports_capability(entry, capability)
+
+
 def entry_video_enabled(entry: BticinoC300XConfigEntry) -> bool:
     """Return the effective HA video setting for this entry."""
 

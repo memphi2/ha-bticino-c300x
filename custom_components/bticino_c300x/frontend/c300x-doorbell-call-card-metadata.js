@@ -1,10 +1,10 @@
-import "./c300x-doorbell-call-card.js?v=466ac4d70e303efc";
+import "./c300x-doorbell-call-card.js?v=c204135f526f29c4";
+import { c300xDocumentationUrlOfPage } from "./c300x-entity-resolver.js?v=c204135f526f29c4";
 
 const C300X_CARD_TAG = "c300x-doorbell-call-card";
 const C300X_CARD_TYPE = `custom:${C300X_CARD_TAG}`;
 const C300X_PLATFORM = "bticino_c300x";
 const C300X_CAMERA_TRANSLATION_KEY = "doorbell_camera";
-const C300X_DOCUMENTATION_URL = "https://github.com/memphi2/ha-bticino-c300x#doorbell-video-ring-calls-and-talkback";
 
 const C300X_METADATA_TRANSLATIONS = {
   en: {
@@ -69,6 +69,8 @@ window.customCards.push({
   name: "BTicino Doorbell Call Card",
   preview: false,
   description: "Doorbell video and Home Call controls of the BTicino door station.",
-  documentationURL: C300X_DOCUMENTATION_URL,
+  get documentationURL() {
+    return c300xDocumentationUrlOfPage();
+  },
   getEntitySuggestion: c300xMetadataEntitySuggestion,
 });

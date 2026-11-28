@@ -2,7 +2,7 @@
   "config": {
     "step": {
       "user": {
-        "title": "BTicino C300X",
+        "title": "BTicino C300X/C100X",
         "description": "Gib zuerst die {model}-Adresse ein. Wenn der native Device-Agent nicht erreichbar ist, kann Home Assistant vor der Eingabe der Schlüssel und der Funktionsauswahl durch eine einmalige Agent-Installation führen.",
         "data": {
           "name": "Name",
@@ -750,11 +750,12 @@
     },
     "abort": {
       "model_mismatch": "Diese Ankündigung stammt von einem anderen Stationsmodell als der eingerichtete Eintrag mit derselben Identität. Es wurde nichts geändert.",
-      "already_configured": "BTicino C300X ist bereits konfiguriert.",
+      "already_configured": "BTicino C300X/C100X ist bereits konfiguriert.",
       "reconfigure_successful": "BTicino {model} wurde neu konfiguriert. Aktualisiere die lokale Device-Agent- oder Display-Bridge-Konfiguration, falls Zugangsdaten rotiert wurden.",
       "cannot_connect": "Der Device-Agent ist nicht erreichbar. Pruefe die Adresse und ob der Agent laeuft.",
       "unique_id_mismatch": "Das ist ein anderes Geraet als das eingerichtete. Konfiguriere den passenden Eintrag neu oder fuege das Geraet als neuen Eintrag hinzu.",
       "reauth_wrong_device": "Der Agent hat eine andere Identität. Der gespeicherte Eintrag wurde nicht geändert.",
+      "reauth_another_station": "Diese Adresse führt jetzt zu einer anderen Station. An ihr und am gespeicherten Eintrag wurde nichts geändert.",
       "reauth_successful": "Die Zugangsdaten wurden aktualisiert.",
       "reinstall_entry_updated": "Der Agent wurde auf einer Station neu installiert, die bereits als {name} eingerichtet ist. Dieser Eintrag verwendet jetzt die neuen Schlüssel und diese Adresse; es wurde kein zweiter Eintrag angelegt.",
       "station_entry_updated": "Diese Station ist bereits als {name} eingerichtet. Dieser Eintrag verwendet jetzt diese Schlüssel und diese Adresse; es wurde kein zweiter Eintrag angelegt.",
@@ -767,7 +768,7 @@
       "device_install_verify_failed": "Die Installation ist fertig, aber der native Agent antwortet nicht mit dem generierten Zugangsschlüssel.",
       "invalid_agent_port": "Gib einen gültigen Device-Agent-Port ein.",
       "invalid_agent_host": "Gib den Device-Agent-Host ein.",
-      "invalid_callback_base_url": "Eine vom {model} erreichbare HTTP- oder HTTPS-Basis-URL von Home Assistant eingeben oder leer lassen.",
+      "invalid_callback_base_url": "Eine erreichbare HTTP- oder HTTPS-Basis-URL von Home Assistant eingeben oder leer lassen.",
       "invalid_device_host": "Gib die {model}-Adresse ein.",
       "installer_dependency_missing": "Home Assistant konnte das optionale SSH-Paket (asyncssh==2.24.1) nicht installieren oder laden. Das ist kein SSH-Anmeldefehler. Home Assistant merkt sich eine fehlgeschlagene Paketinstallation bis zur nächsten Konfigurationsprüfung oder zum Neustart, auch wenn das Paket danach angekommen ist: Wähle unter Entwicklerwerkzeuge > YAML „Konfiguration prüfen“ (oder starte Home Assistant neu) und versuche es dann erneut. Schlägt es wieder fehl, nennen Einstellungen > System > Protokolle die Ursache und die installierte asyncssh-Version.",
       "invalid_ssh_password": "Gib das {model}-SSH-Passwort ein.",
@@ -1298,7 +1299,7 @@
       "invalid_action_map": "Die Action-Allowlist ist kein gültiges JSON.",
       "invalid_agent_host": "Gib den Device-Agent-Host ein.",
       "invalid_agent_port": "Gib einen gültigen Device-Agent-Port ein.",
-      "invalid_callback_base_url": "Eine vom {model} erreichbare HTTP- oder HTTPS-Basis-URL von Home Assistant eingeben oder leer lassen.",
+      "invalid_callback_base_url": "Eine erreichbare HTTP- oder HTTPS-Basis-URL von Home Assistant eingeben oder leer lassen.",
       "invalid_alarm_entity": "Wähle eine Alarmo-Alarm-Control-Panel-Entität oder lasse das Feld leer.",
       "invalid_alarm_page_entity": "Wähle eine unterstützte Dashboard-Entität für die Alarmseite oder lasse das Feld leer.",
       "invalid_weather_entity": "Wähle eine Wetter-Entität oder lasse das Feld leer.",
@@ -1692,10 +1693,10 @@
       "message": "Die Liveaufnahme benötigt freie Medien. Schließe andere Kamerastreams oder Anrufe und versuche es erneut."
     },
     "entry_id_required": {
-      "message": "Es gibt mehrere BTicino-C300X-Stationen: wähle eine Station oder Außenstelle als Ziel."
+      "message": "Es gibt mehrere Stationen von BTicino C300X/C100X: wähle eine Station oder Außenstelle als Ziel."
     },
     "target_unsupported": {
-      "message": "Wähle als Ziel eine BTicino-C300X-Station oder -Außenstelle (Gerät oder Entität); Bereiche, Etagen, Labels und „all“ werden nicht unterstützt."
+      "message": "Wähle als Ziel eine Station oder Außenstelle von BTicino C300X/C100X (Gerät oder Entität); Bereiche, Etagen, Labels und „all“ werden nicht unterstützt."
     },
     "invalid_action_id": {
       "message": "Die Action-ID ist ungültig."
@@ -1722,10 +1723,10 @@
       "message": "Die Action-ID {action_id} ist nicht konfiguriert."
     },
     "unknown_entry": {
-      "message": "Der ausgewählte BTicino-C300X-Eintrag existiert nicht."
+      "message": "Der ausgewählte Eintrag von BTicino C300X/C100X existiert nicht."
     },
     "entry_not_loaded": {
-      "message": "Der BTicino-C300X-Eintrag ist nicht geladen. Aktiviere ihn oder warte, bis er gestartet ist."
+      "message": "Der Eintrag von BTicino C300X/C100X ist nicht geladen. Aktiviere ihn oder warte, bis er gestartet ist."
     },
     "voice_memo_not_available": {
       "message": "Es ist kein {model}-Sprach-Memo verfügbar."
@@ -1799,10 +1800,11 @@
           "ssh_password_login_disabled": "Der {model} nimmt keine Passwort-Anmeldung an, nur SSH-Schlüssel. Füge den privaten Schlüssel ein, den das Root-Tool eingerichtet hat, oder baue das Image mit Passwort-Anmeldung.",
           "firewall_hook_changed": "Das Firewall-Startscript des {model} (/etc/network/if-pre-up.d/iptables) wurde nach dem Eintrag der Agent-Ports von etwas anderem geändert; das gesicherte Original passt nicht mehr dazu. Das Script blieb unverändert. Stelle es wieder her oder entferne den Block des Agents daraus und versuche es erneut.",
           "not_a_bticino_station": "Das Gerät unter dieser Adresse ist keine BTicino-Station. Es wurde nichts darauf geschrieben. Prüfe die Adresse.",
-          "c3x2_not_supported": "Diese Station ist eine Classe 300X2. Sie wird erkannt, aber noch nicht unterstützt. Es wurde nichts darauf installiert oder geschrieben."
+          "c3x2_not_supported": "Diese Station ist eine Classe 300X2. Sie wird erkannt, aber noch nicht unterstützt. Es wurde nichts darauf installiert oder geschrieben.",
+          "wrong_device": "Diese Adresse führt jetzt zu einer anderen Station. An ihr wurde nichts geändert."
         },
         "abort": {
-          "entry_not_loaded": "Der BTicino-C300X-Eintrag ist nicht geladen."
+          "entry_not_loaded": "Der Eintrag von BTicino C300X/C100X ist nicht geladen."
         }
       }
     },
@@ -1836,7 +1838,7 @@
           "core_patch_verify_failed": "Die Core-Media-Hook-Aktion wurde ausgeführt, aber der Agent hat den gepatchten Zustand nicht bestätigt."
         },
         "abort": {
-          "entry_not_loaded": "Der BTicino-C300X-Eintrag ist nicht geladen.",
+          "entry_not_loaded": "Der Eintrag von BTicino C300X/C100X ist nicht geladen.",
           "core_patch_unsupported": "Der installierte {model} Device-Agent unterstützt das Anwenden des Core-Media-Hooks nicht.",
           "display_unsupported": "Der Geräte-Agent kennt das Display dieser Station nicht; er läuft ohne die Displayseiten, und es gibt keinen Core-Media-Hook anzuwenden."
         }
@@ -1856,7 +1858,7 @@
           "core_patch_verify_failed": "Die Display-Schritte liefen, aber der Agent hat den Core-Media-Hook nicht bestätigt."
         },
         "abort": {
-          "entry_not_loaded": "Der BTicino-C300X-Eintrag ist nicht geladen.",
+          "entry_not_loaded": "Der Eintrag von BTicino C300X/C100X ist nicht geladen.",
           "core_patch_unsupported": "Der installierte C300X-Geräte-Agent unterstützt die Display-Schritte nicht.",
           "display_unsupported": "Der Geräte-Agent kennt das Display dieser Station nicht; er läuft ohne die Displayseiten, und es gibt keine Display-Schritte auszuführen."
         }
@@ -1864,7 +1866,7 @@
     },
     "device_qml_transaction_stuck": {
       "title": "{model}-Displayschreibvorgang nicht abgeschlossen",
-      "description": "Ein Schreibvorgang des Display-Patches auf {entry_title} wurde unterbrochen (Stromausfall, Absturz oder erzwungener Stopp), und der Geräte-Agent konnte ihn nicht selbst abschließen. Die Displaydateien bleiben, wie sie sind; nichts geht verloren: Die Dateien von vor diesem Schreibvorgang liegen auf dem Gerät in einem versteckten Ordner `.c300x-qml-transaction.*` in /home/bticino/bin/gui/skins/default.\n\nVorgehen: Prüfe das {model}-Display. Funktioniert es, wende den Display-Patch in der Integration erneut an (aus- und wieder einschalten); dabei werden alle Displaydateien aus den Originalsicherungen neu erstellt. Bleibt die Warnung, starte das {model} neu, damit der Agent es beim Start erneut versucht. Ein Rest von Agent 2.9.0 oder älter wird nie automatisch zurückgespielt: Sobald das Display funktioniert, entferne diesen Ordner per SSH (siehe Erweiterte Wartung, Wiederherstellung, in der Dokumentation)."
+      "description": "Ein Schreibvorgang des Display-Patches auf {entry_title} wurde unterbrochen (Stromausfall, Absturz oder erzwungener Stopp), und der Geräte-Agent konnte ihn nicht selbst abschließen. Die Displaydateien bleiben, wie sie sind; nichts geht verloren: Die Dateien von vor diesem Schreibvorgang liegen auf dem Gerät in einem versteckten Ordner `.c300x-qml-transaction.*` in /home/bticino/bin/gui/skins/default.\n\nVorgehen: Prüfe das {model}-Display. Funktioniert es, wende den Display-Patch in der Integration erneut an (aus- und wieder einschalten); dabei werden alle Displaydateien aus den Originalsicherungen neu erstellt. Bleibt die Warnung, starte das {model} neu, damit der Agent es beim Start erneut versucht. Ein Rest von Agent 2.9.0 oder älter wird nie automatisch zurückgespielt: Sobald das Display funktioniert, entferne diesen Ordner per SSH (siehe Troubleshooting, Display problems, in der Dokumentation)."
     },
     "device_user_required": {
       "title": "{model} Media-User-Setup erforderlich",
@@ -1880,7 +1882,7 @@
           "device_not_registered": "Die {model} wurde noch nicht in der BTicino-App Door Entry angemeldet. Flexisip auf dem Gerät bekommt SIP-User, Domain und Zertifikate nur über diese Anmeldung. Melde das Gerät einmal in der App an und versuche es dann erneut. Die Weiterleitung kann danach auf Smartphone bleiben."
         },
         "abort": {
-          "entry_not_loaded": "Der BTicino-C300X-Eintrag ist nicht geladen."
+          "entry_not_loaded": "Der Eintrag von BTicino C300X/C100X ist nicht geladen."
         }
       }
     },
@@ -1897,7 +1899,7 @@
           "media_setup_repair_failed": "Die Medien-Setup-Reparatur ist fehlgeschlagen. Prüfe den Maintenance-Zugriff und versuche es erneut."
         },
         "abort": {
-          "entry_not_loaded": "Der BTicino-C300X-Eintrag ist nicht geladen."
+          "entry_not_loaded": "Der Eintrag von BTicino C300X/C100X ist nicht geladen."
         }
       }
     },
@@ -1941,7 +1943,7 @@
           "lovelace_unavailable": "Lovelace ist noch nicht verfügbar."
         },
         "abort": {
-          "entry_not_loaded": "Der BTicino C300X Entry ist nicht geladen."
+          "entry_not_loaded": "Der Eintrag von BTicino C300X/C100X ist nicht geladen."
         }
       }
     },
@@ -1958,10 +1960,10 @@
           }
         },
         "error": {
-          "invalid_callback_base_url": "Eine vom {model} erreichbare HTTP- oder HTTPS-Basis-URL von Home Assistant eingeben."
+          "invalid_callback_base_url": "Eine erreichbare HTTP- oder HTTPS-Basis-URL von Home Assistant eingeben."
         },
         "abort": {
-          "entry_not_loaded": "Der BTicino-C300X-Eintrag ist nicht geladen."
+          "entry_not_loaded": "Der Eintrag von BTicino C300X/C100X ist nicht geladen."
         }
       }
     },

@@ -1,6 +1,6 @@
 {
   "domain": "bticino_c300x",
-  "name": "BTicino C300X",
+  "name": "BTicino C300X/C100X",
   "after_dependencies": [
     "energy",
     "http",
@@ -26,7 +26,7 @@
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/memphi2/ha-bticino-c300x/issues",
   "requirements": [],
-  "version": "3.0.0b3",
+  "version": "3.0.0",
   "zeroconf": [
     "_bticino-c100x-agent._tcp.local.",
     "_bticino-c300x-agent._tcp.local."

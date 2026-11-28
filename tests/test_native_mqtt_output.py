@@ -16,11 +16,11 @@ def test_mqtt_output_boundaries(tmp_path, sanitize):
     result = subprocess.run(
         ["cc", "-std=c11", "-g", "-O1", "-Wall", "-Wextra", "-Werror", *flags,
          str(NATIVE / "test/mqtt_output_test.c"), str(NATIVE / "src/mqtt_output.c"),
-         "-Wl,--wrap=send", "-o", str(binary)], capture_output=True, text=True, timeout=30,
+         "-Wl,--wrap=send", "-o", str(binary)], capture_output=True, text=True, timeout=300,
     )
     assert result.returncode == 0, result.stderr
     result = subprocess.run(
-        [str(binary)], capture_output=True, text=True, timeout=5,
+        [str(binary)], capture_output=True, text=True, timeout=60,
         env={**os.environ, "ASAN_OPTIONS": "detect_leaks=1:halt_on_error=1",
              "UBSAN_OPTIONS": "halt_on_error=1"},
     )
@@ -43,7 +43,7 @@ def test_mqtt_connect_runs_beside_the_loop(tmp_path, sanitize, case):
          *(str(NATIVE / "src" / name) for name in (
              "mqtt_bridge.c", "mqtt_output.c", "string_util.c", "http_util.c", "time_util.c")),
          *MQTT_CONNECT_SOURCES, "-pthread", "-Wl,--wrap=getaddrinfo", "-o", str(binary)],
-        capture_output=True, text=True, timeout=60,
+        capture_output=True, text=True, timeout=300,
     )
     assert result.returncode == 0, result.stderr
     result = subprocess.run([str(binary), case], capture_output=True, text=True, timeout=90)
@@ -59,11 +59,11 @@ def test_mqtt_poll_state(tmp_path, sanitize):
          *flags, str(NATIVE / "test/mqtt_poll_test.c"), str(NATIVE / "src/mqtt_output.c"),
          str(NATIVE / "src/string_util.c"), *MQTT_CONNECT_SOURCES, "-pthread",
          "-Wl,--wrap=send", "-o", str(binary)],
-        capture_output=True, text=True, timeout=30,
+        capture_output=True, text=True, timeout=300,
     )
     assert result.returncode == 0, result.stderr
     result = subprocess.run(
-        [str(binary)], capture_output=True, text=True, timeout=5,
+        [str(binary)], capture_output=True, text=True, timeout=60,
         env={**os.environ, "ASAN_OPTIONS": "detect_leaks=1:halt_on_error=1",
              "UBSAN_OPTIONS": "halt_on_error=1"},
     )

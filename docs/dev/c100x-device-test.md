@@ -1,38 +1,73 @@
-# Classe 100X (C100X 1.5.8)
+# Classe 100X Device Test
 
-The integration supports the BTicino Classe 100X on firmware 1.5.8 next to the
-Classe 300X. The C100X is **in test** in
-[issue #51](https://github.com/memphi2/ha-bticino-c300x/issues/51): its
-features are built and checked against the original firmware, but not yet
-confirmed on a C100X device. This page holds only what is specific to the
-C100X; everything else is in the main documentation:
+Material for testers and developers of the Classe 100X support (firmware
+1.5.8, [issue #51](https://github.com/memphi2/ha-bticino-c300x/issues/51)).
+The user pages are in [docs/classe-100x](../classe-100x/1-setup.md). Make
+the private backup below before the first installation.
 
-- what each model offers: [Models and Features](feature-reference.md#models-and-features);
-- installation: [Quick Start](quickstart.md); backup, test plan, stop
-  conditions and reporting: [Testing a Classe 100X](#testing-a-classe-100x) below;
-- display pages: [Classe 100X: Activation by Reboot](display.md#classe-100x-activation-by-reboot);
-- problems: [Troubleshooting: Classe 100X](media-troubleshooting.md#classe-100x).
+## Make a Private Backup
 
-## Before You Start
+Do this once, before the first installation, while no call is active. The
+commands only read from the station; the files land on your computer. They
+contain passwords and your configuration: **never attach them to GitHub.**
 
-- **SSH access.** The first installation needs an SSH-enabled C100X with a
-  known, working privileged login. This project does not enable SSH on stock
-  firmware and gives no rooting steps; see
-  [Requirements](quickstart.md#requirements). The C100X factory login is checked
-  against the root password of the original 1.5.8 image only, not on a device;
-  a login you enter always takes priority. Home Assistant stores no SSH
-  credentials; an installed agent uses its access and maintenance keys.
-- **Vendor provisioning.** Add the station in the BTicino Door Entry app first.
-  Its SIP users, domain and certificates come only from that registration; the
-  integration adds its own media user to them and never creates them.
-- **Stock firmware.** Use firmware 1.5.8 with only the changes needed for root
-  or SSH access. Running alongside BTicino Companion, another controller, or
-  custom SIP, media or display changes is not supported.
-- **The package.** One package serves the C300X and the C100X. Keep a copy of
-  the one you installed for recovery. A release from before the joint package
-  is no substitute: the C100X agent's own updater refuses it (a refused upload
-  can leave staging files), and the SSH installer of such a release does not
-  check the model, so never use it on a C100X.
+Replace `C100X_HOST` with the station's address and check its SSH host key.
+
+1. Record which files exist:
+
+   ```sh
+   umask 077
+   mkdir c100x-51-private
+   cd c100x-51-private
+   ssh root@C100X_HOST 'set -e
+     for p in \
+     /home/bticino/cfg/extra/c300x-native-agent \
+     /home/bticino/cfg/extra/c300x-device-file-backups \
+     /etc/init.d/c300x-native-agent /etc/rc5.d/S40c300x-native-agent \
+     /etc/network/if-pre-up.d/iptables /etc/network/if-pre-up.d/iptables6 \
+     /etc/flexisip; do
+       if [ -e "$p" ] || [ -L "$p" ]; then
+         printf "present %s\n" "$p"
+         stat -c "metadata %a %u %g %h %F %n" "$p"
+         if [ -L "$p" ]; then readlink "$p"; fi
+       else
+         printf "absent %s\n" "$p"
+       fi
+     done' > presence.txt
+   ```
+
+   Stop if SSH fails. If `/etc/flexisip` points outside `/home/bticino/cfg`,
+   ask in issue #51 first.
+
+2. Archive the configuration and the files the integration may change:
+
+   ```sh
+   ssh root@C100X_HOST 'set --
+     for p in home/bticino/cfg \
+       etc/init.d/c300x-native-agent etc/rc5.d/S40c300x-native-agent \
+       etc/network/if-pre-up.d/iptables etc/network/if-pre-up.d/iptables6 \
+       etc/flexisip \
+       home/bticino/bin/gui/BtClass100 home/bticino/bin/BtClass100_qws \
+       home/bticino/bin/gui/skins/default/main.qml \
+       home/bticino/bin/gui/skins/default/MainPage.qml \
+       home/bticino/bin/gui/skins/default/EventManager.qml \
+       home/bticino/bin/bt_answering_machine; do
+         if [ -e "/$p" ] || [ -L "/$p" ]; then set -- "$@" "$p"; fi
+       done
+     exec tar -C / -cpf - "$@"' > pretest.tar.partial
+   ```
+
+   Rename it to `pretest.tar` only if the command ended without an error.
+   Check it with `tar -tvf pretest.tar`. Do not install after a tar warning.
+
+3. Save the firewall rules:
+
+   ```sh
+   ssh root@C100X_HOST '/usr/sbin/iptables-save' > iptables-before.txt
+   ```
+
+Check that `iptables-before.txt` is not empty. Keep the three files outside
+Home Assistant and outside the station.
 
 ## What Is Different on the C100X
 
@@ -40,94 +75,16 @@ C100X; everything else is in the main documentation:
 | --- | --- |
 | Model detection | The agent reads the model from the station's own `<webserver_type>` (`/home/bticino/sp/dbfiles_ws.xml`); the display program (`BtClass100` on a C100X) is the cross-check and decides where that name is missing or disagrees. A disagreement is reported and blocks the display activation. The agent announces `_bticino-c100x-agent._tcp`; an announcement of one model never matches or moves an entry of the other. |
 | Camera | Only the low stream; no **Camera resolution** select and no 960x576. Picture controls use the station's day ranges (brightness 30-220, contrast 80-255, saturation 80-255); at night and on off-grid menu steps the sliders show the nearest 10 % step. |
-| Audio | The firmware codec stays Speex/8000: the station's audio runs at 16 kHz, the firmware's PCMU path accepts only 8 kHz, and the audio chip clocks every profile at 16 kHz. The agent therefore refuses a firmware PCMU switch, and Home Assistant offers no **Audio codec** select. HA and the browser still get PCMU through the agent ([audio analysis](dev/c100x-audio-analysis.md)). |
+| Audio | The firmware codec stays Speex/8000: the station's audio runs at 16 kHz, the firmware's PCMU path accepts only 8 kHz, and the audio chip clocks every profile at 16 kHz. The agent therefore refuses a firmware PCMU switch, and Home Assistant offers no **Audio codec** select. HA and the browser still get PCMU through the agent ([audio analysis](c100x-audio-analysis.md)). |
 | Speaker and TTS | Not offered. The station's own sound paths have no safe owner or cancellation for a door call, so the agent blocks the C300X playback path on a C100X. |
 | Answering machine | Not offered: the vendor library switches it off for this board, so nothing is recorded. The agent refuses the answering-machine, voice-memo and memo-delete requests; HA creates no such entities. |
 | Text memos | Not offered: HA creates no memo entities, `write_text_memo` is refused with a translated message, and the display has no memo page. |
 | Message LED | Not driven; the agent reports none, and HA refuses Notify `led`. |
-| Display | A separate Qt 5 adapter activated by one reboot, confirmed in its first boot and otherwise rolled back; entered through the items **Home Assistant** and **Alarmo** of the station's main menu and operated like the station's own menus (Up/Down, Return, EXIT as the last entry). No Display patch, no home page buttons, no display reload ([details](dev/c100x-display-parity.md#activation-by-reboot)). |
+| Display | A separate Qt 5 adapter activated by one reboot, confirmed in its first boot and otherwise rolled back; entered through the items **Home Assistant** and **Alarmo** of the station's main menu and operated like the station's own menus (Up/Down, Return, EXIT as the last entry). No Display patch, no home page buttons, no display reload ([details](c100x-display-parity.md#activation-by-reboot)). |
 | Agent update | With active, confirmed display pages the agent update Repair renews them when the update brings newer pages: the agent prepares them and reboots the station once, after it has been idle for about two minutes, never during a call and only while the maintenance reboot is allowed. The boot confirms the new pages; otherwise the station goes back to its original display. A station with the original display is not rebooted. |
 | Ringer mute, touch tone, display notifications | Only after the display activation; notifications without a tone. **Ringer volume** works without it. |
 
-<p align="center"><img src="images/readme/c100x-display-start-en.webp" alt="Classe 100X page Home Assistant: status fields, weather with two forecasts, page dots at the bottom" width="360"> <img src="images/readme/c100x-display-alarmo-en.webp" alt="Classe 100X Alarmo page while arming: state line, modes, number pad and the Leaving Home action" width="360"></p>
-
-More pictures of the display pages:
-[Classe 100X: Activation by Reboot](display.md#classe-100x-activation-by-reboot).
-
-## Testing a Classe 100X
-
-Nothing here has been confirmed on a stock C100X yet. Test on a station you can
-reach by SSH and can do without for a while, ideally with a separate Home
-Assistant test instance. Do not reset or dismantle a working station to take
-part.
-
-### Private Backup Before the First Installation
-
-Run this for your own station, while no call is active. Replace `C100X_HOST`
-with its address, use its current SSH login and verify its host key; never put
-a password in a command line. The commands only read; the archive goes to your
-workstation. It contains credentials, user configuration and vendor files.
-**Never attach it, its contents or raw device configuration to GitHub.**
-
-`/etc/flexisip` is a link into `/home/bticino/cfg`. Record `readlink
-/etc/flexisip` and check that the Flexisip tree with your users and routes is
-readable; if a link points outside the archived tree, stop and ask in issue #51
-first. The archive is no complete backup of BTicino Companion.
-
-```sh
-umask 077
-mkdir c100x-51-private
-cd c100x-51-private
-ssh root@C100X_HOST 'set -e
-  for p in \
-  /home/bticino/cfg/extra/c300x-native-agent \
-  /home/bticino/cfg/extra/c300x-device-file-backups \
-  /etc/init.d/c300x-native-agent /etc/rc5.d/S40c300x-native-agent \
-  /etc/network/if-pre-up.d/iptables /etc/network/if-pre-up.d/iptables6 \
-  /etc/flexisip; do
-    if [ -e "$p" ] || [ -L "$p" ]; then
-      printf "present %s\n" "$p"
-      stat -c "metadata %a %u %g %h %F %n" "$p"
-      if [ -L "$p" ]; then readlink "$p"; fi
-    else
-      printf "absent %s\n" "$p"
-    fi
-  done' > presence.txt
-```
-
-Stop if SSH fails. Keep `presence.txt` with its present and absent entries; a
-permission error is not a missing file. Then archive the configuration, the
-startup and firewall files and the files whose identity the test compares:
-
-```sh
-ssh root@C100X_HOST 'set --
-  for p in home/bticino/cfg \
-    etc/init.d/c300x-native-agent etc/rc5.d/S40c300x-native-agent \
-    etc/network/if-pre-up.d/iptables etc/network/if-pre-up.d/iptables6 \
-    etc/flexisip \
-    home/bticino/bin/gui/BtClass100 home/bticino/bin/BtClass100_qws \
-    home/bticino/bin/gui/skins/default/main.qml \
-    home/bticino/bin/gui/skins/default/MainPage.qml \
-    home/bticino/bin/gui/skins/default/EventManager.qml \
-    home/bticino/bin/bt_answering_machine; do
-      if [ -e "/$p" ] || [ -L "/$p" ]; then set -- "$@" "$p"; fi
-    done
-  exec tar -C / -cpf - "$@"' > pretest.tar.partial
-```
-
-Rename `pretest.tar.partial` to `pretest.tar` only after a zero exit status.
-Check it with `tar -tvf pretest.tar`, record `sha256sum pretest.tar` privately
-and do not install after a tar warning or an incomplete archive. Save the IPv4
-rules as well:
-
-```sh
-ssh root@C100X_HOST '/usr/sbin/iptables-save' > iptables-before.partial
-```
-
-Keep it as `iptables-before.txt` after a zero exit status. Keep everything
-outside Home Assistant and outside the station.
-
-### What Setup Changes on the Station
+## What Setup Changes on the Station
 
 Setup installs nothing on a C100X until you tick **experimental support** in
 the setup dialog. Then, with the default paths and API port 8091:
@@ -158,13 +115,13 @@ A `route.conf` that is a regular file, or a link to anything but
 `unsupported_active_route`; nothing is written and video and calls cannot be
 tested on that station.
 
-### Test Plan
+## Test Plan
 
 Run the steps in order, after the backup. Stop at the first failure.
 
 | # | Do | Expected |
 |---|---|---|
-| 1 | Add **BTicino C300X** with the C100X host and tick **experimental support** when asked | Setup completes without a workaround; model C100X, firmware 1.5.8 |
+| 1 | Add **BTicino C300X/C100X** with the C100X host and tick **experimental support** when asked | Setup completes without a workaround; model C100X, firmware 1.5.8 |
 | 2 | Press **Stair light** once | The light comes on |
 | 3 | Press **Door unlock** once, with an authorized person at the door | The door releases |
 | 4 | Start the live stream on the card | Picture and sound; the stream ends cleanly |
@@ -208,7 +165,7 @@ Return):
 
 Report what differs, with a photo of the screen.
 
-### Display Activation by Reboot (device test)
+## Display Activation by Reboot (device test)
 
 Only after steps 1 to 6 passed, and only with Maintenance and its reboot
 enabled. Every step reboots the station at most once, and only after it has
@@ -247,7 +204,7 @@ been idle for two minutes; do not ring or call meanwhile unless a step says so.
      seconds, and a following HA mute works.
 6. Afterwards the ini value, the GUI icon and HA agree.
 
-### Stop Conditions and Recovery
+## Stop Conditions and Recovery
 
 Stop on an unexpected reboot (the display activation's own reboots are
 expected), if a vendor call, the BTicino app or a physical key stops working,
@@ -264,6 +221,8 @@ To go back, in this order:
 2. Turn the **Home Assistant media user** switch off: the stock routing program
    comes back from its backup; the Flexisip user lines stay.
 3. Remove the agent as [Routing and Removal](#routing-and-removal) describes.
+
+### Manual Recovery
 
 If that fails, the files setup wrote can be put back by hand from
 `pretest.tar`, one path at a time and only after the agent has stopped
@@ -283,7 +242,7 @@ setup added it; never flush chains or replay the saved rules. Restoring files
 does not unload a display that is already running. If SSH is lost, there is no
 automatic recovery: this is the reason for the backup and for stopping early.
 
-### How to Report
+## How to Report
 
 Report in [issue #51](https://github.com/memphi2/ha-bticino-c300x/issues/51):
 **pass / fail / not tested** per step, with the integration version, Home
@@ -337,8 +296,8 @@ the agent build, the routing patch on a firmware copy, the display transaction
 on firmware copies under the firmware's own shell, and a compile of the
 generated display files with the original Qt 5.10.1. One contributor ran an
 earlier agent-only package on a modified station with Companion; that was not a
-test of a stock station ([field report](dev/c100x-field-report.md)). None of
+test of a stock station ([field report](c100x-field-report.md)). None of
 this replaces the device tests in issue #51. Developer details:
-[Display parity](dev/c100x-display-parity.md),
-[Audio analysis](dev/c100x-audio-analysis.md),
-[Release validation](dev/release-validation.md#c100x-offline-checks).
+[Display parity](c100x-display-parity.md),
+[Audio analysis](c100x-audio-analysis.md),
+[Release validation](release-validation.md#c100x-offline-checks).

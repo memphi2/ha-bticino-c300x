@@ -380,7 +380,7 @@ def test_release_builder_cleans_before_source_build(tmp_path, monkeypatch):
     ]
 
 
-@pytest.mark.parametrize("document", ["README.md", "docs/quickstart.md"])
+@pytest.mark.parametrize("document", ["README.md", "docs/classe-300x/1-setup.md", "docs/classe-100x/1-setup.md"])
 def test_installation_docs_match_supported_minimum(document: str) -> None:
     versions = json.loads(PROJECT_VERSIONS_PATH.read_text(encoding="utf-8"))
     minimum = versions["min_homeassistant"]

@@ -52,7 +52,7 @@ def test_inert_on_a_c300x(c300x_binary, tmp_path):
 
 
 @pytest.mark.parametrize("case", [
-    "idle", "busy", "trial-fails", "trial-confirms", "no-display", "interrupted", "unknown", "requests",
+    "idle", "busy", "trial-fails", "trial-confirms", "no-display", "interrupted", "unknown", "cut-off", "requests",
     "features", "boot-check", "adapter-updated",
 ])
 def test_c100x_activation(c100x_binary, tmp_path, case):

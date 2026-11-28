@@ -92,7 +92,8 @@ const char *c100x_reboot_gate(const struct c100x_activation *activation,
 int c100x_activation_prepare(const struct c100x_activation *activation, struct pollfd *fd);
 /* One loop step. 1: the station is idle and the reboot is due now. */
 int c100x_activation_tick(struct c100x_activation *activation, const struct c100x_activation_inputs *inputs);
-/* TERM first, so the script's own trap cleans up; KILL after 1.5 s. */
+/* TERM first, so the script's own trap cleans up; KILL after
+ * C300X_QML_WRITE_TERM_GRACE_MS, as at a job's deadline. */
 void c100x_activation_close(struct c100x_activation *activation);
 int c100x_activation_busy(const struct c100x_activation *activation);
 /* A job that changes the display files runs or waits: other maintenance writes wait. */

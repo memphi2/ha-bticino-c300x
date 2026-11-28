@@ -426,7 +426,7 @@ Ring Call was not tested there because the device is not paired.
 ### C100X Offline Checks
 
 The C100X 1.5.8 device tests run in issue #51 with the
-[tester notes](../c100x-experimental.md#testing-a-classe-100x). The offline
+[tester notes](c100x-device-test.md#test-plan). The offline
 checks below need no device; run them with the main repository's
 `.venv/bin/python`:
 

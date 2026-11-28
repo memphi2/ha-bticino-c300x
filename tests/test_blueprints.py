@@ -706,7 +706,7 @@ def test_phone_action_ids_use_real_script_run_contexts(tmp_path):
 def test_blueprint_texts_fit_both_station_models() -> None:
     """A blueprint serves a C300X and a C100X: its shown texts name no model.
 
-    Only the integration name "BTicino C300X" stays, and the released default of the Android
+    Only the integration name "BTicino C300X/C100X" stays, and the released default of the Android
     active-call channel: that value identifies the channel on the phone and is no label.
     """
 
@@ -718,7 +718,7 @@ def test_blueprint_texts_fit_both_station_models() -> None:
                 texts += [str(field.get("name", "")), str(field.get("description", ""))]
                 if key != "active_call_channel":
                     texts.append(str(field.get("default", "")))
-            shown = " ".join(texts).replace("BTicino C300X", "")
+            shown = " ".join(texts).replace("BTicino C300X/C100X", "")
             assert "C300X" not in shown and "C100X" not in shown, path.name
 
 

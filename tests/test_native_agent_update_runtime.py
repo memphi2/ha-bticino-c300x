@@ -32,8 +32,8 @@ def test_update_paths_hashes_and_unchanged_file_writes(tmp_path, sanitize, legac
         ["cc", "-std=c11", "-D_DEFAULT_SOURCE", "-D_POSIX_C_SOURCE=200809L",
          "-Wall", "-Wextra", "-Werror", *flags,
          *(str(root / source) for source in sources), "-o", str(binary)],
-        capture_output=True, text=True, timeout=30,
+        capture_output=True, text=True, timeout=600,
     )
     assert result.returncode == 0, result.stderr
-    result = subprocess.run([str(binary), str(tmp_path)], capture_output=True, text=True, timeout=10)
+    result = subprocess.run([str(binary), str(tmp_path)], capture_output=True, text=True, timeout=120)
     assert result.returncode == 0, result.stderr

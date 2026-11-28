@@ -219,6 +219,7 @@ from .device_installer import (
     async_ensure_installer_dependencies,
     async_install_device_agent,
 )
+from .device_profile import station_model_data
 from .discovery_move import async_follow_proven_move
 from .display_patch_sync import async_mark_display_setting
 from .display_support import (
@@ -226,6 +227,7 @@ from .display_support import (
     device_display_support,
     entry_display_supported,
     entry_is_c100x,
+    setup_display_pages_default,
     setup_is_c100x,
 )
 from .entry_types import BticinoC300XConfigEntry
@@ -275,7 +277,6 @@ class BticinoC300XConfigFlow(ModelTextConfigFlow, config_flow_auth.AuthFlowSteps
         self._setup_agent_needs_token = False
         self._setup_bootstrapped = False
         self._setup_pending_features: dict[str, Any] | None = None
-        self._setup_device_ui_default = False
         self._setup_feature_data: dict[str, Any] = {}
         self._setup_device_activations: list[dict[str, Any]] = []
         self._setup_activation_edit_id: str | None = None
@@ -857,7 +858,7 @@ class BticinoC300XConfigFlow(ModelTextConfigFlow, config_flow_auth.AuthFlowSteps
                 default_device_ui_enabled=bool(
                     (user_input or {}).get(
                         CONF_DEVICE_UI_ENABLED,
-                        self._setup_device_ui_default,
+                        setup_display_pages_default(self._setup_agent_info),
                     )
                 ),
                 default_dashboard_navigation=(user_input or {}).get(CONF_DASHBOARD_NAVIGATION),
@@ -929,6 +930,7 @@ class BticinoC300XConfigFlow(ModelTextConfigFlow, config_flow_auth.AuthFlowSteps
                 **feature_data,
                 **({DISPLAY_SUPPORTED: display_supported} if display_supported is not None else {}),
                 CONF_STATION_ID: self._setup_station_id,
+                **station_model_data(self._setup_agent_info),
                 CONF_WEBHOOK_ID: secrets.token_urlsafe(24),
                 CONF_SHARED_SECRET: secrets.token_urlsafe(32),
                 CONF_EVENT_WEBHOOK_ID: secrets.token_urlsafe(24),

@@ -114,7 +114,12 @@ from .const import (
     SIGNAL_SYSTEM_METRICS_CHANGED,
 )
 from .device_user import media_user_attribute
-from .entity import C300XEntity, entry_config_value, supports_capability
+from .entity import (
+    C300XEntity,
+    entry_config_value,
+    supports_capability,
+    supports_capability_if_known,
+)
 from .entry_types import BticinoC300XConfigEntry
 from .event_payload import agent_event_key
 from .media_status import (
@@ -173,13 +178,6 @@ def _media_decision_is_ring_call(decision: MediaStateOutput) -> bool:
 
 def _media_decision_is_unanswered_ring(decision: MediaStateOutput) -> bool:
     return decision.state in UNANSWERED_RING_STATES
-
-
-def _capability_supported_if_known(entry: BticinoC300XConfigEntry, capability: str) -> bool:
-    capabilities = getattr(getattr(entry, "runtime_data", None), "capabilities", None)
-    if not isinstance(capabilities, dict) or not capabilities:
-        return True
-    return supports_capability(entry, capability)
 
 
 async def async_setup_entry(
@@ -244,7 +242,6 @@ class C300XDoorbellCamera(MediaCameraUnit, WebRTCDebugMixin, C300XEntity, Camera
         )
         self._agent_cpu_watchdog = AgentCpuWatchdog()
         self._closing_webrtc_sessions = 0
-        self._reconcile_in_flight = False
         if not hasattr(self, "stream_options"):
             self.stream_options = {}
         self.stream_options[CONF_RTSP_TRANSPORT] = "tcp"
@@ -1393,6 +1390,10 @@ class C300XDoorbellCamera(MediaCameraUnit, WebRTCDebugMixin, C300XEntity, Camera
         """
         self._background_tasks = CameraBackgroundTasks()
         self._webrtc_sessions = CameraWebRTCSessions(self._background_tasks)
+        # A reconcile the removal cancelled before its first step never
+        # cleared this mark. The close count needs no reset: each close
+        # counts and uncounts itself in one try/finally.
+        self._reconcile_in_flight = False
         self._last_state_snapshot: tuple[Any, Any, Any] | None = None
         self._picture_scope_state: MediaState | None = None
         # A status during removal may have opened the window without a capture.
@@ -1714,15 +1715,15 @@ class C300XDoorbellCamera(MediaCameraUnit, WebRTCDebugMixin, C300XEntity, Camera
                 self._rtsp_unavailable_until > time.monotonic()
                 and self._rtsp_cooldown_scope != "home_call"
             ),
-            capability_doorbell_video=_capability_supported_if_known(
+            capability_doorbell_video=supports_capability_if_known(
                 self._entry,
                 "doorbell_video",
             ),
-            capability_doorbell_call=_capability_supported_if_known(
+            capability_doorbell_call=supports_capability_if_known(
                 self._entry,
                 "doorbell_call",
             ),
-            capability_home_call=_capability_supported_if_known(
+            capability_home_call=supports_capability_if_known(
                 self._entry,
                 "home_call",
             ),

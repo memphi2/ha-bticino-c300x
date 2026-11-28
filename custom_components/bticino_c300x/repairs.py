@@ -41,15 +41,13 @@ from .capabilities import (
     maintenance_action_is_advertised,
     qml_patch_status_is_active,
 )
-from .config_flow_forms import ssh_key_fields
+from .config_flow_forms import ssh_login_fields
 from .const import (
     CONF_AGENT_HOST,
     CONF_AGENT_PORT,
     CONF_AGENT_TOKEN,
     CONF_AGENT_UPDATE_PAYLOAD_PENDING,
     CONF_AGENT_UPDATE_QML_PENDING,
-    CONF_BOOTSTRAP_SSH_PASSWORD,
-    CONF_BOOTSTRAP_SSH_USERNAME,
     CONF_CALLBACK_BASE_URL,
     CONF_DEVICE_ACTIVATION_MODE,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
@@ -75,7 +73,11 @@ from .device_installer import (
     async_ensure_installer_dependencies,
     async_install_device_agent,
 )
-from .device_profile import C3X2_NOT_SUPPORTED, NOT_A_BTICINO_STATION
+from .device_profile import (
+    C3X2_NOT_SUPPORTED,
+    NOT_A_BTICINO_STATION,
+    remember_station_model,
+)
 from .device_ssh_login import (
     INVALID_SSH_KEY,
     SSH_PASSWORD_LOGIN_DISABLED,
@@ -109,6 +111,7 @@ from .repair_issues import (
 )
 from .repair_work import OTHER_FLOW_FINISHED, RepairStepWork, async_run_repair_step
 from .schema_compat import vol
+from .station_identity import WRONG_STATION
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -504,6 +507,7 @@ def _ssh_install_error(err: BaseException) -> str:
     shown = (
         LOGIN_REFUSED, DISPLAY_WRITE_TIMEOUT, NOT_A_BTICINO_STATION, INVALID_SSH_KEY, SSH_USER_NOT_ROOT,
         SSH_UNREACHABLE, SSH_PASSWORD_LOGIN_DISABLED, FIREWALL_HOOK_CHANGED, C3X2_NOT_SUPPORTED,
+        WRONG_STATION,
     )
     return reason if reason in shown else "ssh_install_failed"
 
@@ -731,6 +735,7 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
                         **login,
                         # The entry exists: its station was accepted at setup.
                         c100x_confirmed=True,
+                        station_id=str(entry.unique_id or ""),
                         agent_port=int(
                             entry_config_value(entry, CONF_AGENT_PORT, DEFAULT_AGENT_PORT)
                         ),
@@ -843,6 +848,11 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
         return self.async_create_entry(data={})
 
 
+# The init script waits up to 20 s for a slow agent shutdown before SIGKILL,
+# then starts the new agent; one try per second covers both.
+_AGENT_RESTART_WAIT_ATTEMPTS = 35
+
+
 async def _async_wait_for_agent_after_update(
     api: Any,
     *,
@@ -855,7 +865,7 @@ async def _async_wait_for_agent_after_update(
     saw_stale_setup = False
     if initial_delay > 0:
         await asyncio.sleep(initial_delay)
-    for attempt in range(12):
+    for attempt in range(_AGENT_RESTART_WAIT_ATTEMPTS):
         try:
             setup_data = cast(dict[str, Any], await api.async_validate_setup())
             if target_bundle is None or _agent_setup_matches_bundle(
@@ -866,7 +876,7 @@ async def _async_wait_for_agent_after_update(
             saw_stale_setup = True
         except Exception as err:  # noqa: BLE001 - retry during controlled restart
             last_error = err
-        if attempt < 11:
+        if attempt < _AGENT_RESTART_WAIT_ATTEMPTS - 1:
             await asyncio.sleep(1)
     if last_error is not None and not saw_stale_setup:
         raise last_error
@@ -929,6 +939,7 @@ async def _async_apply_repaired_agent_setup(
     if not isinstance(capabilities, dict):
         capabilities = {}
     entry.runtime_data.agent_info = setup_data
+    remember_station_model(hass, entry, setup_data)
     entry.runtime_data.capabilities = gate_capabilities(
         capabilities,
         doorbell_video_enabled=bool(entry_config_value(entry, CONF_VIDEO_ENABLED, False)),
@@ -1266,13 +1277,7 @@ def _ssh_install_schema(ask_login: bool) -> vol.Schema:
 
     if not ask_login:
         return vol.Schema({})
-    return vol.Schema(
-        {
-            vol.Optional(CONF_BOOTSTRAP_SSH_USERNAME, default=""): str,
-            vol.Optional(CONF_BOOTSTRAP_SSH_PASSWORD, default=""): str,
-            **ssh_key_fields(),
-        }
-    )
+    return vol.Schema(ssh_login_fields())
 
 
 def _core_hook_placeholders(entry: Any) -> dict[str, str]:

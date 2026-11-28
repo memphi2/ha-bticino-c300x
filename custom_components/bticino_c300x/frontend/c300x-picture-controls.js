@@ -1,4 +1,4 @@
-import { mediaLocalize } from "./c300x-media-translations.js?v=466ac4d70e303efc";
+import { mediaLocalize } from "./c300x-media-translations.js?v=c204135f526f29c4";
 
 const keys = ["brightness", "contrast", "saturation"];
 

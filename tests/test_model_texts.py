@@ -56,6 +56,7 @@ def text(lang: str, *path: str, model: str) -> str:
 # are not his and need no entry here.
 ADDED_SINCE_2_10_0 = frozenset({
     "config/abort/model_mismatch",
+    "config/abort/reauth_another_station",
     "config/abort/reinstall_entry_updated",
     "config/abort/station_entry_updated",
     "config/abort/unsupported_display",
@@ -124,6 +125,7 @@ ADDED_SINCE_2_10_0 = frozenset({
     "issues/device_agent_update_required/fix_flow/error/ssh_password_login_disabled",
     "issues/device_agent_update_required/fix_flow/error/ssh_unreachable",
     "issues/device_agent_update_required/fix_flow/error/ssh_user_not_root",
+    "issues/device_agent_update_required/fix_flow/error/wrong_device",
     "issues/device_agent_update_required/fix_flow/step/ssh_install/data/bootstrap_ssh_key",
     "issues/device_agent_update_required/fix_flow/step/ssh_install/data/bootstrap_ssh_key_passphrase",
     "issues/outdoor_units_breaking_change/description",
@@ -169,13 +171,31 @@ ADDED_SINCE_2_10_0 = frozenset({
 })
 # Texts of 2.10.0 that read differently now: the SSH package message names the
 # package and the way out, the service name lost the model (neutral names), the
-# SSH forms name the optional private key and the services ask for a target
-# instead of an entry id (3.1.0).
+# SSH forms name the optional private key, the unfinished display write
+# points to the documentation section where the step now is, the callback
+# URL error reads as in English in every language (no model), and the
+# services ask for a target instead of an entry id (3.1.0).
 CHANGED_SINCE_2_10_0 = frozenset({
-    "config/error/installer_dependency_missing",
-    "config/step/bootstrap_install/description",
+    # The integration is called BTicino C300X/C100X since 3.0.0.
+    "config/abort/already_configured",
+    "config/step/user/title",
     "exceptions/entry_id_required/message",
+    "exceptions/entry_not_loaded/message",
+    "exceptions/unknown_entry/message",
+    "issues/device_agent_update_required/fix_flow/abort/entry_not_loaded",
+    "issues/device_core_qml_hook_required/fix_flow/abort/entry_not_loaded",
+    "issues/device_display_followup_pending/fix_flow/abort/entry_not_loaded",
+    "issues/device_user_required/fix_flow/abort/entry_not_loaded",
+    "issues/frontend_card_setup_hint/fix_flow/abort/entry_not_loaded",
+    "issues/media_setup_repair_required/fix_flow/abort/entry_not_loaded",
+    "issues/unsupported_callback_url/fix_flow/abort/entry_not_loaded",
+    "config/error/installer_dependency_missing",
+    "config/error/invalid_callback_base_url",
+    "config/step/bootstrap_install/description",
     "issues/device_agent_update_required/fix_flow/step/ssh_install/description",
+    "issues/device_qml_transaction_stuck/description",
+    "issues/unsupported_callback_url/fix_flow/error/invalid_callback_base_url",
+    "options/error/invalid_callback_base_url",
     "services/capture_doorbell_call/name",
     # The activation type "light" is now "actuator" (3.1.0).
     "config/step/reconfigure_device_activation_item/data_description/device_activation_item_type",
@@ -251,11 +271,11 @@ REMOVED_SINCE_2_10_0 = frozenset({
 # ones, per file:
 #   json.dumps({"a/b/c": text}, sort_keys=True, ensure_ascii=False)
 DIGESTS_2_10_0 = {
-    "base": "a93db20c64e018fecb9432106543d62e1ca4a565cf620b3d73f7bebf23cf6e94",
-    "en": "a93db20c64e018fecb9432106543d62e1ca4a565cf620b3d73f7bebf23cf6e94",
-    "de": "3aba5a59dac3f41cf7b4f86a2df2e894e9d22990f45523ee85dbacca969cc77b",
-    "it": "1d1cb897dc0117386a63fa2a79398d77e85b3aeeb25e8e95d3a770f69b0606ca",
-    "fr": "a5d79b14df33f2608f36b5019493b0f2b3fb19bdec2b4a186614653e4476277d",
+    "base": "9bccfff6f48563de5a785644c2ebc17bce2dbe8ab98b54dd3f5574ce80f4534a",
+    "en": "9bccfff6f48563de5a785644c2ebc17bce2dbe8ab98b54dd3f5574ce80f4534a",
+    "de": "8215fa8ddccdb3d208a1e663b598e02e4e883cb7796272a97687b2a0698fdec0",
+    "it": "f3b46cfda0b3639afaf8d12823f9f830a0550c5b6929ce57fd19926f0a051a22",
+    "fr": "88a38f379623e679009128685d8af0f4a2720d452fef46f1d6868e2e2d4dbc7b",
 }
 
 
@@ -453,7 +473,7 @@ def test_a_c100x_has_no_memo_capability_left():
     )
     assert text("de", "exceptions", "agent_command_failed", "message", model="C100X").count("C100X") == 1
     # The integration's own name stays.
-    assert text("en", "exceptions", "entry_not_loaded", "message", model="C100X").startswith("The BTicino C300X entry")
+    assert text("en", "exceptions", "entry_not_loaded", "message", model="C100X").startswith("The BTicino C300X/C100X entry")
 
 
 def test_the_c100x_reads_its_own_display_mechanism(monkeypatch):
@@ -559,7 +579,7 @@ def test_global_texts_name_no_model():
     for lang in LANGUAGES:
         for service, value in _load(lang)["services"].items():
             for field in _leaves(value).values():
-                assert "C300X" not in field.replace("BTicino C300X", "") and "C100X" not in field, (lang, service)
+                assert "C300X" not in field.replace("BTicino C300X/C100X", "") and "C100X" not in field, (lang, service)
     assert _load("en")["services"]["capture_doorbell_call"]["name"] == "Capture doorbell video"
     assert _load("de")["services"]["capture_doorbell_call"]["name"] == "Türvideo aufnehmen"
 

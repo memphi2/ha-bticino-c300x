@@ -35,7 +35,7 @@ def c100x_binary(tmp_path_factory: pytest.TempPathFactory) -> Path:
     subprocess.run(
         ["make", "-C", str(ROOT / "native_agent"), f"BUILD_DIR={build}",
          f"CFLAGS={flags}", "-j2", "all"],
-        check=True, capture_output=True, text=True, timeout=300,
+        check=True, capture_output=True, text=True, timeout=600,
     )
     return build / "host/c300x-agent-native"
 

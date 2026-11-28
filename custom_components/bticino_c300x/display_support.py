@@ -28,17 +28,21 @@ def device_display_support(setup: Mapping[str, Any]) -> bool | None:
                 and bridge.get("supported") is True)
     if not isinstance(capabilities, Mapping):
         return None
+    maintenance = capabilities.get("maintenance")
+    patch = (
+        maintenance.get("qml_patch")
+        if isinstance(maintenance, Mapping) and maintenance.get("supported") is True else None
+    )
+    # A C300X whose own model name and display program disagree keeps its
+    # bridge, but the agent offers no Display patch: the pages cannot run.
+    if patch is False:
+        return False
     bridge = capabilities.get("display_bridge")
     if isinstance(bridge, Mapping) and isinstance(bridge.get("supported"), bool):
         return bridge["supported"]
     if isinstance(bridge, bool):
         return bridge
-    maintenance = capabilities.get("maintenance")
-    if isinstance(maintenance, Mapping) and maintenance.get("supported") is True:
-        value = maintenance.get("qml_patch")
-        if isinstance(value, bool):
-            return value
-    return None
+    return patch if isinstance(patch, bool) else None
 
 
 def _c100x(setup: Mapping[str, Any]) -> bool:
@@ -49,6 +53,16 @@ def setup_is_c100x(setup: Any) -> bool:
     """Return whether agent setup data names a C100X."""
 
     return isinstance(setup, Mapping) and _c100x(setup)
+
+
+def setup_display_pages_default(setup: Mapping[str, Any]) -> bool:
+    """Whether a new entry offers the Home Assistant display pages switched on.
+
+    Only a C300X whose agent confirms its display: the C100X activates its
+    pages separately with a reboot, and an unknown display stays off.
+    """
+
+    return not _c100x(setup) and device_display_support(setup) is True
 
 
 def entry_is_c100x(entry: Any) -> bool:

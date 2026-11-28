@@ -2,7 +2,7 @@
   "config": {
     "step": {
       "user": {
-        "title": "BTicino C300X",
+        "title": "BTicino C300X/C100X",
         "description": "Inserisci prima l'indirizzo del {model}. Se il device agent nativo non è raggiungibile, Home Assistant può guidare un'installazione una tantum prima di chiedere le chiavi e le funzioni.",
         "data": {
           "name": "Nome",
@@ -750,11 +750,12 @@
     },
     "abort": {
       "model_mismatch": "Questo annuncio proviene da un modello di postazione diverso dalla voce configurata con la stessa identità. Non è stato modificato nulla.",
-      "already_configured": "BTicino C300X è già configurato.",
+      "already_configured": "BTicino C300X/C100X è già configurato.",
       "reconfigure_successful": "BTicino {model} è stato riconfigurato. Aggiorna la configurazione locale del device agent o del display bridge se hai ruotato le credenziali.",
       "cannot_connect": "Impossibile raggiungere il device agent. Controlla l'indirizzo e che l'agent sia in esecuzione.",
       "unique_id_mismatch": "Questo è un dispositivo diverso da quello configurato. Riconfigura la voce corrispondente oppure aggiungi il dispositivo come nuova voce.",
       "reauth_wrong_device": "L'agente ha un'identità diversa. La voce salvata non è stata modificata.",
+      "reauth_another_station": "Questo indirizzo ora porta a un'altra stazione. Non è stato modificato nulla, né su di essa né nella voce salvata.",
       "reauth_successful": "Le credenziali sono state aggiornate.",
       "reinstall_entry_updated": "L'agente è stato reinstallato su una stazione già configurata come {name}. Questa voce ora usa le nuove chiavi e questo indirizzo; non è stata creata una seconda voce.",
       "station_entry_updated": "Questa stazione è già configurata come {name}. Questa voce ora usa queste chiavi e questo indirizzo; non è stata creata una seconda voce.",
@@ -767,7 +768,7 @@
       "device_install_verify_failed": "L'installazione è terminata, ma l'agent nativo non risponde con la chiave di accesso generata.",
       "invalid_agent_port": "Inserisci una porta valida per il device agent.",
       "invalid_agent_host": "Inserisci l'host del device agent.",
-      "invalid_callback_base_url": "Inserire un URL di base HTTP o HTTPS di Home Assistant raggiungibile dal {model}, oppure lasciare vuoto.",
+      "invalid_callback_base_url": "Inserire un URL di base HTTP o HTTPS di Home Assistant raggiungibile, oppure lasciare vuoto.",
       "invalid_device_host": "Inserisci l'indirizzo {model}.",
       "installer_dependency_missing": "Home Assistant non è riuscito a installare o caricare il pacchetto SSH facoltativo (asyncssh==2.24.1). Non è un errore di accesso SSH. Home Assistant ricorda un'installazione di pacchetto non riuscita fino alla successiva verifica della configurazione o al riavvio, anche se il pacchetto è arrivato dopo: verifica la configurazione in Strumenti per sviluppatori > YAML (oppure riavvia Home Assistant), poi riprova. Se non riesce di nuovo, i registri in Impostazioni > Sistema indicano la causa e la versione di asyncssh installata.",
       "invalid_ssh_password": "Inserisci la password SSH del {model}.",
@@ -1298,7 +1299,7 @@
       "invalid_action_map": "Il JSON della allowlist delle azioni non è valido.",
       "invalid_agent_host": "Inserisci l'host del device agent.",
       "invalid_agent_port": "Inserisci una porta valida per il device agent.",
-      "invalid_callback_base_url": "Inserire un URL di base HTTP o HTTPS di Home Assistant raggiungibile dal {model}, oppure lasciare vuoto.",
+      "invalid_callback_base_url": "Inserire un URL di base HTTP o HTTPS di Home Assistant raggiungibile, oppure lasciare vuoto.",
       "invalid_alarm_entity": "Seleziona un'entità Alarmo alarm_control_panel oppure lascia vuoto il campo.",
       "invalid_alarm_page_entity": "Seleziona un'entità dashboard supportata per la pagina allarme oppure lascia vuoto il campo.",
       "invalid_weather_entity": "Seleziona un'entità meteo oppure lascia vuoto il campo.",
@@ -1692,10 +1693,10 @@
       "message": "La registrazione a richiesta richiede risorse multimediali libere. Chiudi gli altri flussi video o chiamate e riprova."
     },
     "entry_id_required": {
-      "message": "Esistono più stazioni BTicino C300X: seleziona come obiettivo una stazione o un posto esterno."
+      "message": "Esistono più stazioni BTicino C300X/C100X: seleziona come obiettivo una stazione o un posto esterno."
     },
     "target_unsupported": {
-      "message": "Seleziona come obiettivo una stazione o un posto esterno BTicino C300X (dispositivo o entità); aree, piani, etichette e \"all\" non sono supportati."
+      "message": "Seleziona come obiettivo una stazione o un posto esterno BTicino C300X/C100X (dispositivo o entità); aree, piani, etichette e \"all\" non sono supportati."
     },
     "invalid_action_id": {
       "message": "ID azione non valido."
@@ -1722,10 +1723,10 @@
       "message": "L'ID azione {action_id} non è configurato."
     },
     "unknown_entry": {
-      "message": "La voce BTicino C300X selezionata non esiste."
+      "message": "La voce BTicino C300X/C100X selezionata non esiste."
     },
     "entry_not_loaded": {
-      "message": "La voce BTicino C300X non è caricata. Attivala o attendi che sia avviata."
+      "message": "La voce BTicino C300X/C100X non è caricata. Attivala o attendi che sia avviata."
     },
     "voice_memo_not_available": {
       "message": "Non e disponibile alcun memo vocale {model}."
@@ -1799,10 +1800,11 @@
           "ssh_password_login_disabled": "Il {model} non accetta l'accesso con password, solo chiavi SSH. Incolla la chiave privata configurata dallo strumento di root, oppure crea l'immagine con l'accesso tramite password.",
           "firewall_hook_changed": "Lo script di avvio del firewall del {model} (/etc/network/if-pre-up.d/iptables) è stato modificato da altro dopo che l'agent ha aggiunto le sue porte; l'originale salvato non corrisponde più. Lo script è rimasto invariato. Ripristinalo, o rimuovi da esso il blocco dell'agent, poi riprova.",
           "not_a_bticino_station": "Il dispositivo a questo indirizzo non è una postazione BTicino. Non è stato scritto nulla. Controlla l'indirizzo.",
-          "c3x2_not_supported": "Questa postazione è una Classe 300X2. Viene riconosciuta, ma non è ancora supportata. Non è stato installato né scritto nulla."
+          "c3x2_not_supported": "Questa postazione è una Classe 300X2. Viene riconosciuta, ma non è ancora supportata. Non è stato installato né scritto nulla.",
+          "wrong_device": "Questo indirizzo ora porta a un'altra stazione. Su di essa non è stato modificato nulla."
         },
         "abort": {
-          "entry_not_loaded": "La voce BTicino C300X non è caricata."
+          "entry_not_loaded": "La voce BTicino C300X/C100X non è caricata."
         }
       }
     },
@@ -1836,7 +1838,7 @@
           "core_patch_verify_failed": "L'azione hook media core è stata eseguita, ma l'agent non ha confermato lo stato patchato."
         },
         "abort": {
-          "entry_not_loaded": "La voce BTicino C300X non è caricata.",
+          "entry_not_loaded": "La voce BTicino C300X/C100X non è caricata.",
           "core_patch_unsupported": "Il device agent {model} installato non supporta l'applicazione dell'hook media core.",
           "display_unsupported": "Il device agent non conosce il display di questo dispositivo; funziona senza le pagine del display e non c'è alcun hook media core da applicare."
         }
@@ -1856,7 +1858,7 @@
           "core_patch_verify_failed": "I passaggi del display sono stati eseguiti, ma il device agent non ha confermato l'hook media core."
         },
         "abort": {
-          "entry_not_loaded": "La voce BTicino C300X non è caricata.",
+          "entry_not_loaded": "La voce BTicino C300X/C100X non è caricata.",
           "core_patch_unsupported": "Il device agent C300X installato non supporta i passaggi del display.",
           "display_unsupported": "Il device agent non conosce il display di questo dispositivo; funziona senza le pagine del display e non ci sono passaggi del display da eseguire."
         }
@@ -1864,7 +1866,7 @@
     },
     "device_qml_transaction_stuck": {
       "title": "Scrittura del display {model} non completata",
-      "description": "Una scrittura della patch del display su {entry_title} è stata interrotta (mancanza di corrente, crash o arresto forzato) e l'agente del dispositivo non è riuscito a completarla da solo. I file del display sono rimasti come sono; non si perde nulla: i file precedenti a quella scrittura sono conservati sul dispositivo in una cartella nascosta `.c300x-qml-transaction.*` in /home/bticino/bin/gui/skins/default.\n\nCosa fare: controlla il display del {model}. Se funziona, applica di nuovo la patch del display dall'integrazione (disattivala e riattivala): tutti i file del display vengono ricostruiti dai backup originali. Se l'avviso resta, riavvia il {model} perché l'agente riprovi all'avvio. Un residuo dell'agente 2.9.0 o precedente non viene mai ripristinato automaticamente: quando il display funziona, rimuovi quella cartella via SSH (vedi Manutenzione avanzata, Ripristino, nella documentazione)."
+      "description": "Una scrittura della patch del display su {entry_title} è stata interrotta (mancanza di corrente, crash o arresto forzato) e l'agente del dispositivo non è riuscito a completarla da solo. I file del display sono rimasti come sono; non si perde nulla: i file precedenti a quella scrittura sono conservati sul dispositivo in una cartella nascosta `.c300x-qml-transaction.*` in /home/bticino/bin/gui/skins/default.\n\nCosa fare: controlla il display del {model}. Se funziona, applica di nuovo la patch del display dall'integrazione (disattivala e riattivala): tutti i file del display vengono ricostruiti dai backup originali. Se l'avviso resta, riavvia il {model} perché l'agente riprovi all'avvio. Un residuo dell'agente 2.9.0 o precedente non viene mai ripristinato automaticamente: quando il display funziona, rimuovi quella cartella via SSH (vedi Troubleshooting, Display problems, nella documentazione)."
     },
     "device_user_required": {
       "title": "Configurazione utente media {model} richiesta",
@@ -1880,7 +1882,7 @@
           "device_not_registered": "Il {model} non è ancora stato aggiunto nell'app BTicino Door Entry. Flexisip sul dispositivo riceve utente SIP, dominio e certificati solo da questa registrazione. Aggiungi il dispositivo una volta nell'app, poi riprova. In seguito l'inoltro può restare su Smartphone."
         },
         "abort": {
-          "entry_not_loaded": "La voce BTicino C300X non e caricata."
+          "entry_not_loaded": "La voce BTicino C300X/C100X non e caricata."
         }
       }
     },
@@ -1897,7 +1899,7 @@
           "media_setup_repair_failed": "Riparazione configurazione media non riuscita. Controlla l'accesso manutenzione e riprova."
         },
         "abort": {
-          "entry_not_loaded": "La voce BTicino C300X non e caricata."
+          "entry_not_loaded": "La voce BTicino C300X/C100X non e caricata."
         }
       }
     },
@@ -1941,7 +1943,7 @@
           "lovelace_unavailable": "Lovelace non e ancora disponibile."
         },
         "abort": {
-          "entry_not_loaded": "La voce BTicino C300X non e caricata."
+          "entry_not_loaded": "La voce BTicino C300X/C100X non e caricata."
         }
       }
     },
@@ -1958,10 +1960,10 @@
           }
         },
         "error": {
-          "invalid_callback_base_url": "Inserire un URL di base HTTP o HTTPS di Home Assistant raggiungibile dal {model}."
+          "invalid_callback_base_url": "Inserire un URL di base HTTP o HTTPS di Home Assistant raggiungibile."
         },
         "abort": {
-          "entry_not_loaded": "La voce BTicino C300X non e caricata."
+          "entry_not_loaded": "La voce BTicino C300X/C100X non e caricata."
         }
       }
     },

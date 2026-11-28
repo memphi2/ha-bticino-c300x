@@ -72,7 +72,7 @@ async def _async_check_events() -> None:
     )
 
     integration = ROOT / "custom_components" / DOMAIN
-    metadata = SimpleNamespace(file_path=integration, has_translations=True, name="BTicino C300X")
+    metadata = SimpleNamespace(file_path=integration, has_translations=True, name="BTicino C300X/C100X")
     # An entry from 3.1.0 on stores the station id that names its entities.
     entry = SimpleNamespace(entry_id="container-test", title="C300X",
                             data={CONF_STATION_ID: "c300x-0123456789ab"}, options={},

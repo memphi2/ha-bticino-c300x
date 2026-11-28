@@ -19,7 +19,7 @@ import pytest
 import station_e2e
 import station_flow_harness
 from homeassistant.config_entries import SOURCE_IGNORE
-from homeassistant.data_entry_flow import AbortFlow
+from homeassistant.data_entry_flow import AbortFlow, section
 from station_e2e import FIRMWARES, PAGES, PATCHED_PAGES, Account, Network, Station
 
 from custom_components.bticino_c300x.config_flow import BticinoC300XConfigFlow
@@ -128,7 +128,11 @@ class HA:
                     self.before_confirmation.append(self.station.files())
                 user_input: dict[str, Any] = {CONF_C100X_EXPERIMENTAL: True}
             elif step_id.startswith("user_"):
-                user_input = result["data_schema"]({})
+                # As the frontend: each section is sent, with its own defaults.
+                schema = result["data_schema"]
+                user_input = schema({
+                    str(key): {} for key, value in schema.schema.items() if isinstance(value, section)
+                })
             else:
                 return result
             result = await self.step(flow, step_id, user_input)

@@ -12,7 +12,7 @@ proxy if a site needs TLS.
 ## Versioning
 
 - HTTP base path: `/api/v1`
-- Current agent version: `3.0.0b3`
+- Current agent version: `3.0.0`
 - Self-test contract version: `api_version: "1.1"`
 - Normal payloads are JSON unless an endpoint explicitly returns binary media.
 
@@ -1690,8 +1690,8 @@ write finishes it (see QML Patch).
 Graceful agent shutdown during a QML write sends that `SIGTERM` once, as the
 first step of its clean-up, and waits up to the same 15 seconds before
 `SIGKILL` at the end of it; that request is closed without an answer. The init
-script's own stop sends `SIGKILL` to the agent after 5 seconds (50 waits of
-100 ms); the script, in
+script's own stop sends `SIGKILL` to the agent after 20 seconds (200 waits
+of 100 ms), so that grace ends first; the script, in
 a process group of its own, has its signal by then and still finishes its
 rollback. A write cut off even so is finished at the next agent start.
 
@@ -2500,7 +2500,7 @@ request has a monotonic five-second deadline. Diagnostics expose
 
 ## Compatibility
 
-Agent `3.0.0b3` retains self-test contract `api_version: "1.1"` for firmware families
+Agent `3.0.0` retains self-test contract `api_version: "1.1"` for firmware families
 `1.7.x`, `2.0.x` and `3.0.x`; a C100X firmware reads `1.5.x`. `firmware_family` is derived from `device.firmware` of
 the agent config, or from the station's firmware info when that is empty, which
 is what the installer writes; it is `unknown` only when neither is readable. Of

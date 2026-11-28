@@ -2102,3 +2102,18 @@ def test_only_a_c300x_gets_the_display_reload_button(model: str) -> None:
     entities = asyncio.run(_run())
     assert any(isinstance(entity, C300XReloadGuiButton) for entity in entities) is (model == "C300X")
     assert any(isinstance(entity, C300XRebootButton) for entity in entities)
+
+
+@pytest.mark.parametrize(("model", "reload_gui"), [("C100X", False), ("C300X", True), (None, True)])
+def test_an_offline_c100x_entry_gets_no_display_reload_button(model: str | None, reload_gui: bool) -> None:
+    """The model the agent last named decides while it does not answer."""
+
+    from custom_components.bticino_c300x.device_profile import STATION_MODEL
+
+    async def run() -> None:
+        entry = _FakeEntry(data={STATION_MODEL: model} if model else {})
+        entities: list[Any] = []
+        await async_setup_entry(_FakeHass(), entry, entities.extend)  # type: ignore[arg-type]
+        assert any(isinstance(entity, C300XReloadGuiButton) for entity in entities) is reload_gui
+
+    asyncio.run(run())

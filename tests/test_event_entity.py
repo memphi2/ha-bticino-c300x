@@ -133,6 +133,30 @@ def test_device_info_shows_the_board_and_the_article_number_the_station_reports(
         assert "hw_version" not in info and "model_id" not in info
 
 
+class _DataclassDeviceInfo(dict):
+    """A device info as of Home Assistant 2026.11, where setting a field afterwards is deprecated."""
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        raise AssertionError(f"DeviceInfo[{key!r}] set after it was built")
+
+
+def test_device_info_is_built_in_one_call(monkeypatch: pytest.MonkeyPatch) -> None:
+    from custom_components.bticino_c300x import entity as entity_module
+
+    monkeypatch.setattr(entity_module, "DeviceInfo", _DataclassDeviceInfo)
+    owner = _FakeEntry(runtime_data=_FakeRuntimeData(agent_info={
+        "model": "C300X", "firmware": "1.7.19",
+        "board": "BTicino ZIA board HW Rev 3", "article": "344642",
+    }))
+    info = entity_module._device_info(owner)  # type: ignore[arg-type]
+    assert isinstance(info, _DataclassDeviceInfo)
+    assert dict(info) == {
+        "identifiers": {("bticino_c300x", "c300x-0123456789ab")}, "manufacturer": "BTicino",
+        "connections": {("mac", "01:23:45:67:89:ab")}, "model": "Classe 300X", "name": owner.title,
+        "sw_version": "1.7.19", "hw_version": "BTicino ZIA board HW Rev 3", "model_id": "344642",
+    }
+
+
 def test_device_info_omits_empty_firmware_version() -> None:
     entry = _FakeEntry(
         runtime_data=_FakeRuntimeData(agent_info={"firmware": ""}),

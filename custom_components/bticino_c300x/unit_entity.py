@@ -50,10 +50,10 @@ def async_register_unit_device(
 ) -> None:
     """The unit's device below the station: the station's name for it, else "Outdoor unit <where>"."""
 
-    from .entity import _device_info
+    from .entity import station_device_fields
 
     devices = dr.async_get(hass)
-    station = devices.async_get_or_create(config_entry_id=entry.entry_id, **_device_info(entry))
+    station = devices.async_get_or_create(config_entry_id=entry.entry_id, **station_device_fields(entry))
     names: dict[str, Any] = (
         {"name": unit.name} if unit.name
         else {"translation_key": "outdoor_unit", "translation_placeholders": {"unit": unit.where}}

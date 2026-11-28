@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from typing import TYPE_CHECKING, Any, cast
 
 from homeassistant.core import callback
@@ -149,30 +149,36 @@ def _connection_state_available(entry: BticinoC300XConfigEntry) -> bool | None:
 
 
 def _device_info(entry: BticinoC300XConfigEntry) -> DeviceInfo:
-    """Return C300X device metadata without extra device reads."""
+    """Return C300X device metadata without extra device reads.
 
-    model = "Classe 100X" if entry_profile(entry).is_c100x else "Classe 300X"
-    info = DeviceInfo(
-        identifiers={station_device_identifier(entry)},
-        manufacturer="BTicino",
-        model=model,
-        name=entry.title,
-    )
+    Built in one call: from Home Assistant 2026.11 a device info is a
+    dataclass, and setting a field on it afterwards is deprecated. The
+    fields are left out where the station reports nothing, which neither the
+    TypedDict of older versions nor the dataclass can type.
+    """
+
+    build = cast("Callable[..., DeviceInfo]", DeviceInfo)
+    return build(**station_device_fields(entry))
+
+
+def station_device_fields(entry: BticinoC300XConfigEntry) -> dict[str, Any]:
+    """The station device's fields; a value the station does not report leaves its field out."""
+
+    fields: dict[str, Any] = {
+        "identifiers": {station_device_identifier(entry)},
+        "manufacturer": "BTicino",
+        "model": "Classe 100X" if entry_profile(entry).is_c100x else "Classe 300X",
+        "name": entry.title,
+    }
     mac = station_mac(entry)
     if mac is not None:
-        info["connections"] = {(CONNECTION_NETWORK_MAC, mac)}
-    # What the station reports about itself is shown as it is; a value it
-    # does not report leaves its field out.
-    firmware = _agent_info_string(entry, "firmware")
-    if firmware is not None:
-        info["sw_version"] = firmware
-    board = _agent_info_string(entry, "board")
-    if board is not None:
-        info["hw_version"] = board
-    article = _agent_info_string(entry, "article")
-    if article is not None:
-        info["model_id"] = article
-    return info
+        fields["connections"] = {(CONNECTION_NETWORK_MAC, mac)}
+    # What the station reports about itself is shown as it is.
+    for field, key in (("sw_version", "firmware"), ("hw_version", "board"), ("model_id", "article")):
+        value = _agent_info_string(entry, key)
+        if value is not None:
+            fields[field] = value
+    return fields
 
 
 def _agent_info_string(entry: BticinoC300XConfigEntry, key: str) -> str | None:

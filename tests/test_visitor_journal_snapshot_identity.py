@@ -239,28 +239,31 @@ def test_identity_reader_preserves_entry_root_and_retention_boundaries(tmp_path,
 def test_real_storage_preserves_identity_without_rebinding_legacy_records(tmp_path):
     async def run():
         hass = HomeAssistant(str(tmp_path))
-        hass.config.media_dirs = {"local": str(tmp_path / "media")}
-        entry = SimpleNamespace(entry_id="one", data={}, options={})
-        journal = VisitorJournal(hass, entry)
-        await journal.load()
-        journal.event(event())
-        store = identity.SnapshotStore(hass, "one")
-        item = await hass.async_add_executor_job(store.save, frame("red"), "capture", 14)
-        await journal.attach_snapshot(journal.active, item.name, frame("red"))
-        original = journal.items()[0]["snapshot"]
-        assert original is not None
-        journal.event(event(sequence=2))
-        journal.records[journal.active]["snapshot"] = item.name  # Pre-fix storage format.
-        await journal.shutdown()
-        path = store.root / item.name
-        await hass.async_add_executor_job(path.write_bytes, frame("blue"))
-        restored = VisitorJournal(hass, entry)
-        await restored.load()
-        assert restored.items()[0]["snapshot"] is None
-        assert restored.items()[1]["snapshot"] == original
-        assert await hass.async_add_executor_job(identity.read_snapshot, hass, "one", original, 14) is None
-        await restored.shutdown()
-        await hass.async_block_till_done()
+        try:
+            hass.config.media_dirs = {"local": str(tmp_path / "media")}
+            entry = SimpleNamespace(entry_id="one", data={}, options={})
+            journal = VisitorJournal(hass, entry)
+            await journal.load()
+            journal.event(event())
+            store = identity.SnapshotStore(hass, "one")
+            item = await hass.async_add_executor_job(store.save, frame("red"), "capture", 14)
+            await journal.attach_snapshot(journal.active, item.name, frame("red"))
+            original = journal.items()[0]["snapshot"]
+            assert original is not None
+            journal.event(event(sequence=2))
+            journal.records[journal.active]["snapshot"] = item.name  # Pre-fix storage format.
+            await journal.shutdown()
+            path = store.root / item.name
+            await hass.async_add_executor_job(path.write_bytes, frame("blue"))
+            restored = VisitorJournal(hass, entry)
+            await restored.load()
+            assert restored.items()[0]["snapshot"] is None
+            assert restored.items()[1]["snapshot"] == original
+            assert await hass.async_add_executor_job(identity.read_snapshot, hass, "one", original, 14) is None
+            await restored.shutdown()
+            await hass.async_block_till_done()
+        finally:
+            await hass.async_stop(force=True)
 
     asyncio.run(run())
 

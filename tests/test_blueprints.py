@@ -117,16 +117,21 @@ def test_calendar_blueprint_ha_schema_inputs_and_templates(tmp_path: Path) -> No
         assert cv.time_period(rendered["trigger"][0]["offset"]).total_seconds() == -900
         assert rendered["mode"] == "queued"
         hass = HomeAssistant(str(tmp_path))
-        variables = {"trigger": {"entity_id": "calendar.home", "calendar_event": {"summary": "Visit", "start": "2026-11-10T12:00:00+00:00"}}}
-        for key, value in rendered["variables"].items():
-            variables[key] = Template(value, hass).async_render(variables)
-        assert rendered["action"][0]["target"] == {"device_id": "device"}
-        data = {key: Template(value, hass).async_render(variables) if isinstance(value, str) else value for key, value in rendered["action"][0]["data"].items()}
-        from custom_components.bticino_c300x.display_notifications import SHOW_SCHEMA
-        checked = SHOW_SCHEMA(data)
-        assert len(checked["notification_id"]) == 64
-        assert checked["title"] == "Visit"
-        assert "12:00" in checked["message"]
+        try:
+            variables = {"trigger": {"entity_id": "calendar.home", "calendar_event": {"summary": "Visit", "start": "2026-11-10T12:00:00+00:00"}}}
+            for key, value in rendered["variables"].items():
+                variables[key] = Template(value, hass).async_render(variables)
+            assert rendered["action"][0]["target"] == {"device_id": "device"}
+            data = {key: Template(value, hass).async_render(variables) if isinstance(value, str) else value for key, value in rendered["action"][0]["data"].items()}
+            from custom_components.bticino_c300x.display_notifications import (
+                SHOW_SCHEMA,
+            )
+            checked = SHOW_SCHEMA(data)
+            assert len(checked["notification_id"]) == 64
+            assert checked["title"] == "Visit"
+            assert "12:00" in checked["message"]
+        finally:
+            await hass.async_stop(force=True)
 
     asyncio.run(run())
 
@@ -193,14 +198,16 @@ def test_doorbell_blueprint_condition_needs_a_station_and_a_call(tmp_path: Path,
 
     async def run() -> None:
         hass = HomeAssistant(str(tmp_path))
-        template = Template(_blueprint(filename)["condition"][0]["value_template"], hass)
-        for entry_id, call_id, expected in (
-            ("01JENTRY", "0badc0de-7", True), ("", "0badc0de-7", False),
-            ("01JENTRY", "", False), (None, "0badc0de-7", False), ("01JENTRY", None, False),
-        ):
-            variables = {"entry_id": entry_id, "call_id": call_id}
-            assert async_template(hass, template, variables, trace_result=False) is expected, variables
-        await hass.async_stop(force=True)
+        try:
+            template = Template(_blueprint(filename)["condition"][0]["value_template"], hass)
+            for entry_id, call_id, expected in (
+                ("01JENTRY", "0badc0de-7", True), ("", "0badc0de-7", False),
+                ("01JENTRY", "", False), (None, "0badc0de-7", False), ("01JENTRY", None, False),
+            ):
+                variables = {"entry_id": entry_id, "call_id": call_id}
+                assert async_template(hass, template, variables, trace_result=False) is expected, variables
+        finally:
+            await hass.async_stop(force=True)
 
     asyncio.run(run())
 
@@ -515,67 +522,69 @@ def test_the_phone_alert_stops_when_a_door_of_the_station_opens(
 
     async def run() -> None:
         hass = core.HomeAssistant(str(tmp_path))
-        hass.config.skip_pip = True
-        loader.async_setup(hass)
-        hass.config_entries = config_entries.ConfigEntries(hass, {})
-        await bootstrap.async_load_base_functionality(hass)
-        registry = er.async_get(hass)
-        for entry_id in ("station-1", "station-2"):
-            entry = config_entries.ConfigEntry(
-                domain="bticino_c300x", data={}, title=entry_id, source="user", version=1, minor_version=1,
-                options={}, unique_id=None, discovery_keys=MappingProxyType({}), subentries_data=None,
-                entry_id=entry_id,
+        try:
+            hass.config.skip_pip = True
+            loader.async_setup(hass)
+            hass.config_entries = config_entries.ConfigEntries(hass, {})
+            await bootstrap.async_load_base_functionality(hass)
+            registry = er.async_get(hass)
+            for entry_id in ("station-1", "station-2"):
+                entry = config_entries.ConfigEntry(
+                    domain="bticino_c300x", data={}, title=entry_id, source="user", version=1, minor_version=1,
+                    options={}, unique_id=None, discovery_keys=MappingProxyType({}), subentries_data=None,
+                    entry_id=entry_id,
+                )
+                hass.config_entries._entries[entry_id] = entry  # noqa: SLF001
+            for object_id, entry_id, types, state in (
+                ("gate_door", "station-1", ["opened"], opened_1),
+                ("garden_door", "station-1", ["opened"], "unknown"),
+                ("gate_doorbell", "station-1", ["ring"], opened_1),
+                ("other_door", "station-2", ["opened"], opened_1),
+            ):
+                entity = registry.async_get_or_create(
+                    "event", "bticino_c300x", object_id, suggested_object_id=object_id,
+                    config_entry=hass.config_entries.async_get_entry(entry_id),
+                )
+                entity_sources(hass)[entity.entity_id] = {"domain": "bticino_c300x", "custom_component": True}
+                hass.states.async_set(entity.entity_id, state, {"event_types": types})
+
+            variables: dict[str, Any] = {"entry_id": "station-1"}
+            for name in ("door_events", "door_states"):
+                variables[name] = Template(blueprint["variables"][name], hass).async_render(variables)
+            assert sorted(variables["door_events"]) == ["event.garden_door", "event.gate_door"]
+
+            door = [item for item in blueprint["action"][choose_index - 1]["wait_for_trigger"] if item.get("id") == "door_unlock"]
+            fired: list[dict[str, Any]] = []
+
+            async def action(run_variables: dict[str, Any], context: Any = None) -> None:
+                fired.append(run_variables["trigger"])
+
+            remove = await async_initialize_triggers(
+                hass, await async_validate_trigger_config(hass, door), action,
+                "automation", "phone", lambda *args, **kwargs: None, variables=variables,
             )
-            hass.config_entries._entries[entry_id] = entry  # noqa: SLF001
-        for object_id, entry_id, types, state in (
-            ("gate_door", "station-1", ["opened"], opened_1),
-            ("garden_door", "station-1", ["opened"], "unknown"),
-            ("gate_doorbell", "station-1", ["ring"], opened_1),
-            ("other_door", "station-2", ["opened"], opened_1),
-        ):
-            entity = registry.async_get_or_create(
-                "event", "bticino_c300x", object_id, suggested_object_id=object_id,
-                config_entry=hass.config_entries.async_get_entry(entry_id),
-            )
-            entity_sources(hass)[entity.entity_id] = {"domain": "bticino_c300x", "custom_component": True}
-            hass.states.async_set(entity.entity_id, state, {"event_types": types})
-
-        variables: dict[str, Any] = {"entry_id": "station-1"}
-        for name in ("door_events", "door_states"):
-            variables[name] = Template(blueprint["variables"][name], hass).async_render(variables)
-        assert sorted(variables["door_events"]) == ["event.garden_door", "event.gate_door"]
-
-        door = [item for item in blueprint["action"][choose_index - 1]["wait_for_trigger"] if item.get("id") == "door_unlock"]
-        fired: list[dict[str, Any]] = []
-
-        async def action(run_variables: dict[str, Any], context: Any = None) -> None:
-            fired.append(run_variables["trigger"])
-
-        remove = await async_initialize_triggers(
-            hass, await async_validate_trigger_config(hass, door), action,
-            "automation", "phone", lambda *args, **kwargs: None, variables=variables,
-        )
-        for entity_id, state in (
-            ("event.other_door", opened_2),
-            ("event.gate_doorbell", opened_2),
-            ("event.gate_door", "unavailable"), ("event.gate_door", opened_1),
-            ("event.garden_door", "unavailable"), ("event.garden_door", "unknown"),
-        ):
-            hass.states.async_set(entity_id, state, {"event_types": ["opened"]})
+            for entity_id, state in (
+                ("event.other_door", opened_2),
+                ("event.gate_doorbell", opened_2),
+                ("event.gate_door", "unavailable"), ("event.gate_door", opened_1),
+                ("event.garden_door", "unavailable"), ("event.garden_door", "unknown"),
+            ):
+                hass.states.async_set(entity_id, state, {"event_types": ["opened"]})
+                await hass.async_block_till_done()
+            assert fired == [], filename
+            hass.states.async_set("event.garden_door", opened_2, {"event_types": ["opened"]})
             await hass.async_block_till_done()
-        assert fired == [], filename
-        hass.states.async_set("event.garden_door", opened_2, {"event_types": ["opened"]})
-        await hass.async_block_till_done()
-        assert [item["id"] for item in fired] == ["door_unlock"], filename
+            assert [item["id"] for item in fired] == ["door_unlock"], filename
 
-        for branch in blueprint["action"][choose_index]["choose"]:
-            template = Template(branch["conditions"][0]["value_template"], hass)
-            assert template.async_render({
-                "wait": {"trigger": fired[0]}, "answer_action": "answer", "hangup_action": "hangup",
-            }) is False, filename
-        assert remove is not None
-        remove()
-        await hass.async_stop(force=True)
+            for branch in blueprint["action"][choose_index]["choose"]:
+                template = Template(branch["conditions"][0]["value_template"], hass)
+                assert template.async_render({
+                    "wait": {"trigger": fired[0]}, "answer_action": "answer", "hangup_action": "hangup",
+                }) is False, filename
+            assert remove is not None
+            remove()
+        finally:
+            await hass.async_stop(force=True)
 
     asyncio.run(run())
 
@@ -632,73 +641,76 @@ def test_phone_action_ids_use_real_script_run_contexts(tmp_path):
 
     async def run():
         hass = HomeAssistant(str(tmp_path))
-        emitted = []
-
-        @callback
-        def collect(event):
-            emitted.append(dict(event.data))
-
-        unsubscribe = hass.bus.async_listen("c300x_test_action_ids", collect)
         try:
-            for platform in ("android", "ios"):
-                data = _blueprint(f"doorbell_call_{platform}.yaml")
-                assert "answer_action" not in data["variables"]
-                assert "hangup_action" not in data["variables"]
-                # Execute the production initialization step in HA, not a template
-                # environment that invents context availability before actions.
-                sequence = cv.SCRIPT_SCHEMA([
-                    data["action"][0],
-                    {"event": "c300x_test_action_ids", "event_data": {
-                        "answer_action": "{{ answer_action }}",
-                        "hangup_action": "{{ hangup_action }}",
-                    }},
-                ])
-                script = Script(hass, sequence, f"test_{platform}", "automation")
-                contexts = [Context(), Context()]
-                for context in contexts:
-                    await script.async_run({"action_scope": "AUTOMATION_FRONT_DOOR"}, context)
-                    await hass.async_block_till_done()
-                old, current = emitted[-2:]
-                for key in ("answer_action", "hangup_action"):
-                    assert old[key] != current[key]
-                    assert old[key].endswith(contexts[0].id)
-                    assert current[key].endswith(contexts[1].id)
+            emitted = []
 
-                waits = []
-                conditions = []
+            @callback
+            def collect(event):
+                emitted.append(dict(event.data))
 
-                def collect_contracts(node, waits, conditions):
-                    if isinstance(node, dict):
-                        for trigger in node.get("wait_for_trigger", []):
-                            if trigger.get("event_type") == "mobile_app_notification_action":
-                                waits.append(trigger["event_data"]["action"])
-                        if "value_template" in node and "platform" not in node:
-                            conditions.append(node["value_template"])
-                        for value in node.values():
-                            collect_contracts(value, waits, conditions)
-                    elif isinstance(node, list):
-                        for value in node:
-                            collect_contracts(value, waits, conditions)
+            unsubscribe = hass.bus.async_listen("c300x_test_action_ids", collect)
+            try:
+                for platform in ("android", "ios"):
+                    data = _blueprint(f"doorbell_call_{platform}.yaml")
+                    assert "answer_action" not in data["variables"]
+                    assert "hangup_action" not in data["variables"]
+                    # Execute the production initialization step in HA, not a template
+                    # environment that invents context availability before actions.
+                    sequence = cv.SCRIPT_SCHEMA([
+                        data["action"][0],
+                        {"event": "c300x_test_action_ids", "event_data": {
+                            "answer_action": "{{ answer_action }}",
+                            "hangup_action": "{{ hangup_action }}",
+                        }},
+                    ])
+                    script = Script(hass, sequence, f"test_{platform}", "automation")
+                    contexts = [Context(), Context()]
+                    for context in contexts:
+                        await script.async_run({"action_scope": "AUTOMATION_FRONT_DOOR"}, context)
+                        await hass.async_block_till_done()
+                    old, current = emitted[-2:]
+                    for key in ("answer_action", "hangup_action"):
+                        assert old[key] != current[key]
+                        assert old[key].endswith(contexts[0].id)
+                        assert current[key].endswith(contexts[1].id)
 
-                collect_contracts(data["action"], waits, conditions)
-                assert len(waits) == 3  # Answer, ring Hang Up, active-call Hang Up.
-                expected = [Template(text, hass).async_render(current) for text in waits]
-                assert set(expected) == set(current.values())
-                assert set(expected).isdisjoint(old.values())
-                assert len(conditions) == 3
-                for key in ("answer_action", "hangup_action"):
-                    for actions, accepted in ((old, False), (current, True)):
-                        variables = {**current, "wait": {"trigger": {
-                            "event": {"data": {"action": actions[key]}},
-                        }}}
-                        results = [bool(Template(text, hass).async_render(variables)) for text in conditions]
-                        assert any(results) is accepted
-                # Notification replacement/cleanup still uses stable tags.
-                for key in ("ring_tag", "active_tag"):
-                    template = Template(data["variables"][key], hass)
-                    assert template.async_render({"action_scope": "FRONT", "context": contexts[0]}) == template.async_render({"action_scope": "FRONT", "context": contexts[1]})
+                    waits = []
+                    conditions = []
+
+                    def collect_contracts(node, waits, conditions):
+                        if isinstance(node, dict):
+                            for trigger in node.get("wait_for_trigger", []):
+                                if trigger.get("event_type") == "mobile_app_notification_action":
+                                    waits.append(trigger["event_data"]["action"])
+                            if "value_template" in node and "platform" not in node:
+                                conditions.append(node["value_template"])
+                            for value in node.values():
+                                collect_contracts(value, waits, conditions)
+                        elif isinstance(node, list):
+                            for value in node:
+                                collect_contracts(value, waits, conditions)
+
+                    collect_contracts(data["action"], waits, conditions)
+                    assert len(waits) == 3  # Answer, ring Hang Up, active-call Hang Up.
+                    expected = [Template(text, hass).async_render(current) for text in waits]
+                    assert set(expected) == set(current.values())
+                    assert set(expected).isdisjoint(old.values())
+                    assert len(conditions) == 3
+                    for key in ("answer_action", "hangup_action"):
+                        for actions, accepted in ((old, False), (current, True)):
+                            variables = {**current, "wait": {"trigger": {
+                                "event": {"data": {"action": actions[key]}},
+                            }}}
+                            results = [bool(Template(text, hass).async_render(variables)) for text in conditions]
+                            assert any(results) is accepted
+                    # Notification replacement/cleanup still uses stable tags.
+                    for key in ("ring_tag", "active_tag"):
+                        template = Template(data["variables"][key], hass)
+                        assert template.async_render({"action_scope": "FRONT", "context": contexts[0]}) == template.async_render({"action_scope": "FRONT", "context": contexts[1]})
+            finally:
+                unsubscribe()
         finally:
-            unsubscribe()
+            await hass.async_stop(force=True)
 
     asyncio.run(run())
 
@@ -746,63 +758,65 @@ def test_doorbell_blueprint_runs_for_a_ring_not_for_a_reload(tmp_path: Path, fil
 
     async def run() -> None:
         hass = core.HomeAssistant(str(tmp_path))
-        hass.config.skip_pip = True
-        loader.async_setup(hass)
-        hass.config_entries = config_entries.ConfigEntries(hass, {})
-        await bootstrap.async_load_base_functionality(hass)
-        trigger = [
-            {key: entity_id if value == "doorbell_event" else value for key, value in item.items()}
-            for item in blueprint["trigger"]
-        ]
-        triggered: list[dict[str, Any]] = []
+        try:
+            hass.config.skip_pip = True
+            loader.async_setup(hass)
+            hass.config_entries = config_entries.ConfigEntries(hass, {})
+            await bootstrap.async_load_base_functionality(hass)
+            trigger = [
+                {key: entity_id if value == "doorbell_event" else value for key, value in item.items()}
+                for item in blueprint["trigger"]
+            ]
+            triggered: list[dict[str, Any]] = []
 
-        async def action(run_variables: dict[str, Any], context: Any = None) -> None:
-            triggered.append(run_variables["trigger"])
+            async def action(run_variables: dict[str, Any], context: Any = None) -> None:
+                triggered.append(run_variables["trigger"])
 
-        hass.states.async_set(entity_id, ring_1, {"call_id": "0badc0de-1"})
-        remove = await async_initialize_triggers(
-            hass, await async_validate_trigger_config(hass, trigger), action,
-            "automation", "doorbell", lambda *args, **kwargs: None,
-        )
+            hass.states.async_set(entity_id, ring_1, {"call_id": "0badc0de-1"})
+            remove = await async_initialize_triggers(
+                hass, await async_validate_trigger_config(hass, trigger), action,
+                "automation", "doorbell", lambda *args, **kwargs: None,
+            )
 
-        async def states(*values: str | None) -> None:
-            for value in values:
-                if value is None:
-                    hass.states.async_remove(entity_id)
-                else:
-                    hass.states.async_set(entity_id, value, {"call_id": "0badc0de-2"})
-                await hass.async_block_till_done()
+            async def states(*values: str | None) -> None:
+                for value in values:
+                    if value is None:
+                        hass.states.async_remove(entity_id)
+                    else:
+                        hass.states.async_set(entity_id, value, {"call_id": "0badc0de-2"})
+                    await hass.async_block_till_done()
 
-        def runs() -> list[str]:
-            # The automation runs when its condition passes with the variables
-            # the blueprint takes from the trigger (the entry id is known here).
-            # A variable that fails to render fails the run with an error.
-            condition = Template(blueprint["condition"][0]["value_template"], hass)
-            started = []
-            for item in triggered:
-                variables = {
-                    name: Template(template, hass).async_render({"trigger": item})
-                    for name, template in blueprint["variables"].items() if "trigger." in str(template)
-                }
-                variables["entry_id"] = "01JENTRY"
-                if async_template(hass, condition, variables, trace_result=False):
-                    started.append(item["to_state"].state)
-            return started
+            def runs() -> list[str]:
+                # The automation runs when its condition passes with the variables
+                # the blueprint takes from the trigger (the entry id is known here).
+                # A variable that fails to render fails the run with an error.
+                condition = Template(blueprint["condition"][0]["value_template"], hass)
+                started = []
+                for item in triggered:
+                    variables = {
+                        name: Template(template, hass).async_render({"trigger": item})
+                        for name, template in blueprint["variables"].items() if "trigger." in str(template)
+                    }
+                    variables["entry_id"] = "01JENTRY"
+                    if async_template(hass, condition, variables, trace_result=False):
+                        started.append(item["to_state"].state)
+                return started
 
-        # A reload or restart: unavailable, then without a previous state or
-        # with the restored one.
-        await states("unavailable", "unknown")
-        await states("unavailable", ring_1)
-        await states("unavailable", "unknown", "unavailable", ring_1)
-        # The entity is deleted (its stale unit device was removed) and comes
-        # back: Home Assistant's state trigger fires for the removed state.
-        await states(None, "unknown", None, "unavailable", ring_1)
-        assert runs() == [], filename
-        # A ring is a new event time.
-        await states(ring_2)
-        assert runs() == [ring_2], filename
-        assert remove is not None
-        remove()
-        await hass.async_stop(force=True)
+            # A reload or restart: unavailable, then without a previous state or
+            # with the restored one.
+            await states("unavailable", "unknown")
+            await states("unavailable", ring_1)
+            await states("unavailable", "unknown", "unavailable", ring_1)
+            # The entity is deleted (its stale unit device was removed) and comes
+            # back: Home Assistant's state trigger fires for the removed state.
+            await states(None, "unknown", None, "unavailable", ring_1)
+            assert runs() == [], filename
+            # A ring is a new event time.
+            await states(ring_2)
+            assert runs() == [ring_2], filename
+            assert remove is not None
+            remove()
+        finally:
+            await hass.async_stop(force=True)
 
     asyncio.run(run())

@@ -62,13 +62,16 @@ def setup_hass(tmp_path, monkeypatch, *, allowed=(), admin=False):
 def test_read_only_caller_cannot_control_device(tmp_path, monkeypatch, service):
     async def run():
         hass, entry = setup_hass(tmp_path, monkeypatch)
-        data = {"text": "test"} if service == "write_text_memo" else {}
-        with pytest.raises(Unauthorized):
-            await hass.services.async_call(
-                DOMAIN, service, data, blocking=True, context=Context(user_id="reader")
-            )
-        entry.runtime_data.api.async_answer_doorbell_call.assert_not_awaited()
-        entry.runtime_data.api.async_create_text_memo.assert_not_awaited()
+        try:
+            data = {"text": "test"} if service == "write_text_memo" else {}
+            with pytest.raises(Unauthorized):
+                await hass.services.async_call(
+                    DOMAIN, service, data, blocking=True, context=Context(user_id="reader")
+                )
+            entry.runtime_data.api.async_answer_doorbell_call.assert_not_awaited()
+            entry.runtime_data.api.async_create_text_memo.assert_not_awaited()
+        finally:
+            await hass.async_stop(force=True)
 
     asyncio.run(run())
 
@@ -76,17 +79,20 @@ def test_read_only_caller_cannot_control_device(tmp_path, monkeypatch, service):
 def test_call_control_needs_control_of_the_media_camera(tmp_path, monkeypatch):
     async def run():
         hass, entry = setup_hass(tmp_path, monkeypatch, allowed={"camera.c300x-0123456789ab_doorbell_camera"})
-        context = Context(user_id="controller")
-        await hass.services.async_call(
-            DOMAIN, "answer_call", {"call_id": "0badc0de-3"}, blocking=True, context=context
-        )
-        # Memos have no control entity: owners only.
-        with pytest.raises(Unauthorized):
+        try:
+            context = Context(user_id="controller")
             await hass.services.async_call(
-                DOMAIN, "write_text_memo", {"text": "hi"}, blocking=True, context=context
+                DOMAIN, "answer_call", {"call_id": "0badc0de-3"}, blocking=True, context=context
             )
-        entry.runtime_data.api.async_answer_doorbell_call.assert_awaited_once_with("0badc0de-3", unit=None)
-        entry.runtime_data.api.async_create_text_memo.assert_not_awaited()
+            # Memos have no control entity: owners only.
+            with pytest.raises(Unauthorized):
+                await hass.services.async_call(
+                    DOMAIN, "write_text_memo", {"text": "hi"}, blocking=True, context=context
+                )
+            entry.runtime_data.api.async_answer_doorbell_call.assert_awaited_once_with("0badc0de-3", unit=None)
+            entry.runtime_data.api.async_create_text_memo.assert_not_awaited()
+        finally:
+            await hass.async_stop(force=True)
 
     asyncio.run(run())
 
@@ -95,10 +101,13 @@ def test_call_control_needs_control_of_the_media_camera(tmp_path, monkeypatch):
 def test_owner_and_trusted_automation_can_control_calls(tmp_path, monkeypatch, user_id, admin):
     async def run():
         hass, entry = setup_hass(tmp_path, monkeypatch, admin=admin)
-        await hass.services.async_call(
-            DOMAIN, "answer_call", {}, blocking=True, context=Context(user_id=user_id)
-        )
-        entry.runtime_data.api.async_answer_doorbell_call.assert_awaited_once_with(None, unit=None)
+        try:
+            await hass.services.async_call(
+                DOMAIN, "answer_call", {}, blocking=True, context=Context(user_id=user_id)
+            )
+            entry.runtime_data.api.async_answer_doorbell_call.assert_awaited_once_with(None, unit=None)
+        finally:
+            await hass.async_stop(force=True)
 
     asyncio.run(run())
 
@@ -106,36 +115,39 @@ def test_owner_and_trusted_automation_can_control_calls(tmp_path, monkeypatch, u
 def test_action_keeps_context_and_cannot_bypass_admin_check(tmp_path, monkeypatch):
     async def run():
         hass, entry = setup_hass(tmp_path, monkeypatch)
-        target = AsyncMock()
-        async_register_admin_service(hass, "test", "protected", target)
-        entry.options["actions"] = {
-            "protected": {"domain": "test", "service": "protected"}
-        }
-        with pytest.raises(Unauthorized):
+        try:
+            target = AsyncMock()
+            async_register_admin_service(hass, "test", "protected", target)
+            entry.options["actions"] = {
+                "protected": {"domain": "test", "service": "protected"}
+            }
+            with pytest.raises(Unauthorized):
+                await hass.services.async_call(
+                    DOMAIN,
+                    "run_action",
+                    {"action_id": "protected"},
+                    blocking=True,
+                    context=Context(user_id="reader"),
+                )
+            target.assert_not_awaited()
+            seen = []
+
+            async def action(call):
+                seen.append(call.context)
+
+            hass.services.async_register("test", "allowed", action)
+            entry.options["actions"]["allowed"] = {"domain": "test", "service": "allowed"}
+            context = Context(user_id="controller")
             await hass.services.async_call(
                 DOMAIN,
                 "run_action",
-                {"action_id": "protected"},
+                {"action_id": "allowed"},
                 blocking=True,
-                context=Context(user_id="reader"),
+                context=context,
             )
-        target.assert_not_awaited()
-        seen = []
-
-        async def action(call):
-            seen.append(call.context)
-
-        hass.services.async_register("test", "allowed", action)
-        entry.options["actions"]["allowed"] = {"domain": "test", "service": "allowed"}
-        context = Context(user_id="controller")
-        await hass.services.async_call(
-            DOMAIN,
-            "run_action",
-            {"action_id": "allowed"},
-            blocking=True,
-            context=context,
-        )
-        assert seen == [context]
+            assert seen == [context]
+        finally:
+            await hass.async_stop(force=True)
 
     asyncio.run(run())
 
@@ -143,12 +155,15 @@ def test_action_keeps_context_and_cannot_bypass_admin_check(tmp_path, monkeypatc
 def test_unknown_user_cannot_fall_back_to_trusted_automation(tmp_path, monkeypatch):
     async def run():
         hass, entry = setup_hass(tmp_path, monkeypatch)
-        hass.auth.async_get_user.return_value = None
-        with pytest.raises(UnknownUser):
-            await hass.services.async_call(
-                DOMAIN, "answer_call", {}, blocking=True, context=Context(user_id="removed")
-            )
-        entry.runtime_data.api.async_answer_doorbell_call.assert_not_awaited()
+        try:
+            hass.auth.async_get_user.return_value = None
+            with pytest.raises(UnknownUser):
+                await hass.services.async_call(
+                    DOMAIN, "answer_call", {}, blocking=True, context=Context(user_id="removed")
+                )
+            entry.runtime_data.api.async_answer_doorbell_call.assert_not_awaited()
+        finally:
+            await hass.async_stop(force=True)
 
     asyncio.run(run())
 
@@ -157,12 +172,15 @@ def test_unknown_user_cannot_fall_back_to_trusted_automation(tmp_path, monkeypat
 def test_missing_or_disabled_control_entity_denies_service(tmp_path, monkeypatch, disabled):
     async def run():
         hass, entry = setup_hass(tmp_path, monkeypatch, allowed={"camera.c300x-0123456789ab_doorbell_camera"})
-        registry = service_authorization.er.async_get(hass)
-        registry.async_get = lambda _id: SimpleNamespace(disabled_by="user") if disabled else None
-        with pytest.raises(Unauthorized):
-            await hass.services.async_call(
-                DOMAIN, "answer_call", {}, blocking=True, context=Context(user_id="controller")
-            )
-        entry.runtime_data.api.async_answer_doorbell_call.assert_not_awaited()
+        try:
+            registry = service_authorization.er.async_get(hass)
+            registry.async_get = lambda _id: SimpleNamespace(disabled_by="user") if disabled else None
+            with pytest.raises(Unauthorized):
+                await hass.services.async_call(
+                    DOMAIN, "answer_call", {}, blocking=True, context=Context(user_id="controller")
+                )
+            entry.runtime_data.api.async_answer_doorbell_call.assert_not_awaited()
+        finally:
+            await hass.async_stop(force=True)
 
     asyncio.run(run())

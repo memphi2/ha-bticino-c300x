@@ -225,24 +225,27 @@ def test_metadata_retention_quota_and_invalid_restore(tmp_path, monkeypatch):
 def test_real_ha_storage_restores_without_restoring_active_call(tmp_path):
     async def run():
         hass = HomeAssistant(str(tmp_path))
-        entry = SimpleNamespace(entry_id="one", options={}, data={})
-        first = VisitorJournal(hass, entry)
-        await first.load()
-        first.start()
-        first.event(event())
-        await first.shutdown()
-        second = VisitorJournal(hass, entry)
-        await second.load()
-        assert len(second.items()) == 1
-        assert second.active is None
-        second.event(event())
-        assert len(second.items()) == 1
-        other = VisitorJournal(hass, SimpleNamespace(entry_id="two", options={}, data={}))
-        await other.load()
-        assert other.items() == []
-        await second.shutdown()
-        await other.shutdown()
-        await hass.async_block_till_done()
+        try:
+            entry = SimpleNamespace(entry_id="one", options={}, data={})
+            first = VisitorJournal(hass, entry)
+            await first.load()
+            first.start()
+            first.event(event())
+            await first.shutdown()
+            second = VisitorJournal(hass, entry)
+            await second.load()
+            assert len(second.items()) == 1
+            assert second.active is None
+            second.event(event())
+            assert len(second.items()) == 1
+            other = VisitorJournal(hass, SimpleNamespace(entry_id="two", options={}, data={}))
+            await other.load()
+            assert other.items() == []
+            await second.shutdown()
+            await other.shutdown()
+            await hass.async_block_till_done()
+        finally:
+            await hass.async_stop(force=True)
 
     asyncio.run(run())
 
@@ -321,17 +324,20 @@ def test_snapshot_completion_links_original_ring_without_extra_acquisition(tmp_p
 def test_removal_deletes_metadata_but_not_existing_artifacts(tmp_path):
     async def run():
         hass = HomeAssistant(str(tmp_path))
-        journal = VisitorJournal(hass, SimpleNamespace(entry_id="one", data={}, options={}))
-        hass.data.setdefault("bticino_c300x", {})["stream_snapshots"] = {"one": SimpleNamespace(journal=journal)}
-        await journal.load()
-        journal.event(event())
-        await journal.shutdown()
-        path = tmp_path / ".storage" / "bticino_c300x.visitor_journal.one"
-        assert path.exists()
-        await journal_module.async_remove_journal(hass, "one")
-        await journal.shutdown()
-        assert not path.exists()
-        await hass.async_block_till_done()
+        try:
+            journal = VisitorJournal(hass, SimpleNamespace(entry_id="one", data={}, options={}))
+            hass.data.setdefault("bticino_c300x", {})["stream_snapshots"] = {"one": SimpleNamespace(journal=journal)}
+            await journal.load()
+            journal.event(event())
+            await journal.shutdown()
+            path = tmp_path / ".storage" / "bticino_c300x.visitor_journal.one"
+            assert path.exists()
+            await journal_module.async_remove_journal(hass, "one")
+            await journal.shutdown()
+            assert not path.exists()
+            await hass.async_block_till_done()
+        finally:
+            await hass.async_stop(force=True)
 
     asyncio.run(run())
 

@@ -94,47 +94,49 @@ async def _reloaded_setup(hass: core.HomeAssistant, entry: Any) -> None:
 def _handed_over(tmp_path: Path, unique_id: str, data: dict[str, Any], version: int, key: str) -> None:
     async def run() -> None:
         hass = await _hass(tmp_path)
-        reloads: list[str] = []
-        hass.config_entries.async_schedule_reload = reloads.append  # type: ignore[method-assign]
-        entry = _entry(hass, unique_id, {
-            CONF_AGENT_HOST: "door.lan", CONF_AGENT_PORT: 8091,
-            CONF_AGENT_TOKEN: "lost", CONF_MAINTENANCE_TOKEN: "lost", **data,
-        }, version)
-        devices, entities = dr.async_get(hass), er.async_get(hass)
-        prefix = data.get(CONF_STATION_ID, entry.entry_id)
-        station = devices.async_get_or_create(config_entry_id=entry.entry_id, identifiers={(DOMAIN, prefix)})
-        holder = station
-        if CONF_STATION_ID in data:
-            # A 3.1 entry's platforms made the unit device already.
-            holder = devices.async_get_or_create(
-                config_entry_id=entry.entry_id, identifiers={(DOMAIN, f"{prefix}:unit:20")},
-                via_device_id=station.id,
+        try:
+            reloads: list[str] = []
+            hass.config_entries.async_schedule_reload = reloads.append  # type: ignore[method-assign]
+            entry = _entry(hass, unique_id, {
+                CONF_AGENT_HOST: "door.lan", CONF_AGENT_PORT: 8091,
+                CONF_AGENT_TOKEN: "lost", CONF_MAINTENANCE_TOKEN: "lost", **data,
+            }, version)
+            devices, entities = dr.async_get(hass), er.async_get(hass)
+            prefix = data.get(CONF_STATION_ID, entry.entry_id)
+            station = devices.async_get_or_create(config_entry_id=entry.entry_id, identifiers={(DOMAIN, prefix)})
+            holder = station
+            if CONF_STATION_ID in data:
+                # A 3.1 entry's platforms made the unit device already.
+                holder = devices.async_get_or_create(
+                    config_entry_id=entry.entry_id, identifiers={(DOMAIN, f"{prefix}:unit:20")},
+                    via_device_id=station.id,
+                )
+            camera = entities.async_get_or_create(
+                "camera", DOMAIN, f"{prefix}_{key}", config_entry=entry, device_id=holder.id,
+            ).entity_id
+
+            assert await async_hand_keys_to_entry(
+                hass, entry, CONNECTION, unique_id=UNIQUE_ID, display_pending=False,
             )
-        camera = entities.async_get_or_create(
-            "camera", DOMAIN, f"{prefix}_{key}", config_entry=entry, device_id=holder.id,
-        ).entity_id
+            assert reloads == [entry.entry_id]
+            await _reloaded_setup(hass, entry)
 
-        assert await async_hand_keys_to_entry(
-            hass, entry, CONNECTION, unique_id=UNIQUE_ID, display_pending=False,
-        )
-        assert reloads == [entry.entry_id]
-        await _reloaded_setup(hass, entry)
-
-        assert entry.unique_id == UNIQUE_ID
-        assert (entry.data[CONF_AGENT_TOKEN], entry.data[CONF_AGENT_HOST]) == ("new-" + "a" * 40, "192.0.2.10")
-        assert (entry.data[CONF_STATION_ID], entry.version) == (STATION, identity_migration.ENTRY_VERSION)
-        station = devices.async_get_device_by_identifier((DOMAIN, STATION), entry.entry_id)
-        unit = devices.async_get_device_by_identifier((DOMAIN, f"{STATION}:unit:20"), entry.entry_id)
-        assert station is not None and unit is not None and unit.via_device_id == station.id
-        assert holder.id in (station.id, unit.id)
-        assert len(dr.async_entries_for_config_entry(devices, entry.entry_id)) == 2
-        assert (entities.async_get(camera).unique_id, entities.async_get(camera).device_id) == (
-            f"{STATION}_doorbell_camera", unit.id)
-        issue = ir.async_get(hass).async_get_issue(
-            DOMAIN, repair_issue_id(OUTDOOR_UNITS_BREAKING_CHANGE_ISSUE, entry.entry_id))
-        # Only an entry from before 3.1 has something to redo.
-        assert (issue is not None) is (version < identity_migration.ENTRY_VERSION)
-        await hass.async_stop(force=True)
+            assert entry.unique_id == UNIQUE_ID
+            assert (entry.data[CONF_AGENT_TOKEN], entry.data[CONF_AGENT_HOST]) == ("new-" + "a" * 40, "192.0.2.10")
+            assert (entry.data[CONF_STATION_ID], entry.version) == (STATION, identity_migration.ENTRY_VERSION)
+            station = devices.async_get_device_by_identifier((DOMAIN, STATION), entry.entry_id)
+            unit = devices.async_get_device_by_identifier((DOMAIN, f"{STATION}:unit:20"), entry.entry_id)
+            assert station is not None and unit is not None and unit.via_device_id == station.id
+            assert holder.id in (station.id, unit.id)
+            assert len(dr.async_entries_for_config_entry(devices, entry.entry_id)) == 2
+            assert (entities.async_get(camera).unique_id, entities.async_get(camera).device_id) == (
+                f"{STATION}_doorbell_camera", unit.id)
+            issue = ir.async_get(hass).async_get_issue(
+                DOMAIN, repair_issue_id(OUTDOOR_UNITS_BREAKING_CHANGE_ISSUE, entry.entry_id))
+            # Only an entry from before 3.1 has something to redo.
+            assert (issue is not None) is (version < identity_migration.ENTRY_VERSION)
+        finally:
+            await hass.async_stop(force=True)
 
     asyncio.run(run())
 

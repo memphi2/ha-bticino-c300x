@@ -104,6 +104,17 @@ Home Assistant once. If the next stream fails, stop it and check readiness.
 - Files must go below `/media/c300x/`, `/config/c300x/` or
   `/config/www/c300x/`.
 
+## Outdoor Units and Events
+
+| Problem | Why, and what to do |
+| --- | --- |
+| The unit's **Doorbell ring event** fires later than the **Station ring** | The unit's event waits until the station names the calling unit (about 0.3 s, at most 1 s). For the fastest reaction use the **Station ring**. |
+| A ring shows at the default unit although another unit rang | The station did not name the caller within one second, so the default unit stands in (`attribution`: `default_fallback`). If the station names the unit later, the call moves there. |
+| No **Door contact** sensor | It appears only on a unit wired with a door contact, with the unit's first door message. |
+| **Door contact** is unknown | After an agent restart the state is unknown until the door opens or closes again. |
+| An old outdoor unit device stays | Delete it on its device page once the station no longer reports the unit. |
+| `answer_call` or `hangup_call` is refused | The `call_id` belongs to a call that is over, no longer current, or of another unit than the target. Nothing was sent to the station. |
+
 ## The Station Has a New Address
 
 When the station gets a new IPv4 address, Home Assistant finds it again by
@@ -142,7 +153,7 @@ HTTPS for your browser does not need HTTPS here.
 | Problem | Do this |
 | --- | --- |
 | Repairs: **C300X display pages still have to be applied after the update** | Run it. The display goes dark and restarts. |
-| Repairs: **C300X display write left unfinished** | Check the display. Turn the **Display patch** switch off and on; this rebuilds every display file. If the message stays, reboot the station. A folder `.c300x-qml-transaction.*` from agent 2.9.0 or older is never restored: once the display works, delete it over SSH from `/home/bticino/bin/gui/skins/default`. |
+| Repairs: **C300X display write left unfinished** | Check the display. Turn the **Display patch** switch off and on; this rebuilds every display file. If the message stays, reboot the station. |
 | Repairs: **C300X display pages are not available on this station** | The agent does not know this display. The station keeps its original display; report it. |
 | The house symbol has a yellow mark | The station cannot reach Home Assistant. Open the **Integration** tab for the reason ([list](3-display.md#integration-tab)). |
 | A Settings page of an unknown layout | The Display patch stops instead of guessing. Report it. |

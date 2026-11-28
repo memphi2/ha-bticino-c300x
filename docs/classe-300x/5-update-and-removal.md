@@ -18,13 +18,16 @@ remove the integration and the device agent.
 4. If Repairs offers **Add the C300X Lovelace card**, run it. If the card
    still looks old, reload the browser page without cache.
 5. Check **Media readiness**.
+6. If Repairs lists what to redo after the update (for example **Doorbell
+   entities moved to outdoor unit devices**), do the listed steps, then ignore
+   the message.
 
 Updating the integration alone does not change the station: always run the
 agent update Repair.
 
 ### Beta Versions
 
-Betas are versions like `3.0.0b3`. They are opt-in.
+Betas are versions like `3.1.0b1`. They are opt-in.
 
 1. Make a Home Assistant backup and read the beta's release notes.
 2. In Marketplace, turn on **Pre-release** for this repository. In HACS, open
@@ -34,6 +37,13 @@ Betas are versions like `3.0.0b3`. They are opt-in.
 To leave the beta, pick the stable release the same way and run the agent
 update Repair again. A Home Assistant backup does not restore the agent on
 the station.
+
+### Going Back from 3.1 to 3.0.x
+
+3.1 stores the station's entry in a form that 3.0.x cannot load. To go back,
+restore the Home Assistant backup made before the update, then run the agent
+update Repair. It installs the 3.0 agent again over SSH and asks for the SSH
+login.
 
 ### Going Back to 2.10.0 or Older
 

@@ -37,7 +37,7 @@ Card options (in the card editor):
 
 | What | How | Needs |
 | --- | --- | --- |
-| Live video | Press **Stream** in the card. | **Door station video and audio** on. |
+| Live video | Press **Stream** in the card. It shows the unit of the current call, else the default outdoor unit. | **Door station video and audio** on. |
 | Ring Call | Someone rings. Press **Answer**, later **Hang Up**. | Video on, and **Forwarding** on **Home Assistant**. |
 | Home Call | Press **Call Home** in the card. The station display rings; audio only. | Video on. |
 
@@ -74,10 +74,27 @@ It never answers a call: answer in the card first.
 The station is one device. Every outdoor unit (entrance panel) is its own
 device below it, also when there is only one. The station names its units
 from its own configuration; a unit that is not configured appears with its
-first ring. Each unit has a **Doorbell ring event**, a **Door** event, a
-**Door unlock** button, a **Call** sensor, a **Last visitor** image and a
-camera ([all entities](../reference.md#entities)). The device of a unit the
-station no longer reports can be deleted on its device page.
+first ring. The device of a unit the station no longer reports can be
+deleted on its device page.
+
+Each outdoor unit has:
+
+- a **Doorbell ring event** and a **Call** sensor (`idle`, `ringing`,
+  `answered`, `viewing`) with the `call_id` of its call;
+- a **Door unlock** button and a **Door** event, which fires whatever opened
+  the door: the button, the station or the BTicino app;
+- a **Door contact** sensor, only when the unit is wired with one; it appears
+  with the first door message;
+- a **Last visitor** image, and a camera: the **Doorbell camera** on the
+  default unit, which shows the live picture of every unit, a **Camera** with
+  still pictures on the others.
+
+The station has the **Station ring** event, which fires at once with every
+ring, the **Stair light** event and the **Station call state** sensor
+([all entities](../reference.md#entities)).
+
+To watch another unit, run `bticino_c300x.activate_doorbell_video` with that
+unit as target; the **Doorbell camera** then shows it.
 
 ## Door, Stair Light and Activations
 

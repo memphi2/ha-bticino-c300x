@@ -12,7 +12,8 @@ Assistant; nothing goes through a cloud. The integration is called
 **BTicino C300X/C100X** for both models.
 
 Stable: **3.0.0**, one package for the Classe 300X and the Classe 100X
-(Classe 100X experimental).
+(Classe 100X experimental). Beta: **3.1.0b1**, every outdoor unit as its own
+device ([changelog](CHANGELOG.md)).
 
 <p align="center">
   <img src="docs/images/readme/ha-doorbell-card-en.webp" alt="BTicino Doorbell Call Card in Home Assistant with a saved visitor image, play, call, door and light buttons" width="420">
@@ -50,7 +51,10 @@ a link to the next step.
 ## Features
 
 - Live video, ring calls and talking to the door in one card.
-- Door unlock, stair light and extra locks or lights as buttons.
+- Every outdoor unit as its own device, with its ring, door, call state and
+  last visitor.
+- Door unlock, stair light and extra locks or actuators as buttons, also those
+  the station is set up with.
 - One saved image of every visitor.
 - Home Assistant pages on the station's own display: lights, covers, climate,
   energy, calendars, Alarmo and more.

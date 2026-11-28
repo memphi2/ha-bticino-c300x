@@ -15,6 +15,7 @@ Everything here is **in test** in
 | --- | --- | --- |
 | Card, live video, Ring Call, Home Call, talking | Yes | As on the Classe 300X: [card and calls](../classe-300x/2-use.md#doorbell-card) |
 | Forwarding select | Yes | [Forwarding](../classe-300x/2-use.md#video-ring-calls-and-home-calls) |
+| Outdoor units as devices, door contact, station call state | Yes | [Outdoor units](../classe-300x/2-use.md#station-and-outdoor-units) |
 | Door unlock, stair light, activations | Yes | [Activations](../classe-300x/2-use.md#door-stair-light-and-activations) |
 | Visitor images, ring recordings | Yes | [Visitor images](../classe-300x/2-use.md#visitor-images), [Recording a ring](../classe-300x/2-use.md#recording-a-ring) |
 | Picture controls | Yes | [below](#picture) |

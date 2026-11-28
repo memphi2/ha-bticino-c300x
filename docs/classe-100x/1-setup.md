@@ -95,7 +95,8 @@ offered fix.
 ## Add the Card
 
 Run **Add the C100X Lovelace card** in Repairs, or add the **BTicino Doorbell
-Call Card** to a dashboard yourself and select the station's camera entity.
+Call Card** to a dashboard yourself and select the **Doorbell camera** (on the
+device of the default outdoor unit).
 
 ## First Test
 
@@ -105,7 +106,7 @@ Do these steps in order and stop at the first failure.
 | --- | --- | --- |
 | 1 | Check the device page. | Model Classe 100X, firmware 1.5.8. |
 | 2 | Press **Stair light** once. | The light comes on. |
-| 3 | Press **Door unlock** once, with someone at the door. | The door opens. |
+| 3 | Press **Door unlock** on the outdoor unit's device once, with someone at the door. | The door opens. |
 | 4 | Press **Stream** in the card. | Picture and sound; the stream ends cleanly. |
 | 5 | Set **Forwarding** to **Home Assistant**, ring, press **Answer**. | Picture, both directions of sound, **Hang Up** works. |
 | 6 | Move the picture sliders in the card. | The picture changes. |

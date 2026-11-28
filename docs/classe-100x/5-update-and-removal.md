@@ -13,6 +13,7 @@ back to its original state.
 2. Open **Settings > Repairs** and run **C100X device agent update
    required**.
 3. Check **Media readiness**.
+4. If Repairs lists what to redo after the update, do the listed steps.
 
 If the display pages are active and the update brings newer pages, the
 station reboots once after about two minutes of idle time, never during a
@@ -23,8 +24,9 @@ refuse any other. Never go back to a release older than the joint Classe
 300X/100X package (`3.0.0`), and never use the SSH installer of such a
 release on a Classe 100X.
 
-Keys, maintenance switches and the integration removal work as on the Classe
-300X: [Classe 300X update and removal](../classe-300x/5-update-and-removal.md).
+Keys, maintenance switches, going back from 3.1 to 3.0.x and the integration
+removal work as on the Classe 300X:
+[Classe 300X update and removal](../classe-300x/5-update-and-removal.md).
 
 ## Go Back to the Original Station
 

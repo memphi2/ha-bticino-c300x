@@ -13,6 +13,7 @@
 
 ## Supported Release Line
 
+- `3.1.x`: beta 3.1.0b1: every outdoor unit as its own device; includes 3.0.0
 - `3.0.x`: current stable (3.0.0): one package for the Classe 300X and the Classe 100X (Classe 100X experimental, checked offline only); includes 2.10.0
 - `2.10.x`: previous stable; upgrade to 3.0.x for maintenance fixes
 - `2.9.x`: no longer maintained; upgrade to 3.0.x

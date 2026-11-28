@@ -15,6 +15,9 @@ Home Assistant.
 - Home Assistant and the station are in the same trusted local network.
 - SSH access on the station (next section).
 
+A Classe 300X2 (C3X2) is not supported yet: setup recognises it and installs
+nothing on it.
+
 ## Enable SSH on the Station
 
 The integration cannot root a stock station. This project provides no firmware
@@ -131,8 +134,11 @@ Or add the card yourself:
 
 1. Open a dashboard, switch it to edit mode and choose **Add card**.
 2. Choose **BTicino Doorbell Call Card**.
-3. Select the station's camera entity (**Doorbell camera**). Keep the mode
-   **Doorstation + Home Call**.
+3. Select the **Doorbell camera**; it is on the device of the default outdoor
+   unit. Keep the mode **Doorstation + Home Call**.
+
+The station is one device; each outdoor unit is a device below it
+([outdoor units](2-use.md#station-and-outdoor-units)).
 
 ## First Test
 
@@ -141,8 +147,8 @@ Or add the card yourself:
    rings.
 3. **Ring Call:** set the **Forwarding** select on the device page to
    **Home Assistant**. Ring at the door, then press **Answer** in the card.
-4. **Door:** press **Door unlock** on the device page while someone is at the
-   door.
+4. **Door:** press **Door unlock** on the outdoor unit's device page while
+   someone is at the door.
 
 Talking to the door needs Home Assistant over HTTPS (or Home Assistant Cloud)
 and a browser that may use the microphone.

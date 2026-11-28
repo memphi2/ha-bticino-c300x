@@ -10,6 +10,7 @@
 #include "../src/media_sip.h"
 #include "../src/media_sip_io.h"
 #include "../src/media_gop_cache.h"
+#include "../src/media_rtsp_io.h"
 #include "../src/media_unit.h"
 
 #define SIP_BUFFER_SIZE 8192
@@ -170,6 +171,19 @@ void __real_c300x_media_gop_reset(enum c300x_media_gop_source source);
 void __wrap_c300x_media_gop_reset(enum c300x_media_gop_source source) {
     if (source == C300X_MEDIA_GOP_ONDEMAND) log_station("G");
     __real_c300x_media_gop_reset(source);
+}
+/* 1: the next PLAY answer waits after it is sent (2) until the case sets 0. */
+static atomic_int hold_play;
+void __real_send_rtsp_response(struct c300x_rtsp_writer *writer, int fd, int status, const char *cseq,
+                               const char *headers, const char *body);
+void __wrap_send_rtsp_response(struct c300x_rtsp_writer *writer, int fd, int status, const char *cseq,
+                               const char *headers, const char *body) {
+    __real_send_rtsp_response(writer, fd, status, cseq, headers, body);
+    int armed = 1;
+    if (status != 200 || headers == NULL || strstr(headers, "RTP-Info:") == NULL
+        || !atomic_compare_exchange_strong(&hold_play, &armed, 2)) return;
+    long long deadline = __real_c300x_monotonic_ms() + WAIT_MS;
+    while (atomic_load(&hold_play) == 2 && __real_c300x_monotonic_ms() < deadline) usleep(5000);
 }
 static int ring_codes[64];
 static int ring_code_count;
@@ -1225,6 +1239,35 @@ static void ondemand_units(void) {
     close(fd);
 }
 
+/* HA switches the unit while the agent still answers the view's PLAY: the
+ * switch parks the client before it counts as played. It gets the new
+ * unit's view instead of a view that never starts. */
+static void unit_switch_during_play(void) {
+    struct c300x_video_status current;
+    atomic_store(&station_busy, 0);
+    assert(c300x_video_activate(runtime->video, 1, NULL));
+    atomic_store(&hold_play, 1);
+    int fd = rtsp_open();
+    assert(rtsp_play(fd, "/doorbell") == 200);
+    long long deadline = __real_c300x_monotonic_ms() + WAIT_MS;
+    while (atomic_load(&hold_play) != 2) {
+        assert(__real_c300x_monotonic_ms() < deadline);
+        usleep(5000);
+    }
+    assert(c300x_video_activate(runtime->video, 1, "21"));
+    atomic_store(&hold_play, 0);
+    wait_invites(2);
+    expect_log("I20 B G I21");
+    deadline = __real_c300x_monotonic_ms() + WAIT_MS;
+    for (status(&current); current.clients != 1 || !current.call_active; status(&current)) {
+        assert(__real_c300x_monotonic_ms() < deadline);
+        usleep(5000);
+    }
+    c300x_video_stop(runtime->video);
+    wait_byes(2);
+    close(fd);
+}
+
 /* Door contact frames of bt_vct (*8*66 opened, *8*65 closed) on the
  * multicast: per unit, repeats change nothing; the first frame of a unit
  * gives it a contact (outdoor_units.changed). A frame with the qualified
@@ -1324,6 +1367,7 @@ int main(int argc, char **argv) {
     else if (strcmp(argv[1], "lifecycle_ondemand_view") == 0) lifecycle_ondemand_view();
     else if (strcmp(argv[1], "ondemand_units") == 0) ondemand_units();
     else if (strcmp(argv[1], "door_contacts") == 0) door_contacts();
+    else if (strcmp(argv[1], "unit_switch_during_play") == 0) unit_switch_during_play();
     else if (strcmp(argv[1], "refused_answer_then_station") == 0) refused_answer_then_station();
     else if (strcmp(argv[1], "display_answer_without_preview") == 0) display_answer_without_preview();
     else if (strcmp(argv[1], "app_answer_end_frame_first") == 0) app_answer_end_frame_first();

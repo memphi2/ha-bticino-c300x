@@ -5950,6 +5950,7 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
                 home_call_session ? 0 : 1
             );
             send_rtsp_response(writer, fd, 200, cseq, headers, NULL);
+            bool resume_view = false;
             pthread_mutex_lock(&g_bridge.mutex);
             slot = rtsp_client_slot_for_fd_locked(
                 &g_bridge,
@@ -5958,10 +5959,24 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
             );
             if (slot != NULL) {
                 slot->played = true;
+                /* A unit switch parked this client before it counted as
+                 * played, and the resume after it skipped the client. Unless
+                 * HA stopped the view, it joins the running view or starts
+                 * one; while a stop still runs, the resume after it does. */
+                if (
+                    media_started && slot->parked && !g_bridge.stop_in_progress
+                    && !c300x_media_session_guard_blocks_start(&g_bridge.ondemand_guard)
+                ) {
+                    resume_view = !g_bridge.media_active && !g_bridge.media_starting;
+                    if (!resume_view) slot->parked = false;
+                }
                 sync_legacy_rtsp_client_locked(&g_bridge);
                 pthread_cond_broadcast(&g_bridge.ready_cond);
             }
             pthread_mutex_unlock(&g_bridge.mutex);
+            if (resume_view) {
+                (void)c300x_media_session_resume_parked_rtsp(g_bridge.video, rtsp_audio_enabled);
+            }
         } else if (strcmp(method, "GET_PARAMETER") == 0) {
             char headers[128];
             pthread_mutex_lock(&g_bridge.mutex);

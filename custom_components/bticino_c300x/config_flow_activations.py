@@ -31,11 +31,13 @@ from .const import (
     DEVICE_ACTIVATION_MODE_AUTO,
     DEVICE_ACTIVATION_MODE_MANUAL,
     DEVICE_ACTIVATION_MODES,
+    DOMAIN,
 )
 from .device_activations import (
     MAX_DEVICE_ACTIVATIONS,
     DeviceActivationConfigError,
     normalize_device_activations,
+    unnamed_activation_key,
 )
 from .schema_compat import vol
 
@@ -349,12 +351,31 @@ def _activation_summary(items: Sequence[Mapping[str, Any]]) -> str:
     return "\n".join(
         "- {name} (`{id}`): {type} {address}".format(
             id=item.get("id") or "",
-            name=item.get("name") or "",
+            name=_activation_name(item),
             type=item.get("type") or "",
             address=item.get("address") or "",
         ).rstrip()
         for item in items
     )
+
+
+def _activation_name(item: Mapping[str, Any]) -> str:
+    """The item's name; one the station names nowhere as its button reads it.
+
+    That is in the language of Home Assistant, from the translations it
+    loaded for the entry; without them the item's id.
+    """
+
+    key = unnamed_activation_key(item)
+    if key is None:
+        return str(item.get("name") or "")
+    from homeassistant.core import async_get_hass_or_none
+    from homeassistant.helpers.translation import async_get_cached_translations
+
+    hass = async_get_hass_or_none()
+    texts = async_get_cached_translations(hass, hass.config.language, "entity", DOMAIN) if hass else {}
+    text = texts.get(f"component.{DOMAIN}.entity.button.{key}.name", "")
+    return text.replace("{address}", str(item["address"])) if text else str(item.get("id") or "")
 
 
 def _activation_reserved_ids(

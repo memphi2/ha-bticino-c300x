@@ -108,7 +108,9 @@ unit as target; the **Doorbell camera** then shows it.
 - **Stair light** on the station switches the stair light.
 
 The actuators that the station itself is set up with become buttons of the
-station too; its stair light is **Stair light**. A lock at the address of an
+station too, named as on its display; one without a name there is named by
+its type and address, for example **Actuator 25**. Its stair light is
+**Stair light**. A lock at the address of an
 outdoor unit's lock, from the station or added by you, is that unit's
 **Door unlock**. Locks that belong to no outdoor unit and actuators of your
 door system (for example a gate opener) can be added as buttons of their

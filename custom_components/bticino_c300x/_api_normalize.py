@@ -897,9 +897,9 @@ def _normalize_activation(data: Any) -> dict[str, Any] | None:
     source = data.get("source")
     if not ACTIVATION_ID_RE.fullmatch(activation_id) or source not in _ACTIVATION_SOURCES:
         return None
+    # Empty for a station item its archive names nowhere: Home Assistant
+    # names it by type and address in its own language (unnamed_activation_key).
     name = str(data.get("name") or "").strip()
-    if not name:
-        name = activation_id.replace("_", " ").replace("-", " ").title()
     activation_type = str(data.get("type") or "").strip().lower()
     if activation_type not in _ACTIVATION_TYPES:
         activation_type = "unknown"

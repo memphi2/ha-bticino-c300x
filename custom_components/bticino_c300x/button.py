@@ -31,6 +31,7 @@ from .const import (
     EVENT_AGENT_EVENT_RECEIVED,
     SIGNAL_QML_PATCH_CHANGED,
 )
+from .device_activations import unnamed_activation_key
 from .display_activation import gui_reload_kwargs
 from .display_support import entry_is_c100x
 from .entity import C300XEntity, entry_video_enabled, supports_capability
@@ -124,7 +125,11 @@ class C300XDeviceActivationButton(C300XEntity, ButtonEntity):
         super().__init__(entry, f"device_activation_{activation_id}")
         self._activation = activation
         self._activation_id = activation_id
-        self._attr_name = str(activation.get("name") or activation_id)
+        if (key := unnamed_activation_key(activation)) is not None:
+            self._attr_translation_key = key
+            self._attr_translation_placeholders = {"address": str(activation["address"])}
+        else:
+            self._attr_name = str(activation.get("name") or activation_id)
         self._attr_icon = _activation_icon(str(activation.get("type") or "unknown"))
 
     @property

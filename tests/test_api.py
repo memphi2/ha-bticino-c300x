@@ -3353,7 +3353,8 @@ def test_normalize_activations_hides_incomplete_or_invalid_items() -> None:
         "items": [
             {
                 "id": "scene_1",
-                "name": "Scene 1",
+                # No name is made up: Home Assistant names an item without one.
+                "name": "",
                 "type": "scenario",
                 "address_mode": "manual",
                 "address": None,

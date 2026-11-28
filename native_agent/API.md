@@ -776,7 +776,8 @@ In an id, `#` of the address becomes `_`; an item whose id would be longer than
 intercoms, 10061, unknown ones) give no item. A configured item with the same
 id, or of the same type at the same address, hides the station's. The station's
 items are run like configured ones, by their id. Names are the archive's
-`descr`, else the object's, else a type name and the address.
+`descr`, else the object's, else empty: Home Assistant names such an item by
+its type and address, in its own language.
 
 ### `POST /api/v1/activations/{id}/actions/run`
 

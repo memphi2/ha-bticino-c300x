@@ -498,6 +498,35 @@ def test_the_lock_of_an_outdoor_unit_is_only_that_units_door_button() -> None:
     }
 
 
+def test_a_station_item_without_a_name_is_named_by_home_assistant() -> None:
+    # The agent reports only the station's own name, empty when its archive
+    # has none. The unit's door button is then Door unlock; another item's
+    # button is named by its type and address in Home Assistant's language.
+    entry = _entry(STATION)
+    entry.runtime_data.capabilities = {"locks": True, "activations": {"supported": True}}
+    added = _buttons(
+        entry,
+        _activation("station_lock_21", "", "lock", "21", unit="21"),
+        _activation("station_lock_27", "", "lock", "27"),
+        _activation("station_actuator_25", "", "actuator", "25"),
+        _activation("station_stair_light", "", "stair_light", "16"),
+    )
+
+    door = next(button for button in added if isinstance(button, C300XUnitDoorButton) and button.unit_id == "21")
+    assert getattr(door, "_attr_name", None) is None and door.translation_key == "door"
+    assert door.extra_state_attributes == {"lock_address": "21", "lock_name": "Garten"}
+    station = {button._activation_id: button for button in added if isinstance(button, C300XDeviceActivationButton)}
+    assert {
+        item_id: (getattr(button, "_attr_name", None), button.translation_key, button.translation_placeholders)
+        for item_id, button in station.items()
+    } == {
+        "station_lock_27": (None, "activation_lock", {"address": "27"}),
+        "station_actuator_25": (None, "activation_actuator", {"address": "25"}),
+        "station_stair_light": (None, "activation_stair_light", {"address": "16"}),
+    }
+    assert station["station_lock_27"].unique_id == "c300x-0123456789ab_device_activation_station_lock_27"
+
+
 def test_units_learned_later_get_their_entities(monkeypatch: pytest.MonkeyPatch) -> None:
     signals: list[Any] = []
     monkeypatch.setattr(unit_entity, "async_dispatcher_connect", lambda _hass, _signal, handler: signals.append(handler) or (lambda: None))

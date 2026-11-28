@@ -751,6 +751,10 @@ static void station_activations(void)
         "<obj cid=\"2009\" dev=\"2\"><ist descr=\"Stairs\" uii=\"4\"/></obj>"
         "<obj cid=\"10050\" dev=\"2\" where=\"7\" descr=\"Panel\"><ist cid=\"10060\" dev=\"5\" where=\"1\" lkid=\"a\"/>"
         "<ist cid=\"10060\" where=\"7\" descr=\"Panel lock\"/><ist uii=\"5\"/></obj></archive>";
+    static const char *const nameless =
+        "<archive><obj cid=\"3008\" dev=\"2\" where=\"0\"><ist where=\"5\" uii=\"1\"/></obj>"
+        "<obj cid=\"2009\" dev=\"2\"><ist uii=\"4\"/></obj>"
+        "<obj cid=\"10050\" dev=\"2\" where=\"7\"><ist cid=\"10060\" where=\"7\"/></obj></archive>";
     static const char *const owner_conf =
         "<setup><vdes><communication><vde_enabled>1</vde_enabled><dev>1</dev><address>1</address>"
         "<p_default><dev>2</dev><address>0</address></p_default></communication></vdes></setup>";
@@ -849,6 +853,18 @@ static void station_activations(void)
     assert(strstr(json, "\"name\":\"Gate \\\\ opener\"") != NULL);
     assert(strstr(json, "\"unit\":\"27\"") == NULL);
     assert(!c300x_activations_json(&config, &discovery, NULL, json, 200));
+
+    /* What the archive names nowhere has no name: Home Assistant names it. */
+    c300x_station_archive_parse(&station, nameless, CONF);
+    c300x_activation_discovery_build(&discovery, &station, "ok", &config);
+    assert(c300x_activations_json(&config, &discovery, NULL, json, sizeof(json)));
+    expect(json, "{\"ok\":true,\"enabled\":true,\"supported\":true,\"auto_discover\":true,\"station\":\"ok\",\"count\":3,\"items\":["
+        "{\"id\":\"station_lock_27\",\"name\":\"\",\"type\":\"lock\",\"addressMode\":\"manual\",\"address\":\"27\","
+        "\"source\":\"station\",\"executable\":true,\"unit\":null},"
+        "{\"id\":\"station_actuator_25\",\"name\":\"\",\"type\":\"actuator\",\"addressMode\":\"manual\",\"address\":\"25\","
+        "\"source\":\"station\",\"executable\":true,\"unit\":null},"
+        "{\"id\":\"station_stair_light\",\"name\":\"\",\"type\":\"stair_light\",\"addressMode\":\"manual\",\"address\":\"10\","
+        "\"source\":\"station\",\"executable\":true,\"unit\":null}]}\n");
 
     /* An empty archive says so; station items switched off list none. */
     c300x_station_archive_parse(&station, "<archive/>", CONF);

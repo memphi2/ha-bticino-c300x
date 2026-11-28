@@ -1376,6 +1376,15 @@
       },
       "door": {
         "name": "Abrir puerta"
+      },
+      "activation_lock": {
+        "name": "Cerradura {address}"
+      },
+      "activation_actuator": {
+        "name": "Actuador {address}"
+      },
+      "activation_stair_light": {
+        "name": "Luz de escalera {address}"
       }
     },
     "camera": {

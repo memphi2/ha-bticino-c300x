@@ -209,3 +209,44 @@ def test_reconfigure_and_options_texts_name_manual_and_station_activations() -> 
             description = data[area]["step"][step]["description"]
             assert "{station_activation_items}" in description, (path.name, step)
             assert "{station_activation_count}" in description, (path.name, step)
+
+
+def test_a_station_activation_without_a_name_is_listed_by_its_buttons_name(monkeypatch) -> None:
+    """The agent reports only the station's own name; Home Assistant names the rest."""
+
+    import json
+    from pathlib import Path
+    from types import SimpleNamespace
+
+    import homeassistant.core as ha_core
+    from homeassistant.helpers import translation
+
+    from custom_components.bticino_c300x.config_flow_activations import (
+        activation_placeholders,
+    )
+
+    component = Path(__file__).resolve().parents[1] / "custom_components" / "bticino_c300x"
+    buttons = json.loads((component / "translations" / "de.json").read_text(encoding="utf-8"))["entity"]["button"]
+    texts = {f"component.bticino_c300x.entity.button.{key}.name": value["name"] for key, value in buttons.items()}
+
+    def cached(_hass, language, category, integration=None):
+        return texts if (language, category, integration) == ("de", "entity", "bticino_c300x") else {}
+
+    monkeypatch.setattr(ha_core, "async_get_hass_or_none", lambda: SimpleNamespace(config=SimpleNamespace(language="de")))
+    monkeypatch.setattr(translation, "async_get_cached_translations", cached)
+    station = [
+        {"id": "station_lock_27", "name": "", "type": "lock", "address": "27", "source": "station"},
+        {"id": "station_actuator_25", "name": "", "type": "actuator", "address": "25", "source": "station"},
+        {"id": "station_stair_light", "name": "Stairs", "type": "stair_light", "address": "11", "source": "station"},
+    ]
+
+    assert activation_placeholders([], station)["station_activation_items"] == (
+        "- Türschloss 27 (`station_lock_27`): lock 27\n"
+        "- Aktor 25 (`station_actuator_25`): actuator 25\n"
+        "- Stairs (`station_stair_light`): stair_light 11"
+    )
+    # Without Home Assistant's translations: the item's id.
+    monkeypatch.setattr(ha_core, "async_get_hass_or_none", lambda: None)
+    assert activation_placeholders([], station[:1])["station_activation_items"] == (
+        "- station_lock_27 (`station_lock_27`): lock 27"
+    )

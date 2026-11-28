@@ -17,6 +17,21 @@ MAX_DEVICE_ACTIVATIONS = 16
 MAX_DEVICE_ACTIVATION_NAME_LEN = 63
 
 
+def unnamed_activation_key(item: Mapping[str, Any]) -> str | None:
+    """The translation key that names an item without a name by its type and address.
+
+    The agent reports a station item its archive names nowhere without a
+    name; its button reads entity.button.activation_<type>.name, for a lock
+    "Door lock {address}". None for an item with a name, of another type or
+    without an address.
+    """
+
+    kind = item.get("type")
+    if item.get("name") or not item.get("address") or kind not in ADDRESSED_ACTIVATION_TYPES:
+        return None
+    return f"activation_{kind}"
+
+
 class DeviceActivationConfigError(ValueError):
     """Raised when a configured device activation is invalid."""
 

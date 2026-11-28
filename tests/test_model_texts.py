@@ -174,6 +174,10 @@ ADDED_SINCE_2_10_0 = frozenset({
     "config/create_entry/pcmu_restart",
     # Home Assistant has no leg of a ring only the station rings (3.1.0).
     "exceptions/ring_call_not_active/message",
+    # A station item its archive names nowhere is named by type and address (3.1.0).
+    "entity/button/activation_actuator/name",
+    "entity/button/activation_lock/name",
+    "entity/button/activation_stair_light/name",
 })
 # Texts of 2.10.0 that read differently now: the SSH package message names the
 # package and the way out, the service name lost the model (neutral names), the

@@ -21,10 +21,10 @@ static int hidden_by_config(const struct c300x_config *config, const struct c300
 }
 
 /* id: prefix and the address with '_' for '#'; an item whose id or
- * address does not fit is left out. */
+ * address does not fit is left out. The name is the station's, empty when
+ * it has none: Home Assistant names the item then, in its language. */
 static void add_item(struct c300x_activation_discovery *discovery, const struct c300x_config *config,
-                     const char *type, const char *prefix, const char *where, const char *name,
-                     const char *fallback_name)
+                     const char *type, const char *prefix, const char *where, const char *name)
 {
     struct c300x_activation *item;
 
@@ -44,11 +44,7 @@ static void add_item(struct c300x_activation_discovery *discovery, const struct 
     c300x_copy_string(item->type, sizeof(item->type), type);
     c300x_copy_string(item->address_mode, sizeof(item->address_mode), "manual");
     c300x_copy_string(item->address, sizeof(item->address), where);
-    if (name[0] != '\0') {
-        c300x_copy_string(item->name, sizeof(item->name), name);
-    } else {
-        snprintf(item->name, sizeof(item->name), "%s %s", fallback_name, where);
-    }
+    c300x_copy_string(item->name, sizeof(item->name), name);
     if (!hidden_by_config(config, item)) {
         discovery->count++;
     }
@@ -67,18 +63,17 @@ void c300x_activation_discovery_build(struct c300x_activation_discovery *discove
     }
     for (int index = 0; index < station->lock_count; index++) {
         add_item(discovery, config, "lock", "station_lock_", station->locks[index].where,
-                 station->locks[index].name, "Door lock");
+                 station->locks[index].name);
     }
     for (int index = 0; index < station->actuator_count; index++) {
         add_item(discovery, config, "actuator", "station_actuator_", station->actuators[index].where,
-                 station->actuators[index].name, "Actuator");
+                 station->actuators[index].name);
     }
     if (station->stair_light) {
         /* A configured address wins; else the light is at the station's own address. */
         const char *where = config->stair_light_default_address[0] != '\0' ? config->stair_light_default_address
                                                                             : station->own_where;
-        add_item(discovery, config, "stair_light", "station_stair_light", where, station->stair_light_name,
-                 "Stair light");
+        add_item(discovery, config, "stair_light", "station_stair_light", where, station->stair_light_name);
     }
 }
 

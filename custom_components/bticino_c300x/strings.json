@@ -106,7 +106,7 @@
           "device_activation_flow_target": "Activation"
         },
         "data_description": {
-          "device_activation_mode": "Automatic: the stair light is at the station's own address, which the station knows from its configuration. Manual adds a stair-light activation built from the P and N values below.",
+          "device_activation_mode": "Automatic: the stair light is at the station's own address, which the station knows from its configuration. Manual only sets the stair light's address, from the P and N values below.",
           "device_activation_stair_light_p": "Manual mode only: P part of the stair-light address, 0 to 99.",
           "device_activation_stair_light_n": "Manual mode only: N part of the stair-light address, 0 to 99.",
           "device_activation_flow_action": "Add, edit or remove an activation - or finish and save.",
@@ -235,7 +235,7 @@
           "device_activation_flow_target": "Activation"
         },
         "data_description": {
-          "device_activation_mode": "Automatic: the stair light is at the station's own address, which the station knows from its configuration. Manual adds a stair-light activation built from the P and N values below.",
+          "device_activation_mode": "Automatic: the stair light is at the station's own address, which the station knows from its configuration. Manual only sets the stair light's address, from the P and N values below.",
           "device_activation_stair_light_p": "Manual mode only: P part of the stair-light address, 0 to 99.",
           "device_activation_stair_light_n": "Manual mode only: N part of the stair-light address, 0 to 99.",
           "device_activation_flow_action": "Add, edit or remove an activation - or finish and save.",
@@ -911,7 +911,7 @@
           "device_activation_flow_target": "Activation"
         },
         "data_description": {
-          "device_activation_mode": "Automatic: the stair light is at the station's own address, which the station knows from its configuration. Manual adds a stair-light activation built from the P and N values below.",
+          "device_activation_mode": "Automatic: the stair light is at the station's own address, which the station knows from its configuration. Manual only sets the stair light's address, from the P and N values below.",
           "device_activation_stair_light_p": "Manual mode only: P part of the stair-light address, 0 to 99.",
           "device_activation_stair_light_n": "Manual mode only: N part of the stair-light address, 0 to 99.",
           "device_activation_flow_action": "Add, edit or remove an activation - or finish and save.",

@@ -30,7 +30,6 @@ from .const import (
     DEFAULT_STAIR_LIGHT_P,
     DEFAULT_VIDEO_PORT,
     DEVICE_ACTIVATION_MODE_AUTO,
-    DEVICE_ACTIVATION_MODE_MANUAL,
     DOMAIN,
 )
 from .device_activations import desired_activation_items
@@ -805,9 +804,12 @@ def _device_activation_config(
     stair_light_n: str,
     device_activations: Any = None,
 ) -> dict[str, Any]:
-    """Return the native-agent activation config for a bootstrap install."""
+    """Return the native-agent activation config for a bootstrap install.
 
-    auto_discover = mode != DEVICE_ACTIVATION_MODE_MANUAL
+    The station's own items are always read: Manual only sets the stair
+    light's address.
+    """
+
     stair_light_address = stair_light_where_from_entry_values(
         stair_light_p,
         stair_light_n,
@@ -819,7 +821,7 @@ def _device_activation_config(
     )
     return {
         "enabled": True,
-        "autoDiscover": auto_discover,
+        "autoDiscover": True,
         "items": items,
     }
 

@@ -37,6 +37,7 @@ from custom_components.bticino_c300x.const import (
     CONF_VIDEO_ENABLED,
     CONF_WEBHOOK_ID,
     DATA_RUNTIME_ENTRIES,
+    DEVICE_ACTIVATION_MODE_AUTO,
     DEVICE_ACTIVATION_MODE_MANUAL,
     DOMAIN,
 )
@@ -687,9 +688,10 @@ def test_device_user_and_activation_config_helpers() -> None:
         }
     )
 
+    # Manual sets the stair light's address; the station's items are read all the same.
     assert runtime_manager._entry_activation_config(entry) == (
         True,
-        False,
+        True,
         [
             {
                 "address": "10",
@@ -722,7 +724,7 @@ def test_configure_device_activations_updates_only_when_needed() -> None:
     assert api.configured == [
         (
             True,
-            False,
+            True,
             [
                 {
                     "address": "77",
@@ -755,7 +757,7 @@ def test_entry_activation_config_includes_additional_activation_items() -> None:
 
     assert runtime_manager._entry_activation_config(entry) == (
         True,
-        False,
+        True,
         [
             {
                 "address": "77",
@@ -775,7 +777,18 @@ def test_entry_activation_config_includes_additional_activation_items() -> None:
     )
 
 
-def test_configure_device_activations_uses_p_n_address() -> None:
+_MANUAL_STAIR_LIGHT_21 = {
+    "address": "21",
+    "addressMode": "manual",
+    "id": "stair_light",
+    "name": "Stair light",
+    "type": "stair_light",
+}
+
+
+def test_an_existing_manual_entry_reads_the_station_s_items_after_its_next_sync() -> None:
+    """Manual sets only the stair light's address; before 3.1 it switched the station's items off."""
+
     entry = _entry(
         options={
             CONF_DEVICE_ACTIVATION_MODE: DEVICE_ACTIVATION_MODE_MANUAL,
@@ -788,26 +801,23 @@ def test_configure_device_activations_uses_p_n_address() -> None:
             "activations_enabled": True,
             "activations_auto_discover": False,
         },
-        items=[
-            {
-                "address": "21",
-                "addressMode": "manual",
-                "id": "stair_light",
-                "name": "Stair light",
-                "type": "stair_light",
-            }
-        ],
+        items=[_MANUAL_STAIR_LIGHT_21],
     )
 
     asyncio.run(runtime_manager._async_configure_device_activations(entry, api))
 
+    # The same configured items; only the station's are switched on again.
+    assert api.configured == [(True, True, [_MANUAL_STAIR_LIGHT_21])]
+    api.configured.clear()
+    asyncio.run(runtime_manager._async_configure_device_activations(entry, api))
     assert api.configured == []
 
 
-def test_configure_device_activations_skips_unknown_manual_address() -> None:
+@pytest.mark.parametrize("mode", [DEVICE_ACTIVATION_MODE_AUTO, DEVICE_ACTIVATION_MODE_MANUAL])
+def test_configure_device_activations_leaves_an_agent_that_matches(mode: str) -> None:
     entry = _entry(
         options={
-            CONF_DEVICE_ACTIVATION_MODE: DEVICE_ACTIVATION_MODE_MANUAL,
+            CONF_DEVICE_ACTIVATION_MODE: mode,
             CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P: "02",
             CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N: "01",
         }
@@ -815,22 +825,31 @@ def test_configure_device_activations_skips_unknown_manual_address() -> None:
     api = _ActivationApi(
         {
             "activations_enabled": True,
-            "activations_auto_discover": False,
+            "activations_auto_discover": True,
         },
-        items=[
-            {
-                "address": "21",
-                "addressMode": "manual",
-                "id": "stair_light",
-                "name": "Stair light",
-                "type": "stair_light",
-            }
-        ],
+        items=[_MANUAL_STAIR_LIGHT_21] if mode == DEVICE_ACTIVATION_MODE_MANUAL else [],
     )
 
     asyncio.run(runtime_manager._async_configure_device_activations(entry, api))
 
     assert api.configured == []
+
+
+def test_configure_device_activations_keeps_automatic_as_it_was() -> None:
+    """Automatic reads the station's items and sends no stair-light item of its own."""
+
+    entry = _entry(options={CONF_DEVICE_ACTIVATION_MODE: DEVICE_ACTIVATION_MODE_AUTO})
+    api = _ActivationApi(
+        {
+            "activations_enabled": True,
+            "activations_auto_discover": False,
+        },
+        items=[_MANUAL_STAIR_LIGHT_21],
+    )
+
+    asyncio.run(runtime_manager._async_configure_device_activations(entry, api))
+
+    assert api.configured == [(True, True, [])]
 
 
 def test_configure_device_activations_ignores_agent_errors() -> None:

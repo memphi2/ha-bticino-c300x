@@ -151,7 +151,8 @@ def test_bootstrap_device_config_supports_manual_stair_light_activation() -> Non
     )
 
     assert config["activations"]["enabled"] is True
-    assert config["activations"]["autoDiscover"] is False
+    # Manual sets the stair light's address; the station's items are read all the same.
+    assert config["activations"]["autoDiscover"] is True
     assert config["activations"]["items"] == [
         {
             "address": "12",

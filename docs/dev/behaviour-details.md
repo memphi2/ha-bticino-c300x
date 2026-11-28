@@ -1001,7 +1001,9 @@ its activation list differs, never on a plain HA start.
   display does. Home Assistant sends no address.
 - **Manual (P and N)** uses the address built from the P and N parts (0-99
   each) for the stair light button and builds one `stair_light` activation
-  from it; that ID is reserved, so up to 15 more activations fit.
+  from it; that ID is reserved, so up to 15 more activations fit. Manual
+  sets only this address: the station's own activations are read in both
+  modes.
 
 At most 16 activations are sent to the agent.
 

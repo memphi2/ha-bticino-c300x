@@ -467,12 +467,15 @@ def test_configure_device_activations_writes_only_on_mismatch() -> None:
     asyncio.run(_async_configure_device_activations(entry, api))  # type: ignore[arg-type]
     asyncio.run(_async_configure_device_activations(entry, api))  # type: ignore[arg-type]
 
+    # Manual sets the stair light's address; the station's items stay on, so
+    # only the configured items differ the first time.
     assert api.calls == [
         ("status",),
+        ("activations",),
         (
             "configure",
             True,
-            False,
+            True,
             (
                 (
                     (

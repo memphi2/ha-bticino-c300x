@@ -123,9 +123,10 @@ and yours under **Manual**. A manual activation of the same type at the same
 address replaces the station's.
 
 **Stair light address:** **Automatic** switches the stair light at the
-station's own address, as its display does. **Manual (P and N)** sets the
-stair light from its P and N numbers (0-99 each). At most 16 activations are
-possible.
+station's own address, as its display does. **Manual (P and N)** sets only
+the stair light's address, from its P and N numbers (0-99 each); the
+station's own activations are listed in both modes. At most 16 activations
+are possible.
 
 ## Ringer, Messages and Memos
 

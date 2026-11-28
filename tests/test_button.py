@@ -634,14 +634,18 @@ def test_the_station_has_one_stair_light_button() -> None:
     )
     assert sum(isinstance(entity, C300XStairLightButton) for entity in automatic) == 1
     assert activations(automatic) == {"porch": "mdi:lightbulb-on"}
-    # Manual: the generated item is at the address the user set.
+    # Manual: the generated item is at the address the user set. The station's
+    # items are read in Manual too; its stair light is listed where the agent
+    # has it and gets no button either.
+    actuator = {**stair_light("station_actuator_26", "26", "station"), "type": "actuator"}
     manual = buttons(
         {CONF_DEVICE_ACTIVATION_MODE: DEVICE_ACTIVATION_MODE_MANUAL,
          CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P: "01", CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N: "02"},
         stair_light("stair_light", "12", "config"), porch,
+        stair_light("station_stair_light", "11", "station"), actuator,
     )
     assert sum(isinstance(entity, C300XStairLightButton) for entity in manual) == 1
-    assert activations(manual) == {"porch": "mdi:lightbulb-on"}
+    assert activations(manual) == {"porch": "mdi:lightbulb-on", "station_actuator_26": "mdi:electric-switch"}
     # Without the Stair light button the station's light keeps its own.
     alone = buttons({}, stair_light("station_stair_light", "11", "station"), stair_light_supported=False)
     assert not any(isinstance(entity, C300XStairLightButton) for entity in alone)

@@ -59,7 +59,6 @@ from .const import (
     DEFAULT_DASHBOARD_DYNAMIC_HOMEPAGE,
     DEFAULT_RECONNECT_GRACE_SECONDS,
     DEVICE_ACTIVATION_MODE_AUTO,
-    DEVICE_ACTIVATION_MODE_MANUAL,
     DOMAIN,
     SIGNAL_CONNECTION_STATE_CHANGED,
     SPEECH_OPTION_KEYS,
@@ -1110,7 +1109,11 @@ async def _async_device_activation_items_match(
 def _entry_activation_config(
     entry: BticinoC300XConfigEntry,
 ) -> tuple[bool, bool, list[dict[str, Any]]]:
-    """Return the desired native-agent activation configuration."""
+    """Return the desired native-agent activation configuration.
+
+    The station's own items are always read: Manual only sets the stair
+    light's address.
+    """
 
     mode = str(
         _entry_config_value(
@@ -1119,7 +1122,6 @@ def _entry_activation_config(
             DEVICE_ACTIVATION_MODE_AUTO,
         )
     ).strip()
-    auto_discover = mode != DEVICE_ACTIVATION_MODE_MANUAL
     p_value = _entry_config_value(entry, CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P, "")
     n_value = _entry_config_value(entry, CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N, "")
     address = stair_light_where_from_entry_values(p_value, n_value)
@@ -1128,7 +1130,7 @@ def _entry_activation_config(
         stair_light_address=address,
         device_activations=_entry_config_value(entry, CONF_DEVICE_ACTIVATIONS, []),
     )
-    return True, auto_discover, items
+    return True, True, items
 
 
 async def _async_configure_display_bridge(

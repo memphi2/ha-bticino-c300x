@@ -734,6 +734,25 @@ static void station_activations(void)
     assert(discovery.count == 3);
     assert(strcmp(discovery.items[0].id, "station_lock_27") == 0);
 
+    /* Manual: the stair light at the address the user set hides the station's,
+     * which the agent puts there too; an item with a station item's id hides it. */
+    config.activations_count = 2;
+    snprintf(config.activations[0].id, sizeof(config.activations[0].id), "stair_light");
+    snprintf(config.activations[0].name, sizeof(config.activations[0].name), "Stair light");
+    snprintf(config.activations[0].type, sizeof(config.activations[0].type), "stair_light");
+    snprintf(config.activations[0].address, sizeof(config.activations[0].address), "15");
+    snprintf(config.activations[1].id, sizeof(config.activations[1].id), "station_lock_27");
+    snprintf(config.activations[1].name, sizeof(config.activations[1].name), "Panel");
+    snprintf(config.activations[1].type, sizeof(config.activations[1].type), "actuator");
+    snprintf(config.activations[1].address_mode, sizeof(config.activations[1].address_mode), "manual");
+    snprintf(config.activations[1].address, sizeof(config.activations[1].address), "29");
+    snprintf(config.stair_light_default_address, sizeof(config.stair_light_default_address), "15");
+    c300x_activation_discovery_build(&discovery, &station, "ok", &config);
+    assert(discovery.count == 2);
+    assert(strcmp(discovery.items[0].id, "station_actuator_25") == 0);
+    assert(strcmp(discovery.items[1].id, "station_actuator_26") == 0);
+    config.stair_light_default_address[0] = '\0';
+
     /* The stair light is at the station's own address (the owner's station: 11);
      * a configured address wins; without either it is not listed. */
     config.activations_count = 0;

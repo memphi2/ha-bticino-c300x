@@ -106,7 +106,7 @@
           "device_activation_flow_target": "Activation"
         },
         "data_description": {
-          "device_activation_mode": "Automatique : l'éclairage d'escalier est à l'adresse propre de la station, qu'elle connaît par sa configuration. Manuel ajoute un éclairage d'escalier construit à partir des valeurs P et N ci-dessous.",
+          "device_activation_mode": "Automatique : l'éclairage d'escalier est à l'adresse propre de la station, qu'elle connaît par sa configuration. Manuel définit seulement l'adresse de l'éclairage d'escalier, à partir des valeurs P et N ci-dessous.",
           "device_activation_stair_light_p": "Mode manuel uniquement : partie P de l'adresse de l'éclairage d'escalier, de 0 à 99.",
           "device_activation_stair_light_n": "Mode manuel uniquement : partie N de l'adresse de l'éclairage d'escalier, de 0 à 99.",
           "device_activation_flow_action": "Ajouter, modifier ou supprimer une activation - ou terminer et enregistrer.",
@@ -235,7 +235,7 @@
           "device_activation_flow_target": "Activation"
         },
         "data_description": {
-          "device_activation_mode": "Automatique : l'éclairage d'escalier est à l'adresse propre de la station, qu'elle connaît par sa configuration. Manuel ajoute un éclairage d'escalier construit à partir des valeurs P et N ci-dessous.",
+          "device_activation_mode": "Automatique : l'éclairage d'escalier est à l'adresse propre de la station, qu'elle connaît par sa configuration. Manuel définit seulement l'adresse de l'éclairage d'escalier, à partir des valeurs P et N ci-dessous.",
           "device_activation_stair_light_p": "Mode manuel uniquement : partie P de l'adresse de l'éclairage d'escalier, de 0 à 99.",
           "device_activation_stair_light_n": "Mode manuel uniquement : partie N de l'adresse de l'éclairage d'escalier, de 0 à 99.",
           "device_activation_flow_action": "Ajouter, modifier ou supprimer une activation - ou terminer et enregistrer.",
@@ -911,7 +911,7 @@
           "device_activation_flow_target": "Activation"
         },
         "data_description": {
-          "device_activation_mode": "Automatique : l'éclairage d'escalier est à l'adresse propre de la station, qu'elle connaît par sa configuration. Manuel ajoute un éclairage d'escalier construit à partir des valeurs P et N ci-dessous.",
+          "device_activation_mode": "Automatique : l'éclairage d'escalier est à l'adresse propre de la station, qu'elle connaît par sa configuration. Manuel définit seulement l'adresse de l'éclairage d'escalier, à partir des valeurs P et N ci-dessous.",
           "device_activation_stair_light_p": "Mode manuel uniquement : partie P de l'adresse de l'éclairage d'escalier, de 0 à 99.",
           "device_activation_stair_light_n": "Mode manuel uniquement : partie N de l'adresse de l'éclairage d'escalier, de 0 à 99.",
           "device_activation_flow_action": "Ajouter, modifier ou supprimer une activation - ou terminer et enregistrer.",

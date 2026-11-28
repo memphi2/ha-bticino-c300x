@@ -807,7 +807,7 @@
       "c3x2_not_supported": "Questa stazione è una Classe 300X2. Viene riconosciuta, ma non è ancora supportata. Non è stato installato né scritto nulla."
     },
     "create_entry": {
-      "pcmu_restart": "Quando non ci sono chiamate né stream in corso, il {model} si riavvia una volta per passare l'audio a PCMU. Finché non torna, le sue entità non sono disponibili; poi si riconnettono da sole."
+      "pcmu_restart": "Quando non ci sono chiamate né stream in corso, il {model} passa l'audio a PCMU e se necessario si riavvia una volta. Durante il riavvio le sue entità non sono disponibili; poi si riconnettono da sole."
     }
   },
   "options": {

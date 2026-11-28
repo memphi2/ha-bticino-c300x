@@ -807,7 +807,7 @@
       "c3x2_not_supported": "Este videoportero es un Classe 300X2. Se reconoce, pero todavía no es compatible. No se ha instalado ni escrito nada en él."
     },
     "create_entry": {
-      "pcmu_restart": "En cuanto no haya ninguna llamada ni transmisión en curso, el {model} se reinicia una vez para pasar su audio a PCMU. Hasta que vuelva, sus entidades no están disponibles; después se vuelven a conectar solas."
+      "pcmu_restart": "En cuanto no haya ninguna llamada ni transmisión en curso, el {model} pasa su audio a PCMU y se reinicia una vez si hace falta. Durante el reinicio sus entidades no están disponibles; después se vuelven a conectar solas."
     }
   },
   "options": {

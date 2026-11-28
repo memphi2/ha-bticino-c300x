@@ -807,7 +807,7 @@
       "c3x2_not_supported": "Diese Station ist eine Classe 300X2. Sie wird erkannt, aber noch nicht unterstützt. Es wurde nichts darauf installiert oder geschrieben."
     },
     "create_entry": {
-      "pcmu_restart": "Sobald kein Anruf und kein Stream läuft, startet der {model} einmal neu, um seinen Ton auf PCMU umzustellen. Bis er wieder da ist, sind seine Entitäten nicht verfügbar; danach verbinden sie sich von selbst wieder."
+      "pcmu_restart": "Sobald kein Anruf und kein Stream läuft, stellt der {model} seinen Ton auf PCMU um und startet dafür falls nötig einmal neu. Während des Neustarts sind seine Entitäten nicht verfügbar; danach verbinden sie sich von selbst wieder."
     }
   },
   "options": {

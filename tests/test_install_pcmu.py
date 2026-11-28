@@ -126,10 +126,12 @@ def test_the_setup_reinstall_of_an_agent_without_its_keys_keeps_the_codec(monkey
 
 
 def test_the_restart_text_exists_in_every_language():
+    """The setup cannot tell whether the station runs PCMU already: it restarts only if needed."""
+
     words = {
-        "strings": ("restarts once", "PCMU"), "en": ("restarts once", "PCMU"),
-        "de": ("einmal neu", "PCMU"), "it": ("riavvia una volta", "PCMU"), "fr": ("redémarre une fois", "PCMU"),
-        "es": ("se reinicia una vez", "PCMU"),
+        "strings": ("restarts once if needed", "PCMU"), "en": ("restarts once if needed", "PCMU"),
+        "de": ("falls nötig einmal neu", "PCMU"), "it": ("se necessario si riavvia una volta", "PCMU"),
+        "fr": ("redémarre une fois si nécessaire", "PCMU"), "es": ("se reinicia una vez si hace falta", "PCMU"),
     }
     base = json.loads((TEXTS / "strings.json").read_text(encoding="utf-8"))
     assert base["config"]["create_entry"] == json.loads(

@@ -35,6 +35,8 @@ from .api_errors import (
 _ANNOUNCEMENT_PIECE = 4500
 # While the ringing unit is not known, "current" is asked again this often.
 _UNIT_PENDING_POLL_SECONDS = 0.15
+# The agent stands in the default unit at the latest this long after the ring.
+_UNIT_PENDING_MAX_MS = 1000
 
 
 async def _when_unit_known[T](request: Callable[[], Awaitable[T]]) -> T:
@@ -155,7 +157,8 @@ class _ApiMediaMixin(_C300XApiCore):
     ) -> dict[str, Any]:
         """Answer a ring call locally; without ``call_id`` the current call.
 
-        With ``unit`` only a call of that unit, also with ``call_id``.
+        With ``unit`` only a call of that unit, also with ``call_id``; while
+        the ringing unit is not known yet, asked again until it is.
         Raises C300XCallNotCurrentError when that call is not the current one,
         or is an on-demand view, which has nothing to answer.
         """
@@ -175,22 +178,36 @@ class _ApiMediaMixin(_C300XApiCore):
 
     async def _call_action(self, call_id: str | None, action: str, unit: str | None) -> dict[str, Any]:
         if call_id is None or unit is not None:
-            calls = await self.async_calls()
-            current = calls["current_call_id"]
-            wanted = call_id if call_id is not None else current
-            if wanted is None:
-                raise C300XCallNotCurrentError("no current call", None)
-            call = next((call for call in calls["calls"] if call.call_id == wanted), None)
-            if unit is not None and (call is None or call.unit != unit):
-                # Another unit's call, or one the station has not attributed yet.
-                raise C300XCallNotCurrentError("the call is not this unit's", current)
-            if call_id is None and action == "answer" and call is not None and call.kind == "view":
-                raise C300XCallNotCurrentError("the current call is a view", current)
-            call_id = wanted
+            requested = call_id
+            call_id = await _when_unit_known(lambda: self._action_call_id(requested, action, unit))
         data = await self._request_json(
             "POST", f"/api/v1/calls/{quote(call_id, safe='')}/actions/{action}",
         )
         return _ok_response(data)
+
+    async def _action_call_id(self, call_id: str | None, action: str, unit: str | None) -> str:
+        """The call an action goes to; for a unit target only a call of that unit.
+
+        While the current call is a ring whose unit is not known yet this
+        raises C300XCallUnitPendingError, as the agent does for unlock and
+        video, so the caller asks again until the station names the unit.
+        """
+
+        calls = await self.async_calls()
+        current = calls["current_call_id"]
+        wanted = call_id if call_id is not None else current
+        if wanted is None:
+            raise C300XCallNotCurrentError("no current call", None)
+        call = next((call for call in calls["calls"] if call.call_id == wanted), None)
+        if (unit is not None and call is not None and wanted == current and call.kind == "ring"
+                and call.unit is None and call.attribution == "pending"):
+            raise C300XCallUnitPendingError("the ringing unit is not known yet", _UNIT_PENDING_MAX_MS)
+        if unit is not None and (call is None or call.unit != unit):
+            # Another unit's call, or one that is not the current call.
+            raise C300XCallNotCurrentError("the call is not this unit's", current)
+        if call_id is None and action == "answer" and call is not None and call.kind == "view":
+            raise C300XCallNotCurrentError("the current call is a view", current)
+        return wanted
 
     async def async_unlock_outdoor_unit(
         self, unit_id: str = "current", call_id: str | None = None,

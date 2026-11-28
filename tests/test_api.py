@@ -4327,6 +4327,50 @@ def test_a_call_id_of_another_unit_is_refused_for_a_unit_target() -> None:
     assert len(session.requests) == 1
 
 
+_PENDING_RING = (
+    '{"ok": true, "boot_id": "0badc0de", "current_call_id": "0badc0de-2", "calls": ['
+    '{"call_id": "0badc0de-2", "kind": "ring", "state": "ringing", "unit": null,'
+    ' "attribution": "pending", "answered_by": null, "end_reason": null}]}'
+)
+
+
+@pytest.mark.parametrize("call_id", [None, "0badc0de-2"])
+def test_a_unit_target_waits_while_the_ringing_unit_is_pending(
+    monkeypatch: pytest.MonkeyPatch, call_id: str | None,
+) -> None:
+    # As unlock and video: right after the ring the current call has no unit
+    # yet; answer and hangup with a unit target ask again, then decide.
+    monkeypatch.setattr(_api_media, "_UNIT_PENDING_POLL_SECONDS", 0)
+    session = _QueuedSession([(200, _PENDING_RING), (200, _PENDING_RING), (200, _CALLS),
+                              (200, '{"ok": true, "answer_requested": true}')])
+    api = C300XAgentApi(session, "http://agent.local:8080", "agent-token")  # type: ignore[arg-type]
+    assert asyncio.run(api.async_answer_doorbell_call(call_id, unit="21"))["ok"] is True
+    assert [request["args"] for request in session.requests] == [
+        ("GET", "http://agent.local:8080/api/v1/calls")] * 3 + [
+        ("POST", "http://agent.local:8080/api/v1/calls/0badc0de-2/actions/answer")]
+
+    # The ring turns out to be another unit's: refused, nothing sent.
+    session = _QueuedSession([(200, _PENDING_RING), (200, _CALLS)])
+    api = C300XAgentApi(session, "http://agent.local:8080", "agent-token")  # type: ignore[arg-type]
+    with pytest.raises(C300XCallNotCurrentError) as raised:
+        asyncio.run(api.async_hangup_doorbell_call(call_id, unit="20"))
+    assert raised.value.current_call_id == "0badc0de-2"
+    assert len(session.requests) == 2
+
+
+def test_a_unit_target_gives_up_when_the_ringing_unit_stays_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
+    clock = iter([0.0, 0.5, 1.0, 1.29, 1.3])
+    monkeypatch.setattr(_api_media, "_UNIT_PENDING_POLL_SECONDS", 0)
+    monkeypatch.setattr(_api_media, "time", type("Clock", (), {"monotonic": staticmethod(lambda: next(clock))}))
+    session = _QueuedSession([(200, _PENDING_RING)] * 5)
+    api = C300XAgentApi(session, "http://agent.local:8080", "agent-token")  # type: ignore[arg-type]
+
+    with pytest.raises(C300XCallUnitPendingError):
+        asyncio.run(api.async_hangup_doorbell_call(unit="21"))
+    # Until 0.3 s after the agent's latest stand-in (1 s); no action was sent.
+    assert [request["args"][0] for request in session.requests] == ["GET"] * 5
+
+
 def test_a_unit_answers_only_its_own_current_call() -> None:
     # A unit target without call_id: the current call must be that unit's.
     session = _QueuedSession([(200, _CALLS), (200, '{"ok": true, "answer_requested": true}')])

@@ -145,7 +145,8 @@ answer, hangup, home call start and stop) run one at a time each, in the order
 they arrived; the others wait for their turn with the connection open. Three
 requests may wait in all. One more is answered `openwebnet_busy` (502) or
 `media_busy` (503): nothing was sent or changed, and the request can be
-repeated. A request that had to wait and whose caller has closed the
+repeated. `GET /api/v1/calls` is answered without the station's call state
+instead. A request that had to wait and whose caller has closed the
 connection meanwhile, also only its sending side, is not run and answered
 `client_gone`; of the media actions this applies to the three that start
 something, a stop still runs unless a new request needed its place. A
@@ -1385,7 +1386,9 @@ Capabilities report `api_version: "2"`, `capabilities.outdoor_units` and
   the last 60 s. `station_state` is the station's own call state from its
   frame `*#8**35*<code>*0*0##` (`{"code", "state", "age_ms"}`), `null` until
   one was seen; while none was seen the first request asks the station
-  (`*#8**35##`) once. `state` by `code`: `0` `idle`, `1` `setup` (a ring or
+  (`*#8**35##`) once. A request that finds every OpenWebNet waiting place
+  taken is not refused: it is answered without asking (`station_state:
+  null` while none was seen), and a later request asks. `state` by `code`: `0` `idle`, `1` `setup` (a ring or
   view is set up), `2` `ringing` (the ringtone plays), `3` `viewing` (a view
   without a ring), `4` `waiting` (the ringtone is over, timed out or muted,
   and the call still waits), `6` `conversation`, `7` `answering_machine`
@@ -1405,16 +1408,24 @@ Capabilities report `api_version: "2"`, `capabilities.outdoor_units` and
 - `POST /api/v1/outdoor-units/{unit_id}/actions/unlock`, `{unit_id}` may be
   `current`; optional body `{"call_id": "..."}`, which must be a call of that
   unit, live or ended less than 60 s ago (else `409 call_not_current`).
-  `404 unknown_unit` for an unknown unit.
+  `404 unknown_unit` for an unknown unit. While the ring call's unit is not
+  known yet (from the ring until its caller frame, at most 1 s, then the
+  default unit stands in), `current` is no unit: `409 call_unit_pending` with
+  the ring's `call_id` and `retry_after_ms` (the time left until the default
+  unit stands in, 1-1000); nothing reaches the station, and the request can
+  be repeated then or after `call.caller_identified`.
 - `POST /api/v1/video/doorbell/actions/activate` takes an optional `unit`
-  (without it: the current call's unit, else the default unit). During a ring
+  (without it: the current call's unit, else the default unit; while the ring
+  call's unit is not known yet, `409 call_unit_pending` as for the unlock,
+  unless the ring's own video answers). During a ring
   the ring's video is shown whatever unit is asked (`ring_active: true`). On
   demand, the INVITE's `a=DEVADDR` names the unit: `video.sip.devaddr` for the
   default unit, as before, the unit's full address (`where`, verbatim, e.g.
   `21` or `20#2`) for any other. The station's bt_answering_machine sends a
   view for a DEVADDR that starts with `2` and whose number before `#` is below
   96 (`*8*4#1<own>*<DEVADDR>##`); another unit gets
-  `409 unit_video_unsupported`. A running view of another unit ends first
+  `409 unit_video_unsupported`, also while a view runs, which then goes on
+  (only the ring's own video shows whatever unit is asked). A running view of another unit ends first
   (BYE, its cached frames dropped, `doorbell.media.closed`, the view call
   ends); the RTSP clients stay connected and get the new unit's view. The unit
   stays selected for later streams until the next activation.

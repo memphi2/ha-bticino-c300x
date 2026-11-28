@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
+import time
+from collections.abc import Awaitable, Callable
 from typing import Any, cast
 from urllib.parse import quote
 
@@ -25,10 +28,33 @@ from .agent_contracts import (
 from .api_errors import (
     C300XAgentApiConnectionError,
     C300XCallNotCurrentError,
+    C300XCallUnitPendingError,
 )
 
 # Base64 of one piece and its JSON frame stay below the agent's request size.
 _ANNOUNCEMENT_PIECE = 4500
+# While the ringing unit is not known, "current" is asked again this often.
+_UNIT_PENDING_POLL_SECONDS = 0.15
+
+
+async def _when_unit_known[T](request: Callable[[], Awaitable[T]]) -> T:
+    """Run a request for the current call's unit; while that is not known, again until it is.
+
+    The agent names it by the caller frame, about 300 ms after the ring, or
+    stands in the default unit after ``retry_after_ms`` (at most 1 s).
+    """
+
+    try:
+        return await request()
+    except C300XCallUnitPendingError as err:
+        deadline = time.monotonic() + min(max(err.retry_after_ms, 0), 1000) / 1000 + 0.3
+    while True:
+        await asyncio.sleep(_UNIT_PENDING_POLL_SECONDS)
+        try:
+            return await request()
+        except C300XCallUnitPendingError:
+            if time.monotonic() >= deadline:
+                raise
 
 
 class _ApiMediaMixin(_C300XApiCore):
@@ -66,11 +92,11 @@ class _ApiMediaMixin(_C300XApiCore):
         if unit is not None:
             body["unit"] = unit
         try:
-            data = await self._request_json(
+            data = await _when_unit_known(lambda: self._request_json(
                 "POST",
                 "/api/v1/video/doorbell/actions/activate",
                 json_data=body,
-            )
+            ))
         except C300XAgentApiConnectionError as err:
             if "HTTP 409" not in str(err) or "external_session_active" not in str(err):
                 raise
@@ -169,13 +195,17 @@ class _ApiMediaMixin(_C300XApiCore):
     async def async_unlock_outdoor_unit(
         self, unit_id: str = "current", call_id: str | None = None,
     ) -> dict[str, Any]:
-        """Open the lock of one outdoor unit (``current``: the calling unit)."""
+        """Open the lock of one outdoor unit (``current``: the calling unit).
 
-        data = await self._request_json(
+        Right after a ring the calling unit is not known yet: the request is
+        repeated until it is, never sent to another unit's lock.
+        """
+
+        data = await _when_unit_known(lambda: self._request_json(
             "POST",
             f"/api/v1/outdoor-units/{quote(unit_id, safe='')}/actions/unlock",
             json_data={"call_id": call_id} if call_id else None,
-        )
+        ))
         return _ok_response(data)
 
     async def async_capture_doorbell_call(self) -> dict[str, Any]:

@@ -518,6 +518,45 @@ def test_an_unlock_of_the_current_unit_keeps_its_unit_while_it_waits(lab: Lab, t
     assert lab.bus.frames == ["*8*19*21##", "*8*20*21##"]
 
 
+UDP_EVENTS = {"events": {"udp": {"enabled": True, "group": "239.255.76.67", "port": free_tcp_ports(1)[0]}}}
+
+
+@pytest.mark.parametrize("lab", [UDP_EVENTS], indirect=True)
+def test_an_unlock_of_the_current_unit_waits_for_the_caller_frame(lab: Lab, tmp_path: Path) -> None:
+    # Until the caller frame (~300 ms after the ring) names the unit,
+    # "current" is no unit: the door of the default unit stays shut.
+    from native_agent.test.smoke import send_udp_event
+
+    udp_port = json.loads((tmp_path / "config.json").read_text())["events"]["udp"]["port"]
+    send_udp_event(udp_port, "*8*1#1#4#21*11##")
+    send_udp_event(udp_port, "*#8**35*1*0*0##")
+    time.sleep(0.1)
+    call = api_get(lab.api_port, "/api/v1/calls")["current_call_id"]
+    pending = finish(lab.start("/api/v1/outdoor-units/current/actions/unlock", post=True), 409)
+    assert (pending["error"], pending["call_id"]) == ("call_unit_pending", call)
+    assert 0 < pending["retry_after_ms"] <= 1000
+    assert lab.bus.frames == []
+
+    send_udp_event(udp_port, "*8*9#1#4*21##")
+    time.sleep(0.3)
+    body = finish(lab.start("/api/v1/outdoor-units/current/actions/unlock", post=True))
+    assert body["unit"] == "21"
+    assert lab.bus.frames == ["*8*19*21##", "*8*20*21##"]
+
+
+@pytest.mark.parametrize("lab", [UDP_EVENTS], indirect=True)
+def test_an_unlock_of_the_current_unit_takes_the_default_once_no_caller_frame_came(
+    lab: Lab, tmp_path: Path,
+) -> None:
+    from native_agent.test.smoke import send_udp_event
+
+    udp_port = json.loads((tmp_path / "config.json").read_text())["events"]["udp"]["port"]
+    send_udp_event(udp_port, "*8*1#1#4#21*11##")
+    time.sleep(1.2)
+    assert finish(lab.start("/api/v1/outdoor-units/current/actions/unlock", post=True))["unit"] == "20"
+    assert lab.bus.frames == [PRESS, RELEASE]
+
+
 def test_the_station_is_asked_for_its_call_state_once(lab: Lab) -> None:
     # The station sends its call state only on a change: without one since
     # the agent started, the first calls request asks it, once.
@@ -525,6 +564,28 @@ def test_the_station_is_asked_for_its_call_state_once(lab: Lab) -> None:
     assert first["station_state"]["code"] == 0 and first["station_state"]["state"] == "idle"
     assert api_get(lab.api_port, "/api/v1/calls")["station_state"]["state"] == "idle"
     assert lab.bus.frames == ["*#8**35##"]
+
+
+def test_the_calls_are_listed_while_the_bus_queue_is_full(lab: Lab) -> None:
+    # Asking the station for its call state is no reason to refuse the list:
+    # with every waiting place taken it comes without the state, and a later
+    # request asks the station.
+    lab.bus.hold(PRESS)
+    unlock = lab.start(UNLOCK, post=True)
+    assert lab.bus.seen.wait(5)
+    waiting = [lab.start("/api/v1/answering-machine") for _ in range(3)]
+    lab.health_ms()
+
+    calls = finish(lab.start("/api/v1/calls"))
+    assert (calls["ok"], calls["station_state"], calls["calls"]) == (True, None, [])
+    assert lab.bus.frames == [PRESS]
+
+    lab.bus.gate.set()
+    assert finish(unlock)["ok"] is True
+    for conn in waiting:
+        assert finish(conn)["ok"] is True
+    assert api_get(lab.api_port, "/api/v1/calls")["station_state"]["state"] == "idle"
+    assert lab.bus.frames == [PRESS, RELEASE, *["*#8**40##"] * 3, "*#8**35##"]
 
 
 def test_a_refused_unit_unlock_leaves_the_running_one_alone(lab: Lab) -> None:

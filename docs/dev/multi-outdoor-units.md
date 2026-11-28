@@ -27,8 +27,10 @@ On the multicast path every frame arrives up to three times within ~0.3 s.
 logic; on 2.0.2, 3.0.6 and the C100X the frame was not yet captured.
 
 A unit behind an apartment interface (BTicino 346850) reports `20#2` in the
-caller frame, but its lock and video use the plain `20`
-(`*8*19*20##`, `a=DEVADDR:20`).
+caller frame, but its lock uses the plain `20` (`*8*19*20##`). On-demand video
+of such a unit, when it is not the default unit, sends its full address
+(`a=DEVADDR:20#2`, see Video); whether the station shows that unit for it is
+not verified on a station yet.
 
 ## Identity
 
@@ -39,8 +41,9 @@ caller frame, but its lock and video use the plain `20`
 | Call | `call_id` = `<boot_id>-<seq>`: `boot_id` is 8 hex characters drawn at agent start, `seq` counts from 1. Never reused within a boot; a new boot never repeats an old `boot_id` in practice. |
 
 - `where` is a string, never a number: `20#2` and `20` are different units.
-- `action_where` is the address used for unlock and video: `where` up to the
-  first `#` (`20#2` -> `20`).
+- `action_where` is the address the unit's lock is found by: `where` up to
+  the first `#` (`20#2` -> `20`). On-demand video of a unit other than the
+  default one uses the full `where` (see Video).
 - Home Assistant devices:
   - station: identifiers `{(bticino_c300x, <station_id>)}`, connections
     `{(mac, <mac>)}` when `station_id` carries the MAC (`c300x-` and twelve
@@ -270,7 +273,8 @@ handler runs a second time for the same request). Answer marks the call
 ### `POST /api/v1/outdoor-units/{unit_id}/actions/unlock`
 
 Body optional: `{"call_id": "8f3a1c2e-7"}`. `{unit_id}` may be `current`: the
-unit of the current call, else the default unit. Sends `*8*19*<lock_where>##`,
+unit of the current call, else the default unit; while the ring call's unit
+is not known yet, none (`409 call_unit_pending`). Sends `*8*19*<lock_where>##`,
 waits the configured release delay, sends `*8*20*<lock_where>##`.
 
 ```json
@@ -284,7 +288,8 @@ locks that are not outdoor units.
 ### Video
 
 `POST /api/v1/video/doorbell/actions/activate` takes an optional `unit`. Without
-it the unit is the current call's, else the default unit. A ring call always
+it the unit is the current call's, else the default unit (`409
+call_unit_pending` while the ring call's unit is not known). A ring call always
 shows the calling unit; the station switches the picture itself.
 
 On demand, the request's `unit` selects the INVITE's `a=DEVADDR`: the default
@@ -303,7 +308,8 @@ selection stays for later streams until the next activation.
 | --- | --- | --- |
 | `409` | `call_not_current` | The `call_id` is unknown (also from an earlier boot), ended, or not the current call; for unlock: not that unit's call or ended more than 60 s ago. The body carries `current_call_id` (or `null`). Nothing is sent to the station. |
 | `404` | `unknown_unit` | No unit with that id. |
-| `409` | `unit_video_unsupported` | On-demand video of a unit whose address the station does not view (not `2…`, or 96 and above before `#`). |
+| `409` | `call_unit_pending` | `current` (also a video request without `unit`) while the ring call's unit is not known yet: from the ring until its caller frame or the default fallback (1 s). The body carries the ring's `call_id` and `retry_after_ms` (1-1000), the time left until the fallback. Nothing is sent to the station. A video request that the ring's own video answers is not refused. |
+| `409` | `unit_video_unsupported` | On-demand video of a unit whose address the station does not view (not `2…`, or 96 and above before `#`), also while a view runs, which goes on; only the ring's own video is shown whatever unit is asked. |
 | `400` | `invalid_call_id` | Empty or longer than 32 characters. |
 
 ### Events
@@ -407,6 +413,11 @@ call's unit, else the default unit.
 - `answer_call`, `hangup_call`: optional `call_id`; without it the target's
   current call. With a unit target the call must be that unit's, also with
   `call_id`. `409 call_not_current` becomes a translated error.
+- An unlock or a video request for the current call's unit (a station target,
+  the display's door tile) that the agent answers `409 call_unit_pending` is
+  asked again every 0.15 s until the agent names the unit, at most
+  `retry_after_ms` + 0.3 s; it is never sent to another unit. After that it
+  becomes a translated error.
 - `activate_doorbell_video` with a unit target; `capture_doorbell_call` and
   `evaluate_ring_analysis` act on the call's unit (`lock_id` is gone; the
   unlock opens the target unit, with a station target the calling unit).

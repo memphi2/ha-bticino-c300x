@@ -23,6 +23,7 @@ from .api_errors import (
     C300XAgentApiUnsupportedError,
     C300XAgentUpdateError,
     C300XCallNotCurrentError,
+    C300XCallUnitPendingError,
     C300XDeviceNotRegisteredError,
     C300XDisplayBridgeNotRegisteredError,
     C300XStationBusyError,
@@ -254,6 +255,11 @@ class _C300XApiCore:
             if status == 409 and _agent_error_field(text, "error") == "call_not_current":
                 raise C300XCallNotCurrentError(
                     _http_error_text(status, text), _agent_error_field(text, "current_call_id"))
+            if status == 409 and _agent_error_field(text, "error") == "call_unit_pending":
+                wait = json.loads(text).get("retry_after_ms")
+                raise C300XCallUnitPendingError(
+                    _http_error_text(status, text),
+                    wait if isinstance(wait, int) and not isinstance(wait, bool) else 1000)
             if status == 409 and _agent_error_field(text, "error") == "unit_video_unsupported":
                 raise C300XUnitVideoUnsupportedError(
                     _http_error_text(status, text), http_status=409, agent_state="unit_video_unsupported")

@@ -64,7 +64,7 @@ struct c300x_call_routes {
     struct c300x_call_hub *hub;
     struct c300x_video_control *control;
     struct c300x_video *video;
-    const struct c300x_openwebnet_async *openwebnet; /* NULL: OpenWebNet runs in place */
+    struct c300x_openwebnet_async *openwebnet; /* NULL: OpenWebNet runs in place */
 };
 
 /* Zero when the request is not one of these routes. */

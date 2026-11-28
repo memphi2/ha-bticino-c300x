@@ -181,6 +181,18 @@ const char *c300x_openwebnet_async_refusal(const struct c300x_openwebnet_async *
     return async->refusal;
 }
 
+int c300x_openwebnet_async_drop_refusal(struct c300x_openwebnet_async *async)
+{
+    if (async->refusal == NULL) {
+        return 0;
+    }
+    /* A refused call was not queued: only its deferral is undone. */
+    async->refusal = NULL;
+    async->worker.deferred = 0;
+    c300x_openwebnet_call_deferred = 0;
+    return 1;
+}
+
 void c300x_openwebnet_async_end(struct c300x_openwebnet_async *async, int deferred)
 {
     if (c300x_request_worker_end(&async->worker, deferred)) {

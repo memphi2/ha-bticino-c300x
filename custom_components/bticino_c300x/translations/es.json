@@ -1746,6 +1746,9 @@
     "alarm_command_rejected": {
       "message": "El comando de alarma ha sido rechazado. Consulta el estado de la alarma y su integración para más detalles."
     },
+    "call_unit_pending": {
+      "message": "La estación aún no ha indicado la placa exterior que está llamando. No se ha enviado nada a la estación; inténtalo de nuevo en un momento."
+    },
     "call_not_current": {
       "message": "Esa llamada ha terminado o no es la llamada actual. No se ha enviado nada a la estación."
     },

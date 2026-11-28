@@ -337,24 +337,59 @@ static void call_action(int client_fd, const struct c300x_call_routes *routes, c
     hub->stopping = 0;
 }
 
-/* "current": the current call's unit, else the default one. */
-static int unit_index(struct c300x_call_hub *hub, const char *unit_id)
+/* unit_index: the current ring call has no unit yet. */
+#define UNIT_PENDING (-2)
+
+/* The ring call whose caller frame may still name its unit: until the
+ * default unit stands in for it, "current" is none of the units. */
+static const struct c300x_call *pending_call(const struct c300x_call_hub *hub, long long now)
+{
+    const struct c300x_call *call = c300x_calls_current(&hub->calls);
+
+    return call != NULL && !call->view && call->unit[0] == '\0' && strcmp(call->attribution, "pending") == 0
+        && now - call->started_ms < C300X_CALLER_WAIT_MS ? call : NULL;
+}
+
+/* "current": the current call's unit, else the default one; UNIT_PENDING
+ * while the ring call's unit is not known. */
+static int unit_index(struct c300x_call_hub *hub, const char *unit_id, long long now)
 {
     if (strcmp(unit_id, "current") == 0) {
         const struct c300x_call *call = c300x_calls_current(&hub->calls);
         int index = call != NULL ? c300x_outdoor_units_find_id(&hub->units, call->unit) : -1;
+        if (index < 0 && pending_call(hub, now) != NULL) {
+            return UNIT_PENDING;
+        }
         return index >= 0 ? index : hub->units.default_index;
     }
     return c300x_outdoor_units_find_id(&hub->units, unit_id);
+}
+
+/* Nothing is sent: the request can be repeated once the caller frame or
+ * the default unit named the call's unit, at the latest after retry_after_ms. */
+static void send_unit_pending(int client_fd, const struct c300x_call_hub *hub, long long now)
+{
+    const struct c300x_call *call = pending_call(hub, now);
+    long long wait = call != NULL ? call->started_ms + C300X_CALLER_WAIT_MS - now : 0;
+    char body[160];
+
+    snprintf(body, sizeof(body), "{\"ok\":false,\"error\":\"call_unit_pending\",\"call_id\":\"%s\",\"retry_after_ms\":%lld}\n",
+             call != NULL ? call->id : "", wait > 0 ? wait : 1);
+    c300x_http_send_json(client_fd, 409, "Conflict", body);
 }
 
 /* The unit, lock and call of an unlock; zero when it was answered with an error. */
 static int resolve_unlock(int client_fd, struct c300x_call_hub *hub, const struct request *request,
                           const char *unit_id, struct c300x_unlock_resolved *resolved)
 {
-    int index = unit_index(hub, unit_id);
+    long long now = c300x_monotonic_ms();
+    int index = unit_index(hub, unit_id, now);
 
     memset(resolved, 0, sizeof(*resolved));
+    if (index == UNIT_PENDING) {
+        send_unit_pending(client_fd, hub, now);
+        return 0;
+    }
     if (index < 0) {
         c300x_http_send_json(client_fd, 404, "Not Found", "{\"ok\":false,\"error\":\"unknown_unit\"}\n");
         return 0;
@@ -366,7 +401,7 @@ static int resolve_unlock(int client_fd, struct c300x_call_hub *hub, const struc
     }
     if (resolved->call_id[0] != '\0'
         && !c300x_calls_unlock_allowed(&hub->calls, resolved->call_id, hub->units.items[index].id,
-                                       c300x_monotonic_ms())) {
+                                       now)) {
         send_not_current(client_fd, &hub->calls);
         return 0;
     }
@@ -416,7 +451,8 @@ static void unlock(int client_fd, const struct c300x_call_routes *routes, const 
 
 /* The station's call state is sent on changes only: once, while none was
  * seen since the agent started, the station is asked. Zero: the request
- * runs again with the answer. */
+ * runs again with the answer. With the OpenWebNet queue full the list goes
+ * out without the state, and a later request asks. */
 static int ask_station_state(const struct c300x_call_routes *routes)
 {
     struct c300x_call_hub *hub = routes->hub;
@@ -431,7 +467,9 @@ static int ask_station_state(const struct c300x_call_routes *routes)
         return 1;
     }
     if (!c300x_openwebnet_send(hub->config, "*#8**35##", reply, sizeof(reply), error, sizeof(error))) {
-        if (c300x_openwebnet_deferred()) return 0;
+        if (c300x_openwebnet_deferred()) {
+            return routes->openwebnet != NULL && c300x_openwebnet_async_drop_refusal(routes->openwebnet);
+        }
     } else if (c300x_station_state_parse(reply, &code) && hub->calls.station_state == C300X_STATION_STATE_UNKNOWN) {
         media_state(hub, &media);
         c300x_calls_station(&hub->calls, &hub->sink, &media, code, c300x_monotonic_ms());
@@ -461,24 +499,43 @@ static int path_segment(const char *path, const char *prefix, const char *suffix
     return 1;
 }
 
+/* The ring's own media answers a video request, whatever unit it names. */
+static int ring_media_answers(const struct c300x_call_routes *routes)
+{
+    struct c300x_video_status status;
+
+    c300x_video_status(routes->video, &status);
+    return status.ring_call_active || status.ring_media_active;
+}
+
 static void video_activate(int client_fd, const struct c300x_call_routes *routes, const struct request *request)
 {
     char unit_id[C300X_UNIT_WHERE_LEN] = "";
     struct c300x_call_hub *hub = routes->hub;
+    long long now = c300x_monotonic_ms();
     int checked = c300x_json_string_field_checked(request->body, "unit", unit_id, sizeof(unit_id));
     /* Without a unit: the current call's, else the default. */
-    int index = unit_index(hub, checked > 0 ? unit_id : "current");
-    const struct c300x_call *call = c300x_calls_current(&hub->calls);
+    int index = unit_index(hub, checked > 0 ? unit_id : "current", now);
+    /* Without video the request is answered video_unavailable. */
+    int ring = routes->video == NULL || ring_media_answers(routes);
 
+    if (checked >= 0 && index == UNIT_PENDING) {
+        if (!ring) {
+            send_unit_pending(client_fd, hub, now);
+            return;
+        }
+        index = hub->units.default_index;
+    }
     if (checked < 0 || index < 0) {
         c300x_http_send_json(client_fd, 404, "Not Found", "{\"ok\":false,\"error\":\"unknown_unit\"}\n");
         return;
     }
-    /* A ring shows its caller whatever unit is asked. On demand the default
-     * unit is the configured DEVADDR, as before; another unit's DEVADDR is
-     * its full address, which the station takes verbatim. */
+    /* The ring's media shows its caller whatever unit is asked; a view does
+     * not. On demand the default unit is the configured DEVADDR, as before;
+     * another unit's DEVADDR is its full address, which the station takes
+     * verbatim. */
     const char *where = hub->units.items[index].where;
-    if (index != hub->units.default_index && call == NULL && !c300x_media_devaddr_valid(where)) {
+    if (index != hub->units.default_index && !ring && !c300x_media_devaddr_valid(where)) {
         c300x_http_send_json(client_fd, 409, "Conflict", "{\"ok\":false,\"error\":\"unit_video_unsupported\"}\n");
         return;
     }

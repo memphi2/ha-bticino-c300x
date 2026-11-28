@@ -699,6 +699,11 @@ def test_the_outdoor_units_and_calls_texts_say_what_the_agent_does():
     assert "| `GET` | `/api/v1/outdoor-units` | API | None (reads the station's archive on every request). |" in api
     assert "`caller_frames_ignored` in diagnostics" not in contract
     assert "`caller_frames_ignored` in `GET /api/v1/calls`" in contract
+    # Another unit's on-demand video names its full where (20#2), not the
+    # plain address of its lock; no station has shown that yet.
+    assert "index != hub->units.default_index ? where : NULL" in routes
+    assert "`a=DEVADDR:20`" not in contract and "address used for unlock and video" not in contract
+    assert "(`a=DEVADDR:20#2`, see Video); whether the station shows that unit for it is not verified" in contract
 
 
 def _heading_anchors(path: Path) -> set[str]:

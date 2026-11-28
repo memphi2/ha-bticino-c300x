@@ -186,11 +186,15 @@ EVENT_PORT = free_udp_port()
     indirect=True,
 )
 def test_an_activation_answers_with_its_own_result(lab: Lab) -> None:
+    # The caller frame names the ring's unit: before it, an activation
+    # without a unit is refused (call_unit_pending) instead of waiting.
     send_udp_event(EVENT_PORT, "*8*1#1#4#21*11##")
+    send_udp_event(EVENT_PORT, "*8*9#1#4*20##")
     deadline = time.monotonic() + 5
-    while (call_id := api_get(lab.api_port, "/api/v1/calls")["current_call_id"]) is None:
+    while not (calls := api_get(lab.api_port, "/api/v1/calls"))["calls"] or calls["calls"][0]["unit"] != "20":
         assert time.monotonic() < deadline
         time.sleep(0.02)
+    call_id = calls["current_call_id"]
     hangup = lab.held_stop(f"/api/v1/calls/{call_id}/actions/hangup")
     activate = lab.post(ACTIVATE, {"audio": False})
     lab.health_ms()

@@ -755,7 +755,9 @@ knows. The station's files are read again on every request.
   OpenWebNet `where` in `address`; `auto` items without an address or command
   are not executable), `address`, `executable` and `unit`: the id of the
   outdoor unit (`GET /api/v1/outdoor-units`) whose door lock a `lock` item is,
-  `null` for any other item or a lock no unit has.
+  `null` for any other item or a lock no unit has. The request reads the
+  outdoor units again too, so `unit` is right from the first request after
+  the agent starts.
 
 The station's items, from `archive.xml` and `conf.xml`, as its display reads
 them (an `<ist>` attribute it lacks is its `<obj>`'s; the address is `dev` +

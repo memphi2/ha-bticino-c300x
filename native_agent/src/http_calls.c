@@ -81,6 +81,12 @@ static void load_units(struct c300x_call_hub *hub)
     }
 }
 
+const struct c300x_outdoor_units *c300x_call_hub_load_units(struct c300x_call_hub *hub)
+{
+    load_units(hub);
+    return &hub->units;
+}
+
 /* The agent's media state, as its ring session and display guard see it. */
 static void media_state(const struct c300x_call_hub *hub, struct c300x_call_media *media)
 {

@@ -185,3 +185,19 @@ def test_an_actuator_is_pressed_and_released_with_the_lock_frames(lab: Lab) -> N
     assert (status, body["type"]) == (200, "actuator")
     assert lab.bus.sent() == ["*8*19*25##", "*8*20*25##"]
     assert lab.bus.frames[1][0] - lab.bus.frames[0][0] >= 0.045
+
+
+LOCK = [{"id": "gate_lock", "name": "Gate", "type": "lock", "addressMode": "manual", "address": "20"}]
+
+
+@pytest.mark.parametrize("lab", [LOCK], indirect=True)
+def test_a_lock_names_its_outdoor_unit_on_the_first_request(lab: Lab) -> None:
+    # Nothing read the outdoor units before: the first answer names the unit
+    # whose lock it is, as every later one does.
+    first = lab.request("GET", "/api/v1/activations")
+    assert lab.request("GET", "/api/v1/outdoor-units")[0] == 200
+    later = lab.request("GET", "/api/v1/activations")
+
+    assert first[0] == 200
+    assert [(item["id"], item["unit"]) for item in first[1]["items"]] == [("gate_lock", "20")]
+    assert first == later

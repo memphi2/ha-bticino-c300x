@@ -5033,7 +5033,7 @@ static void emit_activation_event(void *context, const char *type, const char *d
 static struct c300x_activation_routes activation_routes(const struct c300x_config *config,
                                                         struct agent_runtime *runtime)
 {
-    struct c300x_activation_routes routes = {config, &runtime->activation_discovery, &runtime->calls.units,
+    struct c300x_activation_routes routes = {config, &runtime->activation_discovery, &runtime->calls,
                                              &runtime->local_action_events, emit_activation_event, runtime};
     return routes;
 }

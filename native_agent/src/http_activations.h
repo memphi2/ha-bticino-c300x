@@ -7,13 +7,15 @@
 
 typedef void (*c300x_activation_emit_fn)(void *context, const char *type, const char *data_json);
 
+struct c300x_call_hub;
+
 /* The activation and stair-light routes. The discovery is the runtime's,
- * read again on every GET /api/v1/activations; units names a lock's
- * outdoor unit. */
+ * read again on every GET /api/v1/activations, as the outdoor units of
+ * calls, which name a lock's outdoor unit. */
 struct c300x_activation_routes {
     const struct c300x_config *config;
     struct c300x_activation_discovery *discovery;
-    const struct c300x_outdoor_units *units;
+    struct c300x_call_hub *calls;
     struct c300x_local_action_events *local_events;
     c300x_activation_emit_fn emit;
     void *context;

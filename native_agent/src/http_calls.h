@@ -58,6 +58,8 @@ int c300x_call_hub_event(struct c300x_call_hub *hub, const char *type, const cha
 void c300x_call_hub_media_closed(struct c300x_call_hub *hub, const char *data, int station_holds_media);
 int c300x_call_hub_timeout_ms(struct c300x_call_hub *hub);
 void c300x_call_hub_tick(struct c300x_call_hub *hub);
+/* The outdoor units, read again from the station's files. */
+const struct c300x_outdoor_units *c300x_call_hub_load_units(struct c300x_call_hub *hub);
 
 struct c300x_openwebnet_async;
 

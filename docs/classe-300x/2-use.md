@@ -107,9 +107,10 @@ unit as target; the **Doorbell camera** then shows it.
 
 The actuators that the station itself is set up with become buttons of the
 station too; its stair light is **Stair light**. A lock at the address of an
-outdoor unit's lock is that unit's **Door unlock**. Extra locks or
-actuators of your door system (for example a second door or a gate opener)
-can be added as buttons of their own:
+outdoor unit's lock, from the station or added by you, is that unit's
+**Door unlock**. Locks that belong to no outdoor unit and actuators of your
+door system (for example a gate opener) can be added as buttons of their
+own:
 
 1. Open **Configure > Activations: locks, actuators, stair light**.
 2. Choose **Add an activation**. Enter an **ID**, a **Name**, the **Type**

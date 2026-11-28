@@ -74,6 +74,14 @@ Breaking changes:
 - **Stair light address:** **Automatic** now switches the stair light at the
   station's own address, as its display does (before: the fixed address
   `10`). The **Manual (P and N)** address is used as before.
+- **Locks of the outdoor units:** a lock activation at the lock address of an
+  outdoor unit, read from the station or added by you, is now that unit's
+  **Door unlock** button, which takes the activation's name. Its old
+  activation button is gone: Home Assistant lists it as no longer provided,
+  and it can be deleted.
+- **Manual stair light:** the **Stair light** activation that **Manual (P
+  and N)** builds has no button of its own any more; the **Stair light**
+  button does the same. Its old button can be deleted.
 - The activation buttons' attribute `source` is `config` or `station`.
 
 Outdoor units and calls:

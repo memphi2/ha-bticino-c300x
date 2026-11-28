@@ -980,8 +980,10 @@ ahead (see the
 
 ## Device Activations
 
-Extra door locks and actuators of the door system, for example a second door
-or a gate opener, become activations: button entities (`button.press`).
+Door locks that belong to no outdoor unit and actuators of the door system,
+for example a gate opener, become activations: button entities
+(`button.press`). A lock activation at the lock address of an outdoor unit is
+that unit's **Door unlock** button and gives it its name.
 Configure them in setup, options or reconfigure under **Activations: locks,
 actuators, stair light**. Changes are
 collected and saved with **Finish and save**; the device is written only when

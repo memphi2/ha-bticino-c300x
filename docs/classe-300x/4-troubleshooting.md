@@ -113,7 +113,7 @@ Home Assistant once. If the next stream fails, stop it and check readiness.
 | No **Door contact** sensor | It appears only on a unit wired with a door contact, with the unit's first door message. |
 | **Door contact** is unknown | After an agent restart the state is unknown until the door opens or closes again. |
 | An old outdoor unit device stays | Delete it on its device page once the station no longer reports the unit. |
-| `answer_call` or `hangup_call` is refused | The `call_id` belongs to a call that is over, no longer current, or of another unit than the target. Nothing was sent to the station. |
+| `answer_call` or `hangup_call` is refused | The `call_id` belongs to a call that is over or no longer current, or the target is an outdoor unit and the current call is another unit's (also without `call_id`). Right after a ring the unit target waits until the station has named the calling unit. Nothing was sent to the station. |
 
 ## The Station Has a New Address
 

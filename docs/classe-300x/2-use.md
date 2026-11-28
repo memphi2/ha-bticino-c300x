@@ -17,7 +17,9 @@ saved images and recordings. Keep its mode on **Doorstation + Home Call**.
 - The card follows the current call and shows the calling outdoor unit's
   name.
 - The door button opens the door of the outdoor unit that is calling, else
-  of the default outdoor unit. The light button switches the stair light.
+  of the default outdoor unit. At the start of a ring it stays disabled
+  until the station has named the calling unit (about 0.3 s, at most 1 s).
+  The light button switches the stair light.
 - The arrows on the picture page through saved images and recordings.
 - The sliders icon opens the [picture controls](#picture).
 - In the Sections layout the card needs at least six rows.
